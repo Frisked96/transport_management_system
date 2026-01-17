@@ -8,7 +8,8 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.contrib import messages
 from django.db import models
-from django.db.models import Q
+from django.db.models import Q, Min
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 
 from .models import Trip, TripLeg, TripExpense
@@ -78,7 +79,13 @@ class TripListView(LoginRequiredMixin, BaseTripPermissionMixin, ListView):
         if status:
             queryset = queryset.filter(status=status)
         
-        return queryset.order_by('-created_at')
+        # Annotate with effective date for grouping
+        # Use the first leg's date, fallback to created_at
+        queryset = queryset.annotate(
+            effective_date=Coalesce(Min('legs__date'), 'created_at')
+        )
+        
+        return queryset.order_by('-effective_date', '-created_at')
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)

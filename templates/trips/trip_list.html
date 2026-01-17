@@ -1,28 +1,119 @@
 {% extends 'base.html' %}
 
-{% block title %}Trips - Transport Management System{% endblock %}
+{% block title %}Trips Logbook - Transport Management System{% endblock %}
 
 {% block content %}
+<style>
+    .logbook-day {
+        background: #fff;
+        border: 1px solid #ddd;
+        margin-bottom: 2rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        border-radius: 4px;
+        overflow: hidden;
+    }
+    
+    .day-header {
+        background: #f8f9fa;
+        padding: 1rem;
+        margin: 0;
+        border-bottom: 2px solid #e9ecef;
+        font-size: 1.2rem;
+        color: #2c3e50;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .trip-entry {
+        border-bottom: 1px solid #eee;
+        padding: 0;
+    }
+    
+    .trip-entry:last-child {
+        border-bottom: none;
+    }
+
+    .trip-summary {
+        background: #fff;
+        padding: 1rem;
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr 1fr auto;
+        gap: 1rem;
+        align-items: center;
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
+
+    .trip-summary:hover {
+        background-color: #f8f9fa;
+    }
+
+    .trip-details {
+        padding: 0 1rem 1rem 1rem;
+        background: #fafafa;
+        border-top: 1px dashed #ddd;
+    }
+
+    .legs-table {
+        width: 100%;
+        margin-top: 0.5rem;
+        font-size: 0.9rem;
+        border-collapse: collapse;
+    }
+
+    .legs-table th {
+        text-align: left;
+        padding: 0.5rem;
+        border-bottom: 1px solid #ddd;
+        color: #666;
+        font-weight: 600;
+    }
+
+    .legs-table td {
+        padding: 0.5rem;
+        border-bottom: 1px solid #eee;
+    }
+    
+    .trip-number {
+        font-weight: bold;
+        color: #2c3e50;
+    }
+    
+    .trip-stats {
+        font-size: 0.85rem;
+        color: #7f8c8d;
+    }
+
+    .toggle-icon {
+        transition: transform 0.3s;
+    }
+    
+    .expanded .toggle-icon {
+        transform: rotate(180deg);
+    }
+</style>
+
 <div class="clearfix mb-1">
-    <h2 style="float: left;">Trip Management</h2>
+    <h2 style="float: left;">Trips Logbook</h2>
     
     {% if perms.trips.add_trip %}
-        <a href="{% url 'trip-create' %}" class="btn btn-success" style="float: right;">Create New Trip</a>
+        <a href="{% url 'trip-create' %}" class="btn btn-success" style="float: right;">+ Add New Trip</a>
     {% endif %}
 </div>
 
-<!-- Search and Filter Form -->
-<form method="get" class="mb-1">
+<!-- Search and Filter -->
+<form method="get" class="mb-2" style="background: #f8f9fa; padding: 1rem; border-radius: 4px;">
     <div style="display: flex; gap: 1rem; align-items: end; flex-wrap: wrap;">
         <div style="flex: 1; min-width: 200px;">
-            <label for="search">Search:</label>
+            <label for="search" style="display: block; margin-bottom: 0.5rem;">Search:</label>
             <input type="text" id="search" name="search" value="{{ search_term }}" 
-                   placeholder="Search trips, clients, locations...">
+                   placeholder="Trip #, Client, Location..." style="width: 100%; padding: 0.5rem;">
         </div>
         
         <div style="min-width: 150px;">
-            <label for="status">Status:</label>
-            <select id="status" name="status">
+            <label for="status" style="display: block; margin-bottom: 0.5rem;">Status:</label>
+            <select id="status" name="status" style="width: 100%; padding: 0.5rem;">
                 <option value="">All Statuses</option>
                 {% for value, label in status_choices %}
                     <option value="{{ value }}" {% if current_status == value %}selected{% endif %}>
@@ -32,69 +123,97 @@
             </select>
         </div>
         
-        <button type="submit" class="btn">Filter</button>
-        <a href="{% url 'trip-list' %}" class="btn btn-warning">Clear</a>
+        <div>
+            <button type="submit" class="btn btn-primary">Filter</button>
+            <a href="{% url 'trip-list' %}" class="btn btn-secondary">Clear</a>
+        </div>
     </div>
 </form>
 
-<!-- Trips Table -->
 {% if trips %}
-    <table>
-        <thead>
-            <tr>
-                <th>Trip Number</th>
-                <th>Driver</th>
-                <th>Vehicle</th>
-                <th>Start Date</th>
-                <th>Legs</th>
-                <th>Status</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for trip in trips %}
-                <tr>
-                    <td><strong>{{ trip.trip_number }}</strong></td>
-                    <td>{{ trip.driver.get_full_name|default:trip.driver.username }}</td>
-                    <td>{{ trip.vehicle.registration_plate }}</td>
-                    <td>{{ trip.start_date|date:"M d, Y H:i" }}</td>
-                    <td>{{ trip.legs.count }}</td>
-                    <td>
-                        <span class="status-badge status-{{ trip.status|slugify }}">
-                            {{ trip.status }}
-                        </span>
-                    </td>
-                    <td>
-                        <a href="{% url 'trip-detail' trip.pk %}" class="btn btn-primary btn-sm">View</a>
-                        
-                        {% if perms.trips.change_trip %}
-                            <a href="{% url 'trip-update' trip.pk %}" class="btn btn-warning btn-sm">Edit</a>
-                        {% endif %}
-                        
-                        <!-- Status update button -->
-                        {% if perms.trips.can_update_trip_status or user == trip.driver %}
-                            <a href="{% url 'trip-status-update' trip.pk %}" class="btn btn-success btn-sm">Status</a>
-                        {% endif %}
-                        
-                        {% if perms.trips.delete_trip %}
-                            <a href="{% url 'trip-delete' trip.pk %}" class="btn btn-danger btn-sm">Delete</a>
-                        {% endif %}
-                    </td>
-                </tr>
+    {% regroup trips by effective_date|date:"l, F d, Y" as date_list %}
+    
+    {% for date_group in date_list %}
+    <div class="logbook-day">
+        <div class="day-header">
+            <span>📅 {{ date_group.grouper }}</span>
+            <span style="font-size: 0.9rem; color: #666; font-weight: normal;">{{ date_group.list|length }} Trip(s)</span>
+        </div>
+        
+        <div class="day-content">
+            {% for trip in date_group.list %}
+            <div class="trip-entry">
+                <!-- Summary Row (Click to toggle details) -->
+                <div class="trip-summary" onclick="toggleDetails('trip-{{ trip.pk }}')">
+                    <div>
+                        <div class="trip-number">{{ trip.trip_number }}</div>
+                        <div class="trip-stats">
+                            <span class="status-badge status-{{ trip.status|slugify }}">{{ trip.status }}</span>
+                        </div>
+                    </div>
+                    <div>
+                        <strong>Driver:</strong> {{ trip.driver.get_full_name|default:trip.driver.username }}<br>
+                        <strong>Vehicle:</strong> {{ trip.vehicle.registration_plate }}
+                    </div>
+                    <div>
+                        <strong>Total Weight:</strong> {{ trip.total_weight|floatformat:2 }} T<br>
+                        <strong>Total Cost:</strong> ${{ trip.total_cost|floatformat:2 }}
+                    </div>
+                    <div>
+                         <strong>Revenue:</strong> ${{ trip.total_revenue|floatformat:2 }}
+                    </div>
+                    <div style="text-align: right;">
+                         <a href="{% url 'trip-detail' trip.pk %}" class="btn btn-primary btn-sm" onclick="event.stopPropagation();">View Full</a>
+                         <span class="toggle-icon">▼</span>
+                    </div>
+                </div>
+
+                <!-- Detailed Legs Table -->
+                <div id="trip-{{ trip.pk }}" class="trip-details">
+                    <table class="legs-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 15%;">Date</th>
+                                <th style="width: 20%;">Client</th>
+                                <th style="width: 25%;">Pickup</th>
+                                <th style="width: 20%;">Delivery</th>
+                                <th style="width: 7%;">Weight</th>
+                                <th style="width: 7%;">Price/T</th>
+                                <th style="width: 6%;">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for leg in trip.legs.all %}
+                            <tr>
+                                <td>{{ leg.date|date:"H:i" }}</td>
+                                <td>{{ leg.client_name }}</td>
+                                <td>{{ leg.pickup_location }}</td>
+                                <td>{{ leg.delivery_location }}</td>
+                                <td>{{ leg.weight|floatformat:2 }} T</td>
+                                <td>${{ leg.price_per_ton }}</td>
+                                <td>${{ leg.revenue|floatformat:2 }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="7" style="text-align: center; color: #999; padding: 1rem;">No legs added yet.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
             {% endfor %}
-        </tbody>
-    </table>
+        </div>
+    </div>
+    {% endfor %}
 
     <!-- Pagination -->
     {% if is_paginated %}
-        <div class="text-center">
-            <div style="margin: 1rem 0;">
-                Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
-            </div>
+        <div class="text-center mt-2">
             <div>
                 {% if page_obj.has_previous %}
-                    <a href="?page=1{% if search_term %}&search={{ search_term }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}" class="btn">First</a>
-                    <a href="?page={{ page_obj.previous_page_number }}{% if search_term %}&search={{ search_term }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}" class="btn">Previous</a>
+                    <a href="?page=1{% if search_term %}&search={{ search_term }}{% endif %}" class="btn">First</a>
+                    <a href="?page={{ page_obj.previous_page_number }}{% if search_term %}&search={{ search_term }}{% endif %}" class="btn">Previous</a>
                 {% endif %}
                 
                 <span style="margin: 0 1rem;">
@@ -102,15 +221,37 @@
                 </span>
                 
                 {% if page_obj.has_next %}
-                    <a href="?page={{ page_obj.next_page_number }}{% if search_term %}&search={{ search_term }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}" class="btn">Next</a>
-                    <a href="?page={{ page_obj.paginator.num_pages }}{% if search_term %}&search={{ search_term }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}" class="btn">Last</a>
+                    <a href="?page={{ page_obj.next_page_number }}{% if search_term %}&search={{ search_term }}{% endif %}" class="btn">Next</a>
+                    <a href="?page={{ page_obj.paginator.num_pages }}{% if search_term %}&search={{ search_term }}{% endif %}" class="btn">Last</a>
                 {% endif %}
             </div>
         </div>
     {% endif %}
+
 {% else %}
     <div class="message warning">
-        No trips found. {% if perms.trips.add_trip %}<a href="{% url 'trip-create' %}">Create your first trip</a>{% endif %}.
+        No trips found. <a href="{% url 'trip-create' %}">Create your first trip</a>.
     </div>
 {% endif %}
+
+<script>
+    function toggleDetails(id) {
+        var el = document.getElementById(id);
+        var icon = el.previousElementSibling.querySelector('.toggle-icon');
+        
+        if (el.style.display === 'none') {
+            el.style.display = 'block';
+            icon.style.transform = 'rotate(180deg)';
+        } else {
+            el.style.display = 'none';
+            icon.style.transform = 'rotate(0deg)';
+        }
+    }
+
+    // Initialize all details to hidden or shown (User requested "trips shown under will be detailed")
+    // If they want to see them "in it", maybe open by default?
+    // Let's keep them open by default for the "Book" feel, or maybe just styled nicely.
+    // I'll leave them visible by default as the CSS doesn't hide them initially.
+    // Wait, CSS doesn't have display:none. So they are visible.
+</script>
 {% endblock %}

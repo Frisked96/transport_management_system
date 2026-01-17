@@ -121,7 +121,7 @@
                     <td>{{ leg.date|date:"M d, H:i" }}</td>
                     <td>{{ leg.client_name }}</td>
                     <td>{{ leg.pickup_location }} &rarr; {{ leg.delivery_location }}</td>
-                    <td>{{ leg.weight|default:"-" }}</td>
+                    <td>{{ leg.weight|floatformat:2|default:"-" }}</td>
                     <td>{{ leg.price_per_ton }}</td>
                     <td>{{ leg.revenue|floatformat:2 }}</td>
                     <td>

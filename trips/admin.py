@@ -16,7 +16,6 @@ class TripAdmin(admin.ModelAdmin):
         'trip_number', 
         'driver', 
         'vehicle', 
-        'scheduled_datetime',
         'status',
         'created_at'
     ]
@@ -25,7 +24,6 @@ class TripAdmin(admin.ModelAdmin):
         'status',
         'driver',
         'vehicle',
-        'scheduled_datetime',
         'created_at'
     ]
     
@@ -44,8 +42,8 @@ class TripAdmin(admin.ModelAdmin):
         ('Assignment', {
             'fields': ('driver', 'vehicle')
         }),
-        ('Schedule', {
-            'fields': ('scheduled_datetime', 'actual_completion_datetime')
+        ('Completion Info', {
+            'fields': ('actual_completion_datetime',)
         }),
         ('Additional Information', {
             'fields': ('notes',)

@@ -50,13 +50,7 @@ class Trip(models.Model):
         verbose_name='Assigned Vehicle'
     )
     
-    # Scheduling
-    scheduled_datetime = models.DateTimeField(
-        verbose_name='Scheduled Date & Time',
-        null=True,
-        blank=True
-    )
-    
+    # Actual completion tracking
     actual_completion_datetime = models.DateTimeField(
         null=True,
         blank=True,
@@ -170,7 +164,7 @@ class Trip(models.Model):
         first_leg = self.legs.order_by('date').first()
         if first_leg:
             return first_leg.date
-        return self.scheduled_datetime or self.created_at
+        return self.created_at
 
     @property
     def end_date(self):
