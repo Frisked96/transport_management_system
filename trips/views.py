@@ -11,8 +11,8 @@ from django.db import models
 from django.db.models import Q
 from django.utils import timezone
 
-from .models import Trip, TripLeg
-from .forms import TripForm, TripStatusForm, TripLegForm
+from .models import Trip, TripLeg, TripExpense
+from .forms import TripForm, TripStatusForm, TripLegForm, TripExpenseUpdateForm, TripCustomExpenseForm
 
 
 class BaseTripPermissionMixin:
@@ -78,7 +78,7 @@ class TripListView(LoginRequiredMixin, BaseTripPermissionMixin, ListView):
         if status:
             queryset = queryset.filter(status=status)
         
-        return queryset.order_by('-scheduled_datetime')
+        return queryset.order_by('-created_at')
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -183,6 +183,90 @@ class TripLegCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView)
         return context
 
 
+class TripLegUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+    """
+    Update view for trip legs
+    """
+    model = TripLeg
+    form_class = TripLegForm
+    template_name = 'trips/trip_leg_form.html'
+    permission_required = 'trips.change_trip'
+
+    def get_success_url(self):
+        return reverse_lazy('trip-detail', kwargs={'pk': self.object.trip.pk})
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['trip'] = self.object.trip
+        return context
+
+
+class TripLegDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
+    """
+    Delete view for trip legs
+    """
+    model = TripLeg
+    template_name = 'trips/trip_leg_confirm_delete.html'
+    permission_required = 'trips.change_trip'
+
+    def get_success_url(self):
+        return reverse_lazy('trip-detail', kwargs={'pk': self.object.trip.pk})
+
+
+class TripExpenseUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+    """
+    View to update fixed trip expenses (diesel, toll)
+    """
+    model = Trip
+    form_class = TripExpenseUpdateForm
+    template_name = 'trips/trip_expense_form.html'
+    permission_required = 'trips.change_trip'
+    
+    def get_success_url(self):
+        messages.success(self.request, 'Trip expenses updated successfully!')
+        return reverse_lazy('trip-detail', kwargs={'pk': self.object.pk})
+
+
+class TripCustomExpenseCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+    """
+    View to add a custom expense to a trip
+    """
+    model = TripExpense
+    form_class = TripCustomExpenseForm
+    template_name = 'trips/trip_custom_expense_form.html'
+    permission_required = 'trips.change_trip'
+    
+    def dispatch(self, request, *args, **kwargs):
+        self.trip = get_object_or_404(Trip, pk=kwargs['trip_pk'])
+        return super().dispatch(request, *args, **kwargs)
+    
+    def form_valid(self, form):
+        form.instance.trip = self.trip
+        messages.success(self.request, 'Expense added successfully!')
+        return super().form_valid(form)
+    
+    def get_success_url(self):
+        return reverse_lazy('trip-detail', kwargs={'pk': self.trip.pk})
+        
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['trip'] = self.trip
+        return context
+
+
+class TripCustomExpenseDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
+    """
+    Delete view for custom trip expenses
+    """
+    model = TripExpense
+    template_name = 'trips/trip_custom_expense_confirm_delete.html'
+    permission_required = 'trips.change_trip'
+    
+    def get_success_url(self):
+        messages.success(self.request, 'Expense deleted successfully!')
+        return reverse_lazy('trip-detail', kwargs={'pk': self.object.trip.pk})
+
+
 @login_required
 def update_trip_status(request, pk):
     """
@@ -246,7 +330,7 @@ def driver_dashboard(request):
     current_trips = Trip.objects.filter(
         driver=request.user,
         status__in=[Trip.STATUS_SCHEDULED, Trip.STATUS_IN_PROGRESS]
-    ).order_by('scheduled_datetime')[:10]
+    ).order_by('created_at')[:10]
     
     recent_trips = Trip.objects.filter(
         driver=request.user,

@@ -14,7 +14,7 @@ class FinancialRecordForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Filter trips to show completed trips only (optional)
-        self.fields['associated_trip'].queryset = Trip.objects.order_by('-scheduled_datetime')
+        self.fields['associated_trip'].queryset = Trip.objects.order_by('-created_at')
         self.fields['associated_trip'].required = False
         
         # Add basic styling for clarity

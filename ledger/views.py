@@ -121,6 +121,18 @@ class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, Cre
     template_name = 'ledger/financialrecord_form.html'
     permission_required = 'ledger.add_financialrecord'
     
+    def get_initial(self):
+        initial = super().get_initial()
+        trip_id = self.request.GET.get('trip')
+        if trip_id:
+            from trips.models import Trip
+            try:
+                trip = Trip.objects.get(pk=trip_id)
+                initial['associated_trip'] = trip
+            except Trip.DoesNotExist:
+                pass
+        return initial
+
     def form_valid(self, form):
         form.instance.recorded_by = self.request.user
         messages.success(self.request, 'Financial record created successfully!')

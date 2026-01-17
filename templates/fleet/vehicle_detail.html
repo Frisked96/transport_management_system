@@ -117,10 +117,7 @@
         <thead>
             <tr>
                 <th>Trip Number</th>
-                <th>Client</th>
-                <th>Pickup Location</th>
-                <th>Delivery Location</th>
-                <th>Scheduled Date</th>
+                <th>Start Date</th>
                 <th>Status</th>
             </tr>
         </thead>
@@ -128,10 +125,7 @@
             {% for trip in recent_trips %}
                 <tr>
                     <td><strong>{{ trip.trip_number }}</strong></td>
-                    <td>{{ trip.client_name }}</td>
-                    <td>{{ trip.pickup_location|truncatechars:30 }}</td>
-                    <td>{{ trip.delivery_location|truncatechars:30 }}</td>
-                    <td>{{ trip.scheduled_datetime|date:"M d, Y H:i" }}</td>
+                    <td>{{ trip.start_date|date:"M d, Y H:i" }}</td>
                     <td>
                         <span class="status-badge status-{{ trip.status|slugify }}">
                             {{ trip.status }}

@@ -45,7 +45,7 @@
                 <th>Trip Number</th>
                 <th>Driver</th>
                 <th>Vehicle</th>
-                <th>Scheduled Date</th>
+                <th>Start Date</th>
                 <th>Legs</th>
                 <th>Status</th>
                 <th>Actions</th>
@@ -57,7 +57,7 @@
                     <td><strong>{{ trip.trip_number }}</strong></td>
                     <td>{{ trip.driver.get_full_name|default:trip.driver.username }}</td>
                     <td>{{ trip.vehicle.registration_plate }}</td>
-                    <td>{{ trip.scheduled_datetime|date:"M d, Y H:i" }}</td>
+                    <td>{{ trip.start_date|date:"M d, Y H:i" }}</td>
                     <td>{{ trip.legs.count }}</td>
                     <td>
                         <span class="status-badge status-{{ trip.status|slugify }}">

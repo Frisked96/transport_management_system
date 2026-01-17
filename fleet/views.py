@@ -89,7 +89,7 @@ class VehicleDetailView(LoginRequiredMixin, BaseFleetPermissionMixin, DetailView
         context['maintenance_logs'] = self.object.maintenance_logs.order_by('-date')[:10]
         
         # Get recent trips
-        context['recent_trips'] = self.object.trips.order_by('-scheduled_datetime')[:10]
+        context['recent_trips'] = self.object.trips.order_by('-created_at')[:10]
         
         # Calculate total maintenance cost
         context['total_maintenance_cost'] = self.object.maintenance_logs.aggregate(

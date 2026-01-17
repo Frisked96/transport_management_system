@@ -58,15 +58,13 @@ A complete, production-ready internal web application for managing transport bus
    pip install -r requirements.txt
    ```
 
-2. **Run Setup Script**
+2. **Database Setup**
    ```bash
-   python setup_project.py
+   python manage.py migrate
+   python manage.py createsuperuser
    ```
-   This script will:
-   - Create database migrations
-   - Set up user groups and permissions
-   - Create demo user accounts
-   - Populate with sample data
+   
+   *Note: `setup_project.py` is currently unavailable. You will need to manually set up groups and permissions via the Django Admin interface.*
 
 3. **Start Development Server**
    ```bash
@@ -119,7 +117,6 @@ transport_management_system/
 ├── static/                 # Static files (CSS, JS, images)
 ├── media/                  # Uploaded files
 ├── manage.py               # Django management script
-├── setup_project.py        # Project setup script
 └── requirements.txt        # Python dependencies
 ```
 
@@ -232,9 +229,9 @@ SECRET_KEY = 'your-secret-key-here'
 7. Create templates
 
 ### Modifying Permissions
-1. Update the `setup_project.py` script
-2. Run the script again to update group permissions
-3. Or use Django admin to manage permissions manually
+1. Use Django admin to manage permissions manually
+2. Access the Admin interface at `/admin/`
+3. Navigate to 'Groups' to manage role-based permissions
 
 ## Production Deployment
 

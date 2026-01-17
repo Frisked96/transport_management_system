@@ -91,16 +91,14 @@
             </thead>
             <tbody>
                 {% for trip in trips %}
-                <tr>
-                    <td><a href="{% url 'trip-detail' trip.pk %}">{{ trip.trip_number }}</a></td>
-                    <td>{{ trip.scheduled_datetime|date:"Y-m-d" }}</td>
-                    <td>{{ trip.vehicle.registration_plate }}</td>
-                    <td><span class="status-badge status-{{ trip.status|lower|slugify }}">{{ trip.status }}</span></td>
-                </tr>
+                    <tr>
+                        <td><a href="{% url 'trip-detail' trip.pk %}">{{ trip.trip_number }}</a></td>
+                        <td>{{ trip.start_date|date:"M d, Y" }}</td>
+                        <td>{{ trip.vehicle.registration_plate }}</td>
+                        <td>{{ trip.status }}</td>
+                    </tr>
                 {% empty %}
-                <tr>
-                    <td colspan="4">No trips found.</td>
-                </tr>
+                    <tr><td colspan="4">No trips assigned yet.</td></tr>
                 {% endfor %}
             </tbody>
         </table>

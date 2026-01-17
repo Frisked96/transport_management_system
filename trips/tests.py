@@ -1,0 +1,154 @@
+from django.test import TestCase, Client
+from django.contrib.auth.models import User, Permission
+from django.urls import reverse
+from django.utils import timezone
+from fleet.models import Vehicle
+from trips.models import Trip, TripLeg, TripExpense
+
+class TripLegViewTest(TestCase):
+    def setUp(self):
+        # Create user
+        self.user = User.objects.create_user(username='manager', password='password')
+        
+        # Add permission
+        try:
+            perm = Permission.objects.get(codename='change_trip')
+            self.user.user_permissions.add(perm)
+        except Permission.DoesNotExist:
+            print("Warning: Permission 'change_trip' not found. Tests might fail.")
+        
+        # Create Vehicle
+        self.vehicle = Vehicle.objects.create(
+            registration_plate='TEST-001',
+            make_model='Test Truck',
+            purchase_date=timezone.now().date(),
+            status=Vehicle.STATUS_ACTIVE
+        )
+        
+        # Create Trip
+        self.trip = Trip.objects.create(
+            driver=self.user,
+            vehicle=self.vehicle,
+            # scheduled_datetime removed or nullable
+            status=Trip.STATUS_SCHEDULED,
+            created_by=self.user
+        )
+        
+        # Create Leg
+        self.leg = TripLeg.objects.create(
+            trip=self.trip,
+            client_name='Test Client',
+            pickup_location='A',
+            delivery_location='B',
+            weight=10,
+            price_per_ton=100,
+            date=timezone.now()
+        )
+        
+        self.client = Client()
+        self.client.login(username='manager', password='password')
+
+    def test_update_leg(self):
+        url = reverse('trip-leg-update', args=[self.leg.pk])
+        data = {
+            'date': timezone.now(), # Ensure date is passed
+            'client_name': 'Updated Client',
+            'pickup_location': 'A',
+            'delivery_location': 'C',
+            'weight': 15,
+            'price_per_ton': 100
+        }
+        response = self.client.post(url, data)
+        
+        # Check if redirects (success)
+        if response.status_code != 302 and response.context:
+             print(f"Form errors: {response.context.get('form').errors if 'form' in response.context else 'No form in context'}")
+
+        self.assertEqual(response.status_code, 302)
+        
+        self.leg.refresh_from_db()
+        self.assertEqual(self.leg.client_name, 'Updated Client')
+        self.assertEqual(self.leg.weight, 15)
+
+
+    def test_delete_leg(self):
+        url = reverse('trip-leg-delete', args=[self.leg.pk])
+        response = self.client.post(url)
+        self.assertEqual(response.status_code, 302)
+        
+class TripExpenseTest(TestCase):
+    def setUp(self):
+        # Create user
+        self.user = User.objects.create_user(username='manager', password='password')
+        
+        # Add permission
+        try:
+            perm = Permission.objects.get(codename='change_trip')
+            self.user.user_permissions.add(perm)
+        except Permission.DoesNotExist:
+            print("Warning: Permission 'change_trip' not found. Tests might fail.")
+        
+        # Create Vehicle
+        self.vehicle = Vehicle.objects.create(
+            registration_plate='TEST-002',
+            make_model='Test Truck 2',
+            purchase_date=timezone.now().date(),
+            status=Vehicle.STATUS_ACTIVE
+        )
+        
+        # Create Trip
+        self.trip = Trip.objects.create(
+            driver=self.user,
+            vehicle=self.vehicle,
+            # scheduled_datetime removed or nullable
+            status=Trip.STATUS_SCHEDULED,
+            created_by=self.user
+        )
+        
+        self.client = Client()
+        self.client.login(username='manager', password='password')
+
+    def test_fixed_expenses(self):
+        url = reverse('trip-expense-update', args=[self.trip.pk])
+        data = {
+            'diesel_expense': 500,
+            'toll_expense': 100
+        }
+        response = self.client.post(url, data)
+        self.assertEqual(response.status_code, 302)
+        
+        self.trip.refresh_from_db()
+        self.assertEqual(self.trip.diesel_expense, 500)
+        self.assertEqual(self.trip.toll_expense, 100)
+        self.assertEqual(self.trip.total_cost, 600)
+
+    def test_custom_expenses(self):
+        # Add fixed expenses first
+        self.trip.diesel_expense = 100
+        self.trip.save()
+
+        url = reverse('trip-custom-expense-create', args=[self.trip.pk])
+        data = {
+            'name': 'Lunch',
+            'amount': 50,
+            'notes': 'Driver lunch'
+        }
+        response = self.client.post(url, data)
+        self.assertEqual(response.status_code, 302)
+        
+        self.assertEqual(self.trip.custom_expenses.count(), 1)
+        self.assertEqual(self.trip.total_cost, 150) # 100 diesel + 50 lunch
+
+    def test_delete_custom_expense(self):
+        expense = TripExpense.objects.create(
+            trip=self.trip,
+            name='Snack',
+            amount=20
+        )
+        
+        url = reverse('trip-custom-expense-delete', args=[expense.pk])
+        response = self.client.post(url)
+        self.assertEqual(response.status_code, 302)
+        
+        self.assertFalse(TripExpense.objects.filter(pk=expense.pk).exists())
+

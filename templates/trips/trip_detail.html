@@ -52,8 +52,17 @@
         </td>
     </tr>
     <tr>
-        <th>Scheduled Date & Time</th>
-        <td>{{ trip.scheduled_datetime|date:"M d, Y H:i" }}</td>
+        <th>Trip Dates</th>
+        <td>
+            {% if trip.start_date %}
+                {{ trip.start_date|date:"M d, Y H:i" }}
+                {% if trip.end_date %}
+                     - {{ trip.end_date|date:"M d, Y H:i" }}
+                {% endif %}
+            {% else %}
+                <em>No dates set (add legs)</em>
+            {% endif %}
+        </td>
     </tr>
     <tr>
         <th>Actual Completion</th>
@@ -97,26 +106,35 @@
     <table>
         <thead>
             <tr>
+                <th>Date</th>
                 <th>Client</th>
                 <th>Route</th>
                 <th>Weight (Tons)</th>
                 <th>Price/Ton</th>
                 <th>Est. Revenue</th>
+                <th>Actions</th>
             </tr>
         </thead>
         <tbody>
             {% for leg in trip.legs.all %}
                 <tr>
+                    <td>{{ leg.date|date:"M d, H:i" }}</td>
                     <td>{{ leg.client_name }}</td>
                     <td>{{ leg.pickup_location }} &rarr; {{ leg.delivery_location }}</td>
                     <td>{{ leg.weight|default:"-" }}</td>
                     <td>{{ leg.price_per_ton }}</td>
                     <td>{{ leg.revenue|floatformat:2 }}</td>
+                    <td>
+                        {% if perms.trips.change_trip %}
+                            <a href="{% url 'trip-leg-update' leg.pk %}" class="btn btn-sm btn-warning">Edit</a>
+                            <a href="{% url 'trip-leg-delete' leg.pk %}" class="btn btn-sm btn-danger">Delete</a>
+                        {% endif %}
+                    </td>
                 </tr>
             {% endfor %}
             <tr style="background-color: #f9f9f9; font-weight: bold;">
-                <td colspan="4" style="text-align: right;">Total Estimated Revenue:</td>
-                <td>{{ trip.total_revenue|floatformat:2 }}</td>
+                <td colspan="5" style="text-align: right;">Total Estimated Revenue:</td>
+                <td colspan="2">{{ trip.total_revenue|floatformat:2 }}</td>
             </tr>
         </tbody>
     </table>
@@ -124,9 +142,75 @@
     <p>No legs added to this trip yet.</p>
 {% endif %}
 
-<!-- Financial Records for this Trip -->
+<!-- Trip Expenses -->
+<div class="clearfix mt-2">
+    <h3 style="float: left;">Trip Expenses</h3>
+    <div style="float: right;">
+        {% if perms.trips.change_trip %}
+            <a href="{% url 'trip-expense-update' trip.pk %}" class="btn btn-sm btn-warning">Update Fixed Expenses</a>
+            <a href="{% url 'trip-custom-expense-create' trip.pk %}" class="btn btn-sm">Add Custom Expense</a>
+        {% endif %}
+    </div>
+</div>
+
+<table>
+    <thead>
+        <tr>
+            <th>Expense Type</th>
+            <th>Amount</th>
+            <th>Notes/Details</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        <!-- Fixed Expenses -->
+        <tr>
+            <td>Diesel Expense</td>
+            <td>{{ trip.diesel_expense|default:0|floatformat:2 }}</td>
+            <td>Fixed Entry</td>
+            <td>-</td>
+        </tr>
+        <tr>
+            <td>Toll Expense</td>
+            <td>{{ trip.toll_expense|default:0|floatformat:2 }}</td>
+            <td>Fixed Entry</td>
+            <td>-</td>
+        </tr>
+        
+        <!-- Custom Expenses -->
+        {% for expense in trip.custom_expenses.all %}
+            <tr>
+                <td>{{ expense.name }}</td>
+                <td>{{ expense.amount|floatformat:2 }}</td>
+                <td>{{ expense.notes }}</td>
+                <td>
+                    {% if perms.trips.change_trip %}
+                        <a href="{% url 'trip-custom-expense-delete' expense.pk %}" class="btn btn-sm btn-danger">Delete</a>
+                    {% endif %}
+                </td>
+            </tr>
+        {% endfor %}
+        
+        <tr style="background-color: #f9f9f9; font-weight: bold;">
+            <td style="text-align: right;">Total Trip Cost:</td>
+            <td>{{ trip.total_cost|floatformat:2 }}</td>
+            <td colspan="2"></td>
+        </tr>
+        
+        <!-- Profit/Loss Calculation -->
+        <tr style="background-color: #f0f0f0; border-top: 2px solid #ddd;">
+             <td style="text-align: right; font-weight: bold;">Estimated Net Profit:</td>
+             <td style="font-weight: bold; {% if trip.total_revenue|add:trip.total_cost < 0 %}color: red;{% else %}color: green;{% endif %}">
+                {% with profit=trip.total_revenue|add:"-"|add:trip.total_cost %}
+                    {{ profit|floatformat:2 }}
+                {% endwith %}
+             </td>
+             <td colspan="2"></td>
+        </tr>
+    </tbody>
+</table>
 {% if trip.financial_records.all %}
-    <h3 class="mt-2">Financial Records</h3>
+    <h4 class="mt-2">Legacy Financial Records</h4>
     <table>
         <thead>
             <tr>

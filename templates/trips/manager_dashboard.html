@@ -63,10 +63,9 @@
         <thead>
             <tr>
                 <th>Trip Number</th>
-                <th>Client</th>
                 <th>Driver</th>
                 <th>Vehicle</th>
-                <th>Scheduled Date</th>
+                <th>Start Date</th>
                 <th>Status</th>
                 <th>Actions</th>
             </tr>
@@ -75,10 +74,9 @@
             {% for trip in recent_trips|slice:":10" %}
                 <tr>
                     <td><strong>{{ trip.trip_number }}</strong></td>
-                    <td>{{ trip.client_name }}</td>
                     <td>{{ trip.driver.get_full_name|default:trip.driver.username }}</td>
                     <td>{{ trip.vehicle.registration_plate }}</td>
-                    <td>{{ trip.scheduled_datetime|date:"M d, Y H:i" }}</td>
+                    <td>{{ trip.start_date|date:"M d, Y H:i" }}</td>
                     <td>
                         <span class="status-badge status-{{ trip.status|slugify }}">
                             {{ trip.status }}

@@ -52,7 +52,9 @@ class Trip(models.Model):
     
     # Scheduling
     scheduled_datetime = models.DateTimeField(
-        verbose_name='Scheduled Date & Time'
+        verbose_name='Scheduled Date & Time',
+        null=True,
+        blank=True
     )
     
     actual_completion_datetime = models.DateTimeField(
@@ -92,7 +94,7 @@ class Trip(models.Model):
     class Meta:
         verbose_name = 'Trip'
         verbose_name_plural = 'Trips'
-        ordering = ['-scheduled_datetime']
+        ordering = ['-created_at']
         permissions = [
             ('can_view_all_trips', 'Can view all trips'),
             ('can_update_trip_status', 'Can update trip status'),
@@ -163,17 +165,38 @@ class Trip(models.Model):
         super().save(*args, **kwargs)
     
     @property
+    def start_date(self):
+        """Get the start date from the first leg"""
+        first_leg = self.legs.order_by('date').first()
+        if first_leg:
+            return first_leg.date
+        return self.scheduled_datetime or self.created_at
+
+    @property
+    def end_date(self):
+        """Get the end date from the last leg"""
+        last_leg = self.legs.order_by('-date').first()
+        if last_leg:
+            return last_leg.date
+        return None
+
+    @property
     def is_overdue(self):
         """Check if trip is overdue"""
         if self.status == self.STATUS_COMPLETED:
             return False
-        return self.scheduled_datetime < timezone.now()
+        if self.start_date:
+             return self.start_date < timezone.now()
+        return False
     
     @property
     def duration_display(self):
         """Display trip duration if completed"""
-        if self.actual_completion_datetime and self.scheduled_datetime:
-            duration = self.actual_completion_datetime - self.scheduled_datetime
+        start = self.start_date
+        end = self.end_date
+        
+        if start and end and end >= start:
+            duration = end - start
             days = duration.days
             hours = duration.seconds // 3600
             minutes = (duration.seconds % 3600) // 60
@@ -198,6 +221,70 @@ class Trip(models.Model):
         for leg in self.legs.all():
             revenue += leg.revenue
         return revenue
+
+    @property
+    def total_cost(self):
+        """Calculate total cost (diesel + toll + custom expenses)"""
+        diesel = self.diesel_expense or 0
+        toll = self.toll_expense or 0
+        custom = self.custom_expenses.aggregate(total=models.Sum('amount'))['total'] or 0
+        return diesel + toll + custom
+    
+    # Trip Expenses
+    diesel_expense = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        verbose_name='Diesel Expense'
+    )
+    
+    toll_expense = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        verbose_name='Toll Expense'
+    )
+
+
+class TripExpense(models.Model):
+    """
+    Custom expenses associated with a trip
+    """
+    trip = models.ForeignKey(
+        Trip,
+        on_delete=models.CASCADE,
+        related_name='custom_expenses',
+        verbose_name='Trip'
+    )
+    
+    name = models.CharField(
+        max_length=200,
+        verbose_name='Expense Name'
+    )
+    
+    amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        verbose_name='Amount'
+    )
+    
+    notes = models.TextField(
+        blank=True,
+        verbose_name='Notes'
+    )
+    
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name='Created At'
+    )
+    
+    class Meta:
+        verbose_name = 'Trip Expense'
+        verbose_name_plural = 'Trip Expenses'
+        ordering = ['created_at']
+    
+    def __str__(self):
+        return f"{self.name} - {self.amount}"
 
 
 class TripLeg(models.Model):
@@ -242,6 +329,12 @@ class TripLeg(models.Model):
         default=0
     )
 
+    date = models.DateTimeField(
+        verbose_name='Date',
+        null=True,
+        blank=True
+    )
+
     created_at = models.DateTimeField(
         auto_now_add=True,
         verbose_name='Created At'
@@ -250,7 +343,7 @@ class TripLeg(models.Model):
     class Meta:
         verbose_name = 'Trip Leg'
         verbose_name_plural = 'Trip Legs'
-        ordering = ['created_at']
+        ordering = ['date']
 
     def __str__(self):
         return f"{self.trip.trip_number} - {self.client_name} ({self.pickup_location} to {self.delivery_location})"

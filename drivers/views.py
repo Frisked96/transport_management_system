@@ -49,7 +49,7 @@ class DriverDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
         ).distinct()
 
         # Trips history
-        context['trips'] = Trip.objects.filter(driver=driver.user).order_by('-scheduled_datetime')
+        context['trips'] = Trip.objects.filter(driver=driver.user).order_by('-created_at')
 
         # Profit Calculation
         # 1. Total Revenue: Sum of (Weight * Price) for all legs of trips by this driver

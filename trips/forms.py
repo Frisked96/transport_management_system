@@ -3,7 +3,7 @@ Forms for Trips application
 """
 from django import forms
 from django.contrib.auth.models import User
-from .models import Trip, TripLeg
+from .models import Trip, TripLeg, TripExpense
 from fleet.models import Vehicle
 
 
@@ -43,18 +43,11 @@ class TripForm(forms.ModelForm):
             'trip_number',
             'driver',
             'vehicle',
-            'scheduled_datetime',
             'status',
             'notes'
         ]
         
         widgets = {
-            'scheduled_datetime': forms.DateTimeInput(
-                attrs={
-                    'type': 'datetime-local',
-                    'style': 'width: 100%; padding: 5px; margin: 2px 0;'
-                }
-            ),
             'notes': forms.Textarea(
                 attrs={
                     'rows': 4,
@@ -80,12 +73,22 @@ class TripLegForm(forms.ModelForm):
     class Meta:
         model = TripLeg
         fields = [
+            'date',
             'client_name',
             'pickup_location',
             'delivery_location',
             'weight',
             'price_per_ton'
         ]
+        
+        widgets = {
+            'date': forms.DateTimeInput(
+                attrs={
+                    'type': 'datetime-local',
+                    'style': 'width: 100%; padding: 5px; margin: 2px 0;'
+                }
+            ),
+        }
 
 
 class TripStatusForm(forms.ModelForm):
@@ -111,3 +114,37 @@ class TripStatusForm(forms.ModelForm):
                 }
             )
         }
+
+
+class TripExpenseUpdateForm(forms.ModelForm):
+    """
+    Form for updating fixed trip expenses (diesel, toll)
+    """
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            field.widget.attrs.update({
+                'style': 'width: 100%; padding: 5px; margin: 2px 0;'
+            })
+    
+    class Meta:
+        model = Trip
+        fields = ['diesel_expense', 'toll_expense']
+
+
+class TripCustomExpenseForm(forms.ModelForm):
+    """
+    Form for adding/editing custom trip expenses
+    """
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            field.widget.attrs.update({
+                'style': 'width: 100%; padding: 5px; margin: 2px 0;'
+            })
+    
+    class Meta:
+        model = TripExpense
+        fields = ['name', 'amount', 'notes']
