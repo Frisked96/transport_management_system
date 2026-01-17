@@ -7,12 +7,13 @@
     box-sizing: border-box;
 }
 
-/* General Body Styling */
+/* General Body Styling - Django Admin Theme */
 body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+    font-family: "Roboto", "Lucida Grande", "DejaVu Sans", "Bitstream Vera Sans", Verdana, Arial, sans-serif;
     color: #333;
     background-color: #f8f8f8;
     line-height: 1.6;
+    font-size: 14px;
 }
 
 /* Container for content width and centering */
@@ -22,30 +23,37 @@ body {
     padding: 0 20px;
 }
 
-/* Header Styling - "Matte Black" */
+/* Header Styling - Django Admin Dark Blue */
 header {
-    background-color: #2c3e50; /* Darker tone */
+    background-color: #417690; /* Django admin header color */
     color: white;
     padding: 1rem 0;
-    margin-bottom: 2rem;
+    margin-bottom: 0;
+    border-bottom: 1px solid #417690;
 }
 
 header h1 {
-    margin-bottom: 0.5rem;
-    color: white; /* Ensure heading is white on dark background */
+    margin-bottom: 0;
+    color: #ffc;
+    font-size: 1.5rem;
+    font-weight: 300;
+    padding-left: 20px;
 }
 
-/* Navigation Styling - "Matte Black" */
+/* Navigation Styling - Django Admin Blue */
 nav {
-    background-color: #34495e; /* Slightly lighter dark tone for contrast */
-    padding: 0.5rem 0;
+    background-color: #79aec8; /* Django admin secondary nav color */
+    padding: 0;
+    border-bottom: 1px solid #417690;
 }
 
 nav ul {
     list-style: none;
     display: flex;
     flex-wrap: wrap;
-    gap: 1rem;
+    gap: 0;
+    margin: 0;
+    padding: 0;
 }
 
 nav li {
@@ -53,69 +61,89 @@ nav li {
 }
 
 nav a {
-    color: white;
+    color: #fff;
     text-decoration: none;
-    padding: 0.5rem 1rem;
+    padding: 10px 15px;
     display: block;
-    border-radius: 3px;
+    border-radius: 0;
+    font-weight: bold;
+    font-size: 0.9rem;
 }
 
 nav a:hover {
-    background-color: #2c3e50; /* Darker hover for navigation items */
+    background-color: #609ab6; /* Slightly darker on hover */
 }
 
-/* User Info Section */
+/* User Info Section - Django style */
 .user-info {
     text-align: right;
-    padding: 0.5rem 0;
+    padding: 0.5rem 20px;
     font-size: 0.9rem;
-    color: #ecf0f1; /* Light color for text on dark header */
+    color: #ffc;
+    background-color: #417690;
 }
 
 .user-info a {
-    color: #ecf0f1;
+    color: #ffc;
     text-decoration: none;
     margin-left: 1rem;
+    font-weight: bold;
 }
 
 .user-info a:hover {
     text-decoration: underline;
+    color: white;
 }
 
 /* Main Content Area */
 main {
     background-color: white;
-    padding: 2rem;
-    border-radius: 5px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    padding: 20px;
     min-height: 500px;
+    margin: 20px 20px 0 20px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
 }
 
 /* Headings within Main Content */
 h1, h2, h3 {
     margin-bottom: 1rem;
-    color: #2c3e50; /* Dark color for headings on light background */
+    color: #333;
+    font-weight: 400;
 }
 
-/* Tables */
+h1 {
+    color: #666;
+    font-size: 1.8rem;
+    margin: 0 0 20px 0;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #eee;
+}
+
+/* Tables - Django Admin Style */
 table {
     width: 100%;
     border-collapse: collapse;
     margin: 1rem 0;
     background-color: #fff;
     border: 1px solid #ddd;
+    font-size: 13px;
 }
 
 th, td {
     border: 1px solid #ddd;
     padding: 10px;
     text-align: left;
+    vertical-align: top;
 }
 
 th {
-    background-color: #e9e9e9; /* Lighter background for table headers */
-    font-weight: bold;
-    color: #333;
+    background-color: #f5f5f5; /* Django table header color */
+    font-weight: 600;
+    color: #666;
+    text-transform: uppercase;
+    font-size: 12px;
+    padding: 8px 10px;
 }
 
 tr:nth-child(even) {
@@ -123,26 +151,39 @@ tr:nth-child(even) {
 }
 
 tr:hover {
-    background-color: #f5f5f5;
+    background-color: #ffffcc; /* Django row hover color */
 }
 
-/* Forms */
+/* Forms - Django Style */
 form {
-    margin: 1rem 0;
+    margin: 0 0 20px 0;
     background-color: #fff;
-    border: 1px solid #ddd;
-    padding: 20px;
-    border-radius: 4px;
+    padding: 0;
+}
+
+.form-row {
+    margin-bottom: 15px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #eee;
+    overflow: hidden;
 }
 
 .form-group {
     margin-bottom: 1rem;
+    float: left;
+    width: 100%;
 }
 
 label {
     display: block;
-    margin-bottom: 0.5rem;
+    margin-bottom: 5px;
     font-weight: bold;
+    color: #333;
+    font-size: 13px;
+    float: left;
+    width: 160px;
+    padding-top: 4px;
+    padding-right: 10px;
 }
 
 input[type="text"],
@@ -153,90 +194,122 @@ input[type="date"],
 input[type="datetime-local"],
 select,
 textarea {
-    width: 100%;
-    padding: 8px;
-    border: 1px solid #ddd;
-    border-radius: 3px;
-    font-size: 14px;
+    width: calc(100% - 170px);
+    padding: 6px 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 13px;
     box-sizing: border-box;
+    float: left;
+    background-color: #fff;
 }
 
-/* Buttons */
-button, .btn {
-    background-color: #3498db; /* Blue button */
+input[type="text"]:focus,
+input[type="email"]:focus,
+input[type="password"]:focus,
+select:focus,
+textarea:focus {
+    border-color: #999;
+    box-shadow: 0 0 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Buttons - Django Style */
+button, .btn, input[type="submit"] {
+    background-color: #417690; /* Django primary button color */
     color: white;
-    padding: 10px 20px;
+    padding: 10px 15px;
     border: none;
-    border-radius: 3px;
+    border-radius: 4px;
     cursor: pointer;
     text-decoration: none;
     display: inline-block;
-    margin: 0.25rem 0;
-    font-size: 1em;
+    margin: 5px 5px 5px 0;
+    font-size: 13px;
+    font-weight: normal;
+    text-transform: uppercase;
+    line-height: 1;
+    transition: background-color 0.15s;
 }
 
-button:hover, .btn:hover {
-    background-color: #2980b9;
+button:hover, .btn:hover, input[type="submit"]:hover {
+    background-color: #205067; /* Darker shade on hover */
+}
+
+button:active, .btn:active, input[type="submit"]:active {
+    background-color: #0c3c5c;
+}
+
+.btn-default {
+    background-color: #f0f0f0;
+    color: #333;
+    border: 1px solid #ccc;
+}
+
+.btn-default:hover {
+    background-color: #e0e0e0;
 }
 
 .btn-success {
-    background-color: #27ae60; /* Green */
+    background-color: #5cb85c; /* Green */
 }
 
 .btn-success:hover {
-    background-color: #229954;
+    background-color: #449d44;
 }
 
 .btn-danger {
-    background-color: #e74c3c; /* Red */
+    background-color: #d9534f; /* Red */
 }
 
 .btn-danger:hover {
-    background-color: #c0392b;
+    background-color: #c9302c;
 }
 
 .btn-warning {
-    background-color: #f39c12; /* Orange */
+    background-color: #f0ad4e; /* Orange */
 }
 
 .btn-warning:hover {
-    background-color: #e67e22;
+    background-color: #ec971f;
 }
 
-/* Message styles */
+/* Message styles - Django Admin */
 .messages {
-    margin: 1rem 0;
+    margin: 0 0 20px 0;
+    padding: 0;
+    list-style: none;
 }
 
 .message {
-    padding: 1rem;
+    padding: 15px;
     margin-bottom: 1rem;
-    border-radius: 3px;
+    border-radius: 4px;
     font-weight: bold;
+    border: 1px solid transparent;
 }
 
 .message.success {
-    background-color: #d4edda;
-    color: #155724;
-    border: 1px solid #c3e6cb;
+    background-color: #dff0d8;
+    color: #3c763d;
+    border-color: #d6e9c6;
 }
 
 .message.error {
-    background-color: #f8d7da;
-    color: #721c24;
-    border: 1px solid #f5c6cb;
+    background-color: #f2dede;
+    color: #a94442;
+    border-color: #ebccd1;
 }
 
 .message.warning {
-    background-color: #fff3cd;
-    color: #856404;
-    border: 1px solid #ffeaa7;
+    background-color: #fcf8e3;
+    color: #8a6d3b;
+    border-color: #faebcc;
 }
 
 .message.info {
-    background-color: #d1ecf1;
-    color: #0c5460;
-    border: 1px solid #bee5eb;
+    background-color: #d9edf7;
+    color: #31708f;
+    border-color: #bce8f1;
 }
 
 /* Utility classes */
@@ -256,15 +329,16 @@ button:hover, .btn:hover {
     border-radius: 3px;
     font-size: 0.85rem;
     font-weight: bold;
+    display: inline-block;
 }
 
-.status-scheduled { background-color: #3498db; color: white; }
-.status-in-progress { background-color: #f39c12; color: white; }
-.status-completed { background-color: #27ae60; color: white; }
-.status-cancelled { background-color: #95a5a6; color: white; }
-.status-active { background-color: #27ae60; color: white; }
-.status-maintenance { background-color: #e74c3c; color: white; }
-.status-retired { background-color: #95a5a6; color: white; }
+.status-scheduled { background-color: #5bc0de; color: white; }
+.status-in-progress { background-color: #f0ad4e; color: white; }
+.status-completed { background-color: #5cb85c; color: white; }
+.status-cancelled { background-color: #777; color: white; }
+.status-active { background-color: #5cb85c; color: white; }
+.status-maintenance { background-color: #d9534f; color: white; }
+.status-retired { background-color: #777; color: white; }
 
 /* Dashboard cards */
 .dashboard-grid {
@@ -277,26 +351,125 @@ button:hover, .btn:hover {
 .dashboard-card {
     background-color: #f8f9fa;
     padding: 1.5rem;
-    border-radius: 5px;
-    border-left: 4px solid #3498db;
+    border-radius: 4px;
+    border-left: 4px solid #417690;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 
 .dashboard-card h3 {
     margin-bottom: 0.5rem;
-    color: #2c3e50;
+    color: #666;
+    font-size: 1rem;
+    text-transform: uppercase;
 }
 
 .dashboard-card .value {
     font-size: 2rem;
-    font-weight: bold;
-    color: #3498db;
+    font-weight: 300;
+    color: #417690;
+}
+
+/* Object Tools - Django Style */
+.object-tools {
+    float: right;
+    margin: 0 0 15px 0;
+    padding: 0;
+    list-style: none;
+}
+
+.object-tools li {
+    display: inline-block;
+    margin-left: 5px;
+}
+
+/* Breadcrumbs - Django Style */
+.breadcrumbs {
+    background: white;
+    padding: 10px 15px;
+    border-bottom: 1px solid #ededed;
+    font-size: 0.85rem;
+    color: #999;
+    margin: 0 0 20px 0;
+}
+
+.breadcrumbs a {
+    color: #417690;
+    text-decoration: none;
+}
+
+.breadcrumbs a:hover {
+    text-decoration: underline;
+}
+
+/* Module - Django Style */
+.module {
+    margin-bottom: 30px;
+    background: white;
+    border: 1px solid #eee;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.module h2 {
+    background: #f8f8f8;
+    padding: 10px 15px;
+    margin: 0;
+    border-bottom: 1px solid #eee;
+    font-size: 1rem;
+    font-weight: 400;
+    color: #666;
+}
+
+.module p, .module ul, .module h3 {
+    padding: 10px 15px;
+    margin: 0;
 }
 
 /* Footer Styling */
 footer {
-    background-color: #2c3e50;
+    background-color: #417690;
     color: white;
     text-align: center;
-    padding: 1rem 0;
-    margin-top: 2rem;
+    padding: 15px 0;
+    margin-top: 30px;
+    font-size: 0.85rem;
+    border-top: 1px solid #205067;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .container {
+        padding: 0 10px;
+    }
+    
+    nav ul {
+        flex-direction: column;
+    }
+    
+    .dashboard-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    label {
+        width: 100%;
+        float: none;
+        margin-bottom: 5px;
+    }
+    
+    input[type="text"],
+    input[type="email"],
+    input[type="password"],
+    input[type="number"],
+    input[type="date"],
+    input[type="datetime-local"],
+    select,
+    textarea {
+        width: 100%;
+        float: none;
+    }
+    
+    .object-tools {
+        float: none;
+        margin-bottom: 15px;
+    }
 }
