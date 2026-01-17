@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+
+{% block title %}Add Trip Leg - Transport Management System{% endblock %}
+
+{% block content %}
+<h2>Add Leg to Trip: {{ trip.trip_number }}</h2>
+
+<form method="post">
+    {% csrf_token %}
+
+    {% for field in form %}
+        <div class="form-group">
+            {{ field.label_tag }}
+            {{ field }}
+            {% if field.errors %}
+                <div class="error" style="color: #e74c3c; margin-top: 5px;">
+                    {{ field.errors }}
+                </div>
+            {% endif %}
+            {% if field.help_text %}
+                <small style="color: #7f8c8d;">{{ field.help_text }}</small>
+            {% endif %}
+        </div>
+    {% endfor %}
+
+    <div style="margin-top: 1.5rem;">
+        <button type="submit" class="btn btn-success">
+            Add Leg
+        </button>
+        <a href="{% url 'trip-detail' trip.pk %}" class="btn" style="margin-left: 1rem;">Cancel</a>
+    </div>
+</form>
+{% endblock %}

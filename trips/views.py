@@ -11,8 +11,8 @@ from django.db import models
 from django.db.models import Q
 from django.utils import timezone
 
-from .models import Trip
-from .forms import TripForm, TripStatusForm
+from .models import Trip, TripLeg
+from .forms import TripForm, TripStatusForm, TripLegForm
 
 
 class BaseTripPermissionMixin:
@@ -68,10 +68,10 @@ class TripListView(LoginRequiredMixin, BaseTripPermissionMixin, ListView):
         if search:
             queryset = queryset.filter(
                 Q(trip_number__icontains=search) |
-                Q(client_name__icontains=search) |
-                Q(pickup_location__icontains=search) |
-                Q(delivery_location__icontains=search)
-            )
+                Q(legs__client_name__icontains=search) |
+                Q(legs__pickup_location__icontains=search) |
+                Q(legs__delivery_location__icontains=search)
+            ).distinct()
         
         # Status filter
         status = self.request.GET.get('status')
@@ -154,6 +154,33 @@ class TripDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
     def delete(self, request, *args, **kwargs):
         messages.success(self.request, 'Trip deleted successfully!')
         return super().delete(request, *args, **kwargs)
+
+
+class TripLegCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+    """
+    View to add a leg to a trip
+    """
+    model = TripLeg
+    form_class = TripLegForm
+    template_name = 'trips/trip_leg_form.html'
+    permission_required = 'trips.change_trip'
+
+    def dispatch(self, request, *args, **kwargs):
+        self.trip = get_object_or_404(Trip, pk=kwargs['trip_pk'])
+        return super().dispatch(request, *args, **kwargs)
+
+    def form_valid(self, form):
+        form.instance.trip = self.trip
+        messages.success(self.request, 'Trip Leg added successfully!')
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse_lazy('trip-detail', kwargs={'pk': self.trip.pk})
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['trip'] = self.trip
+        return context
 
 
 @login_required

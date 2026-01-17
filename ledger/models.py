@@ -3,7 +3,7 @@ Models for Ledger application
 """
 from django.db import models
 from django.contrib.auth.models import User
-from trips.models import Trip
+from trips.models import Trip, TripLeg
 
 
 class FinancialRecord(models.Model):
@@ -41,6 +41,16 @@ class FinancialRecord(models.Model):
         verbose_name='Associated Trip'
     )
     
+    # Associated trip leg (optional, for sub-trip expenses)
+    associated_trip_leg = models.ForeignKey(
+        TripLeg,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='financial_records',
+        verbose_name='Associated Trip Leg'
+    )
+
     # Category of transaction
     category = models.CharField(
         max_length=30,

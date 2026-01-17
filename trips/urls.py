@@ -14,4 +14,7 @@ urlpatterns = [
     
     # Status update URL
     path('trip/<int:pk>/status/', views.update_trip_status, name='trip-status-update'),
+
+    # Sub-trip (Trip Leg) URLs
+    path('trip/<int:trip_pk>/leg/create/', views.TripLegCreateView.as_view(), name='trip-leg-create'),
 ]

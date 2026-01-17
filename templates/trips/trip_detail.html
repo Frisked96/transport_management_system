@@ -40,10 +40,6 @@
         </td>
     </tr>
     <tr>
-        <th>Client Name</th>
-        <td>{{ trip.client_name }}</td>
-    </tr>
-    <tr>
         <th>Assigned Driver</th>
         <td>{{ trip.driver.get_full_name|default:trip.driver.username }}</td>
     </tr>
@@ -54,14 +50,6 @@
                 {{ trip.vehicle.registration_plate }} - {{ trip.vehicle.make_model }}
             </a>
         </td>
-    </tr>
-    <tr>
-        <th>Pickup Location</th>
-        <td>{{ trip.pickup_location }}</td>
-    </tr>
-    <tr>
-        <th>Delivery Location</th>
-        <td>{{ trip.delivery_location }}</td>
     </tr>
     <tr>
         <th>Scheduled Date & Time</th>
@@ -94,6 +82,47 @@
         </tr>
     {% endif %}
 </table>
+
+<!-- Trip Legs -->
+<div class="clearfix mt-2">
+    <h3 style="float: left;">Trip Legs (Sub-trips)</h3>
+    <div style="float: right;">
+        {% if perms.trips.change_trip %}
+            <a href="{% url 'trip-leg-create' trip.pk %}" class="btn btn-sm">Add Leg</a>
+        {% endif %}
+    </div>
+</div>
+
+{% if trip.legs.all %}
+    <table>
+        <thead>
+            <tr>
+                <th>Client</th>
+                <th>Route</th>
+                <th>Weight (Tons)</th>
+                <th>Price/Ton</th>
+                <th>Est. Revenue</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for leg in trip.legs.all %}
+                <tr>
+                    <td>{{ leg.client_name }}</td>
+                    <td>{{ leg.pickup_location }} &rarr; {{ leg.delivery_location }}</td>
+                    <td>{{ leg.weight|default:"-" }}</td>
+                    <td>{{ leg.price_per_ton }}</td>
+                    <td>{{ leg.revenue|floatformat:2 }}</td>
+                </tr>
+            {% endfor %}
+            <tr style="background-color: #f9f9f9; font-weight: bold;">
+                <td colspan="4" style="text-align: right;">Total Estimated Revenue:</td>
+                <td>{{ trip.total_revenue|floatformat:2 }}</td>
+            </tr>
+        </tbody>
+    </table>
+{% else %}
+    <p>No legs added to this trip yet.</p>
+{% endif %}
 
 <!-- Financial Records for this Trip -->
 {% if trip.financial_records.all %}
