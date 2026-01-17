@@ -1,0 +1,149 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ vehicle.registration_plate }} - Transport Management System{% endblock %}
+
+{% block content %}
+<div class="clearfix mb-1">
+    <h2 style="float: left;">Vehicle: {{ vehicle.registration_plate }}</h2>
+    <div style="float: right;">
+        <a href="{% url 'vehicle-list' %}" class="btn">Back to List</a>
+        
+        {% if perms.fleet.change_vehicle %}
+            <a href="{% url 'vehicle-update' vehicle.pk %}" class="btn btn-warning">Edit Vehicle</a>
+        {% endif %}
+        
+        {% if perms.fleet.create_maintenance_log %}
+            <a href="{% url 'maintenance-log-create' %}" class="btn btn-success">Add Maintenance Log</a>
+        {% endif %}
+        
+        {% if perms.fleet.delete_vehicle %}
+            <a href="{% url 'vehicle-delete' vehicle.pk %}" class="btn btn-danger">Delete Vehicle</a>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Vehicle Information -->
+<table>
+    <tr>
+        <th>Registration Plate</th>
+        <td>{{ vehicle.registration_plate }}</td>
+    </tr>
+    <tr>
+        <th>Make & Model</th>
+        <td>{{ vehicle.make_model }}</td>
+    </tr>
+    <tr>
+        <th>Purchase Date</th>
+        <td>{{ vehicle.purchase_date|date:"M d, Y" }}</td>
+    </tr>
+    <tr>
+        <th>Status</th>
+        <td>
+            <span class="status-badge status-{{ vehicle.status|lower }}">
+                {{ vehicle.status }}
+            </span>
+        </td>
+    </tr>
+    <tr>
+        <th>Total Maintenance Cost</th>
+        <td>${{ total_maintenance_cost|floatformat:2 }}</td>
+    </tr>
+    <tr>
+        <th>Last Maintenance</th>
+        <td>
+            {% if vehicle.last_maintenance %}
+                {{ vehicle.last_maintenance.date|date:"M d, Y" }} - {{ vehicle.last_maintenance.type }}
+                <br>
+                <small><strong>Next Due:</strong> 
+                    {% if vehicle.next_due_maintenance %}
+                        {{ vehicle.next_due_maintenance|date:"M d, Y" }}
+                        {% if vehicle.last_maintenance.is_overdue %}
+                            <span style="color: #e74c3c; font-weight: bold;">(OVERDUE)</span>
+                        {% endif %}
+                    {% else %}
+                        Not scheduled
+                    {% endif %}
+                </small>
+            {% else %}
+                <em>No maintenance records</em>
+            {% endif %}
+        </td>
+    </tr>
+</table>
+
+<!-- Recent Maintenance Logs -->
+<h3 class="mt-2">Recent Maintenance Logs</h3>
+{% if maintenance_logs %}
+    <table>
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Type</th>
+                <th>Description</th>
+                <th>Cost</th>
+                <th>Service Provider</th>
+                <th>Next Due</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for log in maintenance_logs %}
+                <tr>
+                    <td>{{ log.date|date:"M d, Y" }}</td>
+                    <td>{{ log.type }}</td>
+                    <td>{{ log.description|truncatechars:40 }}</td>
+                    <td style="text-align: right;">${{ log.cost|floatformat:2 }}</td>
+                    <td>{{ log.service_provider }}</td>
+                    <td>
+                        {% if log.next_service_due %}
+                            {{ log.next_service_due|date:"M d, Y" }}
+                        {% else %}
+                            <em>N/A</em>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% else %}
+    <div class="message info">
+        No maintenance logs found for this vehicle.
+    </div>
+{% endif %}
+
+<!-- Recent Trips -->
+<h3 class="mt-2">Recent Trips</h3>
+{% if recent_trips %}
+    <table>
+        <thead>
+            <tr>
+                <th>Trip Number</th>
+                <th>Client</th>
+                <th>Pickup Location</th>
+                <th>Delivery Location</th>
+                <th>Scheduled Date</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for trip in recent_trips %}
+                <tr>
+                    <td><strong>{{ trip.trip_number }}</strong></td>
+                    <td>{{ trip.client_name }}</td>
+                    <td>{{ trip.pickup_location|truncatechars:30 }}</td>
+                    <td>{{ trip.delivery_location|truncatechars:30 }}</td>
+                    <td>{{ trip.scheduled_datetime|date:"M d, Y H:i" }}</td>
+                    <td>
+                        <span class="status-badge status-{{ trip.status|slugify }}">
+                            {{ trip.status }}
+                        </span>
+                    </td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% else %}
+    <div class="message info">
+        No trips found for this vehicle.
+    </div>
+{% endif %}
+{% endblock %}

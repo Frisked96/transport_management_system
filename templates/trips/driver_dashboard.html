@@ -1,0 +1,101 @@
+{% extends 'base.html' %}
+
+{% block title %}Driver Dashboard - Transport Management System{% endblock %}
+
+{% block content %}
+<h2>Driver Dashboard</h2>
+<p>Welcome, {{ user.get_full_name|default:user.username }}! This dashboard shows your assigned trips.</p>
+
+<!-- Assigned Vehicle Info -->
+{% if assigned_vehicle %}
+    <div class="dashboard-card mb-1">
+        <h3>Your Assigned Vehicle</h3>
+        <p><strong>{{ assigned_vehicle.registration_plate }}</strong> - {{ assigned_vehicle.make_model }}</p>
+        <p>Status: <span class="status-badge status-{{ assigned_vehicle.status|lower }}">{{ assigned_vehicle.status }}</span></p>
+    </div>
+{% endif %}
+
+<!-- Current/Upcoming Trips -->
+<h3>Current & Upcoming Trips</h3>
+{% if current_trips %}
+    <table>
+        <thead>
+            <tr>
+                <th>Trip Number</th>
+                <th>Client</th>
+                <th>Pickup Location</th>
+                <th>Delivery Location</th>
+                <th>Scheduled Date</th>
+                <th>Status</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for trip in current_trips %}
+                <tr>
+                    <td><strong>{{ trip.trip_number }}</strong></td>
+                    <td>{{ trip.client_name }}</td>
+                    <td>{{ trip.pickup_location|truncatechars:25 }}</td>
+                    <td>{{ trip.delivery_location|truncatechars:25 }}</td>
+                    <td>{{ trip.scheduled_datetime|date:"M d, Y H:i" }}</td>
+                    <td>
+                        <span class="status-badge status-{{ trip.status|slugify }}">
+                            {{ trip.status }}
+                        </span>
+                        {% if trip.is_overdue %}
+                            <span style="color: #e74c3c; font-weight: bold; margin-left: 5px;">OVERDUE</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <a href="{% url 'trip-detail' trip.pk %}" class="btn btn-primary btn-sm">View</a>
+                        {% if trip.status == 'Scheduled' or trip.status == 'In Progress' %}
+                            <a href="{% url 'trip-status-update' trip.pk %}" class="btn btn-success btn-sm">Update Status</a>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% else %}
+    <div class="message info">
+        No current or upcoming trips assigned to you.
+    </div>
+{% endif %}
+
+<!-- Recent Completed Trips -->
+<h3 class="mt-2">Recently Completed Trips</h3>
+{% if recent_trips %}
+    <table>
+        <thead>
+            <tr>
+                <th>Trip Number</th>
+                <th>Client</th>
+                <th>Pickup Location</th>
+                <th>Delivery Location</th>
+                <th>Completed Date</th>
+                <th>Duration</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for trip in recent_trips %}
+                <tr>
+                    <td><strong>{{ trip.trip_number }}</strong></td>
+                    <td>{{ trip.client_name }}</td>
+                    <td>{{ trip.pickup_location|truncatechars:25 }}</td>
+                    <td>{{ trip.delivery_location|truncatechars:25 }}</td>
+                    <td>{{ trip.actual_completion_datetime|date:"M d, Y H:i" }}</td>
+                    <td>{{ trip.duration_display }}</td>
+                    <td>
+                        <a href="{% url 'trip-detail' trip.pk %}" class="btn btn-primary btn-sm">View</a>
+                    </td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% else %}
+    <div class="message info">
+        No recently completed trips.
+    </div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,123 @@
+{% extends 'base.html' %}
+
+{% block title %}Maintenance Logs - Transport Management System{% endblock %}
+
+{% block content %}
+<div class="clearfix mb-1">
+    <h2 style="float: left;">Maintenance Logs</h2>
+    
+    {% if perms.fleet.create_maintenance_log %}
+        <a href="{% url 'maintenance-log-create' %}" class="btn btn-success" style="float: right;">Add Maintenance Log</a>
+    {% endif %}
+</div>
+
+<!-- Filter Form -->
+<form method="get" class="mb-1">
+    <div style="display: flex; gap: 1rem; align-items: end; flex-wrap: wrap;">
+        <div style="min-width: 200px;">
+            <label for="vehicle">Vehicle:</label>
+            <select id="vehicle" name="vehicle">
+                <option value="">All Vehicles</option>
+                {% for vehicle in vehicles %}
+                    <option value="{{ vehicle.pk }}" {% if selected_vehicle == vehicle.pk|stringformat:"s" %}selected{% endif %}>
+                        {{ vehicle.registration_plate }} - {{ vehicle.make_model }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <div style="min-width: 150px;">
+            <label for="type">Type:</label>
+            <select id="type" name="type">
+                <option value="">All Types</option>
+                {% for value, label in type_choices %}
+                    <option value="{{ value }}" {% if current_type == value %}selected{% endif %}>
+                        {{ label }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <button type="submit" class="btn">Filter</button>
+        <a href="{% url 'maintenance-log-list' %}" class="btn btn-warning">Clear</a>
+    </div>
+</form>
+
+<!-- Maintenance Logs Table -->
+{% if maintenance_logs %}
+    <table>
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Vehicle</th>
+                <th>Type</th>
+                <th>Description</th>
+                <th>Cost</th>
+                <th>Service Provider</th>
+                <th>Next Due</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for log in maintenance_logs %}
+                <tr>
+                    <td>{{ log.date|date:"M d, Y" }}</td>
+                    <td>
+                        <strong>{{ log.vehicle.registration_plate }}</strong><br>
+                        <small>{{ log.vehicle.make_model }}</small>
+                    </td>
+                    <td>{{ log.type }}</td>
+                    <td>{{ log.description|truncatechars:40 }}</td>
+                    <td style="text-align: right;">${{ log.cost|floatformat:2 }}</td>
+                    <td>{{ log.service_provider }}</td>
+                    <td>
+                        {% if log.next_service_due %}
+                            {{ log.next_service_due|date:"M d, Y" }}
+                            {% if log.is_overdue %}
+                                <span style="color: #e74c3c; font-weight: bold;">(OVERDUE)</span>
+                            {% endif %}
+                        {% else %}
+                            <em>N/A</em>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <a href="{% url 'maintenance-log-detail' log.pk %}" class="btn btn-primary btn-sm">View</a>
+                        
+                        {% if perms.fleet.change_maintenancelog %}
+                            <a href="{% url 'maintenance-log-update' log.pk %}" class="btn btn-warning btn-sm">Edit</a>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <!-- Pagination -->
+    {% if is_paginated %}
+        <div class="text-center">
+            <div style="margin: 1rem 0;">
+                Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+            </div>
+            <div>
+                {% if page_obj.has_previous %}
+                    <a href="?page=1{% if selected_vehicle %}&vehicle={{ selected_vehicle }}{% endif %}{% if current_type %}&type={{ current_type }}{% endif %}" class="btn">First</a>
+                    <a href="?page={{ page_obj.previous_page_number }}{% if selected_vehicle %}&vehicle={{ selected_vehicle }}{% endif %}{% if current_type %}&type={{ current_type }}{% endif %}" class="btn">Previous</a>
+                {% endif %}
+                
+                <span style="margin: 0 1rem;">
+                    Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+                </span>
+                
+                {% if page_obj.has_next %}
+                    <a href="?page={{ page_obj.next_page_number }}{% if selected_vehicle %}&vehicle={{ selected_vehicle }}{% endif %}{% if current_type %}&type={{ current_type }}{% endif %}" class="btn">Next</a>
+                    <a href="?page={{ page_obj.paginator.num_pages }}{% if selected_vehicle %}&vehicle={{ selected_vehicle }}{% endif %}{% if current_type %}&type={{ current_type }}{% endif %}" class="btn">Last</a>
+                {% endif %}
+            </div>
+        </div>
+    {% endif %}
+{% else %}
+    <div class="message warning">
+        No maintenance logs found. {% if perms.fleet.create_maintenance_log %}<a href="{% url 'maintenance-log-create' %}">Add your first maintenance log</a>{% endif %}.
+    </div>
+{% endif %}
+{% endblock %}

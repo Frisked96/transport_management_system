@@ -1,0 +1,120 @@
+{% extends 'base.html' %}
+
+{% block title %}Trips - Transport Management System{% endblock %}
+
+{% block content %}
+<div class="clearfix mb-1">
+    <h2 style="float: left;">Trip Management</h2>
+    
+    {% if perms.trips.add_trip %}
+        <a href="{% url 'trip-create' %}" class="btn btn-success" style="float: right;">Create New Trip</a>
+    {% endif %}
+</div>
+
+<!-- Search and Filter Form -->
+<form method="get" class="mb-1">
+    <div style="display: flex; gap: 1rem; align-items: end; flex-wrap: wrap;">
+        <div style="flex: 1; min-width: 200px;">
+            <label for="search">Search:</label>
+            <input type="text" id="search" name="search" value="{{ search_term }}" 
+                   placeholder="Search trips, clients, locations...">
+        </div>
+        
+        <div style="min-width: 150px;">
+            <label for="status">Status:</label>
+            <select id="status" name="status">
+                <option value="">All Statuses</option>
+                {% for value, label in status_choices %}
+                    <option value="{{ value }}" {% if current_status == value %}selected{% endif %}>
+                        {{ label }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <button type="submit" class="btn">Filter</button>
+        <a href="{% url 'trip-list' %}" class="btn btn-warning">Clear</a>
+    </div>
+</form>
+
+<!-- Trips Table -->
+{% if trips %}
+    <table>
+        <thead>
+            <tr>
+                <th>Trip Number</th>
+                <th>Client</th>
+                <th>Driver</th>
+                <th>Vehicle</th>
+                <th>Pickup Location</th>
+                <th>Delivery Location</th>
+                <th>Scheduled Date</th>
+                <th>Status</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for trip in trips %}
+                <tr>
+                    <td><strong>{{ trip.trip_number }}</strong></td>
+                    <td>{{ trip.client_name }}</td>
+                    <td>{{ trip.driver.get_full_name|default:trip.driver.username }}</td>
+                    <td>{{ trip.vehicle.registration_plate }}</td>
+                    <td>{{ trip.pickup_location|truncatechars:30 }}</td>
+                    <td>{{ trip.delivery_location|truncatechars:30 }}</td>
+                    <td>{{ trip.scheduled_datetime|date:"M d, Y H:i" }}</td>
+                    <td>
+                        <span class="status-badge status-{{ trip.status|slugify }}">
+                            {{ trip.status }}
+                        </span>
+                    </td>
+                    <td>
+                        <a href="{% url 'trip-detail' trip.pk %}" class="btn btn-primary btn-sm">View</a>
+                        
+                        {% if perms.trips.change_trip %}
+                            <a href="{% url 'trip-update' trip.pk %}" class="btn btn-warning btn-sm">Edit</a>
+                        {% endif %}
+                        
+                        <!-- Status update button -->
+                        {% if perms.trips.can_update_trip_status or user == trip.driver %}
+                            <a href="{% url 'trip-status-update' trip.pk %}" class="btn btn-success btn-sm">Status</a>
+                        {% endif %}
+                        
+                        {% if perms.trips.delete_trip %}
+                            <a href="{% url 'trip-delete' trip.pk %}" class="btn btn-danger btn-sm">Delete</a>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <!-- Pagination -->
+    {% if is_paginated %}
+        <div class="text-center">
+            <div style="margin: 1rem 0;">
+                Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+            </div>
+            <div>
+                {% if page_obj.has_previous %}
+                    <a href="?page=1{% if search_term %}&search={{ search_term }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}" class="btn">First</a>
+                    <a href="?page={{ page_obj.previous_page_number }}{% if search_term %}&search={{ search_term }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}" class="btn">Previous</a>
+                {% endif %}
+                
+                <span style="margin: 0 1rem;">
+                    Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+                </span>
+                
+                {% if page_obj.has_next %}
+                    <a href="?page={{ page_obj.next_page_number }}{% if search_term %}&search={{ search_term }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}" class="btn">Next</a>
+                    <a href="?page={{ page_obj.paginator.num_pages }}{% if search_term %}&search={{ search_term }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}" class="btn">Last</a>
+                {% endif %}
+            </div>
+        </div>
+    {% endif %}
+{% else %}
+    <div class="message warning">
+        No trips found. {% if perms.trips.add_trip %}<a href="{% url 'trip-create' %}">Create your first trip</a>{% endif %}.
+    </div>
+{% endif %}
+{% endblock %}

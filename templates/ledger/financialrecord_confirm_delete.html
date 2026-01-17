@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+
+{% block title %}Delete Financial Record - Transport Management System{% endblock %}
+
+{% block content %}
+<h2>Confirm Delete</h2>
+
+<div class="message error">
+    <strong>Warning!</strong> Are you sure you want to delete this financial record? This action cannot be undone.
+</div>
+
+<div class="mb-1">
+    <strong>Date:</strong> {{ object.date|date:"M d, Y" }}<br>
+    <strong>Category:</strong> {{ object.category }}<br>
+    <strong>Amount:</strong> 
+    <span style="font-weight: bold; {% if object.is_income %}color: #27ae60;{% else %}color: #e74c3c;{% endif %}">
+        {% if object.is_income %}+{% else %}-{% endif %}${{ object.amount|floatformat:2 }}
+    </span><br>
+    {% if object.associated_trip %}
+        <strong>Associated Trip:</strong> {{ object.associated_trip.trip_number }}<br>
+    {% endif %}
+    <strong>Description:</strong> {{ object.description|truncatechars:100 }}<br>
+</div>
+
+<form method="post">
+    {% csrf_token %}
+    
+    <div style="margin-top: 1.5rem;">
+        <button type="submit" class="btn btn-danger">Yes, Delete Record</button>
+        <a href="{% url 'financialrecord-detail' object.pk %}" class="btn" style="margin-left: 1rem;">Cancel</a>
+    </div>
+</form>
+{% endblock %}

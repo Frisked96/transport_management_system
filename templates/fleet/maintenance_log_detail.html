@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+
+{% block title %}Maintenance Log - Transport Management System{% endblock %}
+
+{% block content %}
+<div class="clearfix mb-1">
+    <h2 style="float: left;">Maintenance Log</h2>
+    <div style="float: right;">
+        <a href="{% url 'maintenance-log-list' %}" class="btn">Back to List</a>
+        
+        {% if perms.fleet.change_maintenancelog %}
+            <a href="{% url 'maintenance-log-update' log.pk %}" class="btn btn-warning">Edit Log</a>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Maintenance Log Information -->
+<table>
+    <tr>
+        <th>Vehicle</th>
+        <td>
+            <strong>{{ log.vehicle.registration_plate }}</strong> - {{ log.vehicle.make_model }}
+        </td>
+    </tr>
+    <tr>
+        <th>Date</th>
+        <td>{{ log.date|date:"M d, Y" }}</td>
+    </tr>
+    <tr>
+        <th>Type</th>
+        <td>{{ log.type }}</td>
+    </tr>
+    <tr>
+        <th>Cost</th>
+        <td style="font-size: 1.2rem; font-weight: bold; color: #e74c3c;">${{ log.cost|floatformat:2 }}</td>
+    </tr>
+    <tr>
+        <th>Service Provider</th>
+        <td>{{ log.service_provider }}</td>
+    </tr>
+    <tr>
+        <th>Next Service Due</th>
+        <td>
+            {% if log.next_service_due %}
+                {{ log.next_service_due|date:"M d, Y" }}
+                {% if log.is_overdue %}
+                    <span style="color: #e74c3c; font-weight: bold; margin-left: 10px;">OVERDUE</span>
+                {% endif %}
+            {% else %}
+                <em>Not scheduled</em>
+            {% endif %}
+        </td>
+    </tr>
+    <tr>
+        <th>Logged By</th>
+        <td>{{ log.logged_by.get_full_name|default:log.logged_by.username }}</td>
+    </tr>
+</table>
+
+<!-- Description -->
+<h3 class="mt-2">Description of Work</h3>
+<div style="background-color: #f8f9fa; padding: 1rem; border-radius: 5px; border-left: 4px solid #3498db;">
+    {{ log.description|linebreaks }}
+</div>
+{% endblock %}

@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+
+{% block title %}Financial Record - Transport Management System{% endblock %}
+
+{% block content %}
+<div class="clearfix mb-1">
+    <h2 style="float: left;">Financial Record</h2>
+    <div style="float: right;">
+        <a href="{% url 'financialrecord-list' %}" class="btn">Back to List</a>
+        
+        {% if perms.ledger.change_financialrecord %}
+            <a href="{% url 'financialrecord-update' record.pk %}" class="btn btn-warning">Edit Record</a>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Financial Record Information -->
+<table>
+    <tr>
+        <th>Date</th>
+        <td>{{ record.date|date:"M d, Y" }}</td>
+    </tr>
+    <tr>
+        <th>Category</th>
+        <td>{{ record.category }}</td>
+    </tr>
+    <tr>
+        <th>Amount</th>
+        <td style="font-size: 1.5rem; font-weight: bold; {% if record.is_income %}color: #27ae60;{% else %}color: #e74c3c;{% endif %}">
+            {% if record.is_income %}+{% else %}-{% endif %}${{ record.amount|floatformat:2 }}
+        </td>
+    </tr>
+    <tr>
+        <th>Associated Trip</th>
+        <td>
+            {% if record.associated_trip %}
+                <a href="{% url 'trip-detail' record.associated_trip.pk %}">
+                    {{ record.associated_trip.trip_number }} - {{ record.associated_trip.client_name }}
+                </a>
+            {% else %}
+                <em>Not associated with any trip</em>
+            {% endif %}
+        </td>
+    </tr>
+    <tr>
+        <th>Description</th>
+        <td>{{ record.description|linebreaks }}</td>
+    </tr>
+    <tr>
+        <th>Document Reference</th>
+        <td>
+            {% if record.document_ref %}
+                <a href="{{ record.document_ref.url }}" target="_blank">View Document</a>
+            {% else %}
+                <em>No document uploaded</em>
+            {% endif %}
+        </td>
+    </tr>
+    <tr>
+        <th>Recorded By</th>
+        <td>{{ record.recorded_by.get_full_name|default:record.recorded_by.username }}</td>
+    </tr>
+</table>
+{% endblock %}

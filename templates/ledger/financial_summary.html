@@ -1,0 +1,83 @@
+{% extends 'base.html' %}
+
+{% block title %}Financial Summary - Transport Management System{% endblock %}
+
+{% block content %}
+<div class="clearfix mb-1">
+    <h2 style="float: left;">Financial Summary</h2>
+    <div style="float: right;">
+        <a href="{% url 'financialrecord-list' %}" class="btn">Back to Records</a>
+        <a href="{% url 'financialrecord-create' %}" class="btn btn-success">Add Record</a>
+    </div>
+</div>
+
+<h3>{{ current_month }}</h3>
+
+<!-- Monthly Summary -->
+<div class="dashboard-grid">
+    <div class="dashboard-card" style="border-left-color: #27ae60;">
+        <h3>Monthly Income</h3>
+        <div class="value" style="font-size: 2rem; color: #27ae60;">${{ monthly_income|floatformat:2 }}</div>
+        <p>Total freight income for the month</p>
+    </div>
+    
+    <div class="dashboard-card" style="border-left-color: #e74c3c;">
+        <h3>Monthly Expenses</h3>
+        <div class="value" style="font-size: 2rem; color: #e74c3c;">${{ monthly_expenses|floatformat:2 }}</div>
+        <p>Total operational expenses for the month</p>
+    </div>
+    
+    <div class="dashboard-card" style="border-left-color: {% if monthly_net >= 0 %}#27ae60{% else %}#e74c3c{% endif %};">
+        <h3>Monthly Net Profit</h3>
+        <div class="value" style="font-size: 2rem; color: {% if monthly_net >= 0 %}#27ae60{% else %}#e74c3c{% endif %};">
+            {% if monthly_net >= 0 %}+{% endif %}${{ monthly_net|floatformat:2 }}
+        </div>
+        <p>Income minus expenses</p>
+    </div>
+</div>
+
+<!-- Yearly Summary -->
+<h3 class="mt-2">Yearly Summary</h3>
+<div class="dashboard-grid">
+    <div class="dashboard-card" style="border-left-color: #27ae60;">
+        <h3>Yearly Income</h3>
+        <div class="value" style="font-size: 1.5rem; color: #27ae60;">${{ yearly_income|floatformat:2 }}</div>
+        <p>Total freight income for the year</p>
+    </div>
+    
+    <div class="dashboard-card" style="border-left-color: #e74c3c;">
+        <h3>Yearly Expenses</h3>
+        <div class="value" style="font-size: 1.5rem; color: #e74c3c;">${{ yearly_expenses|floatformat:2 }}</div>
+        <p>Total operational expenses for the year</p>
+    </div>
+    
+    <div class="dashboard-card" style="border-left-color: {% if yearly_net >= 0 %}#27ae60{% else %}#e74c3c{% endif %};">
+        <h3>Yearly Net Profit</h3>
+        <div class="value" style="font-size: 1.5rem; color: {% if yearly_net >= 0 %}#27ae60{% else %}#e74c3c{% endif %};">
+            {% if yearly_net >= 0 %}+{% endif %}${{ yearly_net|floatformat:2 }}
+        </div>
+        <p>Income minus expenses</p>
+    </div>
+</div>
+
+<!-- Category Breakdown -->
+<h3 class="mt-2">Category Breakdown - {{ current_month }}</h3>
+<table>
+    <thead>
+        <tr>
+            <th>Category</th>
+            <th>Amount</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for category, amount in category_breakdown.items %}
+            <tr>
+                <td>{{ category }}</td>
+                <td style="text-align: right; {% if category == 'Freight Income' %}color: #27ae60;{% else %}color: #e74c3c;{% endif %} font-weight: bold;">
+                    {% if category == 'Freight Income' %}+{% else %}-{% endif %}${{ amount|floatformat:2 }}
+                </td>
+            </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

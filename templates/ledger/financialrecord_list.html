@@ -1,0 +1,140 @@
+{% extends 'base.html' %}
+
+{% block title %}Financial Records - Transport Management System{% endblock %}
+
+{% block content %}
+<div class="clearfix mb-1">
+    <h2 style="float: left;">Financial Records</h2>
+    
+    {% if perms.ledger.add_financialrecord %}
+        <a href="{% url 'financialrecord-create' %}" class="btn btn-success" style="float: right;">Add Record</a>
+    {% endif %}
+</div>
+
+<!-- Summary Cards -->
+<div class="dashboard-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
+    <div class="dashboard-card" style="border-left-color: #27ae60;">
+        <h4>Total Income</h4>
+        <div class="value" style="font-size: 1.5rem; color: #27ae60;">${{ total_income|floatformat:2 }}</div>
+    </div>
+    <div class="dashboard-card" style="border-left-color: #e74c3c;">
+        <h4>Total Expenses</h4>
+        <div class="value" style="font-size: 1.5rem; color: #e74c3c;">${{ total_expenses|floatformat:2 }}</div>
+    </div>
+    <div class="dashboard-card" style="border-left-color: {% if net_total >= 0 %}#27ae60{% else %}#e74c3c{% endif %};">
+        <h4>Net Total</h4>
+        <div class="value" style="font-size: 1.5rem; color: {% if net_total >= 0 %}#27ae60{% else %}#e74c3c{% endif %};">
+            {% if net_total >= 0 %}+{% endif %}${{ net_total|floatformat:2 }}
+        </div>
+    </div>
+</div>
+
+<!-- Filter Form -->
+<form method="get" class="mb-1">
+    <div style="display: flex; gap: 1rem; align-items: end; flex-wrap: wrap;">
+        <div style="min-width: 150px;">
+            <label for="category">Category:</label>
+            <select id="category" name="category">
+                <option value="">All Categories</option>
+                {% for value, label in category_choices %}
+                    <option value="{{ value }}" {% if current_category == value %}selected{% endif %}>
+                        {{ label }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <div style="min-width: 150px;">
+            <label for="start_date">Start Date:</label>
+            <input type="date" id="start_date" name="start_date" value="{{ request.GET.start_date }}">
+        </div>
+        
+        <div style="min-width: 150px;">
+            <label for="end_date">End Date:</label>
+            <input type="date" id="end_date" name="end_date" value="{{ request.GET.end_date }}">
+        </div>
+        
+        <button type="submit" class="btn">Filter</button>
+        <a href="{% url 'financialrecord-list' %}" class="btn btn-warning">Clear</a>
+        <a href="{% url 'financial-summary' %}" class="btn btn-success">Financial Summary</a>
+    </div>
+</form>
+
+<!-- Financial Records Table -->
+{% if financial_records %}
+    <table>
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Category</th>
+                <th>Amount</th>
+                <th>Associated Trip</th>
+                <th>Description</th>
+                <th>Recorded By</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for record in financial_records %}
+                <tr>
+                    <td>{{ record.date|date:"M d, Y" }}</td>
+                    <td>{{ record.category }}</td>
+                    <td style="text-align: right; font-weight: bold; {% if record.is_income %}color: #27ae60;{% else %}color: #e74c3c;{% endif %}">
+                        {% if record.is_income %}+{% else %}-{% endif %}${{ record.amount|floatformat:2 }}
+                    </td>
+                    <td>
+                        {% if record.associated_trip %}
+                            <a href="{% url 'trip-detail' record.associated_trip.pk %}">
+                                {{ record.associated_trip.trip_number }}
+                            </a>
+                        {% else %}
+                            <em>N/A</em>
+                        {% endif %}
+                    </td>
+                    <td>{{ record.description|truncatechars:40 }}</td>
+                    <td>{{ record.recorded_by.get_full_name|default:record.recorded_by.username }}</td>
+                    <td>
+                        <a href="{% url 'financialrecord-detail' record.pk %}" class="btn btn-primary btn-sm">View</a>
+                        
+                        {% if perms.ledger.change_financialrecord %}
+                            <a href="{% url 'financialrecord-update' record.pk %}" class="btn btn-warning btn-sm">Edit</a>
+                        {% endif %}
+                        
+                        {% if perms.ledger.delete_financialrecord %}
+                            <a href="{% url 'financialrecord-delete' record.pk %}" class="btn btn-danger btn-sm">Delete</a>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <!-- Pagination -->
+    {% if is_paginated %}
+        <div class="text-center">
+            <div style="margin: 1rem 0;">
+                Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+            </div>
+            <div>
+                {% if page_obj.has_previous %}
+                    <a href="?page=1{% if current_category %}&category={{ current_category }}{% endif %}{% if request.GET.start_date %}&start_date={{ request.GET.start_date }}{% endif %}{% if request.GET.end_date %}&end_date={{ request.GET.end_date }}{% endif %}" class="btn">First</a>
+                    <a href="?page={{ page_obj.previous_page_number }}{% if current_category %}&category={{ current_category }}{% endif %}{% if request.GET.start_date %}&start_date={{ request.GET.start_date }}{% endif %}{% if request.GET.end_date %}&end_date={{ request.GET.end_date }}{% endif %}" class="btn">Previous</a>
+                {% endif %}
+                
+                <span style="margin: 0 1rem;">
+                    Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+                </span>
+                
+                {% if page_obj.has_next %}
+                    <a href="?page={{ page_obj.next_page_number }}{% if current_category %}&category={{ current_category }}{% endif %}{% if request.GET.start_date %}&start_date={{ request.GET.start_date }}{% endif %}{% if request.GET.end_date %}&end_date={{ request.GET.end_date }}{% endif %}" class="btn">Next</a>
+                    <a href="?page={{ page_obj.paginator.num_pages }}{% if current_category %}&category={{ current_category }}{% endif %}{% if request.GET.start_date %}&start_date={{ request.GET.start_date }}{% endif %}{% if request.GET.end_date %}&end_date={{ request.GET.end_date }}{% endif %}" class="btn">Last</a>
+                {% endif %}
+            </div>
+        </div>
+    {% endif %}
+{% else %}
+    <div class="message warning">
+        No financial records found. {% if perms.ledger.add_financialrecord %}<a href="{% url 'financialrecord-create' %}">Add your first record</a>{% endif %}.
+    </div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,124 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ trip.trip_number }} - Transport Management System{% endblock %}
+
+{% block content %}
+<div class="clearfix mb-1">
+    <h2 style="float: left;">Trip Details: {{ trip.trip_number }}</h2>
+    <div style="float: right;">
+        <a href="{% url 'trip-list' %}" class="btn">Back to List</a>
+        
+        {% if perms.trips.change_trip %}
+            <a href="{% url 'trip-update' trip.pk %}" class="btn btn-warning">Edit Trip</a>
+        {% endif %}
+        
+        {% if perms.trips.can_update_trip_status or user == trip.driver %}
+            <a href="{% url 'trip-status-update' trip.pk %}" class="btn btn-success">Update Status</a>
+        {% endif %}
+        
+        {% if perms.trips.delete_trip %}
+            <a href="{% url 'trip-delete' trip.pk %}" class="btn btn-danger">Delete Trip</a>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Trip Information -->
+<table>
+    <tr>
+        <th>Trip Number</th>
+        <td>{{ trip.trip_number }}</td>
+    </tr>
+    <tr>
+        <th>Status</th>
+        <td>
+            <span class="status-badge status-{{ trip.status|slugify }}">
+                {{ trip.status }}
+            </span>
+            {% if trip.is_overdue and trip.status != trip.STATUS_COMPLETED %}
+                <span style="color: #e74c3c; font-weight: bold; margin-left: 10px;">OVERDUE</span>
+            {% endif %}
+        </td>
+    </tr>
+    <tr>
+        <th>Client Name</th>
+        <td>{{ trip.client_name }}</td>
+    </tr>
+    <tr>
+        <th>Assigned Driver</th>
+        <td>{{ trip.driver.get_full_name|default:trip.driver.username }}</td>
+    </tr>
+    <tr>
+        <th>Assigned Vehicle</th>
+        <td>
+            <a href="{% url 'vehicle-detail' trip.vehicle.pk %}">
+                {{ trip.vehicle.registration_plate }} - {{ trip.vehicle.make_model }}
+            </a>
+        </td>
+    </tr>
+    <tr>
+        <th>Pickup Location</th>
+        <td>{{ trip.pickup_location }}</td>
+    </tr>
+    <tr>
+        <th>Delivery Location</th>
+        <td>{{ trip.delivery_location }}</td>
+    </tr>
+    <tr>
+        <th>Scheduled Date & Time</th>
+        <td>{{ trip.scheduled_datetime|date:"M d, Y H:i" }}</td>
+    </tr>
+    <tr>
+        <th>Actual Completion</th>
+        <td>
+            {% if trip.actual_completion_datetime %}
+                {{ trip.actual_completion_datetime|date:"M d, Y H:i" }}
+                <br>
+                <small><strong>Duration:</strong> {{ trip.duration_display }}</small>
+            {% else %}
+                <em>Not completed yet</em>
+            {% endif %}
+        </td>
+    </tr>
+    <tr>
+        <th>Created By</th>
+        <td>{{ trip.created_by.get_full_name|default:trip.created_by.username }}</td>
+    </tr>
+    <tr>
+        <th>Created At</th>
+        <td>{{ trip.created_at|date:"M d, Y H:i" }}</td>
+    </tr>
+    {% if trip.notes %}
+        <tr>
+            <th>Notes</th>
+            <td>{{ trip.notes|linebreaks }}</td>
+        </tr>
+    {% endif %}
+</table>
+
+<!-- Financial Records for this Trip -->
+{% if trip.financial_records.all %}
+    <h3 class="mt-2">Financial Records</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Category</th>
+                <th>Amount</th>
+                <th>Description</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for record in trip.financial_records.all %}
+                <tr>
+                    <td>{{ record.date|date:"M d, Y" }}</td>
+                    <td>{{ record.category }}</td>
+                    <td style="text-align: right; {% if record.is_income %}color: #27ae60;{% else %}color: #e74c3c;{% endif %}">
+                        {% if record.is_income %}+{% else %}-{% endif %}${{ record.amount|floatformat:2 }}
+                    </td>
+                    <td>{{ record.description|truncatechars:50 }}</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% endif %}
+{% endblock %}
