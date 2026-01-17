@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+
+{% block title %}Add Transaction - {{ driver.user.get_full_name }}{% endblock %}
+
+{% block content %}
+<h1>Add Transaction for {{ driver.user.get_full_name }}</h1>
+
+<div style="max-width: 600px;">
+    <form method="post">
+        {% csrf_token %}
+
+        <div class="form-group">
+            <label for="{{ form.date.id_for_label }}">Date</label>
+            {{ form.date }}
+
+            <label for="{{ form.transaction_type.id_for_label }}">Type</label>
+            {{ form.transaction_type }}
+
+            <label for="{{ form.amount.id_for_label }}">Amount</label>
+            {{ form.amount }}
+            {% if form.amount.help_text %}
+            <small>{{ form.amount.help_text }}</small>
+            {% endif %}
+
+            <label for="{{ form.description.id_for_label }}">Description</label>
+            {{ form.description }}
+        </div>
+
+        <button type="submit" class="btn btn-success">Save Transaction</button>
+        <a href="{% url 'driver-detail' driver.pk %}" class="btn btn-danger">Cancel</a>
+    </form>
+</div>
+{% endblock %}

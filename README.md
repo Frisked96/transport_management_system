@@ -7,6 +7,7 @@ A complete, production-ready internal web application for managing transport bus
 - **User Authentication & Authorization**: Role-based access control with four user types (Admin, Manager, Supervisor, Driver)
 - **Trip Management**: Create, assign, and track transport trips
 - **Fleet Management**: Manage vehicles and maintenance logs
+- **Driver Management**: Comprehensive driver profiles, history, and financial pocket (allowances, salary, loans)
 - **Financial Ledger**: Track income and expenses with trip association
 - **Dashboard Views**: Role-specific dashboards for drivers and managers
 - **Permission System**: Granular permissions enforced on all views
@@ -104,6 +105,11 @@ transport_management_system/
 │   ├── views.py            # Ledger views with permissions
 │   ├── forms.py            # Ledger forms
 │   └── urls.py             # Ledger URLs
+├── drivers/                # Driver management app
+│   ├── models.py           # Driver and DriverTransaction models
+│   ├── views.py            # Driver management views
+│   ├── forms.py            # Driver forms
+│   └── urls.py             # Driver URLs
 ├── templates/              # HTML templates
 │   ├── base.html           # Base template
 │   ├── registration/       # Login template
@@ -131,6 +137,13 @@ transport_management_system/
 - Maintenance logging with cost tracking
 - Next service due date tracking
 - Vehicle availability checking
+
+### Driver Management
+- Create and manage driver profiles linked to user accounts
+- Track driver history: vehicles driven and trips taken
+- Calculate profitability per driver (Revenue generated vs Expenses)
+- Manage "Driver Pocket": Track salaries, allowances, loans, and repayments
+- View driver financial balance
 
 ### Financial Ledger
 - Income and expense tracking

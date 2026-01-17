@@ -356,6 +356,11 @@
                             <li><a href="{% url 'financialrecord-list' %}">Ledger</a></li>
                         {% endif %}
                         
+                        <!-- Drivers Link -->
+                        {% if user.is_superuser or user.groups.all.0.name == 'manager' %}
+                            <li><a href="{% url 'driver-list' %}">Drivers</a></li>
+                        {% endif %}
+
                         <!-- Admin Link -->
                         {% if user.is_superuser %}
                             <li><a href="/admin/">Admin</a></li>

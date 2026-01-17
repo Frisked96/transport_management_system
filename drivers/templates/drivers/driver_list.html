@@ -1,0 +1,52 @@
+{% extends 'base.html' %}
+
+{% block title %}Drivers - Transport Management System{% endblock %}
+
+{% block content %}
+<div class="clearfix mb-2">
+    <h1 class="float-left">Drivers</h1>
+    {% if perms.drivers.add_driver %}
+    <a href="{% url 'driver-create' %}" class="btn btn-success float-right">Add New Driver</a>
+    {% endif %}
+</div>
+
+<table>
+    <thead>
+        <tr>
+            <th>Employee ID</th>
+            <th>Name</th>
+            <th>License Number</th>
+            <th>Phone</th>
+            <th>Current Balance</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for driver in drivers %}
+        <tr>
+            <td>{{ driver.employee_id }}</td>
+            <td>{{ driver.user.get_full_name }}</td>
+            <td>{{ driver.license_number }}</td>
+            <td>{{ driver.phone_number }}</td>
+            <td>
+                {% if driver.current_balance >= 0 %}
+                    <span style="color: green">{{ driver.current_balance }}</span>
+                {% else %}
+                    <span style="color: red">{{ driver.current_balance }}</span>
+                {% endif %}
+            </td>
+            <td>
+                <a href="{% url 'driver-detail' driver.pk %}" class="btn">View</a>
+                {% if perms.drivers.change_driver %}
+                <a href="{% url 'driver-update' driver.pk %}" class="btn btn-warning">Edit</a>
+                {% endif %}
+            </td>
+        </tr>
+        {% empty %}
+        <tr>
+            <td colspan="6" class="text-center">No drivers found.</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}
