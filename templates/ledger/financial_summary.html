@@ -70,11 +70,11 @@
         </tr>
     </thead>
     <tbody>
-        {% for category, amount in category_breakdown.items %}
+        {% for item in category_breakdown %}
             <tr>
-                <td>{{ category }}</td>
-                <td style="text-align: right; {% if category == 'Freight Income' %}color: #27ae60;{% else %}color: #e74c3c;{% endif %} font-weight: bold;">
-                    {% if category == 'Freight Income' %}+{% else %}-{% endif %}${{ amount|floatformat:2 }}
+                <td>{{ item.name }}</td>
+                <td style="text-align: right; {% if item.type == 'Income' %}color: #27ae60;{% else %}color: #e74c3c;{% endif %} font-weight: bold;">
+                    {% if item.type == 'Income' %}+{% else %}-{% endif %}${{ item.amount|floatformat:2 }}
                 </td>
             </tr>
         {% endfor %}

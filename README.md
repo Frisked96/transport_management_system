@@ -9,7 +9,7 @@ The **Transport Management System** is designed to streamline logistics operatio
 ## Features
 
 - **User Authentication & Authorization**: Role-based access control with four user types (Admin, Manager, Supervisor, Driver)
-- **Trip Management**: Create, assign, and track transport trips
+- **Trip Management**: Single-leg trip structure with daily logbook view. Create, assign, and track transport trips by date.
 - **Fleet Management**: Manage vehicles and maintenance logs
 - **Driver Management**: Comprehensive driver profiles, history, and financial pocket (allowances, salary, loans)
 - **Financial Ledger**: Track income and expenses with trip association
@@ -93,7 +93,7 @@ transport_management_system/
 │   ├── urls.py             # Main URL configuration
 │   └── wsgi.py             # WSGI configuration
 ├── trips/                  # Trip management app
-│   ├── models.py           # Trip model
+│   ├── models.py           # Trip model (Single Leg)
 │   ├── views.py            # Trip views with permissions
 │   ├── forms.py            # Trip forms
 │   └── urls.py             # Trip URLs
@@ -127,11 +127,12 @@ transport_management_system/
 ## Application Features
 
 ### Trip Management
-- Create and assign trips to drivers and vehicles
+- Create and assign trips to vehicles
+- Date-based trip log view
 - Track trip status (Scheduled, In Progress, Completed, Cancelled)
 - Automatic completion timestamp when status changes to Completed
 - Trip search and filtering
-- Trip-specific financial records
+- Trip-specific financial records and profitability analysis
 
 ### Fleet Management
 - Vehicle registration and status tracking
@@ -233,7 +234,7 @@ SECRET_KEY = 'your-secret-key-here'
 7. Create templates
 
 ### Modifying Permissions
-11. Use Django admin to manage permissions manually
+1. Use Django admin to manage permissions manually
 2. Access the Admin interface at `/admin/`
 3. Navigate to 'Groups' to manage role-based permissions
 

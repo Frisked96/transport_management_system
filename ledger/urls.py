@@ -21,7 +21,7 @@ urlpatterns = [
     path('parties/<int:pk>/', views.PartyDetailView.as_view(), name='party-detail'),
     path('parties/<int:pk>/update/', views.PartyUpdateView.as_view(), name='party-update'),
     path('parties/<int:pk>/delete/', views.PartyDeleteView.as_view(), name='party-delete'),
-    path('api/party-unpaid-legs/', views.get_party_unpaid_legs, name='get-party-unpaid-legs'),
+    path('api/party-unpaid-trips/', views.get_party_unpaid_trips, name='get-party-unpaid-trips'),
 
     # Account URLs
     path('accounts/', views.AccountListView.as_view(), name='account-list'),

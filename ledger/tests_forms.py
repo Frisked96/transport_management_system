@@ -3,7 +3,7 @@ from django.contrib.auth.models import User
 from django.utils import timezone
 from .forms import FinancialRecordForm
 from .models import Party
-from trips.models import Trip, TripLeg
+from trips.models import Trip
 from fleet.models import Vehicle
 
 class FinancialRecordFormTest(TestCase):
@@ -18,25 +18,39 @@ class FinancialRecordFormTest(TestCase):
             status='Active',
             purchase_date=timezone.now().date()
         )
-        self.trip = Trip.objects.create(driver=self.user, vehicle=self.vehicle, created_by=self.user)
         
-        self.leg1 = TripLeg.objects.create(trip=self.trip, party=self.party1, pickup_location='A', delivery_location='B', date=timezone.now())
-        self.leg2 = TripLeg.objects.create(trip=self.trip, party=self.party2, pickup_location='C', delivery_location='D', date=timezone.now())
+        # Trip for Party 1
+        self.trip1 = Trip.objects.create(
+            driver=self.user, 
+            vehicle=self.vehicle, 
+            party=self.party1,
+            created_by=self.user,
+            date=timezone.now()
+        )
+        
+        # Trip for Party 2
+        self.trip2 = Trip.objects.create(
+            driver=self.user, 
+            vehicle=self.vehicle, 
+            party=self.party2,
+            created_by=self.user,
+            date=timezone.now()
+        )
 
-    def test_form_filters_legs_by_party_initial(self):
+    def test_form_filters_trips_by_party_initial(self):
         # Initialize form with party1 in initial data
         form = FinancialRecordForm(initial={'party': self.party1})
         
-        # Check that queryset only contains leg1
-        queryset = form.fields['associated_legs'].queryset
-        self.assertIn(self.leg1, queryset)
-        self.assertNotIn(self.leg2, queryset)
+        # Check that queryset only contains trip1
+        queryset = form.fields['associated_trip'].queryset
+        self.assertIn(self.trip1, queryset)
+        self.assertNotIn(self.trip2, queryset)
 
-    def test_form_filters_legs_by_party_data(self):
+    def test_form_filters_trips_by_party_data(self):
         # Initialize form with bound data containing party1
         form = FinancialRecordForm(data={'party': self.party1.pk})
         
-        # Check that queryset only contains leg1
-        queryset = form.fields['associated_legs'].queryset
-        self.assertIn(self.leg1, queryset)
-        self.assertNotIn(self.leg2, queryset)
+        # Check that queryset only contains trip1
+        queryset = form.fields['associated_trip'].queryset
+        self.assertIn(self.trip1, queryset)
+        self.assertNotIn(self.trip2, queryset)

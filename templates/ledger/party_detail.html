@@ -90,7 +90,7 @@
         <!-- Trip History -->
         <div class="card">
             <div class="card-header bg-light">
-                <h5 class="mb-0">Trip History (Legs)</h5>
+                <h5 class="mb-0">Trip History</h5>
             </div>
             <div class="card-body p-0">
                 <div class="table-responsive">
@@ -108,20 +108,26 @@
                             </tr>
                         </thead>
                         <tbody>
-                            {% for leg in trip_legs %}
+                            {% for trip in trips %}
                                 <tr>
-                                    <td>{{ leg.date|date:"d/m/Y" }}</td>
-                                    <td><a href="{% url 'trip-detail' leg.trip.pk %}" class="text-decoration-none">{{ leg.trip.trip_number }}</a></td>
-                                    <td>{{ leg.pickup_location }} &rarr; {{ leg.delivery_location }}</td>
-                                    <td>{{ leg.weight|floatformat:2 }} T</td>
-                                    <td class="text-end">${{ leg.revenue|floatformat:2 }}</td>
-                                    <td class="text-end">${{ leg.amount_received|floatformat:2 }}</td>
-                                    <td class="text-end fw-bold {% if leg.outstanding_balance > 0 %}text-danger{% else %}text-success{% endif %}">
-                                        ${{ leg.outstanding_balance|floatformat:2 }}
+                                    <td>{{ trip.date|date:"d/m/Y" }}</td>
+                                    <td><a href="{% url 'trip-detail' trip.pk %}" class="text-decoration-none">{{ trip.trip_number }}</a></td>
+                                    <td>
+                                        {% if trip.pickup_location or trip.delivery_location %}
+                                            {{ trip.pickup_location|default:"?" }} &rarr; {{ trip.delivery_location|default:"?" }}
+                                        {% else %}
+                                            -
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ trip.weight|floatformat:2 }} T</td>
+                                    <td class="text-end">${{ trip.revenue|floatformat:2 }}</td>
+                                    <td class="text-end">${{ trip.amount_received|floatformat:2 }}</td>
+                                    <td class="text-end fw-bold {% if trip.outstanding_balance > 0 %}text-danger{% else %}text-success{% endif %}">
+                                        ${{ trip.outstanding_balance|floatformat:2 }}
                                     </td>
                                     <td>
-                                        <span class="status-badge status-{{ leg.payment_status|slugify }}">
-                                            {{ leg.payment_status }}
+                                        <span class="badge bg-{% if trip.payment_status == 'Paid' %}success{% elif trip.payment_status == 'Partially Paid' %}warning{% else %}danger{% endif %}">
+                                            {{ trip.payment_status }}
                                         </span>
                                     </td>
                                 </tr>

@@ -1,14 +1,16 @@
 from django import forms
 from django.contrib.auth.models import User
 from .models import FinancialRecord, Party, Account
-from trips.models import Trip, TripLeg
+from trips.models import Trip
 
 
 class FinancialRecordForm(forms.ModelForm):
     """
     Form for creating and editing financial records
     """
-    
+    # Hidden field to store JSON data for multi-trip payment distribution
+    payment_distribution = forms.CharField(widget=forms.HiddenInput(), required=False)
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         
@@ -44,31 +46,24 @@ class FinancialRecordForm(forms.ModelForm):
             if 'driver' in self.fields:
                 del self.fields['driver']
             
-            # Setup legs for party
-            self.fields['associated_legs'].queryset = TripLeg.objects.filter(
+            # Setup trips for party using dynamic payment info
+            self.fields['associated_trip'].queryset = Trip.objects.with_payment_info().filter(
                 party=party
             ).exclude(
-                payment_status=TripLeg.PAYMENT_STATUS_PAID
+                annotated_status=Trip.PAYMENT_STATUS_PAID
             ).order_by('-date')
-            
-            if self.instance and self.instance.pk:
-                current_legs = self.instance.associated_legs.all()
-                self.fields['associated_legs'].queryset = (
-                    self.fields['associated_legs'].queryset | current_legs
-                ).distinct()
         
-        # 2. If Driver context: Remove Party and Legs fields
+        # 2. If Driver context: Remove Party and Trip fields
         elif driver_user:
             if 'party' in self.fields:
                 del self.fields['party']
-            if 'associated_legs' in self.fields:
-                del self.fields['associated_legs']
+            if 'associated_trip' in self.fields:
+                del self.fields['associated_trip']
         
-        # 3. General Ledger context (neither pre-selected)
+        # 3. General Ledger context
         else:
-            # Default empty queryset for legs if no party selected yet
-            if 'associated_legs' in self.fields:
-                self.fields['associated_legs'].queryset = TripLeg.objects.none()
+            # Default empty queryset for trips if no party selected yet
+            self.fields['associated_trip'].queryset = Trip.objects.none()
 
         # Filter drivers if field still exists
         if 'driver' in self.fields:
@@ -79,25 +74,8 @@ class FinancialRecordForm(forms.ModelForm):
         
         # Add basic styling for clarity
         for field_name, field in self.fields.items():
-            # Bootstrap class injection
-            existing_classes = field.widget.attrs.get('class', '')
-            
-            if isinstance(field.widget, (forms.CheckboxSelectMultiple, forms.RadioSelect)):
-                # No form-control for these, maybe form-check-input if we could iterate, 
-                # but standard rendering is tricky. We'll handle CheckboxSelectMultiple specifically.
-                pass 
-            elif isinstance(field.widget, forms.CheckboxInput):
-                field.widget.attrs.update({'class': existing_classes + ' form-check-input'})
-            else:
-                field.widget.attrs.update({'class': existing_classes + ' form-control'})
-
-            if field_name == 'associated_legs':
-                field.widget = forms.CheckboxSelectMultiple()
-                # We can't easily add form-check-input to generated options here without a custom renderer.
-                # We'll rely on the template or custom JS/CSS.
-                field.widget.attrs.update({
-                    'class': 'list-unstyled' # Custom class for container
-                })
+            if field_name != 'payment_distribution':
+                field.widget.attrs.update({'class': 'form-control'})
     
     class Meta:
         model = FinancialRecord
@@ -106,7 +84,8 @@ class FinancialRecordForm(forms.ModelForm):
             'account',
             'party',
             'driver',
-            'associated_legs',
+            'associated_trip',
+            'payment_distribution',
             'category',
             'amount',
             'description',
@@ -116,26 +95,12 @@ class FinancialRecordForm(forms.ModelForm):
         widgets = {
             'date': forms.DateInput(
                 attrs={
-                    'type': 'date',
-                    'style': 'width: 100%; padding: 5px; margin: 2px 0;'
+                    'type': 'date'
                 }
             ),
             'description': forms.Textarea(
                 attrs={
-                    'rows': 4,
-                    'style': 'width: 100%; padding: 5px; margin: 2px 0;'
-                }
-            ),
-            'amount': forms.NumberInput(
-                attrs={
-                    'step': '0.01',
-                    'min': '0',
-                    'style': 'width: 100%; padding: 5px; margin: 2px 0;'
-                }
-            ),
-            'document_ref': forms.FileInput(
-                attrs={
-                    'style': 'width: 100%; padding: 5px; margin: 2px 0;'
+                    'rows': 4
                 }
             ),
         }

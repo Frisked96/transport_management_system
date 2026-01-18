@@ -2,11 +2,11 @@
 Admin configuration for Trips app
 """
 from django.contrib import admin
-from .models import Trip, TripLeg
+from .models import Trip, TripExpense
 
 
-class TripLegInline(admin.TabularInline):
-    model = TripLeg
+class TripExpenseInline(admin.TabularInline):
+    model = TripExpense
     extra = 1
 
 
@@ -14,33 +14,58 @@ class TripLegInline(admin.TabularInline):
 class TripAdmin(admin.ModelAdmin):
     list_display = [
         'trip_number', 
-        'driver', 
+        'date',
         'vehicle', 
+        'party',
+        'weight',
+        'rate_per_ton',
         'status',
-        'created_at'
+        'driver'
     ]
     
     list_filter = [
         'status',
-        'driver',
         'vehicle',
+        'party',
+        'date',
         'created_at'
     ]
     
     search_fields = [
         'trip_number',
+        'vehicle__registration_plate',
+        'party__name'
     ]
     
-    readonly_fields = ['created_at', 'actual_completion_datetime']
+    readonly_fields = [
+        'created_at', 
+        'actual_completion_datetime', 
+        'payment_status', 
+        'amount_received'
+    ]
     
-    inlines = [TripLegInline]
+    inlines = [TripExpenseInline]
 
     fieldsets = (
         ('Trip Information', {
-            'fields': ('trip_number', 'status', 'created_at')
+            'fields': ('trip_number', 'status', 'date', 'created_at')
         }),
-        ('Assignment', {
-            'fields': ('driver', 'vehicle')
+        ('Details', {
+            'fields': ('vehicle', 'party', 'weight', 'rate_per_ton')
+        }),
+        ('Driver Assignment', {
+            'fields': ('driver',)
+        }),
+        ('Locations', {
+            'fields': ('pickup_location', 'delivery_location')
+        }),
+        ('Financials', {
+            'fields': (
+                'payment_status', 
+                'amount_received', 
+                'diesel_expense', 
+                'toll_expense'
+            )
         }),
         ('Completion Info', {
             'fields': ('actual_completion_datetime',)
@@ -55,9 +80,3 @@ class TripAdmin(admin.ModelAdmin):
         if not change:
             obj.created_by = request.user
         super().save_model(request, obj, form, change)
-
-
-@admin.register(TripLeg)
-class TripLegAdmin(admin.ModelAdmin):
-    list_display = ['trip', 'party', 'pickup_location', 'delivery_location', 'weight']
-    search_fields = ['party__name', 'pickup_location', 'delivery_location']

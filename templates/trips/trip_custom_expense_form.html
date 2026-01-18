@@ -11,7 +11,12 @@
     {% for field in form %}
         <div class="form-group">
             {{ field.label_tag }}
-            {{ field }}
+            {% if field.name == 'name' %}
+                {{ field }}
+                <datalist id="expense_suggestions"></datalist>
+            {% else %}
+                {{ field }}
+            {% endif %}
             {% if field.errors %}
                 <div class="error" style="color: #e74c3c; margin-top: 5px;">
                     {{ field.errors }}
@@ -25,4 +30,31 @@
         <a href="{% url 'trip-detail' trip.pk %}" class="btn" style="margin-left: 1rem;">Cancel</a>
     </div>
 </form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const nameInput = document.querySelector('input[name="name"]');
+    if (nameInput) {
+        nameInput.setAttribute('list', 'expense_suggestions');
+        nameInput.addEventListener('input', function() {
+            const val = this.value;
+            if (val.length < 2) return;
+
+            fetch(`{% url 'autocomplete-suggestions' %}?field=expense_name&q=${encodeURIComponent(val)}`)
+                .then(response => response.json())
+                .then(data => {
+                    const datalist = document.getElementById('expense_suggestions');
+                    datalist.innerHTML = '';
+                    data.results.forEach(item => {
+                        const option = document.createElement('option');
+                        option.value = item;
+                        datalist.appendChild(option);
+                    });
+                });
+        });
+    }
+});
+</script>
 {% endblock %}

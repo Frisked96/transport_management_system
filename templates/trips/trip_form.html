@@ -13,7 +13,16 @@
             {% for field in form %}
                 <div class="mb-3">
                     <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
-                    {{ field }}
+                    {% if field.name == 'pickup_location' %}
+                        {{ field }}
+                        <datalist id="pickup_suggestions"></datalist>
+                    {% elif field.name == 'delivery_location' %}
+                        {{ field }}
+                        <datalist id="delivery_suggestions"></datalist>
+                    {% else %}
+                        {{ field }}
+                    {% endif %}
+                    
                     {% if field.errors %}
                         <div class="invalid-feedback d-block">
                             {{ field.errors }}
@@ -35,4 +44,41 @@
         </form>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const pickupInput = document.getElementById('id_pickup_location');
+    const deliveryInput = document.getElementById('id_delivery_location');
+
+    if (pickupInput) {
+        pickupInput.setAttribute('list', 'pickup_suggestions');
+        setupAutocomplete(pickupInput, 'pickup_location', 'pickup_suggestions');
+    }
+    if (deliveryInput) {
+        deliveryInput.setAttribute('list', 'delivery_suggestions');
+        setupAutocomplete(deliveryInput, 'delivery_location', 'delivery_suggestions');
+    }
+
+    function setupAutocomplete(input, field, datalistId) {
+        input.addEventListener('input', function() {
+            const val = this.value;
+            if (val.length < 2) return;
+
+            fetch(`{% url 'autocomplete-suggestions' %}?field=${field}&q=${encodeURIComponent(val)}`)
+                .then(response => response.json())
+                .then(data => {
+                    const datalist = document.getElementById(datalistId);
+                    datalist.innerHTML = '';
+                    data.results.forEach(item => {
+                        const option = document.createElement('option');
+                        option.value = item;
+                        datalist.appendChild(option);
+                    });
+                });
+        });
+    }
+});
+</script>
 {% endblock %}

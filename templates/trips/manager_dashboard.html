@@ -111,7 +111,13 @@
                     {% for trip in recent_trips|slice:":10" %}
                         <tr>
                             <td><a href="{% url 'trip-detail' trip.pk %}" class="fw-bold text-decoration-none">{{ trip.trip_number }}</a></td>
-                            <td>{{ trip.driver.get_full_name|default:trip.driver.username }}</td>
+                            <td>
+                                {% if trip.driver %}
+                                    {{ trip.driver.get_full_name|default:trip.driver.username }}
+                                {% else %}
+                                    <span class="text-muted">Unassigned</span>
+                                {% endif %}
+                            </td>
                             <td>{{ trip.vehicle.registration_plate }}</td>
                             <td>{{ trip.start_date|date:"M d, Y H:i" }}</td>
                             <td>

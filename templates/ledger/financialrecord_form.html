@@ -5,23 +5,83 @@
 {% block content %}
 <h2>{% if object %}Edit Financial Record{% else %}Add Financial Record{% endif %}</h2>
 
-<form method="post" enctype="multipart/form-data">
+{% if form.non_field_errors %}
+<div class="alert alert-danger">
+    {% for error in form.non_field_errors %}
+        {{ error }}
+    {% endfor %}
+</div>
+{% endif %}
+
+<form method="post" enctype="multipart/form-data" id="financial-record-form">
     {% csrf_token %}
     
     {% for field in form %}
-        <div class="mb-3">
-            <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
-            {{ field }}
-            {% if field.errors %}
-                <div class="text-danger small mt-1">
-                    {{ field.errors }}
-                </div>
-            {% endif %}
-            {% if field.help_text %}
-                <div class="form-text">{{ field.help_text }}</div>
+        <div class="mb-3" id="wrapper_{{ field.id_for_label }}">
+            {% if field.name != 'payment_distribution' %}
+                <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                {{ field }}
+                {% if field.errors %}
+                    <div class="text-danger small mt-1">
+                        {{ field.errors }}
+                    </div>
+                {% endif %}
+                {% if field.help_text %}
+                    <div class="form-text">{{ field.help_text }}</div>
+                {% endif %}
+            {% else %}
+                {{ field }}
             {% endif %}
         </div>
     {% endfor %}
+
+    <!-- Custom Multi-Trip Selection Area -->
+    <div id="multi-trip-area" class="card mb-4 d-none border-primary">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">Payment Allocation (Multi-Trip)</h5>
+        </div>
+        <div class="card-body">
+            <p class="small text-muted">Select trips in the order you wish to pay them. The amount will be distributed sequentially.</p>
+            
+            <div class="row">
+                <div class="col-md-6">
+                    <h6>Unpaid Trips</h6>
+                    <div class="list-group" id="unpaid-trips-list" style="max-height: 300px; overflow-y: auto;">
+                        <!-- Populated by JS -->
+                        <div class="text-center p-3 text-muted">Select a party to load trips.</div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <h6>Selected for Payment (In Order)</h6>
+                    <table class="table table-sm table-striped">
+                        <thead>
+                            <tr>
+                                <th>Trip</th>
+                                <th class="text-end">Owed</th>
+                                <th class="text-end">Allocated</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="selected-trips-body">
+                            <!-- Populated by JS -->
+                        </tbody>
+                        <tfoot>
+                            <tr>
+                                <td colspan="2" class="text-end fw-bold">Total Allocated:</td>
+                                <td class="text-end fw-bold" id="total-allocated">0.00</td>
+                                <td></td>
+                            </tr>
+                            <tr>
+                                <td colspan="2" class="text-end text-muted small">Remaining:</td>
+                                <td class="text-end text-muted small" id="remaining-amount">0.00</td>
+                                <td></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
     
     <div class="mt-4">
         <button type="submit" class="btn btn-success">
@@ -35,79 +95,227 @@
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         const partySelect = document.getElementById('id_party');
-        const driverField = document.getElementById('id_driver');
-        const legsContainer = document.getElementById('id_associated_legs');
+        const amountInput = document.getElementById('id_amount');
+        const driverFieldWrapper = document.getElementById('wrapper_id_driver');
+        const associatedTripWrapper = document.getElementById('wrapper_id_associated_trip');
+        const categorySelect = document.getElementById('id_category');
         
-        // Wrapper for driver field (if it exists)
-        // Bootstrap 5 form groups usually don't have a specific class like .form-group unless we added it.
-        // We used .mb-3 in the loop above.
-        const driverFieldWrapper = driverField ? driverField.closest('.mb-3') : null;
+        const multiTripArea = document.getElementById('multi-trip-area');
+        const unpaidTripsList = document.getElementById('unpaid-trips-list');
+        const selectedTripsBody = document.getElementById('selected-trips-body');
+        const totalAllocatedEl = document.getElementById('total-allocated');
+        const remainingAmountEl = document.getElementById('remaining-amount');
+        const distributionInput = document.getElementById('id_payment_distribution');
 
-        // Helper to fetch and render legs
-        function fetchLegs(partyId) {
-            if (!partyId || !legsContainer) {
-                if (legsContainer) legsContainer.innerHTML = '';
+        let unpaidTrips = []; // Store fetched trip data
+        let selectedTripIds = []; // Store IDs in order
+
+        // State Management
+        function updateUIState() {
+            const hasParty = partySelect && partySelect.value;
+            
+            // Check if selected category is an Income type
+            let isIncome = false;
+            if (categorySelect && categorySelect.selectedIndex >= 0) {
+                const selectedText = categorySelect.options[categorySelect.selectedIndex].text;
+                isIncome = selectedText.includes('Income');
+            }
+            
+            const isPayment = isIncome; 
+            
+            if (hasParty && isPayment) {
+                multiTripArea.classList.remove('d-none');
+                if (associatedTripWrapper) associatedTripWrapper.classList.add('d-none'); // Hide single selector
+                if (driverFieldWrapper) driverFieldWrapper.classList.add('d-none');
+            } else {
+                multiTripArea.classList.add('d-none');
+                if (associatedTripWrapper) associatedTripWrapper.classList.remove('d-none');
+                
+                if (driverFieldWrapper) {
+                    if (hasParty) driverFieldWrapper.classList.add('d-none');
+                    else driverFieldWrapper.classList.remove('d-none');
+                }
+            }
+        }
+
+        // Fetch Trips
+        function fetchTrips(partyId) {
+            if (!partyId) {
+                if (associatedTripWrapper) {
+                    const select = document.getElementById('id_associated_trip');
+                    if (select) select.innerHTML = '<option value="">---------</option>';
+                }
                 return;
             }
 
-            // Show loading state
-            legsContainer.innerHTML = '<div class="spinner-border spinner-border-sm text-primary" role="status"><span class="visually-hidden">Loading...</span></div> Loading trips...';
+            unpaidTripsList.innerHTML = '<div class="text-center p-2"><div class="spinner-border spinner-border-sm text-primary"></div> Loading...</div>';
 
-            fetch(`{% url 'get-party-unpaid-legs' %}?party_id=${partyId}`)
+            fetch(`{% url 'get-party-unpaid-trips' %}?party_id=${partyId}`)
                 .then(response => response.json())
                 .then(data => {
-                    legsContainer.innerHTML = ''; // Clear loading
+                    unpaidTrips = data.trips || [];
                     
-                    if (data.legs && data.legs.length > 0) {
-                        data.legs.forEach(leg => {
-                            const div = document.createElement('div');
-                            div.className = 'form-check';
-                            
-                            const checkbox = document.createElement('input');
-                            checkbox.type = 'checkbox';
-                            checkbox.name = 'associated_legs';
-                            checkbox.value = leg.id;
-                            checkbox.className = 'form-check-input';
-                            checkbox.id = 'leg_' + leg.id;
-                            
-                            const label = document.createElement('label');
-                            label.className = 'form-check-label';
-                            label.htmlFor = 'leg_' + leg.id;
-                            label.textContent = leg.label;
-                            
-                            div.appendChild(checkbox);
-                            div.appendChild(label);
-                            
-                            legsContainer.appendChild(div);
-                        });
-                    } else {
-                        legsContainer.innerHTML = '<p class="text-muted fst-italic mb-0">No unpaid legs found for this party.</p>';
+                    // Also populate the standard single selection box for consistency
+                    if (associatedTripWrapper) {
+                        const select = document.getElementById('id_associated_trip');
+                        if (select) {
+                            const currentValue = select.value;
+                            select.innerHTML = '<option value="">---------</option>';
+                            unpaidTrips.forEach(trip => {
+                                const option = document.createElement('option');
+                                option.value = trip.id;
+                                option.textContent = trip.label;
+                                if (trip.id == currentValue) option.selected = true;
+                                select.appendChild(option);
+                            });
+                        }
                     }
+                    
+                    renderUnpaidTrips();
+                    renderSelectedTrips();
                 })
                 .catch(error => {
-                    console.error('Error fetching legs:', error);
-                    if (legsContainer) legsContainer.innerHTML = '<p class="text-danger mb-0">Error loading trip legs.</p>';
+                    console.error('Error:', error);
+                    unpaidTripsList.innerHTML = '<div class="text-danger p-2">Error loading trips.</div>';
                 });
         }
 
-        // Initial check for legs if party selected on load (Edit or Pre-filled)
-        if (partySelect && partySelect.value && legsContainer) {
-            const hasOptions = legsContainer.querySelectorAll('input[type="checkbox"]').length > 0;
-            if (!hasOptions) {
-                fetchLegs(partySelect.value);
+        // Render Unpaid List (Left Side)
+        function renderUnpaidTrips() {
+            unpaidTripsList.innerHTML = '';
+            if (unpaidTrips.length === 0) {
+                unpaidTripsList.innerHTML = '<div class="text-muted p-2">No unpaid trips found.</div>';
+                return;
+            }
+
+            unpaidTrips.forEach(trip => {
+                // If already selected, don't show (or disable)
+                if (selectedTripIds.includes(trip.id)) return;
+
+                const item = document.createElement('button');
+                item.type = 'button';
+                item.className = 'list-group-item list-group-item-action d-flex justify-content-between align-items-center';
+                item.innerHTML = `
+                    <div>
+                        <strong>${trip.label.split(' - ')[0]}</strong> <br>
+                        <span class="small text-muted">${trip.label.split(' - ').slice(1).join(' - ')}</span>
+                    </div>
+                    <span class="badge bg-primary rounded-pill">+</span>
+                `;
+                item.onclick = () => selectTrip(trip.id);
+                unpaidTripsList.appendChild(item);
+            });
+        }
+
+        // Select Trip Logic
+        function selectTrip(tripId) {
+            if (!selectedTripIds.includes(tripId)) {
+                selectedTripIds.push(tripId);
+                renderUnpaidTrips(); // Refresh left
+                renderSelectedTrips(); // Refresh right
             }
         }
 
-        // Event listener for party change
+        // Deselect Trip Logic
+        window.deselectTrip = function(tripId) {
+            selectedTripIds = selectedTripIds.filter(id => id !== tripId);
+            renderUnpaidTrips();
+            renderSelectedTrips();
+        };
+
+        // Render Selected Trips & Calculate Allocation (Right Side)
+        function renderSelectedTrips() {
+            selectedTripsBody.innerHTML = '';
+            
+            let totalAmount = parseFloat(amountInput.value) || 0;
+            let currentAllocated = 0;
+            let distributionData = [];
+
+            selectedTripIds.forEach(id => {
+                const trip = unpaidTrips.find(t => t.id === id);
+                if (!trip) return; // Should not happen if data synced
+
+                // Allocation Logic
+                let amountForThisTrip = 0;
+                let remainingToAllocate = totalAmount - currentAllocated;
+                
+                if (remainingToAllocate > 0) {
+                    amountForThisTrip = Math.min(remainingToAllocate, trip.balance);
+                }
+                
+                // Round to 2 decimals
+                amountForThisTrip = Math.round(amountForThisTrip * 100) / 100;
+                currentAllocated += amountForThisTrip;
+
+                distributionData.push({
+                    trip_id: trip.id,
+                    amount: amountForThisTrip
+                });
+
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${trip.label.split(' (Bal')[0]}</td>
+                    <td class="text-end">$${trip.balance.toFixed(2)}</td>
+                    <td class="text-end fw-bold text-success">$${amountForThisTrip.toFixed(2)}</td>
+                    <td class="text-end">
+                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="deselectTrip(${trip.id})">&times;</button>
+                    </td>
+                `;
+                selectedTripsBody.appendChild(row);
+            });
+
+            // Update Totals
+            totalAllocatedEl.textContent = currentAllocated.toFixed(2);
+            let remaining = totalAmount - currentAllocated;
+            remainingAmountEl.textContent = remaining.toFixed(2);
+            
+            // Update Hidden Input
+            if (distributionData.length > 0) {
+                distributionInput.value = JSON.stringify(distributionData);
+            } else {
+                distributionInput.value = '';
+            }
+        }
+
+        // Restore State from Hidden Input (e.g. after validation error)
+        function restoreState() {
+            if (distributionInput && distributionInput.value) {
+                try {
+                    const data = JSON.parse(distributionInput.value);
+                    if (Array.isArray(data)) {
+                        selectedTripIds = data.map(item => item.trip_id);
+                        // renderSelectedTrips will be called after fetchTrips completes
+                    }
+                } catch (e) {
+                    console.error("Failed to restore state", e);
+                }
+            }
+        }
+
+        // Listeners
         if (partySelect) {
             partySelect.addEventListener('change', function() {
-                fetchLegs(this.value);
-                if (driverFieldWrapper) {
-                    if (this.value) driverFieldWrapper.style.display = 'none';
-                    else driverFieldWrapper.style.display = 'block';
-                }
+                updateUIState();
+                selectedTripIds = []; // Clear on explicit user change
+                fetchTrips(this.value);
             });
+            
+            // Initial load check
+            if (partySelect.value) {
+                updateUIState();
+                restoreState(); // Load saved IDs into selectedTripIds
+                fetchTrips(partySelect.value); // This will trigger render using selectedTripIds
+            }
         }
+
+        if (amountInput) {
+            amountInput.addEventListener('input', renderSelectedTrips);
+        }
+        
+        if (categorySelect) {
+            categorySelect.addEventListener('change', updateUIState);
+        }
+
     });
 </script>
 {% endblock %}

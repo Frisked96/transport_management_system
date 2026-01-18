@@ -48,9 +48,9 @@
                 <label for="category" class="form-label">Category</label>
                 <select id="category" name="category" class="form-select">
                     <option value="">All Categories</option>
-                    {% for value, label in category_choices %}
-                        <option value="{{ value }}" {% if current_category == value %}selected{% endif %}>
-                            {{ label }}
+                    {% for cat in category_choices %}
+                        <option value="{{ cat.id }}" {% if current_category == cat.id|stringformat:"s" %}selected{% endif %}>
+                            {{ cat.name }}
                         </option>
                     {% endfor %}
                 </select>
@@ -81,6 +81,7 @@
             <table class="table table-striped table-hover mb-0">
                 <thead class="table-light">
                     <tr>
+                        <th>Entry #</th>
                         <th>Date</th>
                         <th>Category</th>
                         <th>Party</th>
@@ -93,6 +94,7 @@
                 <tbody>
                     {% for record in financial_records %}
                         <tr>
+                            <td class="fw-bold">#{{ record.entry_number|default:record.pk }}</td>
                             <td>{{ record.date|date:"M d, Y" }}</td>
                             <td><span class="badge bg-secondary">{{ record.category }}</span></td>
                             <td>{{ record.party.name|default:"-" }}</td>

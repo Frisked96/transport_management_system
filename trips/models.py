@@ -5,12 +5,65 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
 from django.core.exceptions import ValidationError
+from django.db.models.signals import post_delete
+from django.dispatch import receiver
+from django.db.models import Sum, Case, When, Value, F, DecimalField, OuterRef, Subquery
+from django.db.models.functions import Coalesce
 from fleet.models import Vehicle
+import re
 
+
+from django.db.models import Sum, Case, When, Value, F, DecimalField
+
+class TripQuerySet(models.QuerySet):
+    def with_payment_info(self):
+        """Annotate queryset with payment information for filtering and sorting"""
+        from ledger.models import FinancialRecord, TripAllocation, TransactionCategory
+        
+        # Subquery for direct payments (Income types)
+        direct_payments = FinancialRecord.objects.filter(
+            associated_trip=OuterRef('pk'),
+            category__type=TransactionCategory.TYPE_INCOME
+        ).values('associated_trip').annotate(
+            total=Sum('amount')
+        ).values('total')
+
+        # Subquery for allocations
+        allocations = TripAllocation.objects.filter(
+            trip=OuterRef('pk')
+        ).values('trip').annotate(
+            total=Sum('amount')
+        ).values('total')
+
+        return self.annotate(
+            annotated_received = Coalesce(Subquery(direct_payments), Value(0), output_field=DecimalField()) + 
+                                 Coalesce(Subquery(allocations), Value(0), output_field=DecimalField()),
+            # We can't easily calculate revenue in SQL here because it involves multiplication of fields,
+            # but we can do it:
+            annotated_revenue = F('weight') * F('rate_per_ton')
+        ).annotate(
+            annotated_status = Case(
+                When(annotated_received__gte=F('annotated_revenue'), annotated_revenue__gt=0, then=Value('Paid')),
+                When(annotated_received__gt=0, then=Value('Partially Paid')),
+                default=Value('Unpaid'),
+                output_field=models.CharField()
+            )
+        )
+
+class TripManager(models.Manager):
+    def get_queryset(self):
+        return TripQuerySet(self.model, using=self._db)
+    
+    def with_payment_info(self):
+        return self.get_queryset().with_payment_info()
 
 class Trip(models.Model):
+    # ... (rest of model) ...
+    objects = TripManager()
+
     """
-    Trip model to manage transport operations
+    Trip model to manage transport operations.
+    Refactored to single-leg structure.
     """
     
     # Status choices
@@ -24,6 +77,17 @@ class Trip(models.Model):
         (STATUS_CANCELLED, 'Cancelled'),
     ]
     
+    # Payment Status
+    PAYMENT_STATUS_UNPAID = 'Unpaid'
+    PAYMENT_STATUS_PARTIAL = 'Partially Paid'
+    PAYMENT_STATUS_PAID = 'Paid'
+    
+    PAYMENT_STATUS_CHOICES = [
+        (PAYMENT_STATUS_UNPAID, 'Unpaid'),
+        (PAYMENT_STATUS_PARTIAL, 'Partially Paid'),
+        (PAYMENT_STATUS_PAID, 'Paid'),
+    ]
+
     # Unique trip identifier
     trip_number = models.CharField(
         max_length=100,
@@ -32,12 +96,14 @@ class Trip(models.Model):
         blank=True
     )
     
-    # Driver assignment (ForeignKey to User)
+    # Driver assignment (ForeignKey to User) - Optional now
     driver = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
         related_name='assigned_trips',
-        verbose_name='Assigned Driver'
+        verbose_name='Assigned Driver',
+        null=True,
+        blank=True
     )
     
     # Vehicle assignment (ForeignKey to Vehicle)
@@ -48,6 +114,49 @@ class Trip(models.Model):
         verbose_name='Assigned Vehicle'
     )
     
+    # Date of the trip (replaces date from TripLeg)
+    date = models.DateTimeField(
+        verbose_name='Trip Date',
+        default=timezone.now
+    )
+
+    # Party details
+    party = models.ForeignKey(
+        'ledger.Party',
+        on_delete=models.PROTECT,
+        verbose_name='Party',
+        null=True,
+        blank=True
+    )
+
+    pickup_location = models.CharField(
+        max_length=300,
+        verbose_name='Pickup Location',
+        blank=True
+    )
+
+    delivery_location = models.CharField(
+        max_length=300,
+        verbose_name='Delivery Location',
+        blank=True
+    )
+
+    weight = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name='Weight (Tons)',
+        help_text='Load weight in Metric Tons'
+    )
+
+    rate_per_ton = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        verbose_name='Rate per Ton',
+        default=0
+    )
+
     # Actual completion tracking
     actual_completion_datetime = models.DateTimeField(
         null=True,
@@ -69,6 +178,21 @@ class Trip(models.Model):
         verbose_name='Trip Notes'
     )
     
+    # Trip Expenses (Fixed)
+    diesel_expense = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        verbose_name='Diesel Expense'
+    )
+    
+    toll_expense = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        verbose_name='Toll Expense'
+    )
+
     # Audit fields
     created_by = models.ForeignKey(
         User,
@@ -86,7 +210,7 @@ class Trip(models.Model):
     class Meta:
         verbose_name = 'Trip'
         verbose_name_plural = 'Trips'
-        ordering = ['-created_at']
+        ordering = ['-date', '-created_at']
         permissions = [
             ('can_view_all_trips', 'Can view all trips'),
             ('can_update_trip_status', 'Can update trip status'),
@@ -95,124 +219,168 @@ class Trip(models.Model):
         ]
     
     def __str__(self):
-        return f"{self.trip_number} ({self.vehicle.registration_plate})"
+        party_name = self.party.name if self.party else "Unknown"
+        return f"{self.trip_number} - {party_name} ({self.vehicle.registration_plate})"
     
     def clean(self):
         """
         Validate trip logic
         """
-        if not self.pk:  # Only on creation
-            # Check for active trips for this vehicle
-            # Active means not Completed and not Cancelled
-            active_trips = Trip.objects.filter(
-                vehicle=self.vehicle,
-                status=self.STATUS_IN_PROGRESS
-            )
-
-            if active_trips.exists():
-                raise ValidationError({
-                    'vehicle': f"Vehicle {self.vehicle.registration_plate} is currently on an active trip ({active_trips.first().trip_number}). Please close that trip first."
-                })
+        pass
 
     def save(self, *args, **kwargs):
         """
         Override save to handle business logic
         """
-        # Run validation
-        if not self.pk:
-            self.clean()
-
-            # Generate Trip Number
-            # Format: {RegPlate}-{Total}/{Month}/{Year}
-            # Total: Total trips for this vehicle
-            # Month: This month's trips
-            # Year: This year's trips
-
-            now = timezone.now()
-
-            # Count previous trips
-            # We use created_at for historical count.
-            total_count = Trip.objects.filter(vehicle=self.vehicle).count() + 1
-
-            month_count = Trip.objects.filter(
-                vehicle=self.vehicle,
-                created_at__month=now.month,
-                created_at__year=now.year
-            ).count() + 1
-
-            year_count = Trip.objects.filter(
-                vehicle=self.vehicle,
-                created_at__year=now.year
-            ).count() + 1
-
-            self.trip_number = f"{self.vehicle.registration_plate}-{total_count}/{month_count}/{year_count}"
-
-
         # Status logic
         if self.status == self.STATUS_COMPLETED and not self.actual_completion_datetime:
             self.actual_completion_datetime = timezone.now()
         elif self.status != self.STATUS_COMPLETED:
             self.actual_completion_datetime = None
+
+        # Handle Trip Number generation and regeneration
+        reg_plate = self.vehicle.registration_plate
         
+        # If trip exists, check if vehicle changed
+        if self.pk:
+            old_instance = Trip.objects.get(pk=self.pk)
+            if old_instance.vehicle != self.vehicle:
+                # Vehicle changed, clear trip_number to trigger regeneration
+                self.trip_number = ""
+
+        # Generate Trip Number if not present or cleared
+        if not self.trip_number:
+            # Use created_at if available (for re-numbering), else current time
+            ref_date = self.created_at or timezone.now()
+            
+            # Helper to extract count from trip_number
+            pattern = re.compile(r'^.*-(\d+)/(\d+)/(\d+)$')
+
+            # 1. Global Sequence (Total)
+            # Find last trip before this one (based on ref_date)
+            # If self.pk is set (update), exclude self
+            qs = Trip.objects.filter(vehicle=self.vehicle)
+            if self.pk:
+                qs = qs.exclude(pk=self.pk)
+            
+            # Use created_at for reliable ordering
+            last_trip = qs.filter(created_at__lte=ref_date).order_by('created_at').last()
+            
+            total_count = 1
+            if last_trip and last_trip.trip_number:
+                match = pattern.match(last_trip.trip_number)
+                if match:
+                    try:
+                        total_count = int(match.group(1)) + 1
+                    except ValueError:
+                        pass
+            
+            # 2. Month Sequence
+            last_month_trip = qs.filter(
+                created_at__month=ref_date.month,
+                created_at__year=ref_date.year,
+                created_at__lte=ref_date
+            ).order_by('created_at').last()
+            
+            month_count = 1
+            if last_month_trip and last_month_trip.trip_number:
+                match = pattern.match(last_month_trip.trip_number)
+                if match:
+                    try:
+                        month_count = int(match.group(2)) + 1
+                    except ValueError:
+                        pass
+
+            # 3. Year Sequence
+            last_year_trip = qs.filter(
+                created_at__year=ref_date.year,
+                created_at__lte=ref_date
+            ).order_by('created_at').last()
+            
+            year_count = 1
+            if last_year_trip and last_year_trip.trip_number:
+                match = pattern.match(last_year_trip.trip_number)
+                if match:
+                    try:
+                        year_count = int(match.group(3)) + 1
+                    except ValueError:
+                        pass
+
+            # 4. Generate & Verify Uniqueness
+            while True:
+                candidate = f"{reg_plate}-{total_count}/{month_count}/{year_count}"
+                # Check collision (excluding self)
+                exists = Trip.objects.filter(trip_number=candidate)
+                if self.pk:
+                    exists = exists.exclude(pk=self.pk)
+                
+                if not exists.exists():
+                    self.trip_number = candidate
+                    break
+                
+                total_count += 1
+        
+        # If trip_number already exists but vehicle plate changed (manual correction)
+        # ensure the prefix matches the current plate
+        elif not self.trip_number.startswith(reg_plate):
+            parts = self.trip_number.rsplit('-', 1)
+            if len(parts) > 1:
+                # Handle cases where registration plate might contain dashes
+                # but our format is PLATE-COUNT/MONTH/YEAR
+                # We want to replace everything before the LAST dash if it doesn't match
+                # Actually, our pattern is PLATE-X/Y/Z. Let's find the last dash.
+                last_dash_idx = self.trip_number.rfind('-')
+                if last_dash_idx != -1:
+                    suffix = self.trip_number[last_dash_idx+1:]
+                    self.trip_number = f"{reg_plate}-{suffix}"
+
         super().save(*args, **kwargs)
     
     @property
     def start_date(self):
-        """Get the start date from the first leg"""
-        first_leg = self.legs.order_by('date').first()
-        if first_leg:
-            return first_leg.date
-        return self.created_at
+        """Alias for date, for backward compatibility"""
+        return self.date
 
     @property
-    def end_date(self):
-        """Get the end date from the last leg"""
-        last_leg = self.legs.order_by('-date').first()
-        if last_leg:
-            return last_leg.date
-        return None
+    def revenue(self):
+        """Calculate revenue for this trip"""
+        if self.weight and self.rate_per_ton:
+            return self.weight * self.rate_per_ton
+        return 0
 
     @property
-    def is_overdue(self):
-        """Check if trip is overdue"""
-        if self.status == self.STATUS_COMPLETED:
-            return False
-        if self.start_date:
-             return self.start_date < timezone.now()
-        return False
-    
-    @property
-    def duration_display(self):
-        """Display trip duration if completed"""
-        start = self.start_date
-        end = self.end_date
+    def amount_received(self):
+        """Calculate total received from both direct links and allocations"""
+        from ledger.models import FinancialRecord, TransactionCategory
+        # 1. Direct links (Records with type='Income')
+        direct = self.financial_records.filter(
+            category__type=TransactionCategory.TYPE_INCOME
+        ).aggregate(total=models.Sum('amount'))['total'] or 0
         
-        if start and end and end >= start:
-            duration = end - start
-            days = duration.days
-            hours = duration.seconds // 3600
-            minutes = (duration.seconds % 3600) // 60
-            
-            if days > 0:
-                return f"{days}d {hours}h {minutes}m"
-            elif hours > 0:
-                return f"{hours}h {minutes}m"
-            else:
-                return f"{minutes}m"
-        return "N/A"
+        # 2. M2M Allocations (Assumed to be income by nature)
+        allocated = self.payment_allocations.aggregate(
+            total=models.Sum('amount')
+        )['total'] or 0
+        
+        return direct + allocated
 
     @property
-    def total_weight(self):
-        """Calculate total weight from all legs"""
-        return self.legs.aggregate(total=models.Sum('weight'))['total'] or 0
+    def payment_status(self):
+        """Calculate payment status dynamically"""
+        received = self.amount_received
+        rev = self.revenue
+        
+        if received >= rev and rev > 0:
+            return self.PAYMENT_STATUS_PAID
+        elif received > 0:
+            return self.PAYMENT_STATUS_PARTIAL
+        else:
+            return self.PAYMENT_STATUS_UNPAID
 
     @property
-    def total_revenue(self):
-        """Calculate total estimated revenue from all legs"""
-        revenue = 0
-        for leg in self.legs.all():
-            revenue += leg.revenue
-        return revenue
+    def outstanding_balance(self):
+        """Calculate outstanding balance dynamically"""
+        return self.revenue - self.amount_received
 
     @property
     def total_cost(self):
@@ -221,21 +389,6 @@ class Trip(models.Model):
         toll = self.toll_expense or 0
         custom = self.custom_expenses.aggregate(total=models.Sum('amount'))['total'] or 0
         return diesel + toll + custom
-    
-    # Trip Expenses
-    diesel_expense = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        default=0,
-        verbose_name='Diesel Expense'
-    )
-    
-    toll_expense = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        default=0,
-        verbose_name='Toll Expense'
-    )
 
 
 class TripExpense(models.Model):
@@ -279,104 +432,21 @@ class TripExpense(models.Model):
         return f"{self.name} - {self.amount}"
 
 
-class TripLeg(models.Model):
+@receiver(post_delete, sender=Trip)
+def renumber_trips(sender, instance, **kwargs):
     """
-    Sub-trip model representing a leg of a trip
+    Renumber subsequent trips when a trip is deleted to fill the gap.
     """
-    trip = models.ForeignKey(
-        Trip,
-        on_delete=models.CASCADE,
-        related_name='legs',
-        verbose_name='Parent Trip'
-    )
+    if not instance.created_at:
+        return
 
-    party = models.ForeignKey(
-        'ledger.Party',
-        on_delete=models.PROTECT,
-        verbose_name='Party',
-        null=True,
-        blank=True
-    )
+    # Find all subsequent trips for the same vehicle
+    subsequent_trips = Trip.objects.filter(
+        vehicle=instance.vehicle,
+        created_at__gt=instance.created_at
+    ).order_by('created_at')
 
-    pickup_location = models.CharField(
-        max_length=300,
-        verbose_name='Pickup Location'
-    )
-
-    delivery_location = models.CharField(
-        max_length=300,
-        verbose_name='Delivery Location'
-    )
-
-    weight = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        null=True,
-        blank=True,
-        verbose_name='Weight (Tons)',
-        help_text='Load weight in Metric Tons'
-    )
-
-    price_per_ton = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        verbose_name='Price per Ton',
-        default=0
-    )
-
-    date = models.DateTimeField(
-        verbose_name='Date',
-        null=True,
-        blank=True
-    )
-    
-    # Payment Status
-    PAYMENT_STATUS_UNPAID = 'Unpaid'
-    PAYMENT_STATUS_PARTIAL = 'Partially Paid'
-    PAYMENT_STATUS_PAID = 'Paid'
-    
-    PAYMENT_STATUS_CHOICES = [
-        (PAYMENT_STATUS_UNPAID, 'Unpaid'),
-        (PAYMENT_STATUS_PARTIAL, 'Partially Paid'),
-        (PAYMENT_STATUS_PAID, 'Paid'),
-    ]
-    
-    payment_status = models.CharField(
-        max_length=20,
-        choices=PAYMENT_STATUS_CHOICES,
-        default=PAYMENT_STATUS_UNPAID,
-        verbose_name='Payment Status'
-    )
-    
-    amount_received = models.DecimalField(
-        max_digits=12,
-        decimal_places=2,
-        default=0,
-        verbose_name='Amount Received'
-    )
-
-    created_at = models.DateTimeField(
-        auto_now_add=True,
-        verbose_name='Created At'
-    )
-
-    class Meta:
-        verbose_name = 'Trip Leg'
-        verbose_name_plural = 'Trip Legs'
-        ordering = ['date']
-
-    def __str__(self):
-        party_name = self.party.name if self.party else "Unknown"
-        return f"{self.trip.trip_number} - {party_name} ({self.pickup_location} to {self.delivery_location})"
-
-    @property
-    def revenue(self):
-        """Calculate revenue for this leg"""
-        if self.weight and self.price_per_ton:
-            return self.weight * self.price_per_ton
-        return 0
-
-    @property
-    def outstanding_balance(self):
-        """Calculate outstanding balance"""
-        return self.revenue - self.amount_received
+    # Regenerate numbers for each subsequent trip
+    for trip in subsequent_trips:
+        trip.trip_number = "" # Clear to trigger regeneration
+        trip.save()
