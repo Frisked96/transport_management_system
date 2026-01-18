@@ -3,142 +3,189 @@
 {% block title %}{{ driver.user.get_full_name }} - Transport Management System{% endblock %}
 
 {% block content %}
-<div class="clearfix mb-2">
-    <h1 class="float-left">{{ driver.user.get_full_name }} ({{ driver.employee_id }})</h1>
-    <div class="float-right">
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2>{{ driver.user.get_full_name }} <small class="text-muted">({{ driver.employee_id }})</small></h2>
+    <div>
+        <a href="{% url 'driver-list' %}" class="btn btn-outline-secondary me-2">Back to List</a>
+        <a href="{% url 'driver-ledger' driver.pk %}" class="btn btn-info me-2 text-white"><i class="bi bi-wallet2"></i> View Ledger</a>
         {% if perms.drivers.change_driver %}
-        <a href="{% url 'driver-update' driver.pk %}" class="btn btn-warning">Edit Profile</a>
-        {% endif %}
-        <a href="{% url 'driver-ledger' driver.pk %}" class="btn btn-info">View Ledger</a>
-        <a href="{% url 'driver-list' %}" class="btn">Back to List</a>
-    </div>
-</div>
-
-<div class="dashboard-grid">
-    <div class="dashboard-card">
-        <h3>Pocket Balance</h3>
-        <div class="value" style="color: {% if driver.current_balance >= 0 %}green{% else %}red{% endif %}">
-            {{ driver.current_balance }}
-        </div>
-        <p>Positive: Company owes Driver</p>
-        <p>Negative: Driver owes Company</p>
-        {% if perms.drivers.can_manage_driver_finance %}
-        <a href="{% url 'driver-transaction-create' driver.pk %}" class="btn btn-success mt-1">Add Transaction</a>
+            <a href="{% url 'driver-update' driver.pk %}" class="btn btn-warning"><i class="bi bi-pencil"></i> Edit Profile</a>
         {% endif %}
     </div>
-    <div class="dashboard-card">
-        <h3>Total Profit Generated</h3>
-        <div class="value" style="color: {% if profit >= 0 %}green{% else %}red{% endif %}">
-            {{ profit }}
+</div>
+
+<div class="row mb-4">
+    <!-- Pocket Balance Card -->
+    <div class="col-md-6">
+        <div class="card h-100 border-start border-{% if driver.current_balance >= 0 %}success{% else %}danger{% endif %} border-4">
+            <div class="card-body">
+                <h5 class="card-title text-muted">Pocket Balance</h5>
+                <h2 class="card-text {% if driver.current_balance >= 0 %}text-success{% else %}text-danger{% endif %}">
+                    ${{ driver.current_balance|floatformat:2 }}
+                </h2>
+                <p class="text-muted small mb-3">
+                    {% if driver.current_balance >= 0 %}Company owes Driver{% else %}Driver owes Company{% endif %}
+                </p>
+                {% if perms.drivers.can_manage_driver_finance %}
+                    <a href="{% url 'driver-transaction-create' driver.pk %}" class="btn btn-sm btn-outline-success">Add Pocket Transaction</a>
+                {% endif %}
+            </div>
         </div>
-        <p>Revenue: {{ total_revenue }}</p>
-        <p>Trip Expenses: {{ total_expenses }}</p>
+    </div>
+    
+    <!-- Profit Card -->
+    <div class="col-md-6">
+        <div class="card h-100 border-start border-{% if profit >= 0 %}success{% else %}danger{% endif %} border-4">
+            <div class="card-body">
+                <h5 class="card-title text-muted">Total Profit Generated</h5>
+                <h2 class="card-text {% if profit >= 0 %}text-success{% else %}text-danger{% endif %}">
+                    ${{ profit|floatformat:2 }}
+                </h2>
+                <div class="d-flex justify-content-between text-muted small mt-2">
+                    <span>Revenue: ${{ total_revenue|floatformat:2 }}</span>
+                    <span>Expenses: ${{ total_expenses|floatformat:2 }}</span>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
-<div style="display: flex; flex-wrap: wrap; gap: 2rem;">
+<div class="row">
+    <!-- Left Column: History -->
+    <div class="col-lg-6">
+        <!-- Pocket Transactions -->
+        <div class="card mb-4">
+            <div class="card-header bg-light">
+                <h5 class="mb-0">Pocket Transactions</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive" style="max-height: 300px;">
+                    <table class="table table-hover table-sm mb-0">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Type</th>
+                                <th>Description</th>
+                                <th class="text-end">Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for transaction in transactions %}
+                            <tr>
+                                <td>{{ transaction.date|date:"d/m/Y" }}</td>
+                                <td>{{ transaction.get_transaction_type_display }}</td>
+                                <td>{{ transaction.description|truncatechars:20 }}</td>
+                                <td class="text-end {% if transaction.amount >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                    {{ transaction.amount }}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="4" class="text-center text-muted">No transactions found.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
 
-    <div style="flex: 1; min-width: 300px;">
-        <h2>Pocket Transactions</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>Date</th>
-                    <th>Type</th>
-                    <th>Description</th>
-                    <th>Amount</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for transaction in transactions %}
-                <tr>
-                    <td>{{ transaction.date }}</td>
-                    <td>{{ transaction.get_transaction_type_display }}</td>
-                    <td>{{ transaction.description }}</td>
-                    <td style="color: {% if transaction.amount >= 0 %}green{% else %}red{% endif %}">
-                        {{ transaction.amount }}
-                    </td>
-                </tr>
-                {% empty %}
-                <tr>
-                    <td colspan="4">No transactions found.</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+        <!-- Trip Expenses -->
+        <div class="card">
+            <div class="card-header bg-light">
+                <h5 class="mb-0">Trip Expenses</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive" style="max-height: 300px;">
+                    <table class="table table-hover table-sm mb-0">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Category</th>
+                                <th>Trip</th>
+                                <th class="text-end">Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for expense in expenses_list %}
+                            <tr>
+                                <td>{{ expense.date|date:"d/m/Y" }}</td>
+                                <td>{{ expense.category }}</td>
+                                <td>
+                                    {% if expense.associated_trip %}
+                                        <a href="{% url 'trip-detail' expense.associated_trip.pk %}">{{ expense.associated_trip.trip_number }}</a>
+                                    {% else %}-{% endif %}
+                                </td>
+                                <td class="text-end text-danger">{{ expense.amount }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="4" class="text-center text-muted">No expenses recorded.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <div style="flex: 1; min-width: 300px;">
-        <h2>Vehicles Driven</h2>
-        <ul>
-            {% for vehicle in vehicles_driven %}
-            <li>
-                <a href="{% url 'vehicle-detail' vehicle.pk %}">{{ vehicle.registration_plate }} - {{ vehicle.make_model }}</a>
-            </li>
-            {% empty %}
-            <li>No vehicles driven yet.</li>
-            {% endfor %}
-        </ul>
+    <!-- Right Column: Operational Info -->
+    <div class="col-lg-6">
+        <!-- Vehicles Driven -->
+        <div class="card mb-4">
+            <div class="card-header bg-light">
+                <h5 class="mb-0">Vehicles Driven</h5>
+            </div>
+            <div class="card-body">
+                {% if vehicles_driven %}
+                    <ul class="list-group list-group-flush">
+                        {% for vehicle in vehicles_driven %}
+                        <li class="list-group-item">
+                            <a href="{% url 'vehicle-detail' vehicle.pk %}" class="text-decoration-none">
+                                <i class="bi bi-truck"></i> {{ vehicle.registration_plate }} - {{ vehicle.make_model }}
+                            </a>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p class="text-muted mb-0">No vehicles driven yet.</p>
+                {% endif %}
+            </div>
+        </div>
 
-        <h2 class="mt-2">Trip History</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>Trip #</th>
-                    <th>Date</th>
-                    <th>Vehicle</th>
-                    <th>Status</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for trip in trips %}
-                    <tr>
-                        <td><a href="{% url 'trip-detail' trip.pk %}">{{ trip.trip_number }}</a></td>
-                        <td>{{ trip.start_date|date:"M d, Y" }}</td>
-                        <td>{{ trip.vehicle.registration_plate }}</td>
-                        <td>{{ trip.status }}</td>
-                    </tr>
-                {% empty %}
-                    <tr><td colspan="4">No trips assigned yet.</td></tr>
-                {% endfor %}
-            </tbody>
-        </table>
+        <!-- Trip History -->
+        <div class="card">
+            <div class="card-header bg-light">
+                <h5 class="mb-0">Trip History</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover table-sm mb-0">
+                        <thead>
+                            <tr>
+                                <th>Trip #</th>
+                                <th>Date</th>
+                                <th>Vehicle</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for trip in trips %}
+                                <tr>
+                                    <td><a href="{% url 'trip-detail' trip.pk %}">{{ trip.trip_number }}</a></td>
+                                    <td>{{ trip.start_date|date:"d/m/Y" }}</td>
+                                    <td>{{ trip.vehicle.registration_plate }}</td>
+                                    <td>
+                                        <span class="badge bg-{% if trip.status == 'Completed' %}success{% elif trip.status == 'Cancelled' %}danger{% else %}primary{% endif %}">
+                                            {{ trip.status }}
+                                        </span>
+                                    </td>
+                                </tr>
+                            {% empty %}
+                                <tr><td colspan="4" class="text-center text-muted">No trips assigned yet.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
     </div>
-</div>
-
-<div class="mt-2">
-    <h2>Trip Expenses</h2>
-    <table>
-        <thead>
-            <tr>
-                <th>Date</th>
-                <th>Category</th>
-                <th>Trip</th>
-                <th>Description</th>
-                <th>Amount</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for expense in expenses_list %}
-            <tr>
-                <td>{{ expense.date }}</td>
-                <td>{{ expense.category }}</td>
-                <td>
-                    {% if expense.associated_trip %}
-                    <a href="{% url 'trip-detail' expense.associated_trip.pk %}">{{ expense.associated_trip.trip_number }}</a>
-                    {% else %}
-                    -
-                    {% endif %}
-                </td>
-                <td>{{ expense.description }}</td>
-                <td>{{ expense.amount }}</td>
-            </tr>
-            {% empty %}
-            <tr>
-                <td colspan="5">No expenses recorded for trips.</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
 </div>
 {% endblock %}

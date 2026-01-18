@@ -32,10 +32,8 @@ class TripForm(forms.ModelForm):
 
         # Add basic styling for clarity
         for field_name, field in self.fields.items():
-            if isinstance(field.widget, (forms.TextInput, forms.Select, forms.Textarea, forms.DateTimeInput)):
-                field.widget.attrs.update({
-                    'style': 'width: 100%; padding: 5px; margin: 2px 0;'
-                })
+            if isinstance(field.widget, (forms.TextInput, forms.Select, forms.Textarea, forms.DateTimeInput, forms.DateInput)):
+                field.widget.attrs.update({'class': 'form-control'})
     
     class Meta:
         model = Trip
@@ -66,9 +64,7 @@ class TripLegForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         # Add basic styling
         for field in self.fields.values():
-            field.widget.attrs.update({
-                'style': 'width: 100%; padding: 5px; margin: 2px 0;'
-            })
+            field.widget.attrs.update({'class': 'form-control'})
 
     class Meta:
         model = TripLeg
@@ -99,9 +95,7 @@ class TripStatusForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Add basic styling
-        self.fields['status'].widget.attrs.update({
-            'style': 'width: 100%; padding: 5px; margin: 2px 0; font-size: 16px;'
-        })
+        self.fields['status'].widget.attrs.update({'class': 'form-select'})
     
     class Meta:
         model = Trip
@@ -117,16 +111,10 @@ class TripStatusForm(forms.ModelForm):
 
 
 class TripExpenseUpdateForm(forms.ModelForm):
-    """
-    Form for updating fixed trip expenses (diesel, toll)
-    """
-    
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         for field in self.fields.values():
-            field.widget.attrs.update({
-                'style': 'width: 100%; padding: 5px; margin: 2px 0;'
-            })
+            field.widget.attrs.update({'class': 'form-control'})
     
     class Meta:
         model = Trip
@@ -141,9 +129,7 @@ class TripCustomExpenseForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         for field in self.fields.values():
-            field.widget.attrs.update({
-                'style': 'width: 100%; padding: 5px; margin: 2px 0;'
-            })
+            field.widget.attrs.update({'class': 'form-control'})
     
     class Meta:
         model = TripExpense

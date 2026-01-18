@@ -3,235 +3,186 @@
 {% block title %}{{ trip.trip_number }} - Transport Management System{% endblock %}
 
 {% block content %}
-<div class="clearfix mb-1">
-    <h2 style="float: left;">Trip Details: {{ trip.trip_number }}</h2>
-    <div style="float: right;">
-        <a href="{% url 'trip-list' %}" class="btn">Back to List</a>
-        
-        {% if perms.trips.change_trip %}
-            <a href="{% url 'trip-update' trip.pk %}" class="btn btn-warning">Edit Trip</a>
-        {% endif %}
-        
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2>Trip Details: {{ trip.trip_number }}</h2>
+    <div>
+        <a href="{% url 'trip-list' %}" class="btn btn-outline-secondary me-2">Back to List</a>
         {% if perms.trips.can_update_trip_status or user == trip.driver %}
-            <a href="{% url 'trip-status-update' trip.pk %}" class="btn btn-success">Update Status</a>
+            <a href="{% url 'trip-status-update' trip.pk %}" class="btn btn-success me-2">Update Status</a>
         {% endif %}
-        
+        {% if perms.trips.change_trip %}
+            <a href="{% url 'trip-update' trip.pk %}" class="btn btn-warning me-2"><i class="bi bi-pencil"></i> Edit</a>
+        {% endif %}
         {% if perms.trips.delete_trip %}
-            <a href="{% url 'trip-delete' trip.pk %}" class="btn btn-danger">Delete Trip</a>
+            <a href="{% url 'trip-delete' trip.pk %}" class="btn btn-danger"><i class="bi bi-trash"></i> Delete</a>
         {% endif %}
     </div>
 </div>
 
-<!-- Trip Information -->
-<table>
-    <tr>
-        <th>Trip Number</th>
-        <td>{{ trip.trip_number }}</td>
-    </tr>
-    <tr>
-        <th>Status</th>
-        <td>
-            <span class="status-badge status-{{ trip.status|slugify }}">
-                {{ trip.status }}
-            </span>
-            {% if trip.is_overdue and trip.status != trip.STATUS_COMPLETED %}
-                <span style="color: #e74c3c; font-weight: bold; margin-left: 10px;">OVERDUE</span>
-            {% endif %}
-        </td>
-    </tr>
-    <tr>
-        <th>Assigned Driver</th>
-        <td>{{ trip.driver.get_full_name|default:trip.driver.username }}</td>
-    </tr>
-    <tr>
-        <th>Assigned Vehicle</th>
-        <td>
-            <a href="{% url 'vehicle-detail' trip.vehicle.pk %}">
-                {{ trip.vehicle.registration_plate }} - {{ trip.vehicle.make_model }}
-            </a>
-        </td>
-    </tr>
-    <tr>
-        <th>Trip Dates</th>
-        <td>
-            {% if trip.start_date %}
-                {{ trip.start_date|date:"M d, Y H:i" }}
-                {% if trip.end_date %}
-                     - {{ trip.end_date|date:"M d, Y H:i" }}
+<div class="row">
+    <div class="col-lg-8">
+        <!-- Trip Info -->
+        <div class="card mb-4">
+            <div class="card-header bg-light">
+                <h5 class="mb-0">Overview</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>Status:</strong> 
+                            <span class="badge bg-{% if trip.status == 'Completed' %}success{% elif trip.status == 'Cancelled' %}danger{% else %}primary{% endif %}">
+                                {{ trip.status }}
+                            </span>
+                            {% if trip.is_overdue and trip.status != trip.STATUS_COMPLETED %}
+                                <span class="badge bg-danger ms-2">OVERDUE</span>
+                            {% endif %}
+                        </p>
+                        <p><strong>Driver:</strong> {{ trip.driver.get_full_name|default:trip.driver.username }}</p>
+                        <p><strong>Vehicle:</strong> <a href="{% url 'vehicle-detail' trip.vehicle.pk %}" class="text-decoration-none">{{ trip.vehicle.registration_plate }}</a></p>
+                    </div>
+                    <div class="col-md-6">
+                        <p><strong>Start Date:</strong> {{ trip.start_date|date:"M d, Y H:i" }}</p>
+                        <p><strong>Completion:</strong> {{ trip.actual_completion_datetime|date:"M d, Y H:i"|default:"-" }}</p>
+                        <p><strong>Duration:</strong> {{ trip.duration_display }}</p>
+                    </div>
+                </div>
+                {% if trip.notes %}
+                    <hr>
+                    <p class="mb-0"><strong>Notes:</strong><br>{{ trip.notes|linebreaks }}</p>
                 {% endif %}
-            {% else %}
-                <em>No dates set (add legs)</em>
-            {% endif %}
-        </td>
-    </tr>
-    <tr>
-        <th>Actual Completion</th>
-        <td>
-            {% if trip.actual_completion_datetime %}
-                {{ trip.actual_completion_datetime|date:"M d, Y H:i" }}
-                <br>
-                <small><strong>Duration:</strong> {{ trip.duration_display }}</small>
-            {% else %}
-                <em>Not completed yet</em>
-            {% endif %}
-        </td>
-    </tr>
-    <tr>
-        <th>Created By</th>
-        <td>{{ trip.created_by.get_full_name|default:trip.created_by.username }}</td>
-    </tr>
-    <tr>
-        <th>Created At</th>
-        <td>{{ trip.created_at|date:"M d, Y H:i" }}</td>
-    </tr>
-    {% if trip.notes %}
-        <tr>
-            <th>Notes</th>
-            <td>{{ trip.notes|linebreaks }}</td>
-        </tr>
-    {% endif %}
-</table>
+            </div>
+        </div>
 
-<!-- Trip Legs -->
-<div class="clearfix mt-2">
-    <h3 style="float: left;">Trip Legs (Sub-trips)</h3>
-    <div style="float: right;">
-        {% if perms.trips.change_trip %}
-            <a href="{% url 'trip-leg-create' trip.pk %}" class="btn btn-sm">Add Leg</a>
-        {% endif %}
+        <!-- Legs -->
+        <div class="card mb-4">
+            <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Trip Legs (Sub-trips)</h5>
+                {% if perms.trips.change_trip %}
+                    <a href="{% url 'trip-leg-create' trip.pk %}" class="btn btn-sm btn-outline-primary"><i class="bi bi-plus-lg"></i> Add Leg</a>
+                {% endif %}
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Date</th>
+                                <th>Party</th>
+                                <th>Route</th>
+                                <th class="text-end">Weight</th>
+                                <th class="text-end">Price/T</th>
+                                <th class="text-end">Total</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for leg in trip.legs.all %}
+                                <tr>
+                                    <td>{{ leg.date|date:"d/m" }}</td>
+                                    <td>{{ leg.party.name }}</td>
+                                    <td>{{ leg.pickup_location }} &rarr; {{ leg.delivery_location }}</td>
+                                    <td class="text-end">{{ leg.weight|floatformat:2|default:"-" }}</td>
+                                    <td class="text-end">{{ leg.price_per_ton }}</td>
+                                    <td class="text-end">${{ leg.revenue|floatformat:2 }}</td>
+                                    <td>
+                                        {% if perms.trips.change_trip %}
+                                            <div class="btn-group btn-group-sm">
+                                                <a href="{% url 'trip-leg-update' leg.pk %}" class="btn btn-outline-warning"><i class="bi bi-pencil"></i></a>
+                                                <a href="{% url 'trip-leg-delete' leg.pk %}" class="btn btn-outline-danger"><i class="bi bi-trash"></i></a>
+                                            </div>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% empty %}
+                                <tr><td colspan="7" class="text-center text-muted">No legs added.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot class="table-light fw-bold">
+                            <tr>
+                                <td colspan="5" class="text-end">Total Revenue:</td>
+                                <td class="text-end text-success">${{ trip.total_revenue|floatformat:2 }}</td>
+                                <td></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
     </div>
-</div>
 
-{% if trip.legs.all %}
-    <table>
-        <thead>
-            <tr>
-                <th>Date</th>
-                <th>Party</th>
-                <th>Route</th>
-                <th>Weight (Tons)</th>
-                <th>Price/Ton</th>
-                <th>Est. Revenue</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for leg in trip.legs.all %}
-                <tr>
-                    <td>{{ leg.date|date:"d/m/Y" }}</td>
-                    <td>{{ leg.party.name }}</td>
-                    <td>{{ leg.pickup_location }} &rarr; {{ leg.delivery_location }}</td>
-                    <td>{{ leg.weight|floatformat:2|default:"-" }}</td>
-                    <td>{{ leg.price_per_ton }}</td>
-                    <td>{{ leg.revenue|floatformat:2 }}</td>
-                    <td>
-                        {% if perms.trips.change_trip %}
-                            <a href="{% url 'trip-leg-update' leg.pk %}" class="btn btn-sm btn-warning">Edit</a>
-                            <a href="{% url 'trip-leg-delete' leg.pk %}" class="btn btn-sm btn-danger">Delete</a>
-                        {% endif %}
-                    </td>
-                </tr>
-            {% endfor %}
-            <tr style="background-color: #f9f9f9; font-weight: bold;">
-                <td colspan="5" style="text-align: right;">Total Estimated Revenue:</td>
-                <td colspan="2">{{ trip.total_revenue|floatformat:2 }}</td>
-            </tr>
-        </tbody>
-    </table>
-{% else %}
-    <p>No legs added to this trip yet.</p>
-{% endif %}
+    <!-- Right Column: Finances -->
+    <div class="col-lg-4">
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Expenses</h5>
+                {% if perms.trips.change_trip %}
+                    <div>
+                        <a href="{% url 'trip-expense-update' trip.pk %}" class="btn btn-sm btn-light me-1" title="Fixed Expenses"><i class="bi bi-gear"></i></a>
+                        <a href="{% url 'trip-custom-expense-create' trip.pk %}" class="btn btn-sm btn-light" title="Add Custom"><i class="bi bi-plus-lg"></i></a>
+                    </div>
+                {% endif %}
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-sm mb-0">
+                    <tbody>
+                        <tr>
+                            <td>Diesel</td>
+                            <td class="text-end">${{ trip.diesel_expense|default:0|floatformat:2 }}</td>
+                        </tr>
+                        <tr>
+                            <td>Toll</td>
+                            <td class="text-end">${{ trip.toll_expense|default:0|floatformat:2 }}</td>
+                        </tr>
+                        {% for expense in trip.custom_expenses.all %}
+                            <tr>
+                                <td>
+                                    {{ expense.name }}
+                                    {% if perms.trips.change_trip %}
+                                        <a href="{% url 'trip-custom-expense-delete' expense.pk %}" class="text-danger ms-1 text-decoration-none">&times;</a>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end">${{ expense.amount|floatformat:2 }}</td>
+                            </tr>
+                        {% endfor %}
+                        <tr class="table-secondary fw-bold">
+                            <td>Total Cost</td>
+                            <td class="text-end text-danger">${{ trip.total_cost|floatformat:2 }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
 
-<!-- Trip Expenses -->
-<div class="clearfix mt-2">
-    <h3 style="float: left;">Trip Expenses</h3>
-    <div style="float: right;">
-        {% if perms.trips.change_trip %}
-            <a href="{% url 'trip-expense-update' trip.pk %}" class="btn btn-sm btn-warning">Update Fixed Expenses</a>
-            <a href="{% url 'trip-custom-expense-create' trip.pk %}" class="btn btn-sm">Add Custom Expense</a>
-        {% endif %}
-    </div>
-</div>
-
-<table>
-    <thead>
-        <tr>
-            <th>Expense Type</th>
-            <th>Amount</th>
-            <th>Notes/Details</th>
-            <th>Actions</th>
-        </tr>
-    </thead>
-    <tbody>
-        <!-- Fixed Expenses -->
-        <tr>
-            <td>Diesel Expense</td>
-            <td>{{ trip.diesel_expense|default:0|floatformat:2 }}</td>
-            <td>Fixed Entry</td>
-            <td>-</td>
-        </tr>
-        <tr>
-            <td>Toll Expense</td>
-            <td>{{ trip.toll_expense|default:0|floatformat:2 }}</td>
-            <td>Fixed Entry</td>
-            <td>-</td>
-        </tr>
-        
-        <!-- Custom Expenses -->
-        {% for expense in trip.custom_expenses.all %}
-            <tr>
-                <td>{{ expense.name }}</td>
-                <td>{{ expense.amount|floatformat:2 }}</td>
-                <td>{{ expense.notes }}</td>
-                <td>
-                    {% if perms.trips.change_trip %}
-                        <a href="{% url 'trip-custom-expense-delete' expense.pk %}" class="btn btn-sm btn-danger">Delete</a>
-                    {% endif %}
-                </td>
-            </tr>
-        {% endfor %}
-        
-        <tr style="background-color: #f9f9f9; font-weight: bold;">
-            <td style="text-align: right;">Total Trip Cost:</td>
-            <td>{{ trip.total_cost|floatformat:2 }}</td>
-            <td colspan="2"></td>
-        </tr>
-        
-        <!-- Profit/Loss Calculation -->
-        <tr style="background-color: #f0f0f0; border-top: 2px solid #ddd;">
-             <td style="text-align: right; font-weight: bold;">Estimated Net Profit:</td>
-             <td style="font-weight: bold; {% if trip.total_revenue|add:trip.total_cost < 0 %}color: red;{% else %}color: green;{% endif %}">
+        <!-- Profit Summary -->
+        <div class="card shadow-sm border-{% if trip.total_revenue|add:trip.total_cost < 0 %}danger{% else %}success{% endif %}">
+            <div class="card-body text-center">
+                <h6 class="text-muted mb-2">Estimated Net Profit</h6>
                 {% with profit=trip.total_revenue|add:"-"|add:trip.total_cost %}
-                    {{ profit|floatformat:2 }}
+                    <h3 class="{% if profit < 0 %}text-danger{% else %}text-success{% endif %} mb-0">
+                        ${{ profit|floatformat:2 }}
+                    </h3>
                 {% endwith %}
-             </td>
-             <td colspan="2"></td>
-        </tr>
-    </tbody>
-</table>
-{% if trip.financial_records.all %}
-    <h4 class="mt-2">Legacy Financial Records</h4>
-    <table>
-        <thead>
-            <tr>
-                <th>Date</th>
-                <th>Category</th>
-                <th>Amount</th>
-                <th>Description</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for record in trip.financial_records.all %}
-                <tr>
-                    <td>{{ record.date|date:"M d, Y" }}</td>
-                    <td>{{ record.category }}</td>
-                    <td style="text-align: right; {% if record.is_income %}color: #27ae60;{% else %}color: #e74c3c;{% endif %}">
-                        {% if record.is_income %}+{% else %}-{% endif %}${{ record.amount|floatformat:2 }}
-                    </td>
-                    <td>{{ record.description|truncatechars:50 }}</td>
-                </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-{% endif %}
+            </div>
+        </div>
+        
+        <!-- Legacy Financials -->
+        {% if trip.financial_records.all %}
+            <div class="card mt-4">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0">Linked Financial Records</h6>
+                </div>
+                <div class="list-group list-group-flush small">
+                    {% for record in trip.financial_records.all %}
+                        <div class="list-group-item d-flex justify-content-between align-items-center">
+                            <span>{{ record.category }}</span>
+                            <span class="{% if record.is_income %}text-success{% else %}text-danger{% endif %} fw-bold">
+                                {% if record.is_income %}+{% else %}-{% endif %}{{ record.amount|floatformat:0 }}
+                            </span>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>
 {% endblock %}

@@ -3,84 +3,103 @@
 {% block title %}Parties - Transport Management System{% endblock %}
 
 {% block content %}
-<div class="clearfix mb-1">
-    <h2 style="float: left;">Parties</h2>
-    
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2>Parties</h2>
     {% if perms.ledger.add_financialrecord %}
-        <a href="{% url 'party-create' %}" class="btn btn-success" style="float: right;">+ Add New Party</a>
+        <a href="{% url 'party-create' %}" class="btn btn-success"><i class="bi bi-plus-lg"></i> Add New Party</a>
     {% endif %}
 </div>
 
 <!-- Search -->
-<form method="get" class="mb-2" style="background: #f8f9fa; padding: 1rem; border-radius: 4px;">
-    <div style="display: flex; gap: 1rem; align-items: end;">
-        <div style="flex: 1;">
-            <label for="search" style="display: block; margin-bottom: 0.5rem;">Search:</label>
-            <input type="text" id="search" name="search" value="{{ request.GET.search }}" 
-                   placeholder="Name, Phone, State..." style="width: 100%; padding: 0.5rem;">
-        </div>
-        <div>
-            <button type="submit" class="btn btn-primary">Search</button>
-            <a href="{% url 'party-list' %}" class="btn btn-secondary">Clear</a>
+<div class="card mb-4 bg-light">
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-md-9">
+                <label for="search" class="form-label">Search</label>
+                <input type="text" id="search" name="search" class="form-control" value="{{ request.GET.search }}" placeholder="Name, Phone, State...">
+            </div>
+            <div class="col-md-3">
+                <button type="submit" class="btn btn-primary me-2">Search</button>
+                <a href="{% url 'party-list' %}" class="btn btn-outline-secondary">Clear</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-striped table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Name</th>
+                        <th>Phone Number</th>
+                        <th>State</th>
+                        <th class="text-end">Outstanding Balance</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for party in parties %}
+                    <tr>
+                        <td>
+                            <a href="{% url 'party-detail' party.pk %}" class="text-decoration-none fw-bold">
+                                {{ party.name }}
+                            </a>
+                        </td>
+                        <td>{{ party.phone_number }}</td>
+                        <td>{{ party.state }}</td>
+                        <td class="text-end fw-bold {% if party.outstanding_balance > 0 %}text-danger{% else %}text-success{% endif %}">
+                            ${{ party.outstanding_balance|floatformat:2 }}
+                        </td>
+                        <td>
+                            <div class="btn-group btn-group-sm">
+                                <a href="{% url 'party-detail' party.pk %}" class="btn btn-outline-primary" title="View"><i class="bi bi-eye"></i></a>
+                                {% if perms.ledger.change_financialrecord %}
+                                    <a href="{% url 'party-update' party.pk %}" class="btn btn-outline-warning" title="Edit"><i class="bi bi-pencil"></i></a>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="5" class="text-center py-4 text-muted">
+                                No parties found.
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
     </div>
-</form>
+</div>
 
-{% if parties %}
-    <table>
-        <thead>
-            <tr>
-                <th>Name</th>
-                <th>Phone Number</th>
-                <th>State</th>
-                <th>Outstanding Balance</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for party in parties %}
-            <tr>
-                <td><a href="{% url 'party-detail' party.pk %}"><strong>{{ party.name }}</strong></a></td>
-                <td>{{ party.phone_number }}</td>
-                <td>{{ party.state }}</td>
-                <td style="font-weight: bold; color: {% if party.outstanding_balance > 0 %}#e74c3c{% else %}#27ae60{% endif %};">
-                    ${{ party.outstanding_balance|floatformat:2 }}
-                </td>
-                <td>
-                    <a href="{% url 'party-detail' party.pk %}" class="btn btn-primary btn-sm">View</a>
-                    {% if perms.ledger.change_financialrecord %}
-                        <a href="{% url 'party-update' party.pk %}" class="btn btn-warning btn-sm">Edit</a>
-                    {% endif %}
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+<!-- Pagination -->
+{% if is_paginated %}
+    <nav class="mt-4">
+        <ul class="pagination justify-content-center">
+            {% if page_obj.has_previous %}
+                <li class="page-item">
+                    <a class="page-link" href="?page=1{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}">&laquo; First</a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}">Previous</a>
+                </li>
+            {% endif %}
 
-    <!-- Pagination -->
-    {% if is_paginated %}
-        <div class="text-center mt-2">
-            <span class="step-links">
-                {% if page_obj.has_previous %}
-                    <a href="?page=1{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}" class="btn">&laquo; First</a>
-                    <a href="?page={{ page_obj.previous_page_number }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}" class="btn">Previous</a>
-                {% endif %}
+            <li class="page-item disabled">
+                <span class="page-link">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+            </li>
 
-                <span class="current">
-                    Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
-                </span>
-
-                {% if page_obj.has_next %}
-                    <a href="?page={{ page_obj.next_page_number }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}" class="btn">Next</a>
-                    <a href="?page={{ page_obj.paginator.num_pages }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}" class="btn">Last &raquo;</a>
-                {% endif %}
-            </span>
-        </div>
-    {% endif %}
-
-{% else %}
-    <div class="message warning">
-        No parties found. <a href="{% url 'party-create' %}">Create your first party</a>.
-    </div>
+            {% if page_obj.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}">Next</a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}">Last &raquo;</a>
+                </li>
+            {% endif %}
+        </ul>
+    </nav>
 {% endif %}
 {% endblock %}

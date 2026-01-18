@@ -2,6 +2,10 @@
 
 A complete, production-ready internal web application for managing transport business operations, built with Django and SQLite.
 
+## Project Overview
+
+The **Transport Management System** is designed to streamline logistics operations, offering robust management for trips, fleet, drivers, and financial records. It features role-based access control (Admin, Manager, Supervisor, Driver) and provides intuitive dashboards. The user interface has recently undergone a significant overhaul, now utilizing **Bootstrap 5** for a modern, responsive design with a custom "Slate & Teal" theme, ensuring a professional and visually cohesive experience across all modules.
+
 ## Features
 
 - **User Authentication & Authorization**: Role-based access control with four user types (Admin, Manager, Supervisor, Driver)
@@ -16,7 +20,7 @@ A complete, production-ready internal web application for managing transport bus
 
 - **Backend**: Django 5.1.4 (LTS)
 - **Database**: SQLite3
-- **Frontend**: Django Templates (HTML only, no CSS frameworks)
+- **Frontend**: Django Templates (HTML) enhanced with **Bootstrap 5** for responsive design and a custom "Slate & Teal" theme. The UI emphasizes clarity, contrast, and usability, with improved button visibility, larger icons, and a consistent visual style across all pages.
 - **Server**: Django Development Server
 
 ## User Roles & Permissions
@@ -229,7 +233,7 @@ SECRET_KEY = 'your-secret-key-here'
 7. Create templates
 
 ### Modifying Permissions
-1. Use Django admin to manage permissions manually
+11. Use Django admin to manage permissions manually
 2. Access the Admin interface at `/admin/`
 3. Navigate to 'Groups' to manage role-based permissions
 

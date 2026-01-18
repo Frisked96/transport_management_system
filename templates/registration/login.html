@@ -3,75 +3,68 @@
 {% block title %}Login - Transport Management System{% endblock %}
 
 {% block content %}
-<h2>Login to Transport Management System</h2>
+<div class="row justify-content-center mt-5">
+    <div class="col-md-6 col-lg-5">
+        <div class="card shadow-lg border-0">
+            <div class="card-header bg-primary text-white text-center py-3">
+                <h4 class="mb-0"><i class="bi bi-shield-lock"></i> System Login</h4>
+            </div>
+            <div class="card-body p-4">
+                {% if form.errors %}
+                    <div class="alert alert-danger">
+                        <i class="bi bi-exclamation-triangle-fill"></i> Invalid username or password.
+                    </div>
+                {% endif %}
 
-{% if form.errors %}
-    <div class="message error">
-        Please enter a correct username and password. Note that both fields may be case-sensitive.
-    </div>
-{% endif %}
+                {% if next %}
+                    <div class="alert alert-info py-2">
+                        <small>Please login to access the requested page.</small>
+                    </div>
+                {% endif %}
 
-{% if next %}
-    <div class="message info">
-        Please login to access this page.
-    </div>
-{% endif %}
+                <form method="post" action="{% url 'login' %}">
+                    {% csrf_token %}
+                    
+                    <div class="mb-3">
+                        <label for="{{ form.username.id_for_label }}" class="form-label">Username</label>
+                        <input type="text" name="username" class="form-control" id="{{ form.username.id_for_label }}" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="{{ form.password.id_for_label }}" class="form-label">Password</label>
+                        <input type="password" name="password" class="form-control" id="{{ form.password.id_for_label }}" required>
+                    </div>
+                    
+                    <div class="d-grid gap-2 mt-4">
+                        <button type="submit" class="btn btn-primary btn-lg">Login</button>
+                    </div>
+                    <input type="hidden" name="next" value="{{ next }}" />
+                </form>
+            </div>
+        </div>
 
-<form method="post" action="{% url 'login' %}">
-    {% csrf_token %}
-    
-    <div class="form-group">
-        <label for="{{ form.username.id_for_label }}">Username:</label>
-        {{ form.username }}
-        {% if form.username.errors %}
-            <div class="error" style="color: #e74c3c;">{{ form.username.errors }}</div>
-        {% endif %}
+        <div class="card mt-4">
+            <div class="card-header bg-light">
+                <h6 class="mb-0 text-muted"><i class="bi bi-info-circle"></i> Demo Credentials</h6>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-sm table-hover mb-0 small">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Role</th>
+                            <th>Username</th>
+                            <th>Password</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>Admin</td><td>admin</td><td>admin123</td></tr>
+                        <tr><td>Manager</td><td>manager</td><td>manager123</td></tr>
+                        <tr><td>Supervisor</td><td>supervisor</td><td>supervisor123</td></tr>
+                        <tr><td>Driver</td><td>driver</td><td>driver123</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </div>
-    
-    <div class="form-group">
-        <label for="{{ form.password.id_for_label }}">Password:</label>
-        {{ form.password }}
-        {% if form.password.errors %}
-            <div class="error" style="color: #e74c3c;">{{ form.password.errors }}</div>
-        {% endif %}
-    </div>
-    
-    <button type="submit" class="btn btn-primary">Login</button>
-    <input type="hidden" name="next" value="{{ next }}" />
-</form>
-
-<div class="mt-2">
-    <h3>Demo Accounts</h3>
-    <table>
-        <thead>
-            <tr>
-                <th>Role</th>
-                <th>Username</th>
-                <th>Password</th>
-            </tr>
-        </thead>
-        <tbody>
-            <tr>
-                <td>Admin</td>
-                <td>admin</td>
-                <td>admin123</td>
-            </tr>
-            <tr>
-                <td>Manager</td>
-                <td>manager</td>
-                <td>manager123</td>
-            </tr>
-            <tr>
-                <td>Supervisor</td>
-                <td>supervisor</td>
-                <td>supervisor123</td>
-            </tr>
-            <tr>
-                <td>Driver</td>
-                <td>driver</td>
-                <td>driver123</td>
-            </tr>
-        </tbody>
-    </table>
 </div>
 {% endblock %}

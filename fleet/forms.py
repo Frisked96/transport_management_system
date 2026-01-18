@@ -14,10 +14,10 @@ class VehicleForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         # Add basic styling for clarity
         for field_name, field in self.fields.items():
-            if isinstance(field.widget, (forms.TextInput, forms.Select, forms.DateInput)):
-                field.widget.attrs.update({
-                    'style': 'width: 100%; padding: 5px; margin: 2px 0;'
-                })
+            if isinstance(field.widget, (forms.Select,)):
+                field.widget.attrs.update({'class': 'form-select'})
+            else:
+                field.widget.attrs.update({'class': 'form-control'})
     
     class Meta:
         model = Vehicle
@@ -50,10 +50,10 @@ class MaintenanceLogForm(forms.ModelForm):
         
         # Add basic styling for clarity
         for field_name, field in self.fields.items():
-            if isinstance(field.widget, (forms.TextInput, forms.Select, forms.Textarea, forms.NumberInput)):
-                field.widget.attrs.update({
-                    'style': 'width: 100%; padding: 5px; margin: 2px 0;'
-                })
+            if isinstance(field.widget, (forms.Select,)):
+                field.widget.attrs.update({'class': 'form-select'})
+            else:
+                field.widget.attrs.update({'class': 'form-control'})
     
     class Meta:
         model = MaintenanceLog

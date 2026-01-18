@@ -79,15 +79,24 @@ class FinancialRecordForm(forms.ModelForm):
         
         # Add basic styling for clarity
         for field_name, field in self.fields.items():
-            if isinstance(field.widget, (forms.TextInput, forms.Select, forms.Textarea, forms.NumberInput, forms.FileInput, forms.SelectMultiple)):
-                field.widget.attrs.update({
-                    'style': 'width: 100%; padding: 5px; margin: 2px 0;'
-                })
+            # Bootstrap class injection
+            existing_classes = field.widget.attrs.get('class', '')
             
+            if isinstance(field.widget, (forms.CheckboxSelectMultiple, forms.RadioSelect)):
+                # No form-control for these, maybe form-check-input if we could iterate, 
+                # but standard rendering is tricky. We'll handle CheckboxSelectMultiple specifically.
+                pass 
+            elif isinstance(field.widget, forms.CheckboxInput):
+                field.widget.attrs.update({'class': existing_classes + ' form-check-input'})
+            else:
+                field.widget.attrs.update({'class': existing_classes + ' form-control'})
+
             if field_name == 'associated_legs':
                 field.widget = forms.CheckboxSelectMultiple()
+                # We can't easily add form-check-input to generated options here without a custom renderer.
+                # We'll rely on the template or custom JS/CSS.
                 field.widget.attrs.update({
-                    'style': 'list-style-type: none; padding: 0; margin: 0;'
+                    'class': 'list-unstyled' # Custom class for container
                 })
     
     class Meta:
@@ -140,21 +149,14 @@ class PartyForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         for field in self.fields.values():
-            field.widget.attrs.update({
-                'style': 'width: 100%; padding: 5px; margin: 2px 0;'
-            })
+            field.widget.attrs.update({'class': 'form-control'})
     
     class Meta:
         model = Party
         fields = ['name', 'phone_number', 'state', 'address']
         
         widgets = {
-            'address': forms.Textarea(
-                attrs={
-                    'rows': 3,
-                    'style': 'width: 100%; padding: 5px; margin: 2px 0;'
-                }
-            ),
+            'address': forms.Textarea(attrs={'rows': 3}),
         }
 
 
@@ -166,19 +168,12 @@ class AccountForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         for field in self.fields.values():
-            field.widget.attrs.update({
-                'style': 'width: 100%; padding: 5px; margin: 2px 0;'
-            })
+            field.widget.attrs.update({'class': 'form-control'})
     
     class Meta:
         model = Account
         fields = ['name', 'account_number', 'opening_balance', 'description']
         
         widgets = {
-            'description': forms.Textarea(
-                attrs={
-                    'rows': 3,
-                    'style': 'width: 100%; padding: 5px; margin: 2px 0;'
-                }
-            ),
+            'description': forms.Textarea(attrs={'rows': 3}),
         }

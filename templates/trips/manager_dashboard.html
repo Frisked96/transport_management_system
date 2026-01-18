@@ -3,100 +3,136 @@
 {% block title %}Manager Dashboard - Transport Management System{% endblock %}
 
 {% block content %}
-<h2>Manager Dashboard</h2>
-<p>System overview and key metrics</p>
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>Manager Dashboard</h2>
+    <div>
+        <a href="{% url 'trip-list' %}" class="btn btn-primary">View All Trips</a>
+        <a href="{% url 'financial-summary' %}" class="btn btn-outline-secondary ms-2">Financial Reports</a>
+    </div>
+</div>
 
-<!-- Key Metrics Grid -->
-<div class="dashboard-grid">
-    <div class="dashboard-card">
-        <h3>Active Trips</h3>
-        <div class="value">{{ active_trips }}</div>
-        <p>Trips currently in progress</p>
+<!-- Key Metrics -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card h-100 border-start border-primary border-4">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-2 text-muted">Active Trips</h6>
+                <h2 class="card-title text-primary">{{ active_trips }}</h2>
+                <small class="text-muted">In Progress</small>
+            </div>
+        </div>
     </div>
     
-    <div class="dashboard-card">
-        <h3>Completed This Month</h3>
-        <div class="value">{{ completed_this_month }}</div>
-        <p>Trips completed successfully this month</p>
+    <div class="col-md-3">
+        <div class="card h-100 border-start border-success border-4">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-2 text-muted">Completed (Month)</h6>
+                <h2 class="card-title text-success">{{ completed_this_month }}</h2>
+                <small class="text-muted">Trips Finished</small>
+            </div>
+        </div>
     </div>
     
-    <div class="dashboard-card">
-        <h3>Vehicles Due Maintenance</h3>
-        <div class="value">{{ vehicles_due_maintenance }}</div>
-        <p>Vehicles requiring maintenance within 7 days</p>
+    <div class="col-md-3">
+        <div class="card h-100 border-start border-warning border-4">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-2 text-muted">Maintenance Due</h6>
+                <h2 class="card-title text-warning">{{ vehicles_due_maintenance }}</h2>
+                <small class="text-muted">Within 7 days</small>
+            </div>
+        </div>
     </div>
     
-    <div class="dashboard-card">
-        <h3>Vehicles in Maintenance</h3>
-        <div class="value">{{ vehicles_in_maintenance }}</div>
-        <p>Vehicles currently unavailable</p>
+    <div class="col-md-3">
+        <div class="card h-100 border-start border-danger border-4">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-2 text-muted">In Maintenance</h6>
+                <h2 class="card-title text-danger">{{ vehicles_in_maintenance }}</h2>
+                <small class="text-muted">Unavailable</small>
+            </div>
+        </div>
     </div>
 </div>
 
 <!-- Financial Summary -->
-<div class="dashboard-grid">
-    <div class="dashboard-card" style="border-left-color: #27ae60;">
-        <h3>Income This Month</h3>
-        <div class="value" style="color: #27ae60;">${{ income_this_month|floatformat:2 }}</div>
-        <p>Total freight income</p>
-    </div>
-    
-    <div class="dashboard-card" style="border-left-color: #e74c3c;">
-        <h3>Expenses This Month</h3>
-        <div class="value" style="color: #e74c3c;">${{ expenses_this_month|floatformat:2 }}</div>
-        <p>Total operational expenses</p>
-    </div>
-    
-    <div class="dashboard-card" style="border-left-color: {% if net_profit >= 0 %}#27ae60{% else %}#e74c3c{% endif %};">
-        <h3>Net Profit This Month</h3>
-        <div class="value" style="color: {% if net_profit >= 0 %}#27ae60{% else %}#e74c3c{% endif %};">
-            {% if net_profit >= 0 %}+{% endif %}${{ net_profit|floatformat:2 }}
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card h-100 bg-success text-white">
+            <div class="card-body">
+                <h5 class="card-title">Income</h5>
+                <h2 class="fw-bold">${{ income_this_month|floatformat:2 }}</h2>
+                <p class="card-text small opacity-75">Freight Income (This Month)</p>
+            </div>
         </div>
-        <p>Income minus expenses</p>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card h-100 bg-danger text-white">
+            <div class="card-body">
+                <h5 class="card-title">Expenses</h5>
+                <h2 class="fw-bold">${{ expenses_this_month|floatformat:2 }}</h2>
+                <p class="card-text small opacity-75">Operational Costs (This Month)</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card h-100 bg-light border">
+            <div class="card-body">
+                <h5 class="card-title text-muted">Net Profit</h5>
+                <h2 class="fw-bold {% if net_profit >= 0 %}text-success{% else %}text-danger{% endif %}">
+                    {% if net_profit >= 0 %}+{% endif %}${{ net_profit|floatformat:2 }}
+                </h2>
+                <p class="card-text small text-muted">Estimated Margin (This Month)</p>
+            </div>
+        </div>
     </div>
 </div>
 
 <!-- Recent Trips -->
-<h3 class="mt-2">Recent Trips</h3>
-{% if recent_trips %}
-    <table>
-        <thead>
-            <tr>
-                <th>Trip Number</th>
-                <th>Driver</th>
-                <th>Vehicle</th>
-                <th>Start Date</th>
-                <th>Status</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for trip in recent_trips|slice:":10" %}
-                <tr>
-                    <td><strong>{{ trip.trip_number }}</strong></td>
-                    <td>{{ trip.driver.get_full_name|default:trip.driver.username }}</td>
-                    <td>{{ trip.vehicle.registration_plate }}</td>
-                    <td>{{ trip.start_date|date:"M d, Y H:i" }}</td>
-                    <td>
-                        <span class="status-badge status-{{ trip.status|slugify }}">
-                            {{ trip.status }}
-                        </span>
-                    </td>
-                    <td>
-                        <a href="{% url 'trip-detail' trip.pk %}" class="btn btn-primary btn-sm">View</a>
-                    </td>
-                </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-    
-    <div class="text-center mt-1">
-        <a href="{% url 'trip-list' %}" class="btn">View All Trips</a>
-        <a href="{% url 'financial-summary' %}" class="btn btn-success">View Financial Summary</a>
+<div class="card">
+    <div class="card-header bg-white">
+        <h5 class="mb-0 text-primary">Recent Trips</h5>
     </div>
-{% else %}
-    <div class="message info">
-        No recent trips found.
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0 align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>Trip Number</th>
+                        <th>Driver</th>
+                        <th>Vehicle</th>
+                        <th>Start Date</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for trip in recent_trips|slice:":10" %}
+                        <tr>
+                            <td><a href="{% url 'trip-detail' trip.pk %}" class="fw-bold text-decoration-none">{{ trip.trip_number }}</a></td>
+                            <td>{{ trip.driver.get_full_name|default:trip.driver.username }}</td>
+                            <td>{{ trip.vehicle.registration_plate }}</td>
+                            <td>{{ trip.start_date|date:"M d, Y H:i" }}</td>
+                            <td>
+                                <span class="badge bg-{% if trip.status == 'Completed' %}success{% elif trip.status == 'Cancelled' %}secondary{% else %}primary{% endif %} rounded-pill">
+                                    {{ trip.status }}
+                                </span>
+                            </td>
+                            <td>
+                                <a href="{% url 'trip-detail' trip.pk %}" class="btn btn-sm btn-outline-primary">View</a>
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="6" class="text-center py-4 text-muted">
+                                No recent trips found.
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </div>
-{% endif %}
+</div>
 {% endblock %}

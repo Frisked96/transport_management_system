@@ -15,7 +15,7 @@ The **Transport Management System** is a production-ready internal web applicati
 *   **Backend:** Python (Django)
 *   **Database:** SQLite3 (default configuration)
 *   **Configuration:** `transport_mgmt/settings.py` uses `python-decouple` for environment variables (`.env`).
-*   **Frontend:** Server-side rendered Django Templates (HTML).
+*   **Frontend:** Server-side rendered Django Templates (HTML) with **Bootstrap 5** for responsive design and a custom theme.
 
 ### Key Directories
 *   `transport_mgmt/`: Main project configuration settings and URLs.
@@ -68,9 +68,9 @@ The **Transport Management System** is a production-ready internal web applicati
 
 ## Development Conventions
 *   **Code Style:** Follows standard PEP 8 Python guidelines.
-*   **Languages:** python, html, css(minimum), JavaScript(wherever needed).
+*   **Languages:** python, html, css (Bootstrap 5 with custom theme), JavaScript (wherever needed).
 *   **Permissions:** Views heavily rely on Django's permission system (Groups). Ensure new views enforce appropriate checks.
-*   **Templates:** Located in the `templates/` directory, organized by app name.
+*   **Templates:** Located in the `templates/` directory, organized by app name, styled with Bootstrap 5 components.
 *   **Static Files:** Served from `static/` (development) or `staticfiles/` (production).
 
 ## Common Tasks

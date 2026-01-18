@@ -9,26 +9,26 @@
     {% csrf_token %}
     
     {% for field in form %}
-        <div class="form-group">
-            {{ field.label_tag }}
+        <div class="mb-3">
+            <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
             {{ field }}
             {% if field.errors %}
-                <div class="error" style="color: #e74c3c; margin-top: 5px;">
+                <div class="text-danger small mt-1">
                     {{ field.errors }}
                 </div>
             {% endif %}
             {% if field.help_text %}
-                <small style="color: #7f8c8d;">{{ field.help_text }}</small>
+                <div class="form-text">{{ field.help_text }}</div>
             {% endif %}
         </div>
     {% endfor %}
     
-    <div style="margin-top: 1.5rem;">
+    <div class="mt-4">
         <button type="submit" class="btn btn-success">
             {% if object %}Update Record{% else %}Add Record{% endif %}
         </button>
         <a href="{% if object %}{% url 'financialrecord-detail' object.pk %}{% else %}{% url 'financialrecord-list' %}{% endif %}" 
-           class="btn" style="margin-left: 1rem;">Cancel</a>
+           class="btn btn-outline-secondary ms-2">Cancel</a>
     </div>
 </form>
 
@@ -39,7 +39,9 @@
         const legsContainer = document.getElementById('id_associated_legs');
         
         // Wrapper for driver field (if it exists)
-        const driverFieldWrapper = driverField ? driverField.closest('.form-group') : null;
+        // Bootstrap 5 form groups usually don't have a specific class like .form-group unless we added it.
+        // We used .mb-3 in the loop above.
+        const driverFieldWrapper = driverField ? driverField.closest('.mb-3') : null;
 
         // Helper to fetch and render legs
         function fetchLegs(partyId) {
@@ -48,36 +50,43 @@
                 return;
             }
 
+            // Show loading state
+            legsContainer.innerHTML = '<div class="spinner-border spinner-border-sm text-primary" role="status"><span class="visually-hidden">Loading...</span></div> Loading trips...';
+
             fetch(`{% url 'get-party-unpaid-legs' %}?party_id=${partyId}`)
                 .then(response => response.json())
                 .then(data => {
-                    legsContainer.innerHTML = ''; // Clear existing options
+                    legsContainer.innerHTML = ''; // Clear loading
                     
                     if (data.legs && data.legs.length > 0) {
                         data.legs.forEach(leg => {
-                            const label = document.createElement('label');
-                            label.style.display = 'block';
-                            label.style.fontWeight = 'normal';
-                            label.style.marginBottom = '5px';
+                            const div = document.createElement('div');
+                            div.className = 'form-check';
                             
                             const checkbox = document.createElement('input');
                             checkbox.type = 'checkbox';
                             checkbox.name = 'associated_legs';
                             checkbox.value = leg.id;
-                            checkbox.style.marginRight = '8px';
+                            checkbox.className = 'form-check-input';
+                            checkbox.id = 'leg_' + leg.id;
                             
-                            label.appendChild(checkbox);
-                            label.appendChild(document.createTextNode(leg.label));
+                            const label = document.createElement('label');
+                            label.className = 'form-check-label';
+                            label.htmlFor = 'leg_' + leg.id;
+                            label.textContent = leg.label;
                             
-                            legsContainer.appendChild(label);
+                            div.appendChild(checkbox);
+                            div.appendChild(label);
+                            
+                            legsContainer.appendChild(div);
                         });
                     } else {
-                        legsContainer.innerHTML = '<p style="color: #666; font-style: italic;">No unpaid legs found for this party.</p>';
+                        legsContainer.innerHTML = '<p class="text-muted fst-italic mb-0">No unpaid legs found for this party.</p>';
                     }
                 })
                 .catch(error => {
                     console.error('Error fetching legs:', error);
-                    if (legsContainer) legsContainer.innerHTML = '<p style="color: red;">Error loading trip legs.</p>';
+                    if (legsContainer) legsContainer.innerHTML = '<p class="text-danger mb-0">Error loading trip legs.</p>';
                 });
         }
 
@@ -89,14 +98,10 @@
             }
         }
 
-        // Event listener for party change (General ledger entry context)
+        // Event listener for party change
         if (partySelect) {
             partySelect.addEventListener('change', function() {
-                // If we are in general ledger mode and party is picked, we might want to fetch legs
                 fetchLegs(this.value);
-                
-                // If driver field exists, we could hide it here, but form init 
-                // handle removal for pre-filled contexts.
                 if (driverFieldWrapper) {
                     if (this.value) driverFieldWrapper.style.display = 'none';
                     else driverFieldWrapper.style.display = 'block';
