@@ -42,7 +42,7 @@
                     </td>
                     <td>
                         <a href="{% url 'trip-detail' trip.pk %}" class="btn btn-primary btn-sm">View</a>
-                        {% if trip.status == 'Scheduled' or trip.status == 'In Progress' %}
+                        {% if trip.status == 'In Progress' %}
                             <a href="{% url 'trip-status-update' trip.pk %}" class="btn btn-success btn-sm">Update Status</a>
                         {% endif %}
                     </td>

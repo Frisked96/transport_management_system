@@ -3,14 +3,24 @@ Forms for Drivers application
 """
 from django import forms
 from django.contrib.auth.models import User, Group
+from django.contrib.auth.forms import AuthenticationForm
 from .models import Driver, DriverTransaction
+
+class CustomAuthenticationForm(AuthenticationForm):
+    """
+    Custom authentication form that allows empty passwords
+    (for driver login).
+    """
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['password'].required = False
+
 
 class DriverForm(forms.ModelForm):
     """
     Form to create/update Driver and associated User
     """
     username = forms.CharField(max_length=150)
-    password = forms.CharField(widget=forms.PasswordInput, required=False)
     first_name = forms.CharField(max_length=30)
     last_name = forms.CharField(max_length=30)
     email = forms.EmailField(required=False)
@@ -30,9 +40,6 @@ class DriverForm(forms.ModelForm):
             self.fields['first_name'].initial = self.instance.user.first_name
             self.fields['last_name'].initial = self.instance.user.last_name
             self.fields['email'].initial = self.instance.user.email
-            self.fields['password'].help_text = "Leave blank to keep current password"
-        else:
-            self.fields['password'].required = True
 
     def save(self, commit=True):
         driver = super().save(commit=False)
@@ -41,11 +48,14 @@ class DriverForm(forms.ModelForm):
         if not driver.pk and not hasattr(driver, 'user'): # New driver
             user = User.objects.create_user(
                 username=self.cleaned_data['username'],
-                password=self.cleaned_data['password'],
+                password=None, # Unusable password
                 first_name=self.cleaned_data['first_name'],
                 last_name=self.cleaned_data['last_name'],
                 email=self.cleaned_data['email']
             )
+            user.set_unusable_password()
+            user.save()
+            
             # Add to group
             group, _ = Group.objects.get_or_create(name='driver')
             user.groups.add(group)
@@ -56,8 +66,6 @@ class DriverForm(forms.ModelForm):
             user.first_name = self.cleaned_data['first_name']
             user.last_name = self.cleaned_data['last_name']
             user.email = self.cleaned_data['email']
-            if self.cleaned_data['password']:
-                user.set_password(self.cleaned_data['password'])
             user.save()
 
         if commit:

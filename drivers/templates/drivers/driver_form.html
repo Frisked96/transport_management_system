@@ -9,57 +9,71 @@
     <form method="post">
         {% csrf_token %}
 
-        <div class="form-group">
+        <div>
             <h3>User Account</h3>
             {% if form.instance.pk %}
-                <p><strong>Username:</strong> {{ form.instance.user.username }}</p>
-                <div style="display:none">{{ form.username }}</div>
+                <div class="form-group">
+                    <p><strong>Username:</strong> {{ form.instance.user.username }}</p>
+                    <div style="display:none">{{ form.username }}</div>
+                </div>
             {% else %}
-                <label for="{{ form.username.id_for_label }}">Username</label>
-                {{ form.username }}
-                {% if form.username.errors %}
-                <div class="message error">{{ form.username.errors }}</div>
-                {% endif %}
+                <div class="form-group">
+                    <label for="{{ form.username.id_for_label }}">Username</label>
+                    {{ form.username }}
+                    {% if form.username.errors %}
+                    <div class="message error">{{ form.username.errors }}</div>
+                    {% endif %}
+                </div>
             {% endif %}
 
-            <label for="{{ form.first_name.id_for_label }}">First Name</label>
-            {{ form.first_name }}
+            <div class="form-group">
+                <label for="{{ form.first_name.id_for_label }}">First Name</label>
+                {{ form.first_name }}
+            </div>
 
-            <label for="{{ form.last_name.id_for_label }}">Last Name</label>
-            {{ form.last_name }}
+            <div class="form-group">
+                <label for="{{ form.last_name.id_for_label }}">Last Name</label>
+                {{ form.last_name }}
+            </div>
 
-            <label for="{{ form.email.id_for_label }}">Email</label>
-            {{ form.email }}
-
-            <label for="{{ form.password.id_for_label }}">Password</label>
-            {{ form.password }}
-            {% if form.password.help_text %}
-            <small>{{ form.password.help_text }}</small>
-            {% endif %}
+            <div class="form-group">
+                <label for="{{ form.email.id_for_label }}">Email</label>
+                {{ form.email }}
+            </div>
         </div>
 
         <hr class="mb-1 mt-1">
 
-        <div class="form-group">
+        <div>
             <h3>Driver Profile</h3>
 
-            <label for="{{ form.employee_id.id_for_label }}">Employee ID</label>
-            {{ form.employee_id }}
-            {% if form.employee_id.errors %}
-            <div class="message error">{{ form.employee_id.errors }}</div>
-            {% endif %}
+            <div class="form-group">
+                <label for="{{ form.employee_id.id_for_label }}">Employee ID</label>
+                {{ form.employee_id }}
+                {% if form.employee_id.errors %}
+                <div class="message error">{{ form.employee_id.errors }}</div>
+                {% endif %}
+            </div>
 
-            <label for="{{ form.license_number.id_for_label }}">License Number</label>
-            {{ form.license_number }}
+            <div class="form-group">
+                <label for="{{ form.license_number.id_for_label }}">License Number</label>
+                {{ form.license_number }}
+            </div>
 
-            <label for="{{ form.phone_number.id_for_label }}">Phone Number</label>
-            {{ form.phone_number }}
+            <div class="form-group">
+                <label for="{{ form.phone_number.id_for_label }}">Phone Number</label>
+                {{ form.phone_number }}
+            </div>
 
-            <label for="{{ form.address.id_for_label }}">Address</label>
-            {{ form.address }}
+            <div class="form-group">
+                <label for="{{ form.address.id_for_label }}">Address</label>
+                {{ form.address }}
+            </div>
 
-            <label for="{{ form.joined_date.id_for_label }}">Joined Date</label>
-            {{ form.joined_date }}
+            <div class="form-group">
+                <label for="{{ form.joined_date.id_for_label }}">Joined Date</label>
+                {{ form.joined_date }}
+            </div>
         </div>
 
         <button type="submit" class="btn btn-success">Save Driver</button>

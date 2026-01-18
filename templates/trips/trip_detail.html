@@ -118,7 +118,7 @@
         <tbody>
             {% for leg in trip.legs.all %}
                 <tr>
-                    <td>{{ leg.date|date:"M d, H:i" }}</td>
+                    <td>{{ leg.date|date:"d/m/Y" }}</td>
                     <td>{{ leg.client_name }}</td>
                     <td>{{ leg.pickup_location }} &rarr; {{ leg.delivery_location }}</td>
                     <td>{{ leg.weight|floatformat:2|default:"-" }}</td>

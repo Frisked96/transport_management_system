@@ -336,7 +336,7 @@ def driver_dashboard(request):
     # Get driver's trips
     current_trips = Trip.objects.filter(
         driver=request.user,
-        status__in=[Trip.STATUS_SCHEDULED, Trip.STATUS_IN_PROGRESS]
+        status=Trip.STATUS_IN_PROGRESS
     ).order_by('created_at')[:10]
     
     recent_trips = Trip.objects.filter(
@@ -378,7 +378,7 @@ def manager_dashboard(request):
     
     # Active trips
     active_trips = Trip.objects.filter(
-        status__in=[Trip.STATUS_SCHEDULED, Trip.STATUS_IN_PROGRESS]
+        status=Trip.STATUS_IN_PROGRESS
     ).count()
     
     # Completed trips this month

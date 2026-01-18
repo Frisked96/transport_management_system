@@ -14,13 +14,11 @@ class Trip(models.Model):
     """
     
     # Status choices
-    STATUS_SCHEDULED = 'Scheduled'
     STATUS_IN_PROGRESS = 'In Progress'
     STATUS_COMPLETED = 'Completed'
     STATUS_CANCELLED = 'Cancelled'
     
     STATUS_CHOICES = [
-        (STATUS_SCHEDULED, 'Scheduled'),
         (STATUS_IN_PROGRESS, 'In Progress'),
         (STATUS_COMPLETED, 'Completed'),
         (STATUS_CANCELLED, 'Cancelled'),
@@ -61,7 +59,7 @@ class Trip(models.Model):
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
-        default=STATUS_SCHEDULED,
+        default=STATUS_IN_PROGRESS,
         verbose_name='Trip Status'
     )
     
@@ -108,7 +106,7 @@ class Trip(models.Model):
             # Active means not Completed and not Cancelled
             active_trips = Trip.objects.filter(
                 vehicle=self.vehicle,
-                status__in=[self.STATUS_SCHEDULED, self.STATUS_IN_PROGRESS]
+                status=self.STATUS_IN_PROGRESS
             )
 
             if active_trips.exists():

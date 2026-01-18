@@ -169,7 +169,7 @@
                 </div>
 
                 <!-- Detailed Legs Table -->
-                <div id="trip-{{ trip.pk }}" class="trip-details">
+                <div id="trip-{{ trip.pk }}" class="trip-details" style="display: none;">
                     <table class="legs-table">
                         <thead>
                             <tr>
@@ -185,7 +185,7 @@
                         <tbody>
                             {% for leg in trip.legs.all %}
                             <tr>
-                                <td>{{ leg.date|date:"H:i" }}</td>
+                                <td>{{ leg.date|date:"d/m/Y" }}</td>
                                 <td>{{ leg.client_name }}</td>
                                 <td>{{ leg.pickup_location }}</td>
                                 <td>{{ leg.delivery_location }}</td>
