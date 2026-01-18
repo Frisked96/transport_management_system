@@ -4,6 +4,7 @@ from django.urls import reverse
 from django.utils import timezone
 from fleet.models import Vehicle
 from trips.models import Trip, TripLeg, TripExpense
+from ledger.models import Party
 
 class TripLegViewTest(TestCase):
     def setUp(self):
@@ -17,6 +18,10 @@ class TripLegViewTest(TestCase):
         except Permission.DoesNotExist:
             print("Warning: Permission 'change_trip' not found. Tests might fail.")
         
+        # Create Party
+        self.party = Party.objects.create(name='Test Party', phone_number='1234567890')
+        self.party2 = Party.objects.create(name='Updated Party', phone_number='0987654321')
+        
         # Create Vehicle
         self.vehicle = Vehicle.objects.create(
             registration_plate='TEST-001',
@@ -29,15 +34,14 @@ class TripLegViewTest(TestCase):
         self.trip = Trip.objects.create(
             driver=self.user,
             vehicle=self.vehicle,
-            # scheduled_datetime removed or nullable
-            status=Trip.STATUS_SCHEDULED,
+            status=Trip.STATUS_IN_PROGRESS, # Updated status constant
             created_by=self.user
         )
         
         # Create Leg
         self.leg = TripLeg.objects.create(
             trip=self.trip,
-            client_name='Test Client',
+            party=self.party,
             pickup_location='A',
             delivery_location='B',
             weight=10,
@@ -52,7 +56,7 @@ class TripLegViewTest(TestCase):
         url = reverse('trip-leg-update', args=[self.leg.pk])
         data = {
             'date': timezone.now(), # Ensure date is passed
-            'client_name': 'Updated Client',
+            'party': self.party2.pk,
             'pickup_location': 'A',
             'delivery_location': 'C',
             'weight': 15,
@@ -67,7 +71,7 @@ class TripLegViewTest(TestCase):
         self.assertEqual(response.status_code, 302)
         
         self.leg.refresh_from_db()
-        self.assertEqual(self.leg.client_name, 'Updated Client')
+        self.assertEqual(self.leg.party, self.party2)
         self.assertEqual(self.leg.weight, 15)
 
 
@@ -100,8 +104,7 @@ class TripExpenseTest(TestCase):
         self.trip = Trip.objects.create(
             driver=self.user,
             vehicle=self.vehicle,
-            # scheduled_datetime removed or nullable
-            status=Trip.STATUS_SCHEDULED,
+            status=Trip.STATUS_IN_PROGRESS, # Updated status constant
             created_by=self.user
         )
         

@@ -59,5 +59,5 @@ class TripAdmin(admin.ModelAdmin):
 
 @admin.register(TripLeg)
 class TripLegAdmin(admin.ModelAdmin):
-    list_display = ['trip', 'client_name', 'pickup_location', 'delivery_location', 'weight']
-    search_fields = ['client_name', 'pickup_location', 'delivery_location']
+    list_display = ['trip', 'party', 'pickup_location', 'delivery_location', 'weight']
+    search_fields = ['party__name', 'pickup_location', 'delivery_location']

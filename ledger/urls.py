@@ -14,4 +14,19 @@ urlpatterns = [
     
     # Financial Summary URL
     path('summary/', views.financial_summary, name='financial-summary'),
+
+    # Party URLs
+    path('parties/', views.PartyListView.as_view(), name='party-list'),
+    path('parties/create/', views.PartyCreateView.as_view(), name='party-create'),
+    path('parties/<int:pk>/', views.PartyDetailView.as_view(), name='party-detail'),
+    path('parties/<int:pk>/update/', views.PartyUpdateView.as_view(), name='party-update'),
+    path('parties/<int:pk>/delete/', views.PartyDeleteView.as_view(), name='party-delete'),
+    path('api/party-unpaid-legs/', views.get_party_unpaid_legs, name='get-party-unpaid-legs'),
+
+    # Account URLs
+    path('accounts/', views.AccountListView.as_view(), name='account-list'),
+    path('accounts/create/', views.AccountCreateView.as_view(), name='account-create'),
+    path('accounts/<int:pk>/', views.AccountDetailView.as_view(), name='account-detail'),
+    path('accounts/<int:pk>/update/', views.AccountUpdateView.as_view(), name='account-update'),
+    path('accounts/<int:pk>/delete/', views.AccountDeleteView.as_view(), name='account-delete'),
 ]

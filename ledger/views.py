@@ -7,11 +7,13 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
 from django.urls import reverse_lazy
 from django.contrib import messages
-from django.db.models import Q, Sum
+from django.db.models import Q, Sum, F, DecimalField, Value
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 
-from .models import FinancialRecord
-from .forms import FinancialRecordForm
+from .models import FinancialRecord, Party, Account
+from .forms import FinancialRecordForm, PartyForm, AccountForm
+from .utils import recalculate_leg_status
 
 
 class BaseLedgerPermissionMixin:
@@ -56,6 +58,11 @@ class FinancialRecordListView(LoginRequiredMixin, BaseLedgerPermissionMixin, Lis
         trip_id = self.request.GET.get('trip')
         if trip_id:
             queryset = queryset.filter(associated_trip_id=trip_id)
+        
+        # Party filter
+        party_id = self.request.GET.get('party')
+        if party_id:
+            queryset = queryset.filter(party_id=party_id)
         
         # Date range filter
         start_date = self.request.GET.get('start_date')
@@ -123,22 +130,53 @@ class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, Cre
     
     def get_initial(self):
         initial = super().get_initial()
-        trip_id = self.request.GET.get('trip')
-        if trip_id:
-            from trips.models import Trip
+        # associated_trip removed from form, so no need to init it from URL
+        
+        party_id = self.request.GET.get('party')
+        if party_id:
             try:
-                trip = Trip.objects.get(pk=trip_id)
-                initial['associated_trip'] = trip
-            except Trip.DoesNotExist:
+                party = Party.objects.get(pk=party_id)
+                initial['party'] = party
+            except Party.DoesNotExist:
                 pass
+                
+        driver_id = self.request.GET.get('driver')
+        if driver_id:
+            try:
+                from django.contrib.auth.models import User
+                driver_user = User.objects.get(pk=driver_id)
+                initial['driver'] = driver_user
+            except User.DoesNotExist:
+                pass
+                
         return initial
 
     def form_valid(self, form):
         form.instance.recorded_by = self.request.user
+        response = super().form_valid(form)
+        
+        # Auto-populate associated_trip if legs are selected and belong to the same trip
+        # We need to do this after saving to access the many-to-many field
+        legs = self.object.associated_legs.all()
+        if legs.exists():
+            first_trip = legs.first().trip
+            # Check if all legs belong to the same trip
+            if all(leg.trip == first_trip for leg in legs):
+                self.object.associated_trip = first_trip
+                self.object.save()
+            
+            # Update Payment Status of Legs
+            if self.object.category in [FinancialRecord.CATEGORY_FREIGHT_INCOME, FinancialRecord.CATEGORY_PARTY_PAYMENT]:
+                 for leg in legs:
+                     recalculate_leg_status(leg)
+
         messages.success(self.request, 'Financial record created successfully!')
-        return super().form_valid(form)
+        return response
     
     def get_success_url(self):
+        # Redirect back to party detail if created from there
+        if self.object.party:
+            return reverse_lazy('party-detail', kwargs={'pk': self.object.party.pk})
         return reverse_lazy('financialrecord-detail', kwargs={'pk': self.object.pk})
 
 
@@ -153,8 +191,28 @@ class FinancialRecordUpdateView(LoginRequiredMixin, PermissionRequiredMixin, Upd
     permission_required = 'ledger.change_financialrecord'
     
     def form_valid(self, form):
+        # We should probably revert previous amounts if this is an update?
+        # This is getting complex. Ideally, we recalculate leg status from scratch based on all records.
+        # But for this iteration, let's keep it simple and just apply the *difference* or re-apply?
+        # Re-calculating is safer.
+        
+        response = super().form_valid(form)
+        
+        # Auto-populate associated_trip if legs are selected and belong to the same trip
+        legs = self.object.associated_legs.all()
+        if legs.exists():
+            first_trip = legs.first().trip
+            if all(leg.trip == first_trip for leg in legs):
+                self.object.associated_trip = first_trip
+                self.object.save()
+        
+        # Recalculate payment status for ALL legs associated with this record
+        if legs.exists() and self.object.category in [FinancialRecord.CATEGORY_FREIGHT_INCOME, FinancialRecord.CATEGORY_PARTY_PAYMENT]:
+             for leg in legs:
+                 recalculate_leg_status(leg)
+        
         messages.success(self.request, 'Financial record updated successfully!')
-        return super().form_valid(form)
+        return response
     
     def get_success_url(self):
         return reverse_lazy('financialrecord-detail', kwargs={'pk': self.object.pk})
@@ -171,8 +229,18 @@ class FinancialRecordDeleteView(LoginRequiredMixin, PermissionRequiredMixin, Del
     success_url = reverse_lazy('financialrecord-list')
     
     def delete(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        legs = list(self.object.associated_legs.all())
+        is_income = self.object.category in [FinancialRecord.CATEGORY_FREIGHT_INCOME, FinancialRecord.CATEGORY_PARTY_PAYMENT]
+        
+        response = super().delete(request, *args, **kwargs)
+        
+        if is_income:
+            for leg in legs:
+                recalculate_leg_status(leg)
+                
         messages.success(self.request, 'Financial record deleted successfully!')
-        return super().delete(request, *args, **kwargs)
+        return response
 
 
 @login_required
@@ -249,3 +317,262 @@ def financial_summary(request):
     }
     
     return render(request, 'ledger/financial_summary.html', context)
+
+
+# --- Party Views ---
+
+class PartyListView(LoginRequiredMixin, BaseLedgerPermissionMixin, ListView):
+    """
+    List view for parties
+    """
+    model = Party
+    template_name = 'ledger/party_list.html'
+    context_object_name = 'parties'
+    paginate_by = 20
+    
+    def get_queryset(self):
+        # Drivers have no access
+        if self.has_driver_permission():
+            return Party.objects.none()
+            
+        queryset = Party.objects.all()
+        
+        search = self.request.GET.get('search')
+        if search:
+            queryset = queryset.filter(
+                Q(name__icontains=search) |
+                Q(phone_number__icontains=search) |
+                Q(state__icontains=search)
+            )
+            
+        # Annotate with outstanding balance
+        # 1. Total Billed (Sum of TripLeg revenue)
+        # Note: We use Coalesce to handle None (if no legs)
+        
+        # 2. Total Received (Sum of FinancialRecords with specific categories)
+        # We need to filter the relation sum. 
+        # Since Django < 2.0 (or simplistic), conditional aggregation is better.
+        # But FilteredRelation is cleaner in modern Django.
+        # Let's use Sum with Case/When for 'total_received'
+        from django.db.models import Case, When
+        
+        queryset = queryset.annotate(
+            total_billed=Coalesce(
+                Sum(F('tripleg__weight') * F('tripleg__price_per_ton'), output_field=DecimalField()), 
+                Value(0, output_field=DecimalField())
+            ),
+            total_received=Coalesce(
+                Sum(
+                    Case(
+                        When(
+                            financial_records__category__in=[
+                                FinancialRecord.CATEGORY_FREIGHT_INCOME,
+                                FinancialRecord.CATEGORY_PARTY_PAYMENT
+                            ],
+                            then=F('financial_records__amount')
+                        ),
+                        default=Value(0),
+                        output_field=DecimalField()
+                    )
+                ),
+                Value(0, output_field=DecimalField())
+            )
+        ).annotate(
+            outstanding_balance=F('total_billed') - F('total_received')
+        )
+        
+        return queryset.order_by('name')
+
+class PartyDetailView(LoginRequiredMixin, BaseLedgerPermissionMixin, DetailView):
+    """
+    Detail view for a party
+    """
+    model = Party
+    template_name = 'ledger/party_detail.html'
+    context_object_name = 'party'
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        
+        # Get associated trip legs
+        trip_legs = self.object.tripleg_set.all().order_by('-date')
+        context['trip_legs'] = trip_legs
+        
+        # Calculate Total Billed (Revenue from Trip Legs)
+        total_billed = trip_legs.aggregate(
+            total=Sum(F('weight') * F('price_per_ton'), output_field=DecimalField())
+        )['total'] or 0
+        
+        # Get associated financial records
+        financial_records = self.object.financial_records.all().order_by('-date')
+        context['financial_records'] = financial_records
+        
+        # Calculate Total Received (Payments from Party)
+        # Includes both FREIGHT_INCOME (Legacy) and PARTY_PAYMENT
+        total_received = financial_records.filter(
+            category__in=[
+                FinancialRecord.CATEGORY_FREIGHT_INCOME,
+                FinancialRecord.CATEGORY_PARTY_PAYMENT
+            ]
+        ).aggregate(total=Sum('amount'))['total'] or 0
+        
+        # Expenses (We paid for them / Other expenses linked to party)
+        # These increase the amount they owe us? Or reduce?
+        # Typically "Expenses" linked to a party might be billable expenses.
+        # If billable, they should ADD to the balance (They owe us).
+        # But for now, let's keep it simple: Balance = Billed - Received.
+        # Unless 'total_expenses' logic was intended to separate "Our Cost" from "Their Bill".
+        
+        context['total_billed'] = total_billed
+        context['total_received'] = total_received
+        context['balance'] = total_billed - total_received
+        
+        return context
+
+class PartyCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+    """
+    Create view for new party
+    """
+    model = Party
+    form_class = PartyForm
+    template_name = 'ledger/party_form.html'
+    permission_required = 'ledger.add_financialrecord' # Using existing permission for now
+    
+    def get_success_url(self):
+        return reverse_lazy('party-detail', kwargs={'pk': self.object.pk})
+        
+    def form_valid(self, form):
+        messages.success(self.request, 'Party created successfully!')
+        return super().form_valid(form)
+
+class PartyUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+    """
+    Update view for existing party
+    """
+    model = Party
+    form_class = PartyForm
+    template_name = 'ledger/party_form.html'
+    permission_required = 'ledger.change_financialrecord' # Using existing permission for now
+    
+    def get_success_url(self):
+        return reverse_lazy('party-detail', kwargs={'pk': self.object.pk})
+
+    def form_valid(self, form):
+        messages.success(self.request, 'Party updated successfully!')
+        return super().form_valid(form)
+
+class PartyDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
+    """
+    Delete view for party
+    """
+    model = Party
+    template_name = 'ledger/party_confirm_delete.html'
+    permission_required = 'ledger.delete_financialrecord' # Using existing permission for now
+    success_url = reverse_lazy('party-list')
+    
+    def delete(self, request, *args, **kwargs):
+        messages.success(self.request, 'Party deleted successfully!')
+        return super().delete(request, *args, **kwargs)
+
+
+# --- Account Views ---
+
+class AccountListView(LoginRequiredMixin, BaseLedgerPermissionMixin, ListView):
+    """
+    List view for company accounts
+    """
+    model = Account
+    template_name = 'ledger/account_list.html'
+    context_object_name = 'accounts'
+    paginate_by = 20
+    
+    def get_queryset(self):
+        # Drivers have no access
+        if self.has_driver_permission():
+            return Account.objects.none()
+            
+        return Account.objects.all().order_by('name')
+
+class AccountCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+    """
+    Create view for new account
+    """
+    model = Account
+    form_class = AccountForm
+    template_name = 'ledger/account_form.html'
+    permission_required = 'ledger.add_financialrecord' # Using existing permission
+    success_url = reverse_lazy('account-list')
+    
+    def form_valid(self, form):
+        messages.success(self.request, 'Account created successfully!')
+        return super().form_valid(form)
+
+class AccountUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+    """
+    Update view for existing account
+    """
+    model = Account
+    form_class = AccountForm
+    template_name = 'ledger/account_form.html'
+    permission_required = 'ledger.change_financialrecord'
+    success_url = reverse_lazy('account-list')
+
+    def form_valid(self, form):
+        messages.success(self.request, 'Account updated successfully!')
+        return super().form_valid(form)
+
+class AccountDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
+    """
+    Delete view for account
+    """
+    model = Account
+    template_name = 'ledger/account_confirm_delete.html'
+    permission_required = 'ledger.delete_financialrecord'
+    success_url = reverse_lazy('account-list')
+    
+    def delete(self, request, *args, **kwargs):
+        messages.success(self.request, 'Account deleted successfully!')
+        return super().delete(request, *args, **kwargs)
+
+class AccountDetailView(LoginRequiredMixin, BaseLedgerPermissionMixin, DetailView):
+    """
+    Detail view for an account (showing transaction history)
+    """
+    model = Account
+    template_name = 'ledger/account_detail.html'
+    context_object_name = 'account'
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['financial_records'] = self.object.financial_records.all().order_by('-date')
+        return context
+
+
+from django.http import JsonResponse
+from trips.models import TripLeg
+
+@login_required
+def get_party_unpaid_legs(request):
+    """
+    AJAX endpoint to get unpaid/partial legs for a party
+    """
+    party_id = request.GET.get('party_id')
+    if not party_id:
+        return JsonResponse({'legs': []})
+    
+    try:
+        legs = TripLeg.objects.filter(
+            party_id=party_id
+        ).exclude(
+            payment_status=TripLeg.PAYMENT_STATUS_PAID
+        ).order_by('date')
+        
+        data = [{
+            'id': leg.id,
+            'label': f"{leg.date.strftime('%d/%m/%Y')} - {leg.pickup_location} to {leg.delivery_location} (Bal: ${leg.outstanding_balance:.2f})",
+            'balance': float(leg.outstanding_balance)
+        } for leg in legs]
+        
+        return JsonResponse({'legs': data})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)

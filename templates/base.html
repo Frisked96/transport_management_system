@@ -18,10 +18,7 @@
                         <li><a href="{% url 'trip-list' %}">Trips</a></li>
                         <li><a href="{% url 'vehicle-list' %}">Fleet</a></li>
                         
-                        <!-- Driver Dashboard Link -->
-                        {% if user.groups.all.0.name == 'driver' %}
-                            <li><a href="{% url 'driver-dashboard' %}">My Dashboard</a></li>
-                        {% endif %}
+
                         
                         <!-- Manager Dashboard Link -->
                         {% if user.is_superuser or user.groups.all.0.name == 'manager' %}
@@ -31,6 +28,8 @@
                         <!-- Financial Records Link (not for drivers) -->
                         {% if user.is_superuser or user.groups.all.0.name == 'manager' or user.groups.all.0.name == 'supervisor' %}
                             <li><a href="{% url 'financialrecord-list' %}">Ledger</a></li>
+                            <li><a href="{% url 'party-list' %}">Parties</a></li>
+                            <li><a href="{% url 'account-list' %}">Accounts</a></li>
                         {% endif %}
                         
                         <!-- Drivers Link -->

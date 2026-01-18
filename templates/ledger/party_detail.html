@@ -1,0 +1,156 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ party.name }} - Transport Management System{% endblock %}
+
+{% block content %}
+<div class="clearfix mb-1">
+    <h2 style="float: left;">{{ party.name }}</h2>
+    <div style="float: right;">
+        <a href="{% url 'party-list' %}" class="btn">Back to List</a>
+        
+        {% if perms.ledger.change_financialrecord %}
+            <a href="{% url 'party-update' party.pk %}" class="btn btn-warning">Edit Party</a>
+        {% endif %}
+        
+        {% if perms.ledger.delete_financialrecord %}
+            <a href="{% url 'party-delete' party.pk %}" class="btn btn-danger">Delete Party</a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="dashboard-grid" style="grid-template-columns: 2fr 1fr; gap: 2rem;">
+    <!-- Left Column: Details & Stats -->
+    <div>
+        <div class="card mb-2" style="background: white; padding: 1.5rem; border-radius: 4px; border: 1px solid #ddd;">
+            <h3>Contact Information</h3>
+            <table style="width: 100%;">
+                <tr>
+                    <th style="width: 150px;">Phone:</th>
+                    <td>{{ party.phone_number|default:"-" }}</td>
+                </tr>
+                <tr>
+                    <th>State:</th>
+                    <td>{{ party.state|default:"-" }}</td>
+                </tr>
+                <tr>
+                    <th>Address:</th>
+                    <td>{{ party.address|linebreaks|default:"-" }}</td>
+                </tr>
+                <tr>
+                    <th>Created At:</th>
+                    <td>{{ party.created_at|date:"M d, Y" }}</td>
+                </tr>
+            </table>
+        </div>
+
+        <div class="clearfix mb-1">
+            <h3 style="float: left;">Transaction History</h3>
+            {% if perms.ledger.add_financialrecord %}
+                <a href="{% url 'financialrecord-create' %}?party={{ party.pk }}" class="btn btn-sm btn-success" style="float: right;">+ Add Transaction</a>
+            {% endif %}
+        </div>
+
+        {% if financial_records %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Category</th>
+                        <th>Amount</th>
+                        <th>Description</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for record in financial_records %}
+                        <tr>
+                            <td>{{ record.date|date:"d/m/Y" }}</td>
+                            <td>{{ record.category }}</td>
+                            <td style="text-align: right; font-weight: bold; {% if record.is_income %}color: #27ae60;{% else %}color: #e74c3c;{% endif %}">
+                                {% if record.is_income %}+{% else %}-{% endif %}${{ record.amount|floatformat:2 }}
+                            </td>
+                            <td>{{ record.description|truncatechars:30 }}</td>
+                            <td>
+                                <a href="{% url 'financialrecord-detail' record.pk %}" class="btn btn-sm btn-primary">View</a>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p style="color: #666; font-style: italic;">No transactions recorded yet.</p>
+        {% endif %}
+        
+        <div class="clearfix mb-1 mt-2">
+            <h3 style="float: left;">Trip History (Legs)</h3>
+        </div>
+        
+        {% if trip_legs %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Trip #</th>
+                        <th>Route</th>
+                        <th>Weight</th>
+                        <th>Revenue</th>
+                        <th>Paid</th>
+                        <th>Balance</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for leg in trip_legs %}
+                        <tr>
+                            <td>{{ leg.date|date:"d/m/Y" }}</td>
+                            <td><a href="{% url 'trip-detail' leg.trip.pk %}">{{ leg.trip.trip_number }}</a></td>
+                            <td>{{ leg.pickup_location }} &rarr; {{ leg.delivery_location }}</td>
+                            <td>{{ leg.weight|floatformat:2 }} T</td>
+                            <td>${{ leg.revenue|floatformat:2 }}</td>
+                            <td>${{ leg.amount_received|floatformat:2 }}</td>
+                            <td style="color: {% if leg.outstanding_balance > 0 %}#e74c3c{% else %}#27ae60{% endif %}; font-weight: bold;">
+                                ${{ leg.outstanding_balance|floatformat:2 }}
+                            </td>
+                            <td>
+                                <span class="status-badge status-{{ leg.payment_status|slugify }}">
+                                    {{ leg.payment_status }}
+                                </span>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+             <p style="color: #666; font-style: italic;">No trips associated with this party.</p>
+        {% endif %}
+
+    </div>
+
+    <!-- Right Column: Balance Summary -->
+    <div>
+        <div class="card" style="background: white; padding: 1.5rem; border-radius: 4px; border: 1px solid #ddd; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+            <h3 style="margin-top: 0; border-bottom: 2px solid #eee; padding-bottom: 0.5rem;">Financial Summary</h3>
+            
+            <div style="margin-top: 1rem;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                    <span>Total Billed (Trip Revenue):</span>
+                    <span style="color: #2c3e50; font-weight: bold;">${{ total_billed|floatformat:2 }}</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                    <span>Total Paid (Received):</span>
+                    <span style="color: #27ae60; font-weight: bold;">${{ total_received|floatformat:2 }}</span>
+                </div>
+                <div style="border-top: 2px solid #eee; margin-top: 0.5rem; padding-top: 0.5rem; display: flex; justify-content: space-between; font-size: 1.1rem; font-weight: bold;">
+                    <span>Outstanding Balance:</span>
+                    <span style="color: {% if balance > 0 %}#e74c3c{% else %}#27ae60{% endif %};">
+                        ${{ balance|floatformat:2 }}
+                    </span>
+                </div>
+                <div style="margin-top: 1rem; font-size: 0.9rem; color: #7f8c8d;">
+                    * Positive balance indicates amount party owes us (Receivables).
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

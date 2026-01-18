@@ -69,7 +69,7 @@ class TripListView(LoginRequiredMixin, BaseTripPermissionMixin, ListView):
         if search:
             queryset = queryset.filter(
                 Q(trip_number__icontains=search) |
-                Q(legs__client_name__icontains=search) |
+                Q(legs__party__name__icontains=search) |
                 Q(legs__pickup_location__icontains=search) |
                 Q(legs__delivery_location__icontains=search)
             ).distinct()
@@ -323,43 +323,7 @@ def update_trip_status(request, pk):
     })
 
 
-@login_required
-def driver_dashboard(request):
-    """
-    Driver dashboard - shows only the logged-in driver's trips
-    """
-    # Check if user is a driver
-    if not request.user.groups.filter(name='driver').exists():
-        messages.error(request, 'Access denied. Driver dashboard is only for drivers.')
-        return redirect('trip-list')
-    
-    # Get driver's trips
-    current_trips = Trip.objects.filter(
-        driver=request.user,
-        status=Trip.STATUS_IN_PROGRESS
-    ).order_by('created_at')[:10]
-    
-    recent_trips = Trip.objects.filter(
-        driver=request.user,
-        status=Trip.STATUS_COMPLETED
-    ).order_by('-actual_completion_datetime')[:10]
-    
-    # Get driver's assigned vehicle (if any)
-    assigned_vehicle = None
-    current_trip_with_vehicle = current_trips.filter(
-        vehicle__isnull=False
-    ).first()
-    if current_trip_with_vehicle:
-        assigned_vehicle = current_trip_with_vehicle.vehicle
-    
-    context = {
-        'current_trips': current_trips,
-        'recent_trips': recent_trips,
-        'assigned_vehicle': assigned_vehicle,
-        'status_choices': Trip.STATUS_CHOICES,
-    }
-    
-    return render(request, 'trips/driver_dashboard.html', context)
+
 
 
 @login_required

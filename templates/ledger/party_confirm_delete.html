@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+
+{% block title %}Delete Party - Transport Management System{% endblock %}
+
+{% block content %}
+<h2>Confirm Delete Party</h2>
+
+<div class="message error">
+    <strong>Warning!</strong> Are you sure you want to delete the party <strong>"{{ object.name }}"</strong>?
+    This action cannot be undone.
+</div>
+
+<p>
+    If this party has associated trip legs or financial records, you may not be able to delete it, or the deletion might cascade depending on system configuration.
+    Currently, deletion is set to PROTECT for Trip Legs and SET_NULL for Financial Records.
+</p>
+
+<form method="post">
+    {% csrf_token %}
+    
+    <div style="margin-top: 1.5rem;">
+        <button type="submit" class="btn btn-danger">Yes, Delete Party</button>
+        <a href="{% url 'party-detail' object.pk %}" class="btn" style="margin-left: 1rem;">Cancel</a>
+    </div>
+</form>
+{% endblock %}

@@ -67,6 +67,7 @@
             <tr>
                 <th>Date</th>
                 <th>Category</th>
+                <th>Party</th>
                 <th>Amount</th>
                 <th>Associated Trip</th>
                 <th>Description</th>
@@ -79,6 +80,7 @@
                 <tr>
                     <td>{{ record.date|date:"M d, Y" }}</td>
                     <td>{{ record.category }}</td>
+                    <td>{{ record.party.name|default:"-" }}</td>
                     <td style="text-align: right; font-weight: bold; {% if record.is_income %}color: #27ae60;{% else %}color: #e74c3c;{% endif %}">
                         {% if record.is_income %}+{% else %}-{% endif %}${{ record.amount|floatformat:2 }}
                     </td>

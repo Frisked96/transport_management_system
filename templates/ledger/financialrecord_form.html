@@ -31,4 +31,78 @@
            class="btn" style="margin-left: 1rem;">Cancel</a>
     </div>
 </form>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const partySelect = document.getElementById('id_party');
+        const driverField = document.getElementById('id_driver');
+        const legsContainer = document.getElementById('id_associated_legs');
+        
+        // Wrapper for driver field (if it exists)
+        const driverFieldWrapper = driverField ? driverField.closest('.form-group') : null;
+
+        // Helper to fetch and render legs
+        function fetchLegs(partyId) {
+            if (!partyId || !legsContainer) {
+                if (legsContainer) legsContainer.innerHTML = '';
+                return;
+            }
+
+            fetch(`{% url 'get-party-unpaid-legs' %}?party_id=${partyId}`)
+                .then(response => response.json())
+                .then(data => {
+                    legsContainer.innerHTML = ''; // Clear existing options
+                    
+                    if (data.legs && data.legs.length > 0) {
+                        data.legs.forEach(leg => {
+                            const label = document.createElement('label');
+                            label.style.display = 'block';
+                            label.style.fontWeight = 'normal';
+                            label.style.marginBottom = '5px';
+                            
+                            const checkbox = document.createElement('input');
+                            checkbox.type = 'checkbox';
+                            checkbox.name = 'associated_legs';
+                            checkbox.value = leg.id;
+                            checkbox.style.marginRight = '8px';
+                            
+                            label.appendChild(checkbox);
+                            label.appendChild(document.createTextNode(leg.label));
+                            
+                            legsContainer.appendChild(label);
+                        });
+                    } else {
+                        legsContainer.innerHTML = '<p style="color: #666; font-style: italic;">No unpaid legs found for this party.</p>';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching legs:', error);
+                    if (legsContainer) legsContainer.innerHTML = '<p style="color: red;">Error loading trip legs.</p>';
+                });
+        }
+
+        // Initial check for legs if party selected on load (Edit or Pre-filled)
+        if (partySelect && partySelect.value && legsContainer) {
+            const hasOptions = legsContainer.querySelectorAll('input[type="checkbox"]').length > 0;
+            if (!hasOptions) {
+                fetchLegs(partySelect.value);
+            }
+        }
+
+        // Event listener for party change (General ledger entry context)
+        if (partySelect) {
+            partySelect.addEventListener('change', function() {
+                // If we are in general ledger mode and party is picked, we might want to fetch legs
+                fetchLegs(this.value);
+                
+                // If driver field exists, we could hide it here, but form init 
+                // handle removal for pre-filled contexts.
+                if (driverFieldWrapper) {
+                    if (this.value) driverFieldWrapper.style.display = 'none';
+                    else driverFieldWrapper.style.display = 'block';
+                }
+            });
+        }
+    });
+</script>
 {% endblock %}

@@ -174,7 +174,7 @@
                         <thead>
                             <tr>
                                 <th style="width: 15%;">Date</th>
-                                <th style="width: 20%;">Client</th>
+                                <th style="width: 20%;">Party</th>
                                 <th style="width: 25%;">Pickup</th>
                                 <th style="width: 20%;">Delivery</th>
                                 <th style="width: 7%;">Weight</th>
@@ -186,7 +186,7 @@
                             {% for leg in trip.legs.all %}
                             <tr>
                                 <td>{{ leg.date|date:"d/m/Y" }}</td>
-                                <td>{{ leg.client_name }}</td>
+                                <td>{{ leg.party.name }}</td>
                                 <td>{{ leg.pickup_location }}</td>
                                 <td>{{ leg.delivery_location }}</td>
                                 <td>{{ leg.weight|floatformat:2 }} T</td>

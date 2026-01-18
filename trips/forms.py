@@ -74,7 +74,7 @@ class TripLegForm(forms.ModelForm):
         model = TripLeg
         fields = [
             'date',
-            'client_name',
+            'party',
             'pickup_location',
             'delivery_location',
             'weight',

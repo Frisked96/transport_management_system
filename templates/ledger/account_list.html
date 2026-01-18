@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+
+{% block title %}Accounts - Transport Management System{% endblock %}
+
+{% block content %}
+<div class="clearfix mb-1">
+    <h2 style="float: left;">Company Accounts</h2>
+    
+    {% if perms.ledger.add_financialrecord %}
+        <a href="{% url 'account-create' %}" class="btn btn-success" style="float: right;">+ Add New Account</a>
+    {% endif %}
+</div>
+
+{% if accounts %}
+    <table>
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Account Number</th>
+                <th>Current Balance</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for account in accounts %}
+            <tr>
+                <td><a href="{% url 'account-detail' account.pk %}"><strong>{{ account.name }}</strong></a></td>
+                <td>{{ account.account_number }}</td>
+                <td style="font-weight: bold; color: {% if account.current_balance >= 0 %}#27ae60{% else %}#e74c3c{% endif %};">
+                    ${{ account.current_balance|floatformat:2 }}
+                </td>
+                <td>
+                    <a href="{% url 'account-detail' account.pk %}" class="btn btn-primary btn-sm">View</a>
+                    {% if perms.ledger.change_financialrecord %}
+                        <a href="{% url 'account-update' account.pk %}" class="btn btn-warning btn-sm">Edit</a>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% else %}
+    <div class="message warning">
+        No accounts found. <a href="{% url 'account-create' %}">Create your first account</a>.
+    </div>
+{% endif %}
+{% endblock %}

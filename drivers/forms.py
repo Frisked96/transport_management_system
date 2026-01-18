@@ -6,14 +6,7 @@ from django.contrib.auth.models import User, Group
 from django.contrib.auth.forms import AuthenticationForm
 from .models import Driver, DriverTransaction
 
-class CustomAuthenticationForm(AuthenticationForm):
-    """
-    Custom authentication form that allows empty passwords
-    (for driver login).
-    """
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields['password'].required = False
+
 
 
 class DriverForm(forms.ModelForm):

@@ -78,7 +78,6 @@ DATABASES = {
 
 AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',
-    'drivers.backends.DriverAuthBackend',
 ]
 
 # Password validation

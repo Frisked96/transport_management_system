@@ -1,0 +1,100 @@
+{% extends 'base.html' %}
+
+{% block title %}Driver Ledger: {{ driver.user.get_full_name }} - Transport Management System{% endblock %}
+
+{% block content %}
+<div class="clearfix mb-1">
+    <h2 style="float: left;">Ledger: {{ driver.user.get_full_name|default:driver.user.username }}</h2>
+    <div style="float: right;">
+        <a href="{% url 'driver-detail' driver.pk %}" class="btn">Back to Profile</a>
+    </div>
+</div>
+
+<div class="dashboard-grid" style="grid-template-columns: 2fr 1fr; gap: 2rem;">
+    <!-- Left Column: Transaction History -->
+    <div>
+        <div class="clearfix mb-1">
+            <h3 style="float: left;">Transaction History</h3>
+            {% if perms.ledger.add_financialrecord %}
+                <!-- Note: financialrecord-create expects driver user pk if we want to pre-fill? 
+                     Actually the form expects 'driver' which is a User ModelChoiceField.
+                     So we should pass driver.user.pk
+                -->
+                <a href="{% url 'financialrecord-create' %}?driver={{ driver.user.pk }}" class="btn btn-sm btn-success" style="float: right;">+ Add Transaction</a>
+            {% endif %}
+        </div>
+
+        {% if financial_records %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Category</th>
+                        <th>Amount</th>
+                        <th>Description</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for record in financial_records %}
+                        <tr>
+                            <td>{{ record.date|date:"d/m/Y" }}</td>
+                            <td>{{ record.category }}</td>
+                            <td style="text-align: right; font-weight: bold; {% if record.is_expense %}color: #e74c3c;{% else %}color: #27ae60;{% endif %}">
+                                <!-- Logic: 
+                                     Driver Payment (Expense for company) -> reduces what we owe them (Debit Driver).
+                                     Salary/Allowance (Not usually Expense in FinRecord unless we book accrual).
+                                     
+                                     Wait, the user said:
+                                     "drivers also need to be in negative when we have to pay them, and positive when they owe us"
+                                     
+                                     If we pay them (Driver Payment) -> They get cash -> Balance increases (towards positive).
+                                     If we owe them (Salary) -> Balance decreases (towards negative).
+                                     
+                                     FinancialRecord categories:
+                                     - Driver Payment: Expense for company, Cash Out. 
+                                       Effect on Driver Balance: + (They received money).
+                                     
+                                     We might need a new category for "Salary Accrual" or similar to represent the liability?
+                                     Or we interpret "Driver Payment" as "We paid them".
+                                     
+                                     Let's look at the balance logic in the view.
+                                -->
+                                ${{ record.amount|floatformat:2 }}
+                            </td>
+                            <td>{{ record.description|truncatechars:40 }}</td>
+                            <td>
+                                <a href="{% url 'financialrecord-detail' record.pk %}" class="btn btn-sm btn-primary">View</a>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p style="color: #666; font-style: italic;">No financial records found for this driver.</p>
+        {% endif %}
+    </div>
+
+    <!-- Right Column: Balance Summary -->
+    <div>
+        <div class="card" style="background: white; padding: 1.5rem; border-radius: 4px; border: 1px solid #ddd; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+            <h3 style="margin-top: 0; border-bottom: 2px solid #eee; padding-bottom: 0.5rem;">Balance Summary</h3>
+            
+            <div style="margin-top: 1rem;">
+                <div style="border-top: 2px solid #eee; margin-top: 0.5rem; padding-top: 0.5rem; display: flex; justify-content: space-between; font-size: 1.1rem; font-weight: bold;">
+                    <span>Current Balance:</span>
+                    <span style="color: {% if balance >= 0 %}#27ae60{% else %}#e74c3c{% endif %};">
+                        {% if balance >= 0 %}+{% endif %}${{ balance|floatformat:2 }}
+                    </span>
+                </div>
+                <div style="margin-top: 1rem; font-size: 0.9rem; color: #7f8c8d;">
+                    <p><strong>Negative:</strong> Company owes Driver (e.g., Salary not yet paid).</p>
+                    <p><strong>Positive:</strong> Driver owes Company (e.g., Loan, Advance).</p>
+                    <hr>
+                    <p><em>Note: Ensure you record "Salary Accrual" (as a liability) and "Driver Payment" (as payment) to keep this accurate.</em></p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

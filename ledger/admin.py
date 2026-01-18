@@ -2,7 +2,14 @@
 Admin configuration for Ledger app
 """
 from django.contrib import admin
-from .models import FinancialRecord
+from .models import FinancialRecord, Party
+
+
+@admin.register(Party)
+class PartyAdmin(admin.ModelAdmin):
+    list_display = ['name', 'phone_number', 'state', 'created_at']
+    search_fields = ['name', 'phone_number', 'state']
+    list_filter = ['state', 'created_at']
 
 
 @admin.register(FinancialRecord)
@@ -10,6 +17,7 @@ class FinancialRecordAdmin(admin.ModelAdmin):
     list_display = [
         'date',
         'category',
+        'party',
         'amount',
         'associated_trip',
         'description',
@@ -19,12 +27,14 @@ class FinancialRecordAdmin(admin.ModelAdmin):
     list_filter = [
         'category',
         'date',
-        'associated_trip'
+        'associated_trip',
+        'party'
     ]
     
     search_fields = [
         'description',
         'associated_trip__trip_number',
+        'party__name',
         'document_ref'
     ]
     

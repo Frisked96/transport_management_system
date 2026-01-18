@@ -9,6 +9,7 @@
         {% if perms.drivers.change_driver %}
         <a href="{% url 'driver-update' driver.pk %}" class="btn btn-warning">Edit Profile</a>
         {% endif %}
+        <a href="{% url 'driver-ledger' driver.pk %}" class="btn btn-info">View Ledger</a>
         <a href="{% url 'driver-list' %}" class="btn">Back to List</a>
     </div>
 </div>

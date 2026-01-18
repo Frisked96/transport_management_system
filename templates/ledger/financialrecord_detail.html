@@ -31,14 +31,34 @@
         </td>
     </tr>
     <tr>
+        <th>Party</th>
+        <td>{{ record.party.name|default:"-" }}</td>
+    </tr>
+    <tr>
         <th>Associated Trip</th>
         <td>
             {% if record.associated_trip %}
                 <a href="{% url 'trip-detail' record.associated_trip.pk %}">
-                    {{ record.associated_trip.trip_number }} - {{ record.associated_trip.client_name }}
+                    {{ record.associated_trip.trip_number }}
                 </a>
             {% else %}
                 <em>Not associated with any trip</em>
+            {% endif %}
+        </td>
+    </tr>
+    <tr>
+        <th>Associated Trip Legs</th>
+        <td>
+            {% if record.associated_legs.all %}
+                <ul>
+                {% for leg in record.associated_legs.all %}
+                    <li>
+                         Leg: {{ leg.pickup_location }} to {{ leg.delivery_location }} ({{ leg.date|date:"d/m/Y" }})
+                    </li>
+                {% endfor %}
+                </ul>
+            {% else %}
+                <em>No specific legs associated</em>
             {% endif %}
         </td>
     </tr>

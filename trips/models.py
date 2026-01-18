@@ -290,9 +290,12 @@ class TripLeg(models.Model):
         verbose_name='Parent Trip'
     )
 
-    client_name = models.CharField(
-        max_length=200,
-        verbose_name='Client Name'
+    party = models.ForeignKey(
+        'ledger.Party',
+        on_delete=models.PROTECT,
+        verbose_name='Party',
+        null=True,
+        blank=True
     )
 
     pickup_location = models.CharField(
@@ -326,6 +329,31 @@ class TripLeg(models.Model):
         null=True,
         blank=True
     )
+    
+    # Payment Status
+    PAYMENT_STATUS_UNPAID = 'Unpaid'
+    PAYMENT_STATUS_PARTIAL = 'Partially Paid'
+    PAYMENT_STATUS_PAID = 'Paid'
+    
+    PAYMENT_STATUS_CHOICES = [
+        (PAYMENT_STATUS_UNPAID, 'Unpaid'),
+        (PAYMENT_STATUS_PARTIAL, 'Partially Paid'),
+        (PAYMENT_STATUS_PAID, 'Paid'),
+    ]
+    
+    payment_status = models.CharField(
+        max_length=20,
+        choices=PAYMENT_STATUS_CHOICES,
+        default=PAYMENT_STATUS_UNPAID,
+        verbose_name='Payment Status'
+    )
+    
+    amount_received = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=0,
+        verbose_name='Amount Received'
+    )
 
     created_at = models.DateTimeField(
         auto_now_add=True,
@@ -338,7 +366,8 @@ class TripLeg(models.Model):
         ordering = ['date']
 
     def __str__(self):
-        return f"{self.trip.trip_number} - {self.client_name} ({self.pickup_location} to {self.delivery_location})"
+        party_name = self.party.name if self.party else "Unknown"
+        return f"{self.trip.trip_number} - {party_name} ({self.pickup_location} to {self.delivery_location})"
 
     @property
     def revenue(self):
@@ -346,3 +375,8 @@ class TripLeg(models.Model):
         if self.weight and self.price_per_ton:
             return self.weight * self.price_per_ton
         return 0
+
+    @property
+    def outstanding_balance(self):
+        """Calculate outstanding balance"""
+        return self.revenue - self.amount_received

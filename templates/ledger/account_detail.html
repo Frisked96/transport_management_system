@@ -1,0 +1,102 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ account.name }} - Transport Management System{% endblock %}
+
+{% block content %}
+<div class="clearfix mb-1">
+    <h2 style="float: left;">{{ account.name }}</h2>
+    <div style="float: right;">
+        <a href="{% url 'account-list' %}" class="btn">Back to List</a>
+        
+        {% if perms.ledger.change_financialrecord %}
+            <a href="{% url 'account-update' account.pk %}" class="btn btn-warning">Edit Account</a>
+        {% endif %}
+        
+        {% if perms.ledger.delete_financialrecord %}
+            <a href="{% url 'account-delete' account.pk %}" class="btn btn-danger">Delete Account</a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="dashboard-grid" style="grid-template-columns: 2fr 1fr; gap: 2rem;">
+    <!-- Left Column: Transaction History -->
+    <div>
+        <div class="clearfix mb-1">
+            <h3 style="float: left;">Transaction History</h3>
+        </div>
+
+        {% if financial_records %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Category</th>
+                        <th>Party/Driver</th>
+                        <th>Amount</th>
+                        <th>Description</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for record in financial_records %}
+                        <tr>
+                            <td>{{ record.date|date:"d/m/Y" }}</td>
+                            <td>{{ record.category }}</td>
+                            <td>
+                                {% if record.party %}
+                                    <a href="{% url 'party-detail' record.party.pk %}">{{ record.party.name }}</a>
+                                {% elif record.driver %}
+                                    {{ record.driver.get_full_name|default:record.driver.username }}
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
+                            <td style="text-align: right; font-weight: bold; {% if record.is_income %}color: #27ae60;{% else %}color: #e74c3c;{% endif %}">
+                                {% if record.is_income %}+{% else %}-{% endif %}${{ record.amount|floatformat:2 }}
+                            </td>
+                            <td>{{ record.description|truncatechars:30 }}</td>
+                            <td>
+                                <a href="{% url 'financialrecord-detail' record.pk %}" class="btn btn-sm btn-primary">View</a>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p style="color: #666; font-style: italic;">No transactions recorded for this account.</p>
+        {% endif %}
+    </div>
+
+    <!-- Right Column: Balance Summary -->
+    <div>
+        <div class="card" style="background: white; padding: 1.5rem; border-radius: 4px; border: 1px solid #ddd; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+            <h3 style="margin-top: 0; border-bottom: 2px solid #eee; padding-bottom: 0.5rem;">Balance Summary</h3>
+            
+            <table style="width: 100%; margin-top: 1rem;">
+                <tr>
+                    <td><strong>Account Number:</strong></td>
+                    <td style="text-align: right;">{{ account.account_number|default:"-" }}</td>
+                </tr>
+                <tr>
+                    <td><strong>Opening Balance:</strong></td>
+                    <td style="text-align: right;">${{ account.opening_balance|floatformat:2 }}</td>
+                </tr>
+            </table>
+
+            <div style="border-top: 2px solid #eee; margin-top: 1rem; padding-top: 1rem; display: flex; justify-content: space-between; font-size: 1.2rem; font-weight: bold;">
+                <span>Current Balance:</span>
+                <span style="color: {% if account.current_balance >= 0 %}#27ae60{% else %}#e74c3c{% endif %};">
+                    ${{ account.current_balance|floatformat:2 }}
+                </span>
+            </div>
+            
+            {% if account.description %}
+            <div style="margin-top: 1rem; color: #666;">
+                <strong>Description:</strong><br>
+                {{ account.description|linebreaks }}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
