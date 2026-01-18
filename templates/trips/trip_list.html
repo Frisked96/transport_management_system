@@ -89,37 +89,49 @@
 
                 <!-- Collapsible Legs -->
                 <div class="collapse mt-2" id="legs-{{ trip.pk }}">
-                    <div class="card card-body bg-light border-0">
-                        <table class="table table-sm table-borderless mb-0">
-                            <thead>
-                                <tr class="text-muted small">
-                                    <th>Date</th>
-                                    <th>Party</th>
-                                    <th>Route</th>
-                                    <th class="text-end">Weight</th>
-                                    <th class="text-end">Revenue</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for leg in trip.legs.all %}
-                                <tr>
-                                    <td>{{ leg.date|date:"d/m" }}</td>
-                                    <td>{{ leg.party.name }}</td>
-                                    <td>{{ leg.pickup_location }} &rarr; {{ leg.delivery_location }}</td>
-                                    <td class="text-end">{{ leg.weight|floatformat:2 }} T</td>
-                                    <td class="text-end">${{ leg.revenue|floatformat:2 }}</td>
-                                    <td>
-                                        {% if perms.trips.change_trip %}
-                                            <a href="{% url 'trip-leg-update' leg.pk %}" class="btn btn-sm btn-outline-warning" title="Edit Leg">Edit</a>
-                                        {% endif %}
-                                    </td>
-                                </tr>
-                                {% empty %}
-                                <tr><td colspan="6" class="text-center text-muted">No legs added.</td></tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
+                    <div class="card border-0 bg-light">
+                        <div class="list-group list-group-flush bg-transparent">
+                            {% for leg in trip.legs.all %}
+                            <div class="list-group-item bg-transparent py-2 px-3 border-bottom">
+                                <div class="row align-items-center">
+                                    <!-- Info Section: Date, Party, Route -->
+                                    <div class="col-7 col-md-9">
+                                        <div class="row align-items-center">
+                                            <div class="col-12 col-md-4 mb-1 mb-md-0">
+                                                <span class="fw-bold text-dark"><i class="bi bi-calendar-event"></i> {{ leg.date|date:"d/m/Y" }}</span>
+                                                <span class="d-md-none text-muted small"><br><i class="bi bi-building"></i> {{ leg.party.name }}</span>
+                                            </div>
+                                            <div class="d-none d-md-block col-md-3 text-secondary">
+                                                <i class="bi bi-building"></i> {{ leg.party.name }}
+                                            </div>
+                                            <div class="col-12 col-md-5 text-muted small">
+                                                <i class="bi bi-geo-alt"></i> {{ leg.pickup_location }} &rarr; {{ leg.delivery_location }}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Stats & Action Section -->
+                                    <div class="col-5 col-md-3 text-end">
+                                        <div class="row align-items-center gx-2">
+                                            <div class="col-12 col-md-6 mb-2 mb-md-0">
+                                                <div class="fw-bold text-primary">{{ leg.weight|floatformat:2 }} T</div>
+                                                <div class="text-muted small">${{ leg.price_per_ton|floatformat:2 }}/T</div>
+                                            </div>
+                                            <div class="col-12 col-md-6">
+                                                {% if perms.trips.change_trip %}
+                                                    <a href="{% url 'trip-leg-update' leg.pk %}" class="btn btn-sm btn-outline-warning w-100" title="Edit Leg">
+                                                        <i class="bi bi-pencil"></i> Edit
+                                                    </a>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% empty %}
+                            <div class="list-group-item bg-transparent text-center text-muted small py-2">No legs added.</div>
+                            {% endfor %}
+                        </div>
                     </div>
                 </div>
             </div>

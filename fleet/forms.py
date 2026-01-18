@@ -31,8 +31,7 @@ class VehicleForm(forms.ModelForm):
         widgets = {
             'purchase_date': forms.DateInput(
                 attrs={
-                    'type': 'date',
-                    'style': 'width: 100%; padding: 5px; margin: 2px 0;'
+                    'type': 'date'
                 }
             ),
         }
@@ -70,27 +69,23 @@ class MaintenanceLogForm(forms.ModelForm):
         widgets = {
             'date': forms.DateInput(
                 attrs={
-                    'type': 'date',
-                    'style': 'width: 100%; padding: 5px; margin: 2px 0;'
+                    'type': 'date'
                 }
             ),
             'next_service_due': forms.DateInput(
                 attrs={
-                    'type': 'date',
-                    'style': 'width: 100%; padding: 5px; margin: 2px 0;'
+                    'type': 'date'
                 }
             ),
             'description': forms.Textarea(
                 attrs={
-                    'rows': 4,
-                    'style': 'width: 100%; padding: 5px; margin: 2px 0;'
+                    'rows': 4
                 }
             ),
             'cost': forms.NumberInput(
                 attrs={
                     'step': '0.01',
-                    'min': '0',
-                    'style': 'width: 100%; padding: 5px; margin: 2px 0;'
+                    'min': '0'
                 }
             ),
         }

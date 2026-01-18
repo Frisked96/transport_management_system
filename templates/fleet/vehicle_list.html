@@ -48,9 +48,9 @@
                         <tr>
                             <th>Registration Plate</th>
                             <th>Make & Model</th>
-                            <th>Purchase Date</th>
+                            <th class="d-none d-md-table-cell">Purchase Date</th>
                             <th>Status</th>
-                            <th>Maint. Logs</th>
+                            <th class="d-none d-md-table-cell">Maint. Logs</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
@@ -59,13 +59,13 @@
                             <tr>
                                 <td><a href="{% url 'vehicle-detail' vehicle.pk %}" class="text-decoration-none fw-bold">{{ vehicle.registration_plate }}</a></td>
                                 <td>{{ vehicle.make_model }}</td>
-                                <td>{{ vehicle.purchase_date|date:"M d, Y" }}</td>
+                                <td class="d-none d-md-table-cell">{{ vehicle.purchase_date|date:"M d, Y" }}</td>
                                 <td>
                                     <span class="badge bg-{% if vehicle.status == 'Active' %}success{% elif vehicle.status == 'Maintenance' %}warning text-dark{% else %}secondary{% endif %}">
                                         {{ vehicle.status }}
                                     </span>
                                 </td>
-                                <td>
+                                <td class="d-none d-md-table-cell">
                                     <span class="badge bg-secondary rounded-pill">{{ vehicle.maintenance_count }}</span>
                                 </td>
                                 <td>

@@ -3,140 +3,163 @@
 {% block title %}{{ vehicle.registration_plate }} - Transport Management System{% endblock %}
 
 {% block content %}
-<div class="clearfix mb-1">
-    <h2 style="float: left;">Vehicle: {{ vehicle.registration_plate }}</h2>
-    <div style="float: right;">
-        <a href="{% url 'vehicle-list' %}" class="btn">Back to List</a>
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap">
+    <h2>Vehicle: {{ vehicle.registration_plate }}</h2>
+    <div class="d-flex flex-wrap gap-2">
+        <a href="{% url 'vehicle-list' %}" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Back to List</a>
         
         {% if perms.fleet.change_vehicle %}
-            <a href="{% url 'vehicle-update' vehicle.pk %}" class="btn btn-warning">Edit Vehicle</a>
+            <a href="{% url 'vehicle-update' vehicle.pk %}" class="btn btn-warning"><i class="bi bi-pencil"></i> Edit Vehicle</a>
         {% endif %}
         
         {% if perms.fleet.create_maintenance_log %}
-            <a href="{% url 'maintenance-log-create' %}" class="btn btn-success">Add Maintenance Log</a>
+            <a href="{% url 'maintenance-log-create' %}" class="btn btn-success"><i class="bi bi-tools"></i> Add Maintenance Log</a>
         {% endif %}
         
         {% if perms.fleet.delete_vehicle %}
-            <a href="{% url 'vehicle-delete' vehicle.pk %}" class="btn btn-danger">Delete Vehicle</a>
+            <a href="{% url 'vehicle-delete' vehicle.pk %}" class="btn btn-danger"><i class="bi bi-trash"></i> Delete Vehicle</a>
         {% endif %}
     </div>
 </div>
 
 <!-- Vehicle Information -->
-<table>
-    <tr>
-        <th>Registration Plate</th>
-        <td>{{ vehicle.registration_plate }}</td>
-    </tr>
-    <tr>
-        <th>Make & Model</th>
-        <td>{{ vehicle.make_model }}</td>
-    </tr>
-    <tr>
-        <th>Purchase Date</th>
-        <td>{{ vehicle.purchase_date|date:"M d, Y" }}</td>
-    </tr>
-    <tr>
-        <th>Status</th>
-        <td>
-            <span class="status-badge status-{{ vehicle.status|lower }}">
-                {{ vehicle.status }}
-            </span>
-        </td>
-    </tr>
-    <tr>
-        <th>Total Maintenance Cost</th>
-        <td>${{ total_maintenance_cost|floatformat:2 }}</td>
-    </tr>
-    <tr>
-        <th>Last Maintenance</th>
-        <td>
-            {% if vehicle.last_maintenance %}
-                {{ vehicle.last_maintenance.date|date:"M d, Y" }} - {{ vehicle.last_maintenance.type }}
-                <br>
-                <small><strong>Next Due:</strong> 
-                    {% if vehicle.next_due_maintenance %}
-                        {{ vehicle.next_due_maintenance|date:"M d, Y" }}
-                        {% if vehicle.last_maintenance.is_overdue %}
-                            <span style="color: #e74c3c; font-weight: bold;">(OVERDUE)</span>
-                        {% endif %}
-                    {% else %}
-                        Not scheduled
-                    {% endif %}
-                </small>
-            {% else %}
-                <em>No maintenance records</em>
-            {% endif %}
-        </td>
-    </tr>
-</table>
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0">Details</h5>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-sm table-borderless mb-0">
+                <tbody>
+                    <tr>
+                        <th class="col-4">Registration Plate</th>
+                        <td>{{ vehicle.registration_plate }}</td>
+                    </tr>
+                    <tr>
+                        <th class="col-4">Make & Model</th>
+                        <td>{{ vehicle.make_model }}</td>
+                    </tr>
+                    <tr>
+                        <th class="col-4">Purchase Date</th>
+                        <td>{{ vehicle.purchase_date|date:"M d, Y" }}</td>
+                    </tr>
+                    <tr>
+                        <th class="col-4">Status</th>
+                        <td>
+                            <span class="badge bg-{% if vehicle.status == 'Active' %}success{% elif vehicle.status == 'Maintenance' %}warning text-dark{% else %}secondary{% endif %}">
+                                {{ vehicle.status }}
+                            </span>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th class="col-4">Total Maintenance Cost</th>
+                        <td><span class="fw-bold">${{ total_maintenance_cost|floatformat:2 }}</span></td>
+                    </tr>
+                    <tr>
+                        <th class="col-4">Last Maintenance</th>
+                        <td>
+                            {% if vehicle.last_maintenance %}
+                                {{ vehicle.last_maintenance.date|date:"M d, Y" }} - {{ vehicle.last_maintenance.type }}
+                                <br>
+                                <small><strong>Next Due:</strong> 
+                                    {% if vehicle.next_due_maintenance %}
+                                        {{ vehicle.next_due_maintenance|date:"M d, Y" }}
+                                        {% if vehicle.last_maintenance.is_overdue %}
+                                            <span class="text-danger fw-bold">(OVERDUE)</span>
+                                        {% endif %}
+                                    {% else %}
+                                        Not scheduled
+                                    {% endif %}
+                                </small>
+                            {% else %}
+                                <em>No maintenance records</em>
+                            {% endif %}
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
 
 <!-- Recent Maintenance Logs -->
-<h3 class="mt-2">Recent Maintenance Logs</h3>
+<h3 class="mt-4">Recent Maintenance Logs</h3>
 {% if maintenance_logs %}
-    <table>
-        <thead>
-            <tr>
-                <th>Date</th>
-                <th>Type</th>
-                <th>Description</th>
-                <th>Cost</th>
-                <th>Service Provider</th>
-                <th>Next Due</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for log in maintenance_logs %}
-                <tr>
-                    <td>{{ log.date|date:"M d, Y" }}</td>
-                    <td>{{ log.type }}</td>
-                    <td>{{ log.description|truncatechars:40 }}</td>
-                    <td style="text-align: right;">${{ log.cost|floatformat:2 }}</td>
-                    <td>{{ log.service_provider }}</td>
-                    <td>
-                        {% if log.next_service_due %}
-                            {{ log.next_service_due|date:"M d, Y" }}
-                        {% else %}
-                            <em>N/A</em>
-                        {% endif %}
-                    </td>
-                </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+    <div class="card mb-4">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-striped table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Type</th>
+                            <th>Description</th>
+                            <th>Cost</th>
+                            <th>Service Provider</th>
+                            <th>Next Due</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for log in maintenance_logs %}
+                            <tr>
+                                <td>{{ log.date|date:"M d, Y" }}</td>
+                                <td>{{ log.type }}</td>
+                                <td>{{ log.description|truncatechars:40 }}</td>
+                                <td class="text-end">${{ log.cost|floatformat:2 }}</td>
+                                <td>{{ log.service_provider }}</td>
+                                <td>
+                                    {% if log.next_service_due %}
+                                        {{ log.next_service_due|date:"M d, Y" }}
+                                    {% else %}
+                                        <em>N/A</em>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
 {% else %}
-    <div class="message info">
+    <div class="alert alert-info mt-3">
         No maintenance logs found for this vehicle.
     </div>
 {% endif %}
 
 <!-- Recent Trips -->
-<h3 class="mt-2">Recent Trips</h3>
+<h3 class="mt-4">Recent Trips</h3>
 {% if recent_trips %}
-    <table>
-        <thead>
-            <tr>
-                <th>Trip Number</th>
-                <th>Start Date</th>
-                <th>Status</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for trip in recent_trips %}
-                <tr>
-                    <td><strong>{{ trip.trip_number }}</strong></td>
-                    <td>{{ trip.start_date|date:"M d, Y H:i" }}</td>
-                    <td>
-                        <span class="status-badge status-{{ trip.status|slugify }}">
-                            {{ trip.status }}
-                        </span>
-                    </td>
-                </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+    <div class="card mb-4">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-striped table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Trip Number</th>
+                            <th>Start Date</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for trip in recent_trips %}
+                            <tr>
+                                <td><a href="{% url 'trip-detail' trip.pk %}" class="text-decoration-none fw-bold">{{ trip.trip_number }}</a></td>
+                                <td>{{ trip.start_date|date:"M d, Y H:i" }}</td>
+                                <td>
+                                    <span class="badge bg-{% if trip.status == 'Completed' %}success{% elif trip.status == 'Cancelled' %}danger{% else %}primary{% endif %}">
+                                        {{ trip.status }}
+                                    </span>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
 {% else %}
-    <div class="message info">
+    <div class="alert alert-info mt-3">
         No trips found for this vehicle.
     </div>
 {% endif %}

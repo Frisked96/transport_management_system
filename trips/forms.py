@@ -48,8 +48,7 @@ class TripForm(forms.ModelForm):
         widgets = {
             'notes': forms.Textarea(
                 attrs={
-                    'rows': 4,
-                    'style': 'width: 100%; padding: 5px; margin: 2px 0;'
+                    'rows': 4
                 }
             ),
         }
@@ -80,8 +79,7 @@ class TripLegForm(forms.ModelForm):
         widgets = {
             'date': forms.DateTimeInput(
                 attrs={
-                    'type': 'datetime-local',
-                    'style': 'width: 100%; padding: 5px; margin: 2px 0;'
+                    'type': 'datetime-local'
                 }
             ),
         }
@@ -102,11 +100,7 @@ class TripStatusForm(forms.ModelForm):
         fields = ['status']
         
         widgets = {
-            'status': forms.Select(
-                attrs={
-                    'style': 'width: 100%; padding: 5px; margin: 2px 0;'
-                }
-            )
+            'status': forms.Select()
         }
 
 
