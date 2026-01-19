@@ -11,6 +11,7 @@ from django.db.models import Q, Sum, F, DecimalField, Value, Case, When, OuterRe
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 from decimal import Decimal, InvalidOperation
+from datetime import datetime
 import json
 
 from .models import FinancialRecord, Party, Account, TripAllocation, TransactionCategory
@@ -317,6 +318,8 @@ def financial_summary(request):
         'category_breakdown': category_breakdown,
         'current_month': datetime(current_year, current_month, 1).strftime('%B %Y'),
     }
+    
+    return render(request, 'ledger/financial_summary.html', context)
 
 
 # --- Party Views ---
