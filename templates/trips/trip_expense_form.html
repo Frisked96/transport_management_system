@@ -3,7 +3,7 @@
 {% block title %}Update Trip Expenses - Transport Management System{% endblock %}
 
 {% block content %}
-<h2>Update Fixed Expenses for {{ form.instance.trip_number }}</h2>
+<h2>Update Fixed Expenses for {{ trip.trip_number }}</h2>
 
 <form method="post">
     {% csrf_token %}
@@ -22,7 +22,7 @@
     
     <div style="margin-top: 1.5rem;">
         <button type="submit" class="btn btn-success">Save Expenses</button>
-        <a href="{% url 'trip-detail' form.instance.pk %}" class="btn" style="margin-left: 1rem;">Cancel</a>
+        <a href="{% url 'trip-detail' trip.pk %}" class="btn" style="margin-left: 1rem;">Cancel</a>
     </div>
 </form>
 {% endblock %}

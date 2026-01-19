@@ -16,6 +16,7 @@ urlpatterns = [
     path('trip/<int:pk>/status/', views.update_trip_status, name='trip-status-update'),
 
     # Trip Expense URLs
+    path('trip/<int:pk>/expenses/manage/', views.TripExpenseManageView.as_view(), name='trip-expenses-manage'),
     path('trip/<int:pk>/expenses/update/', views.TripExpenseUpdateView.as_view(), name='trip-expense-update'),
     path('trip/<int:trip_pk>/expense/create/', views.TripCustomExpenseCreateView.as_view(), name='trip-custom-expense-create'),
     path('trip/expense/<int:pk>/delete/', views.TripCustomExpenseDeleteView.as_view(), name='trip-custom-expense-delete'),

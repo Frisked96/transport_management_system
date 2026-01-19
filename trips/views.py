@@ -7,13 +7,13 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.contrib import messages
-from django.db import models
+from django.db import models, transaction
 from django.db.models import Q, Min, Sum
 from django.utils import timezone
 from datetime import datetime, timedelta
 
 from .models import Trip, TripExpense
-from .forms import TripForm, TripStatusForm, TripExpenseUpdateForm, TripCustomExpenseForm
+from .forms import TripForm, TripStatusForm, TripExpenseUpdateForm, TripCustomExpenseForm, TripExpenseFormSet
 from fleet.models import Vehicle
 from ledger.models import FinancialRecord, TransactionCategory
 
@@ -130,6 +130,11 @@ class TripDetailView(LoginRequiredMixin, BaseTripPermissionMixin, DetailView):
         return self.get_queryset_for_user()
 
 
+from django.db import models, transaction
+from .forms import TripForm, TripStatusForm, TripExpenseUpdateForm, TripCustomExpenseForm, TripExpenseFormSet
+
+# ... (Previous imports remain same)
+
 class TripCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
     """
     Create view for new trips.
@@ -184,6 +189,39 @@ class TripUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
         messages.success(self.request, 'Trip updated successfully!')
         return super().form_valid(form)
     
+    def get_success_url(self):
+        return reverse_lazy('trip-detail', kwargs={'pk': self.object.pk})
+
+
+class TripExpenseManageView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+    """
+    View to manage ALL expenses for a trip (Fixed + Custom) using FormSets
+    """
+    model = Trip
+    fields = [] # We only use the formset
+    template_name = 'trips/trip_expense_manage.html'
+    permission_required = 'trips.change_trip'
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        if self.request.POST:
+            context['expense_formset'] = TripExpenseFormSet(self.request.POST, instance=self.object, prefix='custom_expenses')
+        else:
+            context['expense_formset'] = TripExpenseFormSet(instance=self.object, prefix='custom_expenses')
+        return context
+    
+    def form_valid(self, form):
+        context = self.get_context_data()
+        expense_formset = context['expense_formset']
+        
+        if expense_formset.is_valid():
+            with transaction.atomic():
+                expense_formset.save()
+            messages.success(self.request, 'Trip expenses updated successfully!')
+            return redirect(self.get_success_url())
+        else:
+            return self.render_to_response(self.get_context_data(form=form))
+
     def get_success_url(self):
         return reverse_lazy('trip-detail', kwargs={'pk': self.object.pk})
 

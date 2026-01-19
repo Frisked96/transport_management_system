@@ -91,3 +91,16 @@ class TripCustomExpenseForm(forms.ModelForm):
     class Meta:
         model = TripExpense
         fields = ['name', 'amount', 'notes']
+        widgets = {
+            'notes': forms.Textarea(attrs={'rows': 1}),
+        }
+
+
+# Inline Formset for Trip Expenses
+TripExpenseFormSet = forms.inlineformset_factory(
+    Trip,
+    TripExpense,
+    form=TripCustomExpenseForm,
+    extra=1,
+    can_delete=True
+)
