@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+
+{% block title %}Delete Document - Transport Management System{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card shadow-sm border-danger">
+            <div class="card-header bg-danger text-white">
+                <h5 class="mb-0">Confirm Delete</h5>
+            </div>
+            <div class="card-body">
+                <p>Are you sure you want to delete this document?</p>
+                <div class="alert alert-light border">
+                    <strong>Type:</strong> {{ object.document_type }}<br>
+                    <strong>Number:</strong> {{ object.document_number }}<br>
+                    {% if object.vehicle %}
+                        <strong>Vehicle:</strong> {{ object.vehicle.registration_plate }}
+                    {% elif object.driver %}
+                        <strong>Driver:</strong> {{ object.driver.user.get_full_name }}
+                    {% endif %}
+                </div>
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-danger">Yes, Delete</button>
+                        {% if object.vehicle %}
+                            <a href="{% url 'vehicle-detail' object.vehicle.pk %}" class="btn btn-secondary">Cancel</a>
+                        {% elif object.driver %}
+                            <a href="{% url 'driver-detail' object.driver.pk %}" class="btn btn-secondary">Cancel</a>
+                        {% endif %}
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
