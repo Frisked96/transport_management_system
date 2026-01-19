@@ -15,7 +15,6 @@ import json
 
 from .models import FinancialRecord, Party, Account, TripAllocation, TransactionCategory
 from .forms import FinancialRecordForm, PartyForm, AccountForm
-from .utils import recalculate_trip_payment_status
 from trips.models import Trip
 
 
@@ -198,7 +197,6 @@ class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, Cre
                         )
                         
                         total_distributed += amount
-                        recalculate_trip_payment_status(trip)
                 
                 messages.success(self.request, f'Financial record created and distributed across {len(distribution_data)} trips!')
                 
@@ -215,10 +213,6 @@ class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, Cre
         form.instance.recorded_by = self.request.user
         response = super().form_valid(form)
         
-        # Update associated trip status
-        if self.object.associated_trip:
-            recalculate_trip_payment_status(self.object.associated_trip)
-
         messages.success(self.request, 'Financial record created successfully!')
         return response
     
@@ -240,19 +234,7 @@ class FinancialRecordUpdateView(LoginRequiredMixin, PermissionRequiredMixin, Upd
     permission_required = 'ledger.change_financialrecord'
     
     def form_valid(self, form):
-        # Store old trip to recalculate if it changes
-        old_trip = self.get_object().associated_trip
-        
         response = super().form_valid(form)
-        
-        # Update current associated trip status
-        if self.object.associated_trip:
-            recalculate_trip_payment_status(self.object.associated_trip)
-        
-        # If trip was changed, update the old one too
-        if old_trip and old_trip != self.object.associated_trip:
-            recalculate_trip_payment_status(old_trip)
-
         messages.success(self.request, 'Financial record updated successfully!')
         return response
     
@@ -272,13 +254,7 @@ class FinancialRecordDeleteView(LoginRequiredMixin, PermissionRequiredMixin, Del
     
     def delete(self, request, *args, **kwargs):
         self.object = self.get_object()
-        trip = self.object.associated_trip
-        
         response = super().delete(request, *args, **kwargs)
-        
-        if trip:
-            recalculate_trip_payment_status(trip)
-                
         messages.success(self.request, 'Financial record deleted successfully!')
         return response
 

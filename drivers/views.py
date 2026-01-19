@@ -45,16 +45,16 @@ class DriverDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
         # Vehicles driven (History)
         # Distinct vehicles from trips assigned to this driver
         context['vehicles_driven'] = Vehicle.objects.filter(
-            trips__driver=driver.user
+            trips__driver=driver
         ).distinct()
 
         # Trips history
-        context['trips'] = Trip.objects.filter(driver=driver.user).order_by('-created_at')
+        context['trips'] = Trip.objects.filter(driver=driver).order_by('-created_at')
 
         # Profit Calculation
         # 1. Total Revenue: Sum of (Weight * Rate per Ton) for all trips by this driver
         total_revenue = Trip.objects.filter(
-            driver=driver.user
+            driver=driver
         ).aggregate(
             total=Sum(F('weight') * F('rate_per_ton'), output_field=DecimalField())
         )['total'] or 0
@@ -62,7 +62,7 @@ class DriverDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
         # 2. Total Expenses
         # FinancialRecords associated with trips by this driver, that are expenses
         total_expenses = FinancialRecord.objects.filter(
-            associated_trip__driver=driver.user,
+            associated_trip__driver=driver,
             category__type=TransactionCategory.TYPE_EXPENSE
         ).aggregate(total=Sum('amount'))['total'] or 0
 
@@ -72,7 +72,7 @@ class DriverDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
 
         # Expenses List (for the panel)
         context['expenses_list'] = FinancialRecord.objects.filter(
-            associated_trip__driver=driver.user,
+            associated_trip__driver=driver,
             category__type=TransactionCategory.TYPE_EXPENSE
         ).order_by('-date')
 
@@ -154,10 +154,10 @@ class DriverLedgerView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        driver_user = self.object.user
+        driver = self.object
         
         # Get all financial records associated with this driver
-        records = FinancialRecord.objects.filter(driver=driver_user).order_by('-date')
+        records = FinancialRecord.objects.filter(driver=driver).order_by('-date')
         context['financial_records'] = records
         
         # Calculate Balance

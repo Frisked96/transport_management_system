@@ -32,6 +32,8 @@ class TripForm(forms.ModelForm):
             'party',
             'weight',
             'rate_per_ton',
+            'start_odometer',
+            'end_odometer',
             'notes'
         ]
         
@@ -63,15 +65,14 @@ class TripStatusForm(forms.ModelForm):
         }
 
 
-class TripExpenseUpdateForm(forms.ModelForm):
+class TripExpenseUpdateForm(forms.Form):
+    diesel_expense = forms.DecimalField(max_digits=10, decimal_places=2, required=False)
+    toll_expense = forms.DecimalField(max_digits=10, decimal_places=2, required=False)
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         for field in self.fields.values():
             field.widget.attrs.update({'class': 'form-control'})
-    
-    class Meta:
-        model = Trip
-        fields = ['diesel_expense', 'toll_expense']
 
 
 class TripCustomExpenseForm(forms.ModelForm):

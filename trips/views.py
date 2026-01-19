@@ -1,7 +1,7 @@
 """
 Views for Trips application with permission checks
 """
-from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView
+from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView, FormView
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, get_object_or_404, redirect
@@ -204,18 +204,51 @@ class TripDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
         return super().delete(request, *args, **kwargs)
 
 
-class TripExpenseUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+class TripExpenseUpdateView(LoginRequiredMixin, PermissionRequiredMixin, FormView):
     """
     View to update fixed trip expenses (diesel, toll)
     """
-    model = Trip
-    form_class = TripExpenseUpdateForm
     template_name = 'trips/trip_expense_form.html'
+    form_class = TripExpenseUpdateForm
     permission_required = 'trips.change_trip'
     
-    def get_success_url(self):
+    def get_initial(self):
+        trip = get_object_or_404(Trip, pk=self.kwargs['pk'])
+        initial = {}
+        diesel = TripExpense.objects.filter(trip=trip, name='Diesel').first()
+        if diesel:
+            initial['diesel_expense'] = diesel.amount
+        toll = TripExpense.objects.filter(trip=trip, name='Toll').first()
+        if toll:
+            initial['toll_expense'] = toll.amount
+        return initial
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['trip'] = get_object_or_404(Trip, pk=self.kwargs['pk'])
+        return context
+
+    def form_valid(self, form):
+        trip = get_object_or_404(Trip, pk=self.kwargs['pk'])
+        diesel_amount = form.cleaned_data.get('diesel_expense') or 0
+        toll_amount = form.cleaned_data.get('toll_expense') or 0
+
+        # Update or create Diesel
+        TripExpense.objects.update_or_create(
+            trip=trip,
+            name='Diesel',
+            defaults={'amount': diesel_amount}
+        )
+
+        # Update or create Toll
+        TripExpense.objects.update_or_create(
+            trip=trip,
+            name='Toll',
+            defaults={'amount': toll_amount}
+        )
+
         messages.success(self.request, 'Trip expenses updated successfully!')
-        return reverse_lazy('trip-detail', kwargs={'pk': self.object.pk})
+        return redirect('trip-detail', pk=trip.pk)
 
 
 class TripCustomExpenseCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):

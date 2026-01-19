@@ -96,10 +96,10 @@ class Trip(models.Model):
         blank=True
     )
     
-    # Driver assignment (ForeignKey to User) - Optional now
+    # Driver assignment (ForeignKey to Driver)
     driver = models.ForeignKey(
-        User,
-        on_delete=models.CASCADE,
+        'drivers.Driver',
+        on_delete=models.SET_NULL,
         related_name='assigned_trips',
         verbose_name='Assigned Driver',
         null=True,
@@ -114,6 +114,18 @@ class Trip(models.Model):
         verbose_name='Assigned Vehicle'
     )
     
+    start_odometer = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name='Start Odometer'
+    )
+
+    end_odometer = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name='End Odometer'
+    )
+
     # Date of the trip (replaces date from TripLeg)
     date = models.DateTimeField(
         verbose_name='Trip Date',
@@ -178,21 +190,6 @@ class Trip(models.Model):
         verbose_name='Trip Notes'
     )
     
-    # Trip Expenses (Fixed)
-    diesel_expense = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        default=0,
-        verbose_name='Diesel Expense'
-    )
-    
-    toll_expense = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        default=0,
-        verbose_name='Toll Expense'
-    )
-
     # Audit fields
     created_by = models.ForeignKey(
         User,
@@ -250,75 +247,17 @@ class Trip(models.Model):
 
         # Generate Trip Number if not present or cleared
         if not self.trip_number:
+            from ledger.models import Sequence
+
             # Use created_at if available (for re-numbering), else current time
             ref_date = self.created_at or timezone.now()
             
-            # Helper to extract count from trip_number
-            pattern = re.compile(r'^.*-(\d+)/(\d+)/(\d+)$')
-
-            # 1. Global Sequence (Total)
-            # Find last trip before this one (based on ref_date)
-            # If self.pk is set (update), exclude self
-            qs = Trip.objects.filter(vehicle=self.vehicle)
-            if self.pk:
-                qs = qs.exclude(pk=self.pk)
+            # Using Sequences for robust atomic numbering
+            total_count = Sequence.next_value(f"trip_total_{self.vehicle.pk}")
+            month_count = Sequence.next_value(f"trip_month_{self.vehicle.pk}_{ref_date.year}_{ref_date.month}")
+            year_count = Sequence.next_value(f"trip_year_{self.vehicle.pk}_{ref_date.year}")
             
-            # Use created_at for reliable ordering
-            last_trip = qs.filter(created_at__lte=ref_date).order_by('created_at').last()
-            
-            total_count = 1
-            if last_trip and last_trip.trip_number:
-                match = pattern.match(last_trip.trip_number)
-                if match:
-                    try:
-                        total_count = int(match.group(1)) + 1
-                    except ValueError:
-                        pass
-            
-            # 2. Month Sequence
-            last_month_trip = qs.filter(
-                created_at__month=ref_date.month,
-                created_at__year=ref_date.year,
-                created_at__lte=ref_date
-            ).order_by('created_at').last()
-            
-            month_count = 1
-            if last_month_trip and last_month_trip.trip_number:
-                match = pattern.match(last_month_trip.trip_number)
-                if match:
-                    try:
-                        month_count = int(match.group(2)) + 1
-                    except ValueError:
-                        pass
-
-            # 3. Year Sequence
-            last_year_trip = qs.filter(
-                created_at__year=ref_date.year,
-                created_at__lte=ref_date
-            ).order_by('created_at').last()
-            
-            year_count = 1
-            if last_year_trip and last_year_trip.trip_number:
-                match = pattern.match(last_year_trip.trip_number)
-                if match:
-                    try:
-                        year_count = int(match.group(3)) + 1
-                    except ValueError:
-                        pass
-
-            # 4. Generate & Verify Uniqueness
-            while True:
-                candidate = f"{reg_plate}-{total_count}/{month_count}/{year_count}"
-                # Check collision (excluding self)
-                exists = Trip.objects.filter(trip_number=candidate)
-                if self.pk:
-                    exists = exists.exclude(pk=self.pk)
-                
-                if not exists.exists():
-                    self.trip_number = candidate
-                    break
-                
-                total_count += 1
+            self.trip_number = f"{reg_plate}-{total_count}/{month_count}/{year_count}"
         
         # If trip_number already exists but vehicle plate changed (manual correction)
         # ensure the prefix matches the current plate
@@ -334,7 +273,13 @@ class Trip(models.Model):
                     suffix = self.trip_number[last_dash_idx+1:]
                     self.trip_number = f"{reg_plate}-{suffix}"
 
+        is_new = self._state.adding
         super().save(*args, **kwargs)
+
+        if is_new:
+            # Create default TripExpense entries
+            TripExpense.objects.create(trip=self, name='Diesel', amount=0)
+            TripExpense.objects.create(trip=self, name='Toll', amount=0)
     
     @property
     def start_date(self):
@@ -384,11 +329,8 @@ class Trip(models.Model):
 
     @property
     def total_cost(self):
-        """Calculate total cost (diesel + toll + custom expenses)"""
-        diesel = self.diesel_expense or 0
-        toll = self.toll_expense or 0
-        custom = self.custom_expenses.aggregate(total=models.Sum('amount'))['total'] or 0
-        return diesel + toll + custom
+        """Calculate total cost (from TripExpense)"""
+        return self.custom_expenses.aggregate(total=models.Sum('amount'))['total'] or 0
 
 
 class TripExpense(models.Model):
@@ -431,22 +373,3 @@ class TripExpense(models.Model):
     def __str__(self):
         return f"{self.name} - {self.amount}"
 
-
-@receiver(post_delete, sender=Trip)
-def renumber_trips(sender, instance, **kwargs):
-    """
-    Renumber subsequent trips when a trip is deleted to fill the gap.
-    """
-    if not instance.created_at:
-        return
-
-    # Find all subsequent trips for the same vehicle
-    subsequent_trips = Trip.objects.filter(
-        vehicle=instance.vehicle,
-        created_at__gt=instance.created_at
-    ).order_by('created_at')
-
-    # Regenerate numbers for each subsequent trip
-    for trip in subsequent_trips:
-        trip.trip_number = "" # Clear to trigger regeneration
-        trip.save()

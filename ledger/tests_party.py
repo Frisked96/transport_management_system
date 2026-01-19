@@ -5,6 +5,7 @@ from django.utils import timezone
 from .models import Party, FinancialRecord, TransactionCategory
 from trips.models import Trip
 from fleet.models import Vehicle
+from drivers.models import Driver
 
 class PartyViewTest(TestCase):
     def setUp(self):
@@ -16,6 +17,13 @@ class PartyViewTest(TestCase):
         perm_change = Permission.objects.get(codename='change_financialrecord')
         self.user.user_permissions.add(perm_add, perm_change)
         
+        self.driver_profile = Driver.objects.create(
+            user=self.user,
+            employee_id='D001',
+            license_number='LIC123',
+            phone_number='1234567890'
+        )
+
         # Create Party
         self.party = Party.objects.create(
             name='Test Party',
@@ -33,7 +41,7 @@ class PartyViewTest(TestCase):
         
         # Create Trip (Revenue = 10 * 100 = 1000)
         self.trip = Trip.objects.create(
-            driver=self.user,
+            driver=self.driver_profile,
             vehicle=self.vehicle,
             party=self.party,
             weight=10,

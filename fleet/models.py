@@ -40,6 +40,11 @@ class Vehicle(models.Model):
         verbose_name='Purchase Date'
     )
     
+    current_odometer = models.PositiveIntegerField(
+        default=0,
+        verbose_name='Current Odometer (km)'
+    )
+
     # Status with choices
     status = models.CharField(
         max_length=20,
@@ -170,3 +175,38 @@ class MaintenanceLog(models.Model):
         if self.next_service_due:
             return self.next_service_due < timezone.now().date()
         return False
+
+
+class FuelLog(models.Model):
+    """
+    Fuel Log to track fueling events
+    """
+    vehicle = models.ForeignKey(
+        Vehicle,
+        on_delete=models.CASCADE,
+        related_name='fuel_logs',
+        verbose_name='Vehicle'
+    )
+    trip = models.ForeignKey(
+        'trips.Trip',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='fuel_logs',
+        verbose_name='Related Trip'
+    )
+    date = models.DateField(default=timezone.now, verbose_name='Date')
+    liters = models.DecimalField(max_digits=10, decimal_places=2, verbose_name='Liters')
+    rate = models.DecimalField(max_digits=10, decimal_places=2, verbose_name='Rate per Liter')
+    total_cost = models.DecimalField(max_digits=12, decimal_places=2, verbose_name='Total Cost')
+    odometer = models.PositiveIntegerField(verbose_name='Odometer Reading')
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Fuel Log'
+        verbose_name_plural = 'Fuel Logs'
+        ordering = ['-date', '-odometer']
+
+    def __str__(self):
+        return f"{self.vehicle} - {self.liters}L - {self.date}"

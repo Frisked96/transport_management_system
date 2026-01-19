@@ -25,6 +25,7 @@ class VehicleForm(forms.ModelForm):
             'registration_plate',
             'make_model',
             'purchase_date',
+            'current_odometer',
             'status'
         ]
         

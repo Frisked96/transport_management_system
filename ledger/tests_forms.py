@@ -5,10 +5,19 @@ from .forms import FinancialRecordForm
 from .models import Party
 from trips.models import Trip
 from fleet.models import Vehicle
+from drivers.models import Driver
 
 class FinancialRecordFormTest(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username='testuser', password='password')
+
+        self.driver_profile = Driver.objects.create(
+            user=self.user,
+            employee_id='D001',
+            license_number='LIC123',
+            phone_number='1234567890'
+        )
+
         self.party1 = Party.objects.create(name='Party 1')
         self.party2 = Party.objects.create(name='Party 2')
         
@@ -21,7 +30,7 @@ class FinancialRecordFormTest(TestCase):
         
         # Trip for Party 1
         self.trip1 = Trip.objects.create(
-            driver=self.user, 
+            driver=self.driver_profile,
             vehicle=self.vehicle, 
             party=self.party1,
             created_by=self.user,
@@ -30,7 +39,7 @@ class FinancialRecordFormTest(TestCase):
         
         # Trip for Party 2
         self.trip2 = Trip.objects.create(
-            driver=self.user, 
+            driver=self.driver_profile,
             vehicle=self.vehicle, 
             party=self.party2,
             created_by=self.user,

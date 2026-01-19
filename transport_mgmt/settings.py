@@ -35,6 +35,7 @@ INSTALLED_APPS = [
     'fleet',
     'ledger',
     'drivers',
+    'documents',
 ]
 
 MIDDLEWARE = [

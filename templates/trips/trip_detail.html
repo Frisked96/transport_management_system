@@ -60,7 +60,7 @@
                          <label class="small text-muted text-uppercase">Driver</label>
                          <p class="mb-0">
                             {% if trip.driver %}
-                                {{ trip.driver.get_full_name|default:trip.driver.username }}
+                                <a href="{% url 'driver-detail' trip.driver.pk %}" class="text-decoration-none">{{ trip.driver }}</a>
                             {% else %}
                                 Unassigned
                             {% endif %}
@@ -90,6 +90,21 @@
                     <div class="col-md-4">
                         <label class="small text-muted text-uppercase">Revenue</label>
                         <p class="fs-5 fw-bold text-success mb-0">${{ trip.revenue|floatformat:2 }}</p>
+                    </div>
+
+                    <div class="col-md-12">
+                        <hr class="my-2">
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="small text-muted text-uppercase">Odometer</label>
+                        <p class="mb-0">
+                            {% if trip.start_odometer or trip.end_odometer %}
+                                Start: {{ trip.start_odometer|default:"-" }} / End: {{ trip.end_odometer|default:"-" }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </p>
                     </div>
                 </div>
 
@@ -167,20 +182,14 @@
             <div class="card-body p-0">
                 <table class="table table-sm mb-0">
                     <tbody>
-                        <tr>
-                            <td>Diesel</td>
-                            <td class="text-end">${{ trip.diesel_expense|default:0|floatformat:2 }}</td>
-                        </tr>
-                        <tr>
-                            <td>Toll</td>
-                            <td class="text-end">${{ trip.toll_expense|default:0|floatformat:2 }}</td>
-                        </tr>
                         {% for expense in trip.custom_expenses.all %}
                             <tr>
                                 <td>
                                     {{ expense.name }}
                                     {% if perms.trips.change_trip %}
-                                        <a href="{% url 'trip-custom-expense-delete' expense.pk %}" class="text-danger ms-1 text-decoration-none">&times;</a>
+                                        {% if expense.name != "Diesel" and expense.name != "Toll" %}
+                                            <a href="{% url 'trip-custom-expense-delete' expense.pk %}" class="text-danger ms-1 text-decoration-none">&times;</a>
+                                        {% endif %}
                                     {% endif %}
                                 </td>
                                 <td class="text-end">${{ expense.amount|floatformat:2 }}</td>

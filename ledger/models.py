@@ -5,6 +5,29 @@ from django.db import models
 from django.contrib.auth.models import User
 from trips.models import Trip
 
+class Sequence(models.Model):
+    """
+    Sequence model for generating robust, gap-less numbers.
+    Used for Trip Numbers and Financial Record Entry Numbers.
+    """
+    key = models.CharField(max_length=100, unique=True)
+    value = models.PositiveIntegerField(default=0)
+
+    @classmethod
+    def next_value(cls, key):
+        """
+        Atomically increment and return the next value for a given key.
+        """
+        from django.db import transaction
+        with transaction.atomic():
+            seq, created = cls.objects.select_for_update().get_or_create(key=key)
+            seq.value += 1
+            seq.save()
+            return seq.value
+
+    def __str__(self):
+        return f"{self.key}: {self.value}"
+
 class Party(models.Model):
     """
     Party/Client model for managing business entities
@@ -99,7 +122,7 @@ class FinancialRecord(models.Model):
         verbose_name='Associated Party'
     )
     driver = models.ForeignKey(
-        User,
+        'drivers.Driver',
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
@@ -148,11 +171,7 @@ class FinancialRecord(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.entry_number:
-            last_entry = FinancialRecord.objects.all().order_by('entry_number').last()
-            if last_entry and last_entry.entry_number:
-                self.entry_number = last_entry.entry_number + 1
-            else:
-                self.entry_number = 1
+            self.entry_number = Sequence.next_value('financial_record_entry_number')
         super().save(*args, **kwargs)
 
     class Meta:
@@ -183,10 +202,6 @@ class FinancialRecord(models.Model):
             return -abs(self.amount)
         return abs(self.amount)
 
-from django.db.models.signals import post_delete
-from django.dispatch import receiver
-from .utils import recalculate_trip_payment_status
-
 class TripAllocation(models.Model):
     financial_record = models.ForeignKey(
         FinancialRecord,
@@ -214,13 +229,3 @@ class TripAllocation(models.Model):
 
     def __str__(self):
         return f"{self.financial_record} -> {self.trip.trip_number}: {self.amount}"
-
-@receiver(post_delete, sender=FinancialRecord)
-def update_trip_on_record_delete(sender, instance, **kwargs):
-    if instance.associated_trip:
-        recalculate_trip_payment_status(instance.associated_trip)
-
-@receiver(post_delete, sender=TripAllocation)
-def update_trip_on_allocation_delete(sender, instance, **kwargs):
-    if instance.trip:
-        recalculate_trip_payment_status(instance.trip)

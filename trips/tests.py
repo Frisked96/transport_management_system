@@ -5,6 +5,7 @@ from django.utils import timezone
 from fleet.models import Vehicle
 from trips.models import Trip, TripExpense
 from ledger.models import Party
+from drivers.models import Driver
 
 class TripExpenseTest(TestCase):
     def setUp(self):
@@ -17,6 +18,13 @@ class TripExpenseTest(TestCase):
             self.user.user_permissions.add(perm)
         except Permission.DoesNotExist:
             print("Warning: Permission 'change_trip' not found. Tests might fail.")
+
+        self.driver_profile = Driver.objects.create(
+            user=self.user,
+            employee_id='D001',
+            license_number='LIC123',
+            phone_number='1234567890'
+        )
         
         # Create Vehicle
         self.vehicle = Vehicle.objects.create(
@@ -31,7 +39,7 @@ class TripExpenseTest(TestCase):
 
         # Create Trip
         self.trip = Trip.objects.create(
-            driver=self.user,
+            driver=self.driver_profile,
             vehicle=self.vehicle,
             party=self.party,
             weight=10,
@@ -40,7 +48,6 @@ class TripExpenseTest(TestCase):
             status=Trip.STATUS_IN_PROGRESS, 
             created_by=self.user
         )
-        
         self.client = Client()
         self.client.login(username='manager', password='password')
 
@@ -53,15 +60,21 @@ class TripExpenseTest(TestCase):
         response = self.client.post(url, data)
         self.assertEqual(response.status_code, 302)
         
-        self.trip.refresh_from_db()
-        self.assertEqual(self.trip.diesel_expense, 500)
-        self.assertEqual(self.trip.toll_expense, 100)
+        # Verify expenses via TripExpense model
+        diesel = TripExpense.objects.get(trip=self.trip, name='Diesel')
+        toll = TripExpense.objects.get(trip=self.trip, name='Toll')
+
+        self.assertEqual(diesel.amount, 500)
+        self.assertEqual(toll.amount, 100)
         self.assertEqual(self.trip.total_cost, 600)
 
     def test_custom_expenses(self):
         # Add fixed expenses first
-        self.trip.diesel_expense = 100
-        self.trip.save()
+        TripExpense.objects.update_or_create(
+            trip=self.trip,
+            name='Diesel',
+            defaults={'amount': 100}
+        )
 
         url = reverse('trip-custom-expense-create', args=[self.trip.pk])
         data = {
@@ -72,7 +85,8 @@ class TripExpenseTest(TestCase):
         response = self.client.post(url, data)
         self.assertEqual(response.status_code, 302)
         
-        self.assertEqual(self.trip.custom_expenses.count(), 1)
+        # Diesel (100) + Toll (0) + Lunch (50) = 3 expenses
+        self.assertEqual(self.trip.custom_expenses.count(), 3)
         self.assertEqual(self.trip.total_cost, 150) # 100 diesel + 50 lunch
 
     def test_delete_custom_expense(self):
