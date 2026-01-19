@@ -63,6 +63,13 @@ class Driver(models.Model):
         """
         return self.transactions.aggregate(balance=models.Sum('amount'))['balance'] or 0
 
+    @property
+    def abs_current_balance(self):
+        """
+        Returns the absolute value of the current balance.
+        """
+        return abs(self.current_balance)
+
 
 class DriverTransaction(models.Model):
     """

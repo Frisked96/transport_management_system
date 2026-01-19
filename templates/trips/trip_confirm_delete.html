@@ -12,7 +12,7 @@
 <div class="mb-1">
     <strong>Trip Number:</strong> {{ object.trip_number }}<br>
     <strong>Client:</strong> {{ object.client_name }}<br>
-    <strong>Driver:</strong> {{ object.driver.get_full_name|default:object.driver.username }}<br>
+    <strong>Driver:</strong> {{ object.driver|default:"No Driver Assigned" }}<br>
     <strong>Vehicle:</strong> {{ object.vehicle.registration_plate }}<br>
 </div>
 

@@ -29,7 +29,10 @@ class TripForm(forms.ModelForm):
         model = Trip
         fields = [
             'vehicle',
+            'driver',
             'party',
+            'pickup_location',
+            'delivery_location',
             'weight',
             'rate_per_ton',
             'start_odometer',

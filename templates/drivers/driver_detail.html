@@ -93,7 +93,7 @@
                     <strong>Current Balance:</strong>
                     <span class="fs-5 ms-2 {% if driver.current_balance >= 0 %}text-success{% else %}text-danger{% endif %}">
                         {% if driver.current_balance >= 0 %}Company owes Driver{% else %}Driver owes Company{% endif %}
-                        ${{ driver.current_balance|abs|floatformat:2 }}
+                        ${{ driver.abs_current_balance|floatformat:2 }}
                     </span>
                 </div>
 
