@@ -9,6 +9,11 @@
 
         <form method="post">
             {% csrf_token %}
+            {% if form.non_field_errors %}
+                <div class="alert alert-danger">
+                    {{ form.non_field_errors }}
+                </div>
+            {% endif %}
             
             <div class="card mb-4">
                 <div class="card-header bg-primary text-white">
@@ -36,12 +41,16 @@
                         </div>
                         <div class="col-md-6 mb-3">
                             <label for="{{ form.pickup_location.id_for_label }}" class="form-label">Pickup Location</label>
-                            {{ form.pickup_location }} <!-- Render as select for Select2 tagging -->
+                            {{ form.pickup_location }}
+                            {{ form.pickup_lat }}
+                            {{ form.pickup_lng }}
                             {% if form.pickup_location.errors %}<div class="text-danger small">{{ form.pickup_location.errors }}</div>{% endif %}
                         </div>
                         <div class="col-md-6 mb-3">
                             <label for="{{ form.delivery_location.id_for_label }}" class="form-label">Delivery Location</label>
                             {{ form.delivery_location }}
+                            {{ form.delivery_lat }}
+                            {{ form.delivery_lng }}
                              {% if form.delivery_location.errors %}<div class="text-danger small">{{ form.delivery_location.errors }}</div>{% endif %}
                         </div>
 
@@ -104,32 +113,147 @@ $(document).ready(function() {
         placeholder: 'Select Party'
     });
 
-    // 2. Initialize AJAX Autocomplete for Locations
-    function setupLocationAutocomplete(fieldSelector, fieldName) {
-        const input = $(fieldSelector);
-        if (!input.length) return;
-        
-        const listId = fieldSelector.replace('#id_', '') + '_list';
-        if ($('#' + listId).length === 0) {
-            $('<datalist id="' + listId + '"></datalist>').insertAfter(input);
-            input.attr('list', listId);
-        }
+    // 2. Initialize Select2 for Locations (Hybrid: History + Map)
+    function setupLocationSelect2(fieldSelector, fieldName) {
+        const select = $(fieldSelector);
+        const latInput = $(fieldSelector.replace('location', 'lat'));
+        const lngInput = $(fieldSelector.replace('location', 'lng'));
 
-        input.on('input', function() {
-            const val = this.value;
-            if (val.length < 2) return;
-            $.get('{% url "autocomplete-suggestions" %}', { field: fieldName, q: val }, function(data) {
-                const datalist = $('#' + listId);
-                datalist.empty();
-                data.results.forEach(item => {
-                    datalist.append(`<option value="${item}">`);
-                });
-            });
+        // Replace the input with a Select2-compatible select if it's currently a text input
+        // (Django renders CharField as input type="text", but Select2 works best on <select>)
+        // However, Select2 can attach to input type="text" too, but tagging behaves differently.
+        // Best practice for AJAX+Tagging: Use <select> or attach to input with specific config.
+        // We will stick to the existing input but rely on Select2's ability to handle it.
+        // Actually, for proper AJAX tagging support, standard Select2 expects a <select>.
+        // Let's assume we attach to the text input but we might need to handle the UI carefully.
+        
+        // BETTER APPROACH: We'll use the existing input but configure Select2 to use it as a data source
+        // Wait, standard Select2 attaches to <select>. Attaching to <input type="text"> is deprecated/removed in v4.
+        // We need to transform the input into a select or use a wrapper.
+        // Simplest: Just hide the real input and insert a <select> for Select2 to control?
+        // No, let's keep it simple. If we use tagging=true on a <select>, it works.
+        // But the form renders an <input>. 
+        // We will convert the <input> to a <select> on the fly.
+        
+        // 1. Get current value
+        const initialValue = select.val();
+        
+        // 2. Create a new <select> element
+        const newSelect = $('<select class="form-select"></select>');
+        newSelect.attr('id', select.attr('id'));
+        newSelect.attr('name', select.attr('name'));
+        if (initialValue) {
+            newSelect.append(new Option(initialValue, initialValue, true, true));
+        }
+        
+        // 3. Replace old input
+        select.replaceWith(newSelect);
+        
+        // 4. Init Select2 with Custom Parallel Transport
+        newSelect.select2({
+            theme: 'bootstrap-5',
+            placeholder: 'Search or type location...',
+            tags: true, // Allow custom typing
+            minimumInputLength: 0, // START INSTANTLY
+            ajax: {
+                delay: 0, // REMOVE DELAY FOR INSTANT FEEL
+                transport: function (params, success, failure) {
+                    const term = params.data.term || '';
+                    
+                    // Promise 1: Local History (Always fetch if 0+ chars)
+                    const localRequest = $.ajax({
+                        url: '{% url "autocomplete-suggestions" %}',
+                        dataType: 'json',
+                        data: {
+                            term: term,
+                            field: fieldName
+                        }
+                    });
+
+                    // Promise 2: Map Suggestions (External) - START AT 2 CHARS
+                    let mapRequest = Promise.resolve({ features: [] });
+                    if (term.length >= 2) {
+                        // Optimizations:
+                        // 1. limit=20: Fetch more candidates
+                        // 2. lat=22.0&lon=79.0: Bias towards India center
+                        // 3. osm_tag=place:...: ONLY fetch cities, towns, villages (removes shops, hospitals, etc.)
+                        const mapUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(term)}&limit=20&lat=22.0&lon=79.0&osm_tag=place:city&osm_tag=place:town&osm_tag=place:village&lang=en`;
+                        mapRequest = $.ajax({
+                            url: mapUrl,
+                            dataType: 'json'
+                        }).catch(() => ({ features: [] })); // Fail silently
+                    }
+
+                    // Wait for BOTH to finish
+                    Promise.all([localRequest, mapRequest]).then(([localData, mapData]) => {
+                        const results = [];
+                        const seen = new Set();
+
+                        // 1. Process Local History
+                        if (localData.results) {
+                            localData.results.forEach(item => {
+                                if (!seen.has(item.id)) {
+                                    results.push(item);
+                                    seen.add(item.id);
+                                }
+                            });
+                        }
+
+                        // 2. Process Map Data
+                        if (mapData && mapData.features) {
+                            mapData.features.forEach(feature => {
+                                const p = feature.properties;
+                                const coords = feature.geometry.coordinates; // [lng, lat]
+                                
+                                const c_code = (p.countrycode || '').toUpperCase();
+                                const c_name = (p.country || '').toLowerCase();
+                                if (c_code === 'IN' || c_name === 'india') {
+                                    let parts = [];
+                                    if (p.name) parts.push(p.name);
+                                    if (p.city && p.city !== p.name) parts.push(p.city);
+                                    if (p.state) parts.push(p.state);
+                                    
+                                    const displayName = parts.join(', ');
+                                    if (displayName && !seen.has(displayName)) {
+                                        results.push({
+                                            id: displayName,
+                                            text: `🌍 ${displayName}`,
+                                            lat: coords[1],
+                                            lng: coords[0]
+                                        });
+                                        seen.add(displayName);
+                                    }
+                                }
+                            });
+                        }
+
+                        success({ results: results });
+                    }).catch(failure);
+                },
+                processResults: function (data) {
+                    return data; // Data is already formatted in transport
+                },
+                cache: true
+            }
+        });
+
+        // 5. Handle Selection (Capture Coordinates)
+        newSelect.on('select2:select', function (e) {
+            const data = e.params.data;
+            if (data.lat && data.lng) {
+                // Round to 6 decimal places to satisfy DB constraint (max_digits=9, decimal_places=6)
+                latInput.val(parseFloat(data.lat).toFixed(6));
+                lngInput.val(parseFloat(data.lng).toFixed(6));
+            } else {
+                // If user selected history or typed custom text, we might not have coords.
+                latInput.val('');
+                lngInput.val('');
+            }
         });
     }
 
-    setupLocationAutocomplete('#id_pickup_location', 'pickup_location');
-    setupLocationAutocomplete('#id_delivery_location', 'delivery_location');
+    setupLocationSelect2('#id_pickup_location', 'pickup_location');
+    setupLocationSelect2('#id_delivery_location', 'delivery_location');
 });
 </script>
 {% endblock %}

@@ -99,9 +99,9 @@
                         <tr>
                             <th>Date</th>
                             <th>Type</th>
+                            <th>Odo</th>
                             <th>Description</th>
                             <th>Cost</th>
-                            <th>Service Provider</th>
                             <th>Next Due</th>
                         </tr>
                     </thead>
@@ -110,15 +110,14 @@
                             <tr>
                                 <td>{{ log.date|date:"M d, Y" }}</td>
                                 <td>{{ log.type }}</td>
-                                <td>{{ log.description|truncatechars:40 }}</td>
-                                <td class="text-end">${{ log.cost|floatformat:2 }}</td>
-                                <td>{{ log.service_provider }}</td>
+                                <td>{{ log.odometer_reading|default:"-" }}</td>
+                                <td>{{ log.description|truncatechars:30 }}</td>
+                                <td class="text-end">${{ log.cost|floatformat:0 }}</td>
                                 <td>
-                                    {% if log.next_service_due %}
-                                        {{ log.next_service_due|date:"M d, Y" }}
-                                    {% else %}
-                                        <em>N/A</em>
-                                    {% endif %}
+                                    <small>
+                                        {% if log.next_service_due %}Date: {{ log.next_service_due|date:"M d, Y" }}<br>{% endif %}
+                                        {% if log.next_service_odometer %}Odo: {{ log.next_service_odometer }} km{% endif %}
+                                    </small>
                                 </td>
                             </tr>
                         {% endfor %}
@@ -130,6 +129,46 @@
 {% else %}
     <div class="alert alert-info mt-3">
         No maintenance logs found for this vehicle.
+    </div>
+{% endif %}
+
+<!-- Mounted Tyres -->
+<div class="d-flex justify-content-between align-items-center mt-4 mb-2">
+    <h3>Mounted Tyres</h3>
+    <a href="{% url 'tyre-list' %}" class="btn btn-sm btn-outline-primary">Manage Inventory</a>
+</div>
+{% if vehicle.tyres.exists %}
+    <div class="card mb-4">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-striped table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Position</th>
+                            <th>Brand & Size</th>
+                            <th>Serial Number</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for tyre in vehicle.tyres.all %}
+                            <tr>
+                                <td><strong>{{ tyre.current_position }}</strong></td>
+                                <td>{{ tyre.brand }} <small class="text-muted">{{ tyre.size }}</small></td>
+                                <td>{{ tyre.serial_number }}</td>
+                                <td>
+                                    <a href="{% url 'tyre-log-create' %}?tyre={{ tyre.pk }}" class="btn btn-sm btn-outline-success">Log Action</a>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+{% else %}
+    <div class="alert alert-info mt-3">
+        No tyres are currently recorded as mounted on this vehicle.
     </div>
 {% endif %}
 

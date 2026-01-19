@@ -32,7 +32,11 @@ class TripForm(forms.ModelForm):
             'driver',
             'party',
             'pickup_location',
+            'pickup_lat',
+            'pickup_lng',
             'delivery_location',
+            'delivery_lat',
+            'delivery_lng',
             'weight',
             'rate_per_ton',
             'start_odometer',
@@ -46,7 +50,19 @@ class TripForm(forms.ModelForm):
                     'rows': 3
                 }
             ),
+            'pickup_lat': forms.HiddenInput(),
+            'pickup_lng': forms.HiddenInput(),
+            'delivery_lat': forms.HiddenInput(),
+            'delivery_lng': forms.HiddenInput(),
         }
+
+    def clean(self):
+        cleaned_data = super().clean()
+        # Ensure empty strings for coordinates become None
+        for field in ['pickup_lat', 'pickup_lng', 'delivery_lat', 'delivery_lng']:
+            if not cleaned_data.get(field):
+                cleaned_data[field] = None
+        return cleaned_data
 
 
 class TripStatusForm(forms.ModelForm):

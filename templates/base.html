@@ -25,7 +25,16 @@
                 <ul class="navbar-nav me-auto">
                     {% if user.is_authenticated %}
                         <li class="nav-item"><a class="nav-link" href="{% url 'trip-list' %}"><i class="bi bi-truck"></i> Trips</a></li>
-                        <li class="nav-item"><a class="nav-link" href="{% url 'vehicle-list' %}"><i class="bi bi-car-front"></i> Fleet</a></li>
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                                <i class="bi bi-car-front"></i> Fleet
+                            </a>
+                            <ul class="dropdown-menu">
+                                <li><a class="dropdown-item" href="{% url 'vehicle-list' %}">Vehicles</a></li>
+                                <li><a class="dropdown-item" href="{% url 'maintenance-log-list' %}">Maintenance Logs</a></li>
+                                <li><a class="dropdown-item" href="{% url 'tyre-list' %}">Tyre Inventory</a></li>
+                            </ul>
+                        </li>
                         
                         {% if user.is_superuser or user.groups.all.0.name == 'manager' %}
                             <li class="nav-item"><a class="nav-link" href="{% url 'manager-dashboard' %}"><i class="bi bi-speedometer2"></i> Dashboard</a></li>

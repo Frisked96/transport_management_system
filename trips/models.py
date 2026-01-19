@@ -146,12 +146,16 @@ class Trip(models.Model):
         verbose_name='Pickup Location',
         blank=True
     )
+    pickup_lat = models.DecimalField(max_digits=18, decimal_places=10, null=True, blank=True)
+    pickup_lng = models.DecimalField(max_digits=18, decimal_places=10, null=True, blank=True)
 
     delivery_location = models.CharField(
         max_length=300,
         verbose_name='Delivery Location',
         blank=True
     )
+    delivery_lat = models.DecimalField(max_digits=18, decimal_places=10, null=True, blank=True)
+    delivery_lng = models.DecimalField(max_digits=18, decimal_places=10, null=True, blank=True)
 
     weight = models.DecimalField(
         max_digits=10,

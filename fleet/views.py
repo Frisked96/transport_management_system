@@ -9,8 +9,102 @@ from django.urls import reverse_lazy
 from django.contrib import messages
 from django.db.models import Q, Count, Sum
 
-from .models import Vehicle, MaintenanceLog
-from .forms import VehicleForm, MaintenanceLogForm
+from .models import Vehicle, MaintenanceLog, Tyre, TyreLog
+from .forms import VehicleForm, MaintenanceLogForm, TyreForm, TyreLogForm
+
+
+class TyreListView(LoginRequiredMixin, ListView):
+    model = Tyre
+    template_name = 'fleet/tyre_list.html'
+    context_object_name = 'tyres'
+    paginate_by = 20
+
+    def get_queryset(self):
+        queryset = Tyre.objects.all()
+        search = self.request.GET.get('search')
+        if search:
+            queryset = queryset.filter(
+                Q(serial_number__icontains=search) |
+                Q(brand__icontains=search) |
+                Q(size__icontains=search)
+            )
+        status = self.request.GET.get('status')
+        if status:
+            queryset = queryset.filter(status=status)
+        return queryset.order_by('brand', 'serial_number')
+
+
+class TyreDetailView(LoginRequiredMixin, DetailView):
+    model = Tyre
+    template_name = 'fleet/tyre_detail.html'
+    context_object_name = 'tyre'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['logs'] = self.object.logs.all().order_by('-date', '-id')
+        return context
+
+
+class TyreCreateView(LoginRequiredMixin, CreateView):
+    model = Tyre
+    form_class = TyreForm
+    template_name = 'fleet/tyre_form.html'
+    success_url = reverse_lazy('tyre-list')
+
+    def form_valid(self, form):
+        messages.success(self.request, 'Tyre added to inventory.')
+        return super().form_valid(form)
+
+
+class TyreUpdateView(LoginRequiredMixin, UpdateView):
+    model = Tyre
+    form_class = TyreForm
+    template_name = 'fleet/tyre_form.html'
+    
+    def get_success_url(self):
+        return reverse_lazy('tyre-detail', kwargs={'pk': self.object.pk})
+
+    def form_valid(self, form):
+        messages.success(self.request, 'Tyre updated.')
+        return super().form_valid(form)
+
+
+class TyreLogCreateView(LoginRequiredMixin, CreateView):
+    model = TyreLog
+    form_class = TyreLogForm
+    template_name = 'fleet/tyre_log_form.html'
+
+    def get_initial(self):
+        initial = super().get_initial()
+        tyre_id = self.request.GET.get('tyre')
+        if tyre_id:
+            initial['tyre'] = get_object_or_404(Tyre, pk=tyre_id)
+        return initial
+
+    def form_valid(self, form):
+        # Automatically update Tyre status/vehicle based on action
+        tyre = form.instance.tyre
+        action = form.instance.action
+        
+        if action == TyreLog.ACTION_MOUNT:
+            tyre.status = Tyre.STATUS_MOUNTED
+            tyre.current_vehicle = form.instance.vehicle
+            tyre.current_position = form.instance.position
+        elif action in [TyreLog.ACTION_DISMOUNT, TyreLog.ACTION_REPAIR]:
+            tyre.status = Tyre.STATUS_IN_STOCK if action == TyreLog.ACTION_DISMOUNT else Tyre.STATUS_REPAIR
+            tyre.current_vehicle = None
+            tyre.current_position = ''
+        elif action == TyreLog.ACTION_SCRAP:
+            tyre.status = Tyre.STATUS_SCRAP
+            tyre.current_vehicle = None
+            tyre.current_position = ''
+            
+        tyre.save()
+        messages.success(self.request, f'Tyre action {action} logged.')
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse_lazy('tyre-detail', kwargs={'pk': self.object.tyre.pk})
 
 
 class BaseFleetPermissionMixin:

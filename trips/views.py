@@ -135,6 +135,67 @@ from .forms import TripForm, TripStatusForm, TripExpenseUpdateForm, TripCustomEx
 
 # ... (Previous imports remain same)
 
+class TripMapView(LoginRequiredMixin, BaseTripPermissionMixin, ListView):
+    """
+    View to display trips on a map for a selected date range.
+    """
+    model = Trip
+    template_name = 'trips/trip_map.html'
+    context_object_name = 'trips'
+    
+    def get_queryset(self):
+        """Filter trips based on date range and valid coordinates"""
+        queryset = self.get_queryset_for_user()
+        
+        # Date filtering
+        start_date_str = self.request.GET.get('start_date')
+        end_date_str = self.request.GET.get('end_date')
+        
+        today = timezone.now().date()
+        
+        if start_date_str:
+            self.start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+        else:
+            self.start_date = today - timedelta(days=30) # Default last 30 days
+            
+        if end_date_str:
+            self.end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+        else:
+            self.end_date = today
+
+        queryset = queryset.filter(
+            date__date__range=[self.start_date, self.end_date],
+            pickup_lat__isnull=False,
+            pickup_lng__isnull=False,
+            delivery_lat__isnull=False,
+            delivery_lng__isnull=False
+        )
+            
+        return queryset
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['start_date'] = self.start_date
+        context['end_date'] = self.end_date
+        
+        # Serialize trip data for JS
+        trips_data = []
+        for trip in context['trips']:
+            trips_data.append({
+                'trip_number': trip.trip_number,
+                'vehicle': trip.vehicle.registration_plate,
+                'driver': str(trip.driver) if trip.driver else 'Unassigned',
+                'date': trip.date.strftime('%Y-%m-%d'),
+                'start': [float(trip.pickup_lat), float(trip.pickup_lng)],
+                'end': [float(trip.delivery_lat), float(trip.delivery_lng)],
+                'pickup_name': trip.pickup_location,
+                'delivery_name': trip.delivery_location,
+                'url': str(reverse_lazy('trip-detail', kwargs={'pk': trip.pk}))
+            })
+        context['trips_json'] = trips_data
+        return context
+
+
 class TripCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
     """
     Create view for new trips.
@@ -150,6 +211,11 @@ class TripCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
         # You could prepopulate date here if the form had a date field, 
         # but we are handling it in form_valid
         return initial
+
+    def form_invalid(self, form):
+        print("Trip Create Form Invalid!")
+        print(form.errors)
+        return super().form_invalid(form)
 
     def form_valid(self, form):
         """Set created_by and date fields"""
@@ -445,21 +511,48 @@ def manager_dashboard(request):
 
 from django.http import JsonResponse
 
+from fleet.models import Vehicle, Tyre
+
+
 @login_required
 def get_autocomplete_suggestions(request):
     """
-    Returns unique previous values for locations and expense names
+    Returns suggestions for Select2.
+    Now optimized to return ONLY Local History (Fast).
+    External Map results are handled client-side.
     """
-    field = request.GET.get('field')
-    q = request.GET.get('q', '')
+    field = request.GET.get('field') # 'pickup_location' or 'delivery_location'
+    term = request.GET.get('term', '') # Select2 uses 'term' for the search query
     
-    if field == 'pickup_location':
-        results = Trip.objects.filter(pickup_location__icontains=q).values_list('pickup_location', flat=True).distinct()[:10]
-    elif field == 'delivery_location':
-        results = Trip.objects.filter(delivery_location__icontains=q).values_list('delivery_location', flat=True).distinct()[:10]
-    elif field == 'expense_name':
-        results = TripExpense.objects.filter(name__icontains=q).values_list('name', flat=True).distinct()[:10]
-    else:
-        results = []
+    results = []
+    
+    # 1. Handle Location Fields (Pickup/Delivery)
+    if field in ['pickup_location', 'delivery_location']:
+        seen_names = set()
         
-    return JsonResponse({'results': list(results)})
+        # Local History (Fast)
+        # Search distinct locations from previous trips
+        query_filter = {f"{field}__icontains": term} if term else {}
+        local_qs = Trip.objects.filter(**query_filter).values_list(field, flat=True).distinct().order_by(field)[:10]
+        
+        for name in local_qs:
+            if name and name not in seen_names:
+                results.append({
+                    'id': name,
+                    'text': f"🕒 {name}", # Icon to indicate history
+                    'source': 'history'
+                })
+                seen_names.add(name)
+
+    # 2. Handle Other Fields (Legacy support)
+    elif field == 'expense_name':
+        qs = TripExpense.objects.filter(name__icontains=term).values_list('name', flat=True).distinct()[:10]
+        results = [{'id': x, 'text': x} for x in qs]
+    elif field == 'tyre_brand':
+        qs = Tyre.objects.filter(brand__icontains=term).values_list('brand', flat=True).distinct()[:10]
+        results = [{'id': x, 'text': x} for x in qs]
+    elif field == 'tyre_size':
+        qs = Tyre.objects.filter(size__icontains=term).values_list('size', flat=True).distinct()[:10]
+        results = [{'id': x, 'text': x} for x in qs]
+        
+    return JsonResponse({'results': results})

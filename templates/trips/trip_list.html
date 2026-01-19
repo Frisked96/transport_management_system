@@ -33,11 +33,16 @@
             </div>
         </form>
     </div>
-    {% if perms.trips.add_trip %}
-        <a href="{% url 'trip-create' %}?date={{ view_date|date:'Y-m-d' }}" class="btn btn-success">
-            <i class="bi bi-plus-lg"></i> <span class="d-none d-sm-inline">Add Trip for {{ view_date|date:"M d" }}</span><span class="d-sm-none">Add Trip</span>
+    <div>
+        <a href="{% url 'trip-map' %}" class="btn btn-outline-info me-2">
+            <i class="bi bi-map"></i> <span class="d-none d-sm-inline">Map View</span>
         </a>
-    {% endif %}
+        {% if perms.trips.add_trip %}
+            <a href="{% url 'trip-create' %}?date={{ view_date|date:'Y-m-d' }}" class="btn btn-success">
+                <i class="bi bi-plus-lg"></i> <span class="d-none d-sm-inline">Add Trip for {{ view_date|date:"M d" }}</span><span class="d-sm-none">Add Trip</span>
+            </a>
+        {% endif %}
+    </div>
 </div>
 
 <!-- Search and Filter (Collapsible) -->

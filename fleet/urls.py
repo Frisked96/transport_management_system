@@ -23,4 +23,11 @@ urlpatterns = [
     path('vehicle/<int:vehicle_pk>/fuel/add/', views_fuel.FuelLogCreateView.as_view(), name='fuel-log-create'),
     path('fuel/<int:pk>/update/', views_fuel.FuelLogUpdateView.as_view(), name='fuel-log-update'),
     path('fuel/<int:pk>/delete/', views_fuel.FuelLogDeleteView.as_view(), name='fuel-log-delete'),
+
+    # Tyre URLs
+    path('tyres/', views.TyreListView.as_view(), name='tyre-list'),
+    path('tyre/<int:pk>/', views.TyreDetailView.as_view(), name='tyre-detail'),
+    path('tyre/add/', views.TyreCreateView.as_view(), name='tyre-create'),
+    path('tyre/<int:pk>/update/', views.TyreUpdateView.as_view(), name='tyre-update'),
+    path('tyre/log/add/', views.TyreLogCreateView.as_view(), name='tyre-log-create'),
 ]

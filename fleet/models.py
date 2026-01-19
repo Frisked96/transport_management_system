@@ -98,9 +98,15 @@ class MaintenanceLog(models.Model):
     # Maintenance type choices
     TYPE_ROUTINE = 'Routine Service'
     TYPE_REPAIR = 'Repair'
+    TYPE_OIL_CHANGE = 'Oil Change'
+    TYPE_TYRE_WORK = 'Tyre Work'
+    TYPE_MAJOR_SERVICE = 'Major Service'
     
     TYPE_CHOICES = [
         (TYPE_ROUTINE, 'Routine Service'),
+        (TYPE_OIL_CHANGE, 'Oil Change'),
+        (TYPE_TYRE_WORK, 'Tyre Work'),
+        (TYPE_MAJOR_SERVICE, 'Major Service'),
         (TYPE_REPAIR, 'Repair'),
     ]
     
@@ -119,9 +125,16 @@ class MaintenanceLog(models.Model):
     
     # Type of maintenance
     type = models.CharField(
-        max_length=20,
+        max_length=50,
         choices=TYPE_CHOICES,
+        default=TYPE_ROUTINE,
         verbose_name='Maintenance Type'
+    )
+
+    odometer_reading = models.PositiveIntegerField(
+        null=True, 
+        blank=True, 
+        verbose_name='Odometer Reading'
     )
     
     # Description of work done
@@ -142,11 +155,16 @@ class MaintenanceLog(models.Model):
         verbose_name='Service Provider'
     )
     
-    # Next service due date
+    # Next service due (Date and/or Odometer)
     next_service_due = models.DateField(
         null=True,
         blank=True,
-        verbose_name='Next Service Due'
+        verbose_name='Next Service Due (Date)'
+    )
+    next_service_odometer = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name='Next Service Due (Odometer)'
     )
     
     # Who logged this entry
@@ -171,10 +189,86 @@ class MaintenanceLog(models.Model):
     
     @property
     def is_overdue(self):
-        """Check if next service is overdue"""
-        if self.next_service_due:
-            return self.next_service_due < timezone.now().date()
+        """Check if next service is overdue by date or odometer"""
+        today = timezone.now().date()
+        if self.next_service_due and self.next_service_due < today:
+            return True
+        if self.next_service_odometer and self.vehicle.current_odometer >= self.next_service_odometer:
+            return True
         return False
+
+
+class Tyre(models.Model):
+    """
+    Inventory management for individual tyres
+    """
+    STATUS_IN_STOCK = 'In Stock'
+    STATUS_MOUNTED = 'Mounted'
+    STATUS_SCRAP = 'Scrap'
+    STATUS_REPAIR = 'Under Repair'
+
+    STATUS_CHOICES = [
+        (STATUS_IN_STOCK, 'In Stock'),
+        (STATUS_MOUNTED, 'Mounted'),
+        (STATUS_REPAIR, 'Under Repair'),
+        (STATUS_SCRAP, 'Scrap'),
+    ]
+
+    serial_number = models.CharField(max_length=100, unique=True, verbose_name='Serial Number')
+    brand = models.CharField(max_length=100, verbose_name='Brand')
+    size = models.CharField(max_length=50, verbose_name='Size')
+    purchase_date = models.DateField(null=True, blank=True, verbose_name='Purchase Date')
+    purchase_cost = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    
+    current_vehicle = models.ForeignKey(
+        Vehicle,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='tyres',
+        verbose_name='Current Vehicle'
+    )
+    current_position = models.CharField(max_length=50, blank=True, verbose_name='Position')
+    
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_IN_STOCK)
+    notes = models.TextField(blank=True)
+
+    def __str__(self):
+        return f"{self.brand} {self.size} ({self.serial_number})"
+
+
+class TyreLog(models.Model):
+    """
+    History of tyre movements and repairs
+    """
+    ACTION_MOUNT = 'Mount'
+    ACTION_DISMOUNT = 'Dismount'
+    ACTION_ROTATION = 'Rotation'
+    ACTION_REPAIR = 'Repair'
+    ACTION_SCRAP = 'Scrap'
+
+    ACTION_CHOICES = [
+        (ACTION_MOUNT, 'Mount'),
+        (ACTION_DISMOUNT, 'Dismount'),
+        (ACTION_ROTATION, 'Rotation'),
+        (ACTION_REPAIR, 'Repair'),
+        (ACTION_SCRAP, 'Scrap'),
+    ]
+
+    tyre = models.ForeignKey(Tyre, on_delete=models.CASCADE, related_name='logs')
+    date = models.DateField(default=timezone.now)
+    action = models.CharField(max_length=20, choices=ACTION_CHOICES)
+    
+    vehicle = models.ForeignKey(Vehicle, on_delete=models.SET_NULL, null=True, blank=True)
+    position = models.CharField(max_length=50, blank=True)
+    odometer = models.PositiveIntegerField(null=True, blank=True)
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['-date', '-id']
+
+    def __str__(self):
+        return f"{self.tyre} - {self.action} on {self.date}"
 
 
 class FuelLog(models.Model):

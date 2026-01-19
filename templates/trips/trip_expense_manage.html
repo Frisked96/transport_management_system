@@ -27,21 +27,21 @@
                         {% for form in expense_formset %}
                             <div class="expense-row row align-items-end mb-3 pb-3 border-bottom">
                                 {{ form.id }}
-                                <div class="col-md-4">
+                                <div class="col-7 col-md-4">
                                     <label class="form-label small">Expense Name</label>
                                     {{ form.name }}
                                     {% if form.name.errors %}<div class="text-danger small">{{ form.name.errors }}</div>{% endif %}
                                 </div>
-                                <div class="col-md-3">
+                                <div class="col-5 col-md-3">
                                     <label class="form-label small">Amount</label>
                                     {{ form.amount }}
                                     {% if form.amount.errors %}<div class="text-danger small">{{ form.amount.errors }}</div>{% endif %}
                                 </div>
-                                <div class="col-md-4">
+                                <div class="col-10 col-md-4 mt-2 mt-md-0">
                                     <label class="form-label small">Notes</label>
                                     {{ form.notes }}
                                 </div>
-                                <div class="col-md-1 text-end">
+                                <div class="col-2 col-md-1 mt-2 mt-md-0 text-end d-flex align-items-end justify-content-end">
                                     {% if expense_formset.can_delete %}
                                         <div class="form-check d-none">
                                             {{ form.DELETE }}
@@ -65,19 +65,19 @@
                     <div id="empty-form" class="d-none">
                         <div class="expense-row row align-items-end mb-3 pb-3 border-bottom">
                             {{ expense_formset.empty_form.id }}
-                            <div class="col-md-4">
+                            <div class="col-7 col-md-4">
                                 <label class="form-label small">Expense Name</label>
                                 {{ expense_formset.empty_form.name }}
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-5 col-md-3">
                                 <label class="form-label small">Amount</label>
                                 {{ expense_formset.empty_form.amount }}
                             </div>
-                            <div class="col-md-4">
+                            <div class="col-10 col-md-4 mt-2 mt-md-0">
                                 <label class="form-label small">Notes</label>
                                 {{ expense_formset.empty_form.notes }}
                             </div>
-                            <div class="col-md-1 text-end">
+                            <div class="col-2 col-md-1 mt-2 mt-md-0 text-end d-flex align-items-end justify-content-end">
                                 <div class="form-check d-none">
                                     {{ expense_formset.empty_form.DELETE }}
                                 </div>
@@ -158,10 +158,112 @@ $(document).ready(function() {
         });
     }
 
-    // Initialize on existing rows
-    container.find('input[name$="-name"]').each(function() {
-        initExpenseAutocomplete($(this));
+    // --- Auto-Save / Restore Logic ---
+    const TRIP_ID = "{{ object.pk }}";
+    const STORAGE_KEY = "trip_expenses_draft_" + TRIP_ID;
+    const DRAFT_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+    function saveDraft() {
+        const data = {
+            timestamp: new Date().getTime(),
+            totalForms: totalForms.val(),
+            fields: {}
+        };
+        
+        // Save all input values
+        $('form').find('input, select, textarea').each(function() {
+            const name = $(this).attr('name');
+            const type = $(this).attr('type');
+            if (name && name !== 'csrfmiddlewaretoken') {
+                if (type === 'checkbox' || type === 'radio') {
+                    data.fields[name] = $(this).prop('checked');
+                } else {
+                    data.fields[name] = $(this).val();
+                }
+            }
+        });
+        
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    }
+
+    function restoreDraft() {
+        const rawData = localStorage.getItem(STORAGE_KEY);
+        if (!rawData) return;
+
+        try {
+            const data = JSON.parse(rawData);
+            
+            // Check expiration
+            if (data.timestamp) {
+                const age = new Date().getTime() - data.timestamp;
+                if (age > DRAFT_MAX_AGE_MS) {
+                    console.log("Draft expired. Clearing storage.");
+                    localStorage.removeItem(STORAGE_KEY);
+                    return;
+                }
+            }
+
+            // 1. Reconstruct Rows
+            const savedTotal = parseInt(data.totalForms || 0);
+            let currentTotal = parseInt(totalForms.val());
+            
+            // Add missing rows
+            while (currentTotal < savedTotal) {
+                addForm();
+                currentTotal++;
+            }
+
+            // 2. Populate Fields
+            $.each(data.fields, function(name, value) {
+                const element = $('[name="' + name + '"]');
+                if (element.length) {
+                    if (element.attr('type') === 'checkbox' || element.attr('type') === 'radio') {
+                        element.prop('checked', value);
+                    } else {
+                        element.val(value);
+                    }
+                }
+            });
+            
+            // Show notification
+            const toastHtml = `
+                <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 11">
+                    <div id="draftToast" class="toast align-items-center text-white bg-info border-0" role="alert" aria-live="assertive" aria-atomic="true">
+                        <div class="d-flex">
+                            <div class="toast-body">
+                                Unsaved changes restored.
+                            </div>
+                            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            $('body').append(toastHtml);
+            const toast = new bootstrap.Toast($('#draftToast'));
+            toast.show();
+            
+        } catch (e) {
+            console.error("Error restoring draft:", e);
+            localStorage.removeItem(STORAGE_KEY);
+        }
+    }
+
+    // Event Listeners for Auto-Save
+    $('form').on('input change', 'input, select, textarea', function() {
+        saveDraft();
     });
+
+    // Clear draft on successful submit (optional, but good practice to avoid stale drafts)
+    $('form').on('submit', function() {
+        // We generally don't clear on submit immediately in case of server error (page reload).
+        // If the save is successful, the user is redirected, and the draft remains but is harmless.
+        // Or we can rely on the fact that next time they load, the DB data will match the draft anyway.
+        // For now, we leave the draft. It will be overwritten if they make new changes.
+        // Optionally, clear it: localStorage.removeItem(STORAGE_KEY);
+    });
+    
+    // Restore on Load
+    restoreDraft();
 });
 </script>
 {% endblock %}

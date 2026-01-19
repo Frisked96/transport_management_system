@@ -3,21 +3,21 @@
 {% block title %}{{ trip.trip_number }} - Transport Management System{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <div>
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-3">
+    <div class="mb-2 mb-md-0">
         <h2 class="mb-0">Trip: {{ trip.trip_number }}</h2>
         <span class="text-muted">{{ trip.date|date:"l, F d, Y" }}</span>
     </div>
-    <div>
-        <a href="{% url 'trip-list' %}?date={{ trip.date|date:'Y-m-d' }}" class="btn btn-outline-secondary me-2">Back to List</a>
+    <div class="d-flex flex-wrap gap-2">
+        <a href="{% url 'trip-list' %}?date={{ trip.date|date:'Y-m-d' }}" class="btn btn-outline-secondary">Back</a>
         {% if perms.trips.can_update_trip_status or user == trip.driver %}
-            <a href="{% url 'trip-status-update' trip.pk %}" class="btn btn-success me-2">Update Status</a>
+            <a href="{% url 'trip-status-update' trip.pk %}" class="btn btn-success">Status</a>
         {% endif %}
         {% if perms.trips.change_trip %}
-            <a href="{% url 'trip-update' trip.pk %}" class="btn btn-warning me-2"><i class="bi bi-pencil"></i> Edit</a>
+            <a href="{% url 'trip-update' trip.pk %}" class="btn btn-warning"><i class="bi bi-pencil"></i></a>
         {% endif %}
         {% if perms.trips.delete_trip %}
-            <a href="{% url 'trip-delete' trip.pk %}" class="btn btn-danger"><i class="bi bi-trash"></i> Delete</a>
+            <a href="{% url 'trip-delete' trip.pk %}" class="btn btn-danger"><i class="bi bi-trash"></i></a>
         {% endif %}
     </div>
 </div>
@@ -31,24 +31,24 @@
             </div>
             <div class="card-body">
                 <div class="row g-3">
-                    <div class="col-md-6">
+                    <div class="col-6 col-md-6">
                         <label class="small text-muted text-uppercase">Vehicle</label>
                         <p class="fs-5 fw-bold mb-0">
                             <a href="{% url 'vehicle-detail' trip.vehicle.pk %}" class="text-decoration-none">{{ trip.vehicle.registration_plate }}</a>
                         </p>
                     </div>
-                    <div class="col-md-6">
+                    <div class="col-6 col-md-6">
                         <label class="small text-muted text-uppercase">Party</label>
                         <p class="fs-5 fw-bold mb-0">{% if trip.party %}{{ trip.party.name }}{% else %}-{% endif %}</p>
                     </div>
                     
-                    <div class="col-md-12">
+                    <div class="col-12">
                         <hr class="my-2">
                     </div>
 
-                    <div class="col-md-6">
+                    <div class="col-12 col-md-6">
                         <label class="small text-muted text-uppercase">Route</label>
-                        <p class="mb-0">
+                        <p class="mb-0 text-break">
                             {% if trip.pickup_location or trip.delivery_location %}
                                 {{ trip.pickup_location|default:"?" }} <i class="bi bi-arrow-right mx-2 text-muted"></i> {{ trip.delivery_location|default:"?" }}
                             {% else %}
@@ -56,7 +56,7 @@
                             {% endif %}
                         </p>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-6 col-md-3">
                          <label class="small text-muted text-uppercase">Driver</label>
                          <p class="mb-0">
                             {% if trip.driver %}
@@ -66,7 +66,7 @@
                             {% endif %}
                          </p>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-6 col-md-3">
                         <label class="small text-muted text-uppercase">Status</label>
                         <p class="mb-0">
                             <span class="badge bg-{% if trip.status == 'Completed' %}success{% elif trip.status == 'Cancelled' %}danger{% else %}primary{% endif %}">
@@ -75,32 +75,33 @@
                         </p>
                     </div>
 
-                    <div class="col-md-12">
+                    <div class="col-12">
                         <hr class="my-2">
                     </div>
 
-                    <div class="col-md-4">
+                    <div class="col-4">
                         <label class="small text-muted text-uppercase">Weight</label>
-                        <p class="fs-5 mb-0">{{ trip.weight|default:"-" }} <small class="text-muted">Tons</small></p>
+                        <p class="fs-5 mb-0">{{ trip.weight|default:"-" }}<span class="fs-6 text-muted">t</span></p>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-4">
                         <label class="small text-muted text-uppercase">Rate</label>
-                        <p class="fs-5 mb-0">${{ trip.rate_per_ton|default:"0.00" }} <small class="text-muted">/Ton</small></p>
+                        <p class="fs-5 mb-0">${{ trip.rate_per_ton|default:"0" }}</p>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-4">
                         <label class="small text-muted text-uppercase">Revenue</label>
-                        <p class="fs-5 fw-bold text-success mb-0">${{ trip.revenue|floatformat:2 }}</p>
+                        <p class="fs-5 fw-bold text-success mb-0">${{ trip.revenue|floatformat:0 }}</p>
                     </div>
 
-                    <div class="col-md-12">
+                    <div class="col-12">
                         <hr class="my-2">
                     </div>
 
-                    <div class="col-md-6">
+                    <div class="col-12">
                         <label class="small text-muted text-uppercase">Odometer</label>
                         <p class="mb-0">
                             {% if trip.start_odometer or trip.end_odometer %}
-                                Start: {{ trip.start_odometer|default:"-" }} / End: {{ trip.end_odometer|default:"-" }}
+                                <span class="me-3">Start: {{ trip.start_odometer|default:"-" }}</span>
+                                <span>End: {{ trip.end_odometer|default:"-" }}</span>
                             {% else %}
                                 -
                             {% endif %}
