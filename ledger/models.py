@@ -95,15 +95,31 @@ class Account(models.Model):
     def current_balance(self):
         """
         Calculate current balance: Opening Balance + Total Income - Total Expenses
+        Excludes 'Invoice' type records as they are accruals, not cash flow.
         """
-        income = self.financial_records.filter(category__type=TransactionCategory.TYPE_INCOME).aggregate(total=models.Sum('amount'))['total'] or 0
-        expenses = self.financial_records.filter(category__type=TransactionCategory.TYPE_EXPENSE).aggregate(total=models.Sum('amount'))['total'] or 0
+        income = self.financial_records.filter(
+            category__type=TransactionCategory.TYPE_INCOME
+        ).exclude(record_type='Invoice').aggregate(total=models.Sum('amount'))['total'] or 0
+
+        expenses = self.financial_records.filter(
+            category__type=TransactionCategory.TYPE_EXPENSE
+        ).exclude(record_type='Invoice').aggregate(total=models.Sum('amount'))['total'] or 0
+
         return self.opening_balance + income - expenses
 
 class FinancialRecord(models.Model):
     """
     Financial record for managing income and expenses
     """
+
+    # Record Type choices
+    RECORD_TYPE_TRANSACTION = 'Transaction'
+    RECORD_TYPE_INVOICE = 'Invoice'
+    RECORD_TYPE_CHOICES = [
+        (RECORD_TYPE_TRANSACTION, 'Transaction'),
+        (RECORD_TYPE_INVOICE, 'Invoice'),
+    ]
+
     date = models.DateField(verbose_name='Transaction Date')
     account = models.ForeignKey(
         Account,
@@ -137,6 +153,14 @@ class FinancialRecord(models.Model):
         related_name='financial_records',
         verbose_name='Associated Trip'
     )
+
+    record_type = models.CharField(
+        max_length=20,
+        choices=RECORD_TYPE_CHOICES,
+        default=RECORD_TYPE_TRANSACTION,
+        verbose_name='Record Type'
+    )
+
     category = models.ForeignKey(
         TransactionCategory,
         on_delete=models.PROTECT,
@@ -174,6 +198,10 @@ class FinancialRecord(models.Model):
             self.entry_number = Sequence.next_value('financial_record_entry_number')
         super().save(*args, **kwargs)
 
+        # Check trip closure if associated and this is a payment (Transaction)
+        if self.associated_trip and self.record_type == self.RECORD_TYPE_TRANSACTION:
+            self.associated_trip.check_and_close_trip()
+
     class Meta:
         verbose_name = 'Financial Record'
         verbose_name_plural = 'Financial Records'
@@ -195,6 +223,10 @@ class FinancialRecord(models.Model):
     @property
     def is_expense(self):
         return self.category.type == TransactionCategory.TYPE_EXPENSE if self.category else False
+
+    @property
+    def is_invoice(self):
+        return self.record_type == self.RECORD_TYPE_INVOICE
 
     @property
     def signed_amount(self):

@@ -88,22 +88,15 @@ class FinancialRecordListView(LoginRequiredMixin, BaseLedgerPermissionMixin, Lis
             
     
             # Calculate totals for filtered records
-    
             records = self.get_queryset()
     
             total_income = records.filter(
-    
                 category__type=TransactionCategory.TYPE_INCOME
-    
-            ).aggregate(total=Sum('amount'))['total'] or 0
-    
+            ).exclude(record_type='Invoice').aggregate(total=Sum('amount'))['total'] or 0
             
-    
             total_expenses = records.filter(
-    
                 category__type=TransactionCategory.TYPE_EXPENSE
-    
-            ).aggregate(total=Sum('amount'))['total'] or 0
+            ).exclude(record_type='Invoice').aggregate(total=Sum('amount'))['total'] or 0
     
             
     
@@ -349,15 +342,19 @@ class PartyListView(LoginRequiredMixin, BaseLedgerPermissionMixin, ListView):
             )
             
         # Correctly calculate totals using Subquery to avoid cross-join multiplication
-        billed_subquery = Trip.objects.filter(
-            party=OuterRef('pk')
+        # Total Billed = Sum of Invoices
+        billed_subquery = FinancialRecord.objects.filter(
+            party=OuterRef('pk'),
+            record_type=FinancialRecord.RECORD_TYPE_INVOICE
         ).values('party').annotate(
-            total=Sum(F('weight') * F('rate_per_ton'))
+            total=Sum('amount')
         ).values('total')
 
+        # Total Received = Sum of Income Transactions (Payments)
         received_subquery = FinancialRecord.objects.filter(
             party=OuterRef('pk'),
-            category__type=TransactionCategory.TYPE_INCOME
+            category__type=TransactionCategory.TYPE_INCOME,
+            record_type=FinancialRecord.RECORD_TYPE_TRANSACTION
         ).values('party').annotate(
             total=Sum('amount')
         ).values('total')
@@ -386,18 +383,19 @@ class PartyDetailView(LoginRequiredMixin, BaseLedgerPermissionMixin, DetailView)
         trips = self.object.trip_set.all().order_by('-date')
         context['trips'] = trips
         
-        # Calculate Total Billed (Revenue from Trips)
-        total_billed = trips.aggregate(
-            total=Sum(F('weight') * F('rate_per_ton'), output_field=DecimalField())
-        )['total'] or 0
-        
         # Get associated financial records
         financial_records = self.object.financial_records.all().order_by('-date')
         context['financial_records'] = financial_records
         
-        # Calculate Total Received (Payments from Party)
+        # Calculate Total Billed (Sum of Invoices)
+        total_billed = financial_records.filter(
+            record_type=FinancialRecord.RECORD_TYPE_INVOICE
+        ).aggregate(total=Sum('amount'))['total'] or 0
+
+        # Calculate Total Received (Payments from Party - Transactions Only)
         total_received = financial_records.filter(
-            category__type=TransactionCategory.TYPE_INCOME
+            category__type=TransactionCategory.TYPE_INCOME,
+            record_type=FinancialRecord.RECORD_TYPE_TRANSACTION
         ).aggregate(total=Sum('amount'))['total'] or 0
         
         context['total_billed'] = total_billed

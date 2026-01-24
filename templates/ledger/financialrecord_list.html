@@ -96,7 +96,12 @@
                         <tr>
                             <td class="fw-bold">#{{ record.entry_number|default:record.pk }}</td>
                             <td>{{ record.date|date:"M d, Y" }}</td>
-                            <td><span class="badge bg-secondary">{{ record.category }}</span></td>
+                            <td>
+                                <span class="badge bg-secondary">{{ record.category }}</span>
+                                {% if record.is_invoice %}
+                                    <span class="badge bg-info text-dark">Invoice</span>
+                                {% endif %}
+                            </td>
                             <td>{{ record.party.name|default:"-" }}</td>
                             <td class="text-end fw-bold {% if record.is_income %}text-success{% else %}text-danger{% endif %}">
                                 {% if record.is_income %}+{% else %}-{% endif %}${{ record.amount|floatformat:2 }}

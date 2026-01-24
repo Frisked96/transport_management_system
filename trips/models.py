@@ -229,6 +229,68 @@ class Trip(models.Model):
         """
         pass
 
+    def sync_ledger_invoice(self):
+        """
+        Synchronize Trip Revenue to FinancialRecord as an Invoice.
+        """
+        from ledger.models import FinancialRecord, TransactionCategory
+
+        # 1. Check if we have Revenue info
+        has_revenue = self.weight is not None and self.rate_per_ton is not None
+
+        # 2. Find existing invoice record
+        invoice_qs = FinancialRecord.objects.filter(
+            associated_trip=self,
+            record_type=FinancialRecord.RECORD_TYPE_INVOICE
+        )
+
+        if has_revenue:
+            amount = self.weight * self.rate_per_ton
+
+            # Ensure Category exists
+            cat, _ = TransactionCategory.objects.get_or_create(
+                name="Trip Revenue",
+                defaults={'type': TransactionCategory.TYPE_INCOME, 'description': 'Auto-generated revenue from trips'}
+            )
+
+            if invoice_qs.exists():
+                # Update existing
+                record = invoice_qs.first()
+                # Update fields if changed
+                should_save = False
+                if record.amount != amount:
+                    record.amount = amount
+                    should_save = True
+                if record.party != self.party:
+                    record.party = self.party
+                    should_save = True
+                if record.driver != self.driver:
+                    record.driver = self.driver
+                    should_save = True
+                if record.date != self.date.date():
+                    record.date = self.date.date()
+                    should_save = True
+
+                if should_save:
+                    record.save()
+            else:
+                # Create new
+                if amount >= 0:
+                    FinancialRecord.objects.create(
+                        associated_trip=self,
+                        party=self.party,
+                        driver=self.driver,
+                        date=self.date.date(),
+                        category=cat,
+                        amount=amount,
+                        record_type=FinancialRecord.RECORD_TYPE_INVOICE,
+                        description=f"Invoice for Trip {self.trip_number}"
+                    )
+        else:
+            # If revenue details removed, delete the invoice
+            if invoice_qs.exists():
+                invoice_qs.delete()
+
     def save(self, *args, **kwargs):
         """
         Override save to handle business logic
@@ -280,6 +342,9 @@ class Trip(models.Model):
         is_new = self._state.adding
         super().save(*args, **kwargs)
 
+        # Sync to Ledger
+        self.sync_ledger_invoice()
+
         if is_new:
             # Create default TripExpense entries
             TripExpense.objects.create(trip=self, name='Diesel', amount=0)
@@ -304,7 +369,7 @@ class Trip(models.Model):
         # 1. Direct links (Records with type='Income')
         direct = self.financial_records.filter(
             category__type=TransactionCategory.TYPE_INCOME
-        ).aggregate(total=models.Sum('amount'))['total'] or 0
+        ).exclude(record_type=FinancialRecord.RECORD_TYPE_INVOICE).aggregate(total=models.Sum('amount'))['total'] or 0
         
         # 2. M2M Allocations (Assumed to be income by nature)
         allocated = self.payment_allocations.aggregate(
@@ -312,6 +377,35 @@ class Trip(models.Model):
         )['total'] or 0
         
         return direct + allocated
+
+    def check_and_close_trip(self):
+        """
+        Check if trip should be automatically closed.
+        Conditions:
+        1. Revenue > 0
+        2. Fully Paid (Total Received >= Revenue)
+        3. Trip Date has passed
+        """
+        if self.status == self.STATUS_COMPLETED:
+            return
+
+        # 1. Revenue
+        revenue = self.revenue
+        if revenue <= 0:
+            return
+
+        # 2. Date Check (Must be in past)
+        if self.date > timezone.now():
+            return
+
+        # 3. Paid Amount
+        received = self.amount_received
+
+        if received >= revenue:
+            self.status = self.STATUS_COMPLETED
+            if not self.actual_completion_datetime:
+                self.actual_completion_datetime = timezone.now()
+            self.save(update_fields=['status', 'actual_completion_datetime'])
 
     @property
     def payment_status(self):
