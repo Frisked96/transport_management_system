@@ -50,7 +50,7 @@ class FinancialRecordListView(LoginRequiredMixin, BaseLedgerPermissionMixin, Lis
         if self.has_driver_permission():
             return FinancialRecord.objects.none()
         
-        queryset = FinancialRecord.objects.all()
+        queryset = FinancialRecord.objects.all().select_related('category', 'party', 'associated_trip')
         
         # Category filter
         category_id = self.request.GET.get('category')

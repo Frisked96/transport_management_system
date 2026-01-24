@@ -20,7 +20,7 @@ class TyreListView(LoginRequiredMixin, ListView):
     paginate_by = 20
 
     def get_queryset(self):
-        queryset = Tyre.objects.all()
+        queryset = Tyre.objects.all().select_related('current_vehicle')
         search = self.request.GET.get('search')
         if search:
             queryset = queryset.filter(

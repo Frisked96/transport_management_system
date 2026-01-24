@@ -65,7 +65,7 @@ class TripListView(LoginRequiredMixin, BaseTripPermissionMixin, ListView):
     
     def get_queryset(self):
         """Filter trips based on date and user permissions"""
-        queryset = self.get_queryset_for_user()
+        queryset = self.get_queryset_for_user().select_related('vehicle', 'party', 'driver')
         
         # Date filtering
         date_str = self.request.GET.get('date')
