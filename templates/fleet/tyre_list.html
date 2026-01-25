@@ -1,0 +1,97 @@
+{% extends 'base.html' %}
+
+{% block title %}Tyre Inventory{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2>Tyre Inventory</h2>
+    <a href="{% url 'tyre-create' %}" class="btn btn-primary">
+        <i class="bi bi-plus-circle"></i> Add Tyre
+    </a>
+</div>
+
+<div class="card shadow-sm mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-6">
+                <input type="text" name="search" class="form-control" placeholder="Search Serial, Brand, Size..." value="{{ request.GET.search }}">
+            </div>
+            <div class="col-md-4">
+                <select name="status" class="form-select">
+                    <option value="">All Statuses</option>
+                    <option value="In Stock" {% if request.GET.status == 'In Stock' %}selected{% endif %}>In Stock</option>
+                    <option value="Mounted" {% if request.GET.status == 'Mounted' %}selected{% endif %}>Mounted</option>
+                    <option value="Under Repair" {% if request.GET.status == 'Under Repair' %}selected{% endif %}>Under Repair</option>
+                    <option value="Scrap" {% if request.GET.status == 'Scrap' %}selected{% endif %}>Scrap</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-secondary w-100">Filter</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Serial Number</th>
+                    <th>Brand & Size</th>
+                    <th>Status</th>
+                    <th>Vehicle/Position</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for tyre in tyres %}
+                <tr>
+                    <td><strong>{{ tyre.serial_number }}</strong></td>
+                    <td>{{ tyre.brand }} <br><small class="text-muted">{{ tyre.size }}</small></td>
+                    <td>
+                        <span class="badge bg-{% if tyre.status == 'Mounted' %}success{% elif tyre.status == 'In Stock' %}primary{% elif tyre.status == 'Scrap' %}danger{% else %}warning{% endif %}">
+                            {{ tyre.status }}
+                        </span>
+                    </td>
+                    <td>
+                        {% if tyre.current_vehicle %}
+                            <a href="{% url 'vehicle-detail' tyre.current_vehicle.pk %}" class="text-decoration-none">
+                                {{ tyre.current_vehicle.registration_plate }}
+                            </a>
+                            <br><small class="text-muted">{{ tyre.current_position }}</small>
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div class="btn-group">
+                            <a href="{% url 'tyre-detail' tyre.pk %}" class="btn btn-sm btn-outline-info"><i class="bi bi-eye"></i></a>
+                            <a href="{% url 'tyre-log-create' %}?tyre={{ tyre.pk }}" class="btn btn-sm btn-outline-success"><i class="bi bi-gear"></i></a>
+                        </div>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="5" class="text-center py-4 text-muted">No tyres found in inventory.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% if is_paginated %}
+<nav class="mt-4">
+    <ul class="pagination justify-content-center">
+        {% if page_obj.has_previous %}
+            <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}">Previous</a></li>
+        {% endif %}
+        <li class="page-item active"><span class="page-link">{{ page_obj.number }}</span></li>
+        {% if page_obj.has_next %}
+            <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}">Next</a></li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+{% endblock %}

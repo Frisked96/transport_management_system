@@ -4,16 +4,19 @@ Views for Ledger application with permission checks
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.contrib.auth.decorators import login_required
-from django.shortcuts import render
+from django.shortcuts import render, redirect
 from django.urls import reverse_lazy
 from django.contrib import messages
-from django.db.models import Q, Sum, F, DecimalField, Value
+from django.db.models import Q, Sum, F, DecimalField, Value, Case, When, OuterRef, Subquery
 from django.db.models.functions import Coalesce
 from django.utils import timezone
+from decimal import Decimal, InvalidOperation
+from datetime import datetime
+import json
 
-from .models import FinancialRecord, Party, Account
+from .models import FinancialRecord, Party, Account, TripAllocation, TransactionCategory
 from .forms import FinancialRecordForm, PartyForm, AccountForm
-from .utils import recalculate_leg_status
+from trips.models import Trip
 
 
 class BaseLedgerPermissionMixin:
@@ -47,12 +50,12 @@ class FinancialRecordListView(LoginRequiredMixin, BaseLedgerPermissionMixin, Lis
         if self.has_driver_permission():
             return FinancialRecord.objects.none()
         
-        queryset = FinancialRecord.objects.all()
+        queryset = FinancialRecord.objects.all().select_related('category', 'party', 'associated_trip')
         
         # Category filter
-        category = self.request.GET.get('category')
-        if category:
-            queryset = queryset.filter(category=category)
+        category_id = self.request.GET.get('category')
+        if category_id:
+            queryset = queryset.filter(category_id=category_id)
         
         # Trip filter
         trip_id = self.request.GET.get('trip')
@@ -74,31 +77,36 @@ class FinancialRecordListView(LoginRequiredMixin, BaseLedgerPermissionMixin, Lis
         
         return queryset.order_by('-date')
     
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['category_choices'] = FinancialRecord.CATEGORY_CHOICES
-        context['current_category'] = self.request.GET.get('category', '')
-        
-        # Calculate totals for filtered records
-        records = self.get_queryset()
-        total_income = records.filter(
-            category=FinancialRecord.CATEGORY_FREIGHT_INCOME
-        ).aggregate(total=Sum('amount'))['total'] or 0
-        
-        total_expenses = records.filter(
-            category__in=[
-                FinancialRecord.CATEGORY_FUEL_EXPENSE,
-                FinancialRecord.CATEGORY_MAINTENANCE_EXPENSE,
-                FinancialRecord.CATEGORY_DRIVER_PAYMENT,
-                FinancialRecord.CATEGORY_OTHER
-            ]
-        ).aggregate(total=Sum('amount'))['total'] or 0
-        
-        context['total_income'] = total_income
-        context['total_expenses'] = total_expenses
-        context['net_total'] = total_income - total_expenses
-        
-        return context
+        def get_context_data(self, **kwargs):
+    
+            context = super().get_context_data(**kwargs)
+    
+            context['category_choices'] = TransactionCategory.objects.all()
+    
+            context['current_category'] = self.request.GET.get('category', '')
+    
+            
+    
+            # Calculate totals for filtered records
+            records = self.get_queryset()
+    
+            total_income = records.filter(
+                category__type=TransactionCategory.TYPE_INCOME
+            ).exclude(record_type='Invoice').aggregate(total=Sum('amount'))['total'] or 0
+            
+            total_expenses = records.filter(
+                category__type=TransactionCategory.TYPE_EXPENSE
+            ).exclude(record_type='Invoice').aggregate(total=Sum('amount'))['total'] or 0
+    
+            
+    
+            context['total_income'] = total_income
+    
+            context['total_expenses'] = total_expenses
+    
+            context['net_total'] = total_income - total_expenses
+    
+            return context
 
 
 class FinancialRecordDetailView(LoginRequiredMixin, BaseLedgerPermissionMixin, DetailView):
@@ -130,7 +138,6 @@ class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, Cre
     
     def get_initial(self):
         initial = super().get_initial()
-        # associated_trip removed from form, so no need to init it from URL
         
         party_id = self.request.GET.get('party')
         if party_id:
@@ -152,24 +159,54 @@ class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, Cre
         return initial
 
     def form_valid(self, form):
+        distribution_json = form.cleaned_data.get('payment_distribution')
+        
+        if distribution_json:
+            try:
+                distribution_data = json.loads(distribution_json)
+                
+                # 1. Create the single parent FinancialRecord
+                self.object = form.save(commit=False)
+                self.object.recorded_by = self.request.user
+                self.object.save()
+                
+                total_input_amount = self.object.amount
+                total_distributed = Decimal('0')
+                
+                # 2. Iterate and create allocations for trips
+                for item in distribution_data:
+                    trip_id = item.get('trip_id')
+                    try:
+                        amount = Decimal(str(item.get('amount')))
+                    except (ValueError, InvalidOperation):
+                        raise ValueError(f"Invalid amount format for trip {trip_id}")
+                    
+                    if amount > 0:
+                        trip = Trip.objects.get(pk=trip_id)
+                        
+                        TripAllocation.objects.create(
+                            financial_record=self.object,
+                            trip=trip,
+                            amount=amount
+                        )
+                        
+                        total_distributed += amount
+                
+                messages.success(self.request, f'Financial record created and distributed across {len(distribution_data)} trips!')
+                
+                # Redirect logic - Use redirect() not reverse_lazy()
+                if self.object.party:
+                    return redirect('party-detail', pk=self.object.party.pk)
+                return redirect('financialrecord-list')
+
+            except Exception as e:
+                form.add_error(None, f"Error processing payment distribution: {str(e)}")
+                return self.form_invalid(form)
+        
+        # Fallback to standard single record creation
         form.instance.recorded_by = self.request.user
         response = super().form_valid(form)
         
-        # Auto-populate associated_trip if legs are selected and belong to the same trip
-        # We need to do this after saving to access the many-to-many field
-        legs = self.object.associated_legs.all()
-        if legs.exists():
-            first_trip = legs.first().trip
-            # Check if all legs belong to the same trip
-            if all(leg.trip == first_trip for leg in legs):
-                self.object.associated_trip = first_trip
-                self.object.save()
-            
-            # Update Payment Status of Legs
-            if self.object.category in [FinancialRecord.CATEGORY_FREIGHT_INCOME, FinancialRecord.CATEGORY_PARTY_PAYMENT]:
-                 for leg in legs:
-                     recalculate_leg_status(leg)
-
         messages.success(self.request, 'Financial record created successfully!')
         return response
     
@@ -191,26 +228,7 @@ class FinancialRecordUpdateView(LoginRequiredMixin, PermissionRequiredMixin, Upd
     permission_required = 'ledger.change_financialrecord'
     
     def form_valid(self, form):
-        # We should probably revert previous amounts if this is an update?
-        # This is getting complex. Ideally, we recalculate leg status from scratch based on all records.
-        # But for this iteration, let's keep it simple and just apply the *difference* or re-apply?
-        # Re-calculating is safer.
-        
         response = super().form_valid(form)
-        
-        # Auto-populate associated_trip if legs are selected and belong to the same trip
-        legs = self.object.associated_legs.all()
-        if legs.exists():
-            first_trip = legs.first().trip
-            if all(leg.trip == first_trip for leg in legs):
-                self.object.associated_trip = first_trip
-                self.object.save()
-        
-        # Recalculate payment status for ALL legs associated with this record
-        if legs.exists() and self.object.category in [FinancialRecord.CATEGORY_FREIGHT_INCOME, FinancialRecord.CATEGORY_PARTY_PAYMENT]:
-             for leg in legs:
-                 recalculate_leg_status(leg)
-        
         messages.success(self.request, 'Financial record updated successfully!')
         return response
     
@@ -230,15 +248,7 @@ class FinancialRecordDeleteView(LoginRequiredMixin, PermissionRequiredMixin, Del
     
     def delete(self, request, *args, **kwargs):
         self.object = self.get_object()
-        legs = list(self.object.associated_legs.all())
-        is_income = self.object.category in [FinancialRecord.CATEGORY_FREIGHT_INCOME, FinancialRecord.CATEGORY_PARTY_PAYMENT]
-        
         response = super().delete(request, *args, **kwargs)
-        
-        if is_income:
-            for leg in legs:
-                recalculate_leg_status(leg)
-                
         messages.success(self.request, 'Financial record deleted successfully!')
         return response
 
@@ -247,63 +257,49 @@ class FinancialRecordDeleteView(LoginRequiredMixin, PermissionRequiredMixin, Del
 def financial_summary(request):
     """
     Financial summary report view
-    Only accessible by admin and manager
     """
-    # Check permissions
-    if not (request.user.is_superuser or 
-            request.user.groups.filter(name='manager').exists()):
-        messages.error(request, 'Access denied. Financial summary is only for managers.')
-        return redirect('trip-list')
+    now = timezone.now()
+    current_month = now.month
+    current_year = now.year
     
-    from datetime import datetime
-    
-    # Get current month and year
-    current_month = timezone.now().month
-    current_year = timezone.now().year
-    
-    # Monthly summary
+    # Month calculations
     monthly_income = FinancialRecord.objects.filter(
-        category=FinancialRecord.CATEGORY_FREIGHT_INCOME,
+        category__type=TransactionCategory.TYPE_INCOME,
         date__month=current_month,
         date__year=current_year
     ).aggregate(total=Sum('amount'))['total'] or 0
     
     monthly_expenses = FinancialRecord.objects.filter(
-        category__in=[
-            FinancialRecord.CATEGORY_FUEL_EXPENSE,
-            FinancialRecord.CATEGORY_MAINTENANCE_EXPENSE,
-            FinancialRecord.CATEGORY_DRIVER_PAYMENT,
-            FinancialRecord.CATEGORY_OTHER
-        ],
+        category__type=TransactionCategory.TYPE_EXPENSE,
         date__month=current_month,
         date__year=current_year
     ).aggregate(total=Sum('amount'))['total'] or 0
     
-    # Yearly summary
+    # Year calculations
     yearly_income = FinancialRecord.objects.filter(
-        category=FinancialRecord.CATEGORY_FREIGHT_INCOME,
+        category__type=TransactionCategory.TYPE_INCOME,
         date__year=current_year
     ).aggregate(total=Sum('amount'))['total'] or 0
     
     yearly_expenses = FinancialRecord.objects.filter(
-        category__in=[
-            FinancialRecord.CATEGORY_FUEL_EXPENSE,
-            FinancialRecord.CATEGORY_MAINTENANCE_EXPENSE,
-            FinancialRecord.CATEGORY_DRIVER_PAYMENT,
-            FinancialRecord.CATEGORY_OTHER
-        ],
+        category__type=TransactionCategory.TYPE_EXPENSE,
         date__year=current_year
     ).aggregate(total=Sum('amount'))['total'] or 0
     
     # Category breakdown for current month
-    category_breakdown = {}
-    for category, _ in FinancialRecord.CATEGORY_CHOICES:
+    category_breakdown = []
+    for cat in TransactionCategory.objects.all():
         total = FinancialRecord.objects.filter(
-            category=category,
+            category=cat,
             date__month=current_month,
             date__year=current_year
         ).aggregate(total=Sum('amount'))['total'] or 0
-        category_breakdown[category] = total
+        if total > 0:
+            category_breakdown.append({
+                'name': cat.name,
+                'amount': total,
+                'type': cat.type
+            })
     
     context = {
         'monthly_income': monthly_income,
@@ -345,38 +341,27 @@ class PartyListView(LoginRequiredMixin, BaseLedgerPermissionMixin, ListView):
                 Q(state__icontains=search)
             )
             
-        # Annotate with outstanding balance
-        # 1. Total Billed (Sum of TripLeg revenue)
-        # Note: We use Coalesce to handle None (if no legs)
-        
-        # 2. Total Received (Sum of FinancialRecords with specific categories)
-        # We need to filter the relation sum. 
-        # Since Django < 2.0 (or simplistic), conditional aggregation is better.
-        # But FilteredRelation is cleaner in modern Django.
-        # Let's use Sum with Case/When for 'total_received'
-        from django.db.models import Case, When
+        # Correctly calculate totals using Subquery to avoid cross-join multiplication
+        # Total Billed = Sum of Invoices
+        billed_subquery = FinancialRecord.objects.filter(
+            party=OuterRef('pk'),
+            record_type=FinancialRecord.RECORD_TYPE_INVOICE
+        ).values('party').annotate(
+            total=Sum('amount')
+        ).values('total')
+
+        # Total Received = Sum of Income Transactions (Payments)
+        received_subquery = FinancialRecord.objects.filter(
+            party=OuterRef('pk'),
+            category__type=TransactionCategory.TYPE_INCOME,
+            record_type=FinancialRecord.RECORD_TYPE_TRANSACTION
+        ).values('party').annotate(
+            total=Sum('amount')
+        ).values('total')
         
         queryset = queryset.annotate(
-            total_billed=Coalesce(
-                Sum(F('tripleg__weight') * F('tripleg__price_per_ton'), output_field=DecimalField()), 
-                Value(0, output_field=DecimalField())
-            ),
-            total_received=Coalesce(
-                Sum(
-                    Case(
-                        When(
-                            financial_records__category__in=[
-                                FinancialRecord.CATEGORY_FREIGHT_INCOME,
-                                FinancialRecord.CATEGORY_PARTY_PAYMENT
-                            ],
-                            then=F('financial_records__amount')
-                        ),
-                        default=Value(0),
-                        output_field=DecimalField()
-                    )
-                ),
-                Value(0, output_field=DecimalField())
-            )
+            total_billed=Coalesce(Subquery(billed_subquery, output_field=DecimalField()), Value(0, output_field=DecimalField())),
+            total_received=Coalesce(Subquery(received_subquery, output_field=DecimalField()), Value(0, output_field=DecimalField()))
         ).annotate(
             outstanding_balance=F('total_billed') - F('total_received')
         )
@@ -394,34 +379,24 @@ class PartyDetailView(LoginRequiredMixin, BaseLedgerPermissionMixin, DetailView)
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         
-        # Get associated trip legs
-        trip_legs = self.object.tripleg_set.all().order_by('-date')
-        context['trip_legs'] = trip_legs
-        
-        # Calculate Total Billed (Revenue from Trip Legs)
-        total_billed = trip_legs.aggregate(
-            total=Sum(F('weight') * F('price_per_ton'), output_field=DecimalField())
-        )['total'] or 0
+        # Get associated trips
+        trips = self.object.trip_set.all().order_by('-date')
+        context['trips'] = trips
         
         # Get associated financial records
         financial_records = self.object.financial_records.all().order_by('-date')
         context['financial_records'] = financial_records
         
-        # Calculate Total Received (Payments from Party)
-        # Includes both FREIGHT_INCOME (Legacy) and PARTY_PAYMENT
-        total_received = financial_records.filter(
-            category__in=[
-                FinancialRecord.CATEGORY_FREIGHT_INCOME,
-                FinancialRecord.CATEGORY_PARTY_PAYMENT
-            ]
+        # Calculate Total Billed (Sum of Invoices)
+        total_billed = financial_records.filter(
+            record_type=FinancialRecord.RECORD_TYPE_INVOICE
         ).aggregate(total=Sum('amount'))['total'] or 0
-        
-        # Expenses (We paid for them / Other expenses linked to party)
-        # These increase the amount they owe us? Or reduce?
-        # Typically "Expenses" linked to a party might be billable expenses.
-        # If billable, they should ADD to the balance (They owe us).
-        # But for now, let's keep it simple: Balance = Billed - Received.
-        # Unless 'total_expenses' logic was intended to separate "Our Cost" from "Their Bill".
+
+        # Calculate Total Received (Payments from Party - Transactions Only)
+        total_received = financial_records.filter(
+            category__type=TransactionCategory.TYPE_INCOME,
+            record_type=FinancialRecord.RECORD_TYPE_TRANSACTION
+        ).aggregate(total=Sum('amount'))['total'] or 0
         
         context['total_billed'] = total_billed
         context['total_received'] = total_received
@@ -436,7 +411,7 @@ class PartyCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
     model = Party
     form_class = PartyForm
     template_name = 'ledger/party_form.html'
-    permission_required = 'ledger.add_financialrecord' # Using existing permission for now
+    permission_required = 'ledger.add_financialrecord'
     
     def get_success_url(self):
         return reverse_lazy('party-detail', kwargs={'pk': self.object.pk})
@@ -452,7 +427,7 @@ class PartyUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
     model = Party
     form_class = PartyForm
     template_name = 'ledger/party_form.html'
-    permission_required = 'ledger.change_financialrecord' # Using existing permission for now
+    permission_required = 'ledger.change_financialrecord'
     
     def get_success_url(self):
         return reverse_lazy('party-detail', kwargs={'pk': self.object.pk})
@@ -467,7 +442,7 @@ class PartyDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
     """
     model = Party
     template_name = 'ledger/party_confirm_delete.html'
-    permission_required = 'ledger.delete_financialrecord' # Using existing permission for now
+    permission_required = 'ledger.delete_financialrecord'
     success_url = reverse_lazy('party-list')
     
     def delete(self, request, *args, **kwargs):
@@ -500,7 +475,7 @@ class AccountCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView)
     model = Account
     form_class = AccountForm
     template_name = 'ledger/account_form.html'
-    permission_required = 'ledger.add_financialrecord' # Using existing permission
+    permission_required = 'ledger.add_financialrecord'
     success_url = reverse_lazy('account-list')
     
     def form_valid(self, form):
@@ -549,30 +524,29 @@ class AccountDetailView(LoginRequiredMixin, BaseLedgerPermissionMixin, DetailVie
 
 
 from django.http import JsonResponse
-from trips.models import TripLeg
 
 @login_required
-def get_party_unpaid_legs(request):
+def get_party_unpaid_trips(request):
     """
-    AJAX endpoint to get unpaid/partial legs for a party
+    AJAX endpoint to get unpaid/partial trips for a party
     """
     party_id = request.GET.get('party_id')
     if not party_id:
-        return JsonResponse({'legs': []})
+        return JsonResponse({'trips': []})
     
     try:
-        legs = TripLeg.objects.filter(
+        trips = Trip.objects.with_payment_info().filter(
             party_id=party_id
         ).exclude(
-            payment_status=TripLeg.PAYMENT_STATUS_PAID
+            annotated_status=Trip.PAYMENT_STATUS_PAID
         ).order_by('date')
         
         data = [{
-            'id': leg.id,
-            'label': f"{leg.date.strftime('%d/%m/%Y')} - {leg.pickup_location} to {leg.delivery_location} (Bal: ${leg.outstanding_balance:.2f})",
-            'balance': float(leg.outstanding_balance)
-        } for leg in legs]
+            'id': trip.id,
+            'label': f"{trip.date.strftime('%d/%m/%Y')} - {trip.vehicle.registration_plate} (Bal: ${trip.outstanding_balance:.2f})",
+            'balance': float(trip.outstanding_balance)
+        } for trip in trips]
         
-        return JsonResponse({'legs': data})
+        return JsonResponse({'trips': data})
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)

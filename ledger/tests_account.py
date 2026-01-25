@@ -2,7 +2,7 @@ from django.test import TestCase, Client
 from django.contrib.auth.models import User, Permission
 from django.urls import reverse
 from django.utils import timezone
-from .models import Account, FinancialRecord, Party
+from .models import Account, FinancialRecord, Party, TransactionCategory
 
 class AccountTest(TestCase):
     def setUp(self):
@@ -23,6 +23,10 @@ class AccountTest(TestCase):
         
         # Create Party
         self.party = Party.objects.create(name='Test Party')
+        
+        # Create categories
+        self.income_cat = TransactionCategory.objects.create(name='Freight Income', type=TransactionCategory.TYPE_INCOME)
+        self.expense_cat = TransactionCategory.objects.create(name='Fuel Expense', type=TransactionCategory.TYPE_EXPENSE)
         
         self.client = Client()
         self.client.login(username='manager', password='password')
@@ -49,10 +53,9 @@ class AccountTest(TestCase):
         # Add Income Record linked to Account
         FinancialRecord.objects.create(
             date=timezone.now().date(),
-            category=FinancialRecord.CATEGORY_FREIGHT_INCOME,
-            amount=500,
             account=self.account,
-            party=self.party,
+            category=self.income_cat,
+            amount=500,
             recorded_by=self.user
         )
         
@@ -68,9 +71,9 @@ class AccountTest(TestCase):
         # Add Expense Record linked to Account
         FinancialRecord.objects.create(
             date=timezone.now().date(),
-            category=FinancialRecord.CATEGORY_FUEL_EXPENSE,
-            amount=200,
             account=self.account,
+            category=self.expense_cat,
+            amount=200,
             recorded_by=self.user
         )
         

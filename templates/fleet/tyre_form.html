@@ -1,0 +1,105 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if object %}Edit Tyre{% else %}Add Tyre{% endif %}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card shadow-sm">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0">{% if object %}Edit Tyre: {{ object.serial_number }}{% else %}Add New Tyre to Inventory{% endif %}</h4>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    <div class="row g-3">
+                        <div class="col-md-12">
+                            <label class="form-label">Serial Number (Unique)</label>
+                            {{ form.serial_number }}
+                            {% if form.serial_number.errors %}<div class="text-danger small">{{ form.serial_number.errors }}</div>{% endif %}
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label">Brand</label>
+                            {{ form.brand }}
+                            <datalist id="tyre_brand_list"></datalist>
+                            {% if form.brand.errors %}<div class="text-danger small">{{ form.brand.errors }}</div>{% endif %}
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label">Size</label>
+                            {{ form.size }}
+                            <datalist id="tyre_size_list"></datalist>
+                            {% if form.size.errors %}<div class="text-danger small">{{ form.size.errors }}</div>{% endif %}
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label">Purchase Date</label>
+                            {{ form.purchase_date }}
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label">Purchase Cost</label>
+                            {{ form.purchase_cost }}
+                        </div>
+
+                        <div class="col-md-12">
+                            <hr class="my-2">
+                            <h6 class="text-muted">Current Location (Optional)</h6>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label">Status</label>
+                            {{ form.status }}
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label">Assigned Vehicle</label>
+                            {{ form.current_vehicle }}
+                        </div>
+
+                        <div class="col-md-12">
+                            <label class="form-label">Position</label>
+                            {{ form.current_position }}
+                        </div>
+
+                        <div class="col-md-12">
+                            <label class="form-label">Notes</label>
+                            {{ form.notes }}
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-end gap-2 mt-4">
+                        <a href="{% url 'tyre-list' %}" class="btn btn-outline-secondary">Cancel</a>
+                        <button type="submit" class="btn btn-primary">Save Tyre</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    // Generic Autocomplete for Tyre Fields
+    $('[data-autocomplete]').on('input', function() {
+        const field = $(this).data('autocomplete');
+        const listId = $(this).attr('list');
+        const q = $(this).val();
+        
+        if (q.length < 2) return;
+        
+        $.get('{% url "autocomplete-suggestions" %}', { field: field, q: q }, function(data) {
+            const datalist = $('#' + listId);
+            datalist.empty();
+            data.results.forEach(item => {
+                datalist.append(`<option value="${item}">`);
+            });
+        });
+    });
+});
+</script>
+{% endblock %}

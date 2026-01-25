@@ -2,9 +2,10 @@ from django.test import TestCase, Client
 from django.contrib.auth.models import User, Permission
 from django.urls import reverse
 from django.utils import timezone
-from .models import Party, FinancialRecord
-from trips.models import Trip, TripLeg
+from .models import Party, FinancialRecord, TransactionCategory
+from trips.models import Trip
 from fleet.models import Vehicle
+from drivers.models import Driver
 
 class PartyViewTest(TestCase):
     def setUp(self):
@@ -16,6 +17,13 @@ class PartyViewTest(TestCase):
         perm_change = Permission.objects.get(codename='change_financialrecord')
         self.user.user_permissions.add(perm_add, perm_change)
         
+        self.driver_profile = Driver.objects.create(
+            user=self.user,
+            employee_id='D001',
+            license_number='LIC123',
+            phone_number='1234567890'
+        )
+
         # Create Party
         self.party = Party.objects.create(
             name='Test Party',
@@ -31,24 +39,22 @@ class PartyViewTest(TestCase):
             status=Vehicle.STATUS_ACTIVE
         )
         
-        # Create Trip
+        # Create Trip (Revenue = 10 * 100 = 1000)
         self.trip = Trip.objects.create(
-            driver=self.user,
+            driver=self.driver_profile,
             vehicle=self.vehicle,
+            party=self.party,
+            weight=10,
+            rate_per_ton=100,
+            date=timezone.now(),
             status=Trip.STATUS_IN_PROGRESS,
             created_by=self.user
         )
         
-        # Create Leg (Revenue = 10 * 100 = 1000)
-        self.leg = TripLeg.objects.create(
-            trip=self.trip,
-            party=self.party,
-            pickup_location='A',
-            delivery_location='B',
-            weight=10,
-            price_per_ton=100,
-            date=timezone.now()
-        )
+        # Create categories
+        self.income_cat = TransactionCategory.objects.create(name='Freight Income', type=TransactionCategory.TYPE_INCOME)
+        self.payment_cat = TransactionCategory.objects.create(name='Party Payment', type=TransactionCategory.TYPE_INCOME)
+        self.expense_cat = TransactionCategory.objects.create(name='Fuel Expense', type=TransactionCategory.TYPE_EXPENSE)
         
         self.client = Client()
         self.client.login(username='manager', password='password')
@@ -93,15 +99,15 @@ class PartyViewTest(TestCase):
         self.party.refresh_from_db()
         self.assertEqual(self.party.name, 'Updated Party Name')
         
-    def test_financial_record_create_with_legs_auto_populates_trip(self):
+    def test_financial_record_create_updates_trip_status(self):
         url = reverse('financialrecord-create')
         data = {
             'date': timezone.now().date(),
             'party': self.party.pk,
-            'category': FinancialRecord.CATEGORY_FREIGHT_INCOME,
+            'category': self.income_cat.id,
             'amount': 1000,
             'description': 'Test Income',
-            'associated_legs': [self.leg.pk]
+            'associated_trip': self.trip.pk
         }
         response = self.client.post(url, data)
         self.assertEqual(response.status_code, 302)
@@ -109,10 +115,13 @@ class PartyViewTest(TestCase):
         record = FinancialRecord.objects.filter(description='Test Income').first()
         self.assertIsNotNone(record)
         self.assertEqual(record.associated_trip, self.trip)
-        self.assertIn(self.leg, record.associated_legs.all())
+        
+        self.trip.refresh_from_db()
+        self.assertEqual(self.trip.amount_received, 1000)
+        self.assertEqual(self.trip.payment_status, Trip.PAYMENT_STATUS_PAID)
 
     def test_party_balance_calculation(self):
-        # Initial state: Leg created with 1000 revenue. No payments.
+        # Initial state: Trip created with 1000 revenue. No payments.
         url = reverse('party-detail', args=[self.party.pk])
         response = self.client.get(url)
         self.assertEqual(response.context['total_billed'], 1000)
@@ -122,7 +131,7 @@ class PartyViewTest(TestCase):
         # Make a payment of 500
         FinancialRecord.objects.create(
             date=timezone.now().date(),
-            category=FinancialRecord.CATEGORY_PARTY_PAYMENT,
+            category=self.payment_cat,
             amount=500,
             party=self.party,
             recorded_by=self.user
@@ -135,7 +144,7 @@ class PartyViewTest(TestCase):
 
     def test_party_list_balance(self):
         # Setup: Party has 1000 revenue, 0 paid. Balance should be 1000.
-        # leg created in setUp has 1000 revenue.
+        # trip created in setUp has 1000 revenue.
         
         url = reverse('party-list')
         response = self.client.get(url)
@@ -151,7 +160,7 @@ class PartyViewTest(TestCase):
         # Add payment
         FinancialRecord.objects.create(
             date=timezone.now().date(),
-            category=FinancialRecord.CATEGORY_PARTY_PAYMENT,
+            category=self.payment_cat,
             amount=500,
             party=self.party,
             recorded_by=self.user

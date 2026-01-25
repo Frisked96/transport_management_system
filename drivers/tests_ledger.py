@@ -3,7 +3,7 @@ from django.contrib.auth.models import User, Permission, Group
 from django.urls import reverse
 from django.utils import timezone
 from .models import Driver
-from ledger.models import FinancialRecord, Party
+from ledger.models import FinancialRecord, Party, TransactionCategory
 
 class DriverLedgerTest(TestCase):
     def setUp(self):
@@ -35,13 +35,19 @@ class DriverLedgerTest(TestCase):
         self.assertContains(response, 'Ledger:')
         
     def test_financial_record_appears_in_ledger(self):
+        # Create category
+        category = TransactionCategory.objects.create(
+            name='Driver Payment',
+            type=TransactionCategory.TYPE_EXPENSE
+        )
+
         # Create a financial record for the driver
         FinancialRecord.objects.create(
             date=timezone.now().date(),
-            category=FinancialRecord.CATEGORY_DRIVER_PAYMENT,
+            category=category,
             amount=500,
             description='Test Payment',
-            driver=self.user, # Link to driver user
+            driver=self.driver_profile, # Link to driver profile
             recorded_by=self.manager
         )
         

@@ -27,6 +27,11 @@ class DriverForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        
+        # Add Bootstrap classes
+        for field in self.fields.values():
+            field.widget.attrs.update({'class': 'form-control'})
+            
         if self.instance.pk:
             # Populate user fields if updating
             self.fields['username'].initial = self.instance.user.username
@@ -78,6 +83,14 @@ class DriverTransactionForm(forms.ModelForm):
         widgets = {
             'date': forms.DateInput(attrs={'type': 'date'}),
         }
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field_name, field in self.fields.items():
+            if field_name == 'transaction_type':
+                field.widget.attrs.update({'class': 'form-select'})
+            else:
+                field.widget.attrs.update({'class': 'form-control'})
 
     def save(self, commit=True):
         instance = super().save(commit=False)

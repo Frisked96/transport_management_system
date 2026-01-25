@@ -1,19 +1,21 @@
 """
 Views for Trips application with permission checks
 """
-from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView
+from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView, FormView
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.contrib import messages
-from django.db import models
-from django.db.models import Q, Min
-from django.db.models.functions import Coalesce
+from django.db import models, transaction
+from django.db.models import Q, Min, Sum
 from django.utils import timezone
+from datetime import datetime, timedelta
 
-from .models import Trip, TripLeg, TripExpense
-from .forms import TripForm, TripStatusForm, TripLegForm, TripExpenseUpdateForm, TripCustomExpenseForm
+from .models import Trip, TripExpense
+from .forms import TripForm, TripStatusForm, TripExpenseUpdateForm, TripCustomExpenseForm, TripExpenseFormSet
+from fleet.models import Vehicle
+from ledger.models import FinancialRecord, TransactionCategory
 
 
 class BaseTripPermissionMixin:
@@ -53,45 +55,65 @@ class BaseTripPermissionMixin:
 
 class TripListView(LoginRequiredMixin, BaseTripPermissionMixin, ListView):
     """
-    List view for trips with permission-based filtering
+    List view for trips, organized by Date (Page).
+    One date per page.
     """
     model = Trip
     template_name = 'trips/trip_list.html'
     context_object_name = 'trips'
-    paginate_by = 20
+    paginate_by = None # Disable standard pagination as we use date pagination
     
     def get_queryset(self):
-        """Filter trips based on user permissions"""
-        queryset = self.get_queryset_for_user()
+        """Filter trips based on date and user permissions"""
+        queryset = self.get_queryset_for_user().select_related('vehicle', 'party', 'driver')
+        
+        # Date filtering
+        date_str = self.request.GET.get('date')
+        if date_str:
+            try:
+                self.view_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+            except ValueError:
+                self.view_date = timezone.now().date()
+        else:
+            self.view_date = timezone.now().date()
+
+        # Filter by the specific date
+        queryset = queryset.filter(date__date=self.view_date)
         
         # Search functionality
         search = self.request.GET.get('search')
         if search:
             queryset = queryset.filter(
                 Q(trip_number__icontains=search) |
-                Q(legs__party__name__icontains=search) |
-                Q(legs__pickup_location__icontains=search) |
-                Q(legs__delivery_location__icontains=search)
+                Q(party__name__icontains=search) |
+                Q(pickup_location__icontains=search) |
+                Q(delivery_location__icontains=search) |
+                Q(vehicle__registration_plate__icontains=search)
             ).distinct()
         
         # Status filter
         status = self.request.GET.get('status')
         if status:
             queryset = queryset.filter(status=status)
-        
-        # Annotate with effective date for grouping
-        # Use the first leg's date, fallback to created_at
-        queryset = queryset.annotate(
-            effective_date=Coalesce(Min('legs__date'), 'created_at')
-        )
-        
-        return queryset.order_by('-effective_date', '-created_at')
+            
+        return queryset.order_by('-created_at')
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['status_choices'] = Trip.STATUS_CHOICES
         context['current_status'] = self.request.GET.get('status', '')
         context['search_term'] = self.request.GET.get('search', '')
+        
+        # Date Navigation
+        context['view_date'] = self.view_date
+        context['previous_date'] = self.view_date - timedelta(days=1)
+        context['next_date'] = self.view_date + timedelta(days=1)
+        context['today'] = timezone.now().date()
+        
+        # Summary for the day
+        trips = context['trips']
+        context['total_weight'] = trips.aggregate(Sum('weight'))['weight__sum'] or 0
+        
         return context
 
 
@@ -108,32 +130,121 @@ class TripDetailView(LoginRequiredMixin, BaseTripPermissionMixin, DetailView):
         return self.get_queryset_for_user()
 
 
+from django.db import models, transaction
+from .forms import TripForm, TripStatusForm, TripExpenseUpdateForm, TripCustomExpenseForm, TripExpenseFormSet
+
+# ... (Previous imports remain same)
+
+class TripMapView(LoginRequiredMixin, BaseTripPermissionMixin, ListView):
+    """
+    View to display trips on a map for a selected date range.
+    """
+    model = Trip
+    template_name = 'trips/trip_map.html'
+    context_object_name = 'trips'
+    
+    def get_queryset(self):
+        """Filter trips based on date range and valid coordinates"""
+        queryset = self.get_queryset_for_user()
+        
+        # Date filtering
+        start_date_str = self.request.GET.get('start_date')
+        end_date_str = self.request.GET.get('end_date')
+        
+        today = timezone.now().date()
+        
+        if start_date_str:
+            self.start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+        else:
+            self.start_date = today - timedelta(days=30) # Default last 30 days
+            
+        if end_date_str:
+            self.end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+        else:
+            self.end_date = today
+
+        queryset = queryset.filter(
+            date__date__range=[self.start_date, self.end_date],
+            pickup_lat__isnull=False,
+            pickup_lng__isnull=False,
+            delivery_lat__isnull=False,
+            delivery_lng__isnull=False
+        )
+            
+        return queryset
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['start_date'] = self.start_date
+        context['end_date'] = self.end_date
+        
+        # Serialize trip data for JS
+        trips_data = []
+        for trip in context['trips']:
+            trips_data.append({
+                'trip_number': trip.trip_number,
+                'vehicle': trip.vehicle.registration_plate,
+                'driver': str(trip.driver) if trip.driver else 'Unassigned',
+                'date': trip.date.strftime('%Y-%m-%d'),
+                'start': [float(trip.pickup_lat), float(trip.pickup_lng)],
+                'end': [float(trip.delivery_lat), float(trip.delivery_lng)],
+                'pickup_name': trip.pickup_location,
+                'delivery_name': trip.delivery_location,
+                'url': str(reverse_lazy('trip-detail', kwargs={'pk': trip.pk}))
+            })
+        context['trips_json'] = trips_data
+        return context
+
+
 class TripCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
     """
-    Create view for new trips
-    Permission: Only admin and manager can create trips
+    Create view for new trips.
+    Inherits date from the context (GET param).
     """
     model = Trip
     form_class = TripForm
     template_name = 'trips/trip_form.html'
     permission_required = 'trips.add_trip'
     
+    def get_initial(self):
+        initial = super().get_initial()
+        # You could prepopulate date here if the form had a date field, 
+        # but we are handling it in form_valid
+        return initial
+
+    def form_invalid(self, form):
+        print("Trip Create Form Invalid!")
+        print(form.errors)
+        return super().form_invalid(form)
+
     def form_valid(self, form):
-        """Set created_by field"""
+        """Set created_by and date fields"""
         form.instance.created_by = self.request.user
+        
+        # Set date from GET param if available, else today
+        date_str = self.request.GET.get('date')
+        if date_str:
+            try:
+                trip_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+                # Set time to current time for ordering, but date is fixed
+                current_time = timezone.now().time()
+                form.instance.date = datetime.combine(trip_date, current_time)
+            except ValueError:
+                form.instance.date = timezone.now()
+        else:
+            form.instance.date = timezone.now()
+
         messages.success(self.request, 'Trip created successfully!')
         return super().form_valid(form)
     
     def get_success_url(self):
-        return reverse_lazy('trip-detail', kwargs={'pk': self.object.pk})
+        # Redirect back to the trip list for the same date
+        return reverse_lazy('trip-list') + f"?date={self.object.date.strftime('%Y-%m-%d')}"
 
 
 class TripUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
     """
     Update view for existing trips
-    Permission: Admin and manager can update all fields
-    Supervisor can only update status
-    Driver cannot update trips (except status via separate view)
     """
     model = Trip
     form_class = TripForm
@@ -148,90 +259,100 @@ class TripUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
         return reverse_lazy('trip-detail', kwargs={'pk': self.object.pk})
 
 
+class TripExpenseManageView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+    """
+    View to manage ALL expenses for a trip (Fixed + Custom) using FormSets
+    """
+    model = Trip
+    fields = [] # We only use the formset
+    template_name = 'trips/trip_expense_manage.html'
+    permission_required = 'trips.change_trip'
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        if self.request.POST:
+            context['expense_formset'] = TripExpenseFormSet(self.request.POST, instance=self.object, prefix='custom_expenses')
+        else:
+            context['expense_formset'] = TripExpenseFormSet(instance=self.object, prefix='custom_expenses')
+        return context
+    
+    def form_valid(self, form):
+        context = self.get_context_data()
+        expense_formset = context['expense_formset']
+        
+        if expense_formset.is_valid():
+            with transaction.atomic():
+                expense_formset.save()
+            messages.success(self.request, 'Trip expenses updated successfully!')
+            return redirect(self.get_success_url())
+        else:
+            return self.render_to_response(self.get_context_data(form=form))
+
+    def get_success_url(self):
+        return reverse_lazy('trip-detail', kwargs={'pk': self.object.pk})
+
+
 class TripDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
     """
     Delete view for trips
-    Permission: Only admin can delete trips
     """
     model = Trip
     template_name = 'trips/trip_confirm_delete.html'
     permission_required = 'trips.delete_trip'
-    success_url = reverse_lazy('trip-list')
+    
+    def get_success_url(self):
+        return reverse_lazy('trip-list') + f"?date={self.object.date.strftime('%Y-%m-%d')}"
     
     def delete(self, request, *args, **kwargs):
         messages.success(self.request, 'Trip deleted successfully!')
         return super().delete(request, *args, **kwargs)
 
 
-class TripLegCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
-    """
-    View to add a leg to a trip
-    """
-    model = TripLeg
-    form_class = TripLegForm
-    template_name = 'trips/trip_leg_form.html'
-    permission_required = 'trips.change_trip'
-
-    def dispatch(self, request, *args, **kwargs):
-        self.trip = get_object_or_404(Trip, pk=kwargs['trip_pk'])
-        return super().dispatch(request, *args, **kwargs)
-
-    def form_valid(self, form):
-        form.instance.trip = self.trip
-        messages.success(self.request, 'Trip Leg added successfully!')
-        return super().form_valid(form)
-
-    def get_success_url(self):
-        return reverse_lazy('trip-detail', kwargs={'pk': self.trip.pk})
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['trip'] = self.trip
-        return context
-
-
-class TripLegUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
-    """
-    Update view for trip legs
-    """
-    model = TripLeg
-    form_class = TripLegForm
-    template_name = 'trips/trip_leg_form.html'
-    permission_required = 'trips.change_trip'
-
-    def get_success_url(self):
-        return reverse_lazy('trip-detail', kwargs={'pk': self.object.trip.pk})
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['trip'] = self.object.trip
-        return context
-
-
-class TripLegDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
-    """
-    Delete view for trip legs
-    """
-    model = TripLeg
-    template_name = 'trips/trip_leg_confirm_delete.html'
-    permission_required = 'trips.change_trip'
-
-    def get_success_url(self):
-        return reverse_lazy('trip-detail', kwargs={'pk': self.object.trip.pk})
-
-
-class TripExpenseUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+class TripExpenseUpdateView(LoginRequiredMixin, PermissionRequiredMixin, FormView):
     """
     View to update fixed trip expenses (diesel, toll)
     """
-    model = Trip
-    form_class = TripExpenseUpdateForm
     template_name = 'trips/trip_expense_form.html'
+    form_class = TripExpenseUpdateForm
     permission_required = 'trips.change_trip'
     
-    def get_success_url(self):
+    def get_initial(self):
+        trip = get_object_or_404(Trip, pk=self.kwargs['pk'])
+        initial = {}
+        diesel = TripExpense.objects.filter(trip=trip, name='Diesel').first()
+        if diesel:
+            initial['diesel_expense'] = diesel.amount
+        toll = TripExpense.objects.filter(trip=trip, name='Toll').first()
+        if toll:
+            initial['toll_expense'] = toll.amount
+        return initial
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['trip'] = get_object_or_404(Trip, pk=self.kwargs['pk'])
+        return context
+
+    def form_valid(self, form):
+        trip = get_object_or_404(Trip, pk=self.kwargs['pk'])
+        diesel_amount = form.cleaned_data.get('diesel_expense') or 0
+        toll_amount = form.cleaned_data.get('toll_expense') or 0
+
+        # Update or create Diesel
+        TripExpense.objects.update_or_create(
+            trip=trip,
+            name='Diesel',
+            defaults={'amount': diesel_amount}
+        )
+
+        # Update or create Toll
+        TripExpense.objects.update_or_create(
+            trip=trip,
+            name='Toll',
+            defaults={'amount': toll_amount}
+        )
+
         messages.success(self.request, 'Trip expenses updated successfully!')
-        return reverse_lazy('trip-detail', kwargs={'pk': self.object.pk})
+        return redirect('trip-detail', pk=trip.pk)
 
 
 class TripCustomExpenseCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
@@ -278,9 +399,6 @@ class TripCustomExpenseDeleteView(LoginRequiredMixin, PermissionRequiredMixin, D
 def update_trip_status(request, pk):
     """
     Dedicated view for updating trip status
-    - Drivers can only update their own trips
-    - Supervisors can update any trip status
-    - Uses separate form for status-only updates
     """
     trip = get_object_or_404(Trip, pk=pk)
     
@@ -308,7 +426,6 @@ def update_trip_status(request, pk):
             old_status = trip.status
             form.save()
             
-            # Log the status change
             messages.success(
                 request, 
                 f'Trip status updated from "{old_status}" to "{trip.status}" successfully!'
@@ -323,9 +440,6 @@ def update_trip_status(request, pk):
     })
 
 
-
-
-
 @login_required
 def manager_dashboard(request):
     """
@@ -337,16 +451,12 @@ def manager_dashboard(request):
         messages.error(request, 'Access denied. Manager dashboard is only for managers.')
         return redirect('trip-list')
     
-    from fleet.models import Vehicle, MaintenanceLog
-    from ledger.models import FinancialRecord
-    
     # Active trips
     active_trips = Trip.objects.filter(
         status=Trip.STATUS_IN_PROGRESS
     ).count()
     
     # Completed trips this month
-    from datetime import datetime
     current_month = timezone.now().month
     current_year = timezone.now().year
     
@@ -357,7 +467,6 @@ def manager_dashboard(request):
     ).count()
     
     # Vehicles due for maintenance (next service due within 7 days)
-    from datetime import timedelta
     seven_days_later = timezone.now().date() + timedelta(days=7)
     
     vehicles_due_maintenance = Vehicle.objects.filter(
@@ -365,21 +474,14 @@ def manager_dashboard(request):
     ).distinct().count()
     
     # Recent financial summary
-    # Income this month
     income_this_month = FinancialRecord.objects.filter(
-        category=FinancialRecord.CATEGORY_FREIGHT_INCOME,
+        category__type=TransactionCategory.TYPE_INCOME,
         date__month=current_month,
         date__year=current_year
     ).aggregate(total=models.Sum('amount'))['total'] or 0
     
-    # Expenses this month
     expenses_this_month = FinancialRecord.objects.filter(
-        category__in=[
-            FinancialRecord.CATEGORY_FUEL_EXPENSE,
-            FinancialRecord.CATEGORY_MAINTENANCE_EXPENSE,
-            FinancialRecord.CATEGORY_DRIVER_PAYMENT,
-            FinancialRecord.CATEGORY_OTHER
-        ],
+        category__type=TransactionCategory.TYPE_EXPENSE,
         date__month=current_month,
         date__year=current_year
     ).aggregate(total=models.Sum('amount'))['total'] or 0
@@ -404,3 +506,53 @@ def manager_dashboard(request):
     }
     
     return render(request, 'trips/manager_dashboard.html', context)
+
+
+
+from django.http import JsonResponse
+
+from fleet.models import Vehicle, Tyre
+
+
+@login_required
+def get_autocomplete_suggestions(request):
+    """
+    Returns suggestions for Select2.
+    Now optimized to return ONLY Local History (Fast).
+    External Map results are handled client-side.
+    """
+    field = request.GET.get('field') # 'pickup_location' or 'delivery_location'
+    term = request.GET.get('term', '') # Select2 uses 'term' for the search query
+    
+    results = []
+    
+    # 1. Handle Location Fields (Pickup/Delivery)
+    if field in ['pickup_location', 'delivery_location']:
+        seen_names = set()
+        
+        # Local History (Fast)
+        # Search distinct locations from previous trips
+        query_filter = {f"{field}__icontains": term} if term else {}
+        local_qs = Trip.objects.filter(**query_filter).values_list(field, flat=True).distinct().order_by(field)[:10]
+        
+        for name in local_qs:
+            if name and name not in seen_names:
+                results.append({
+                    'id': name,
+                    'text': f"🕒 {name}", # Icon to indicate history
+                    'source': 'history'
+                })
+                seen_names.add(name)
+
+    # 2. Handle Other Fields (Legacy support)
+    elif field == 'expense_name':
+        qs = TripExpense.objects.filter(name__icontains=term).values_list('name', flat=True).distinct()[:10]
+        results = [{'id': x, 'text': x} for x in qs]
+    elif field == 'tyre_brand':
+        qs = Tyre.objects.filter(brand__icontains=term).values_list('brand', flat=True).distinct()[:10]
+        results = [{'id': x, 'text': x} for x in qs]
+    elif field == 'tyre_size':
+        qs = Tyre.objects.filter(size__icontains=term).values_list('size', flat=True).distinct()[:10]
+        results = [{'id': x, 'text': x} for x in qs]
+        
+    return JsonResponse({'results': results})

@@ -3,32 +3,36 @@
 {% block title %}{% if object %}Edit{% else %}Add{% endif %} Vehicle - Transport Management System{% endblock %}
 
 {% block content %}
-<h2>{% if object %}Edit Vehicle: {{ object.registration_plate }}{% else %}Add New Vehicle{% endif %}</h2>
+<div class="row justify-content-center">
+    <div class="col-md-8 col-lg-6">
+        <h2 class="mb-4">{% if object %}Edit Vehicle: {{ object.registration_plate }}{% else %}Add New Vehicle{% endif %}</h2>
 
-<form method="post">
-    {% csrf_token %}
-    
-    {% for field in form %}
-        <div class="form-group">
-            {{ field.label_tag }}
-            {{ field }}
-            {% if field.errors %}
-                <div class="error" style="color: #e74c3c; margin-top: 5px;">
-                    {{ field.errors }}
+        <form method="post">
+            {% csrf_token %}
+            
+            {% for field in form %}
+                <div class="mb-3">
+                    <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
+                    {{ field }}
+                    {% if field.errors %}
+                        <div class="invalid-feedback d-block">
+                            {{ field.errors }}
+                        </div>
+                    {% endif %}
+                    {% if field.help_text %}
+                        <small class="form-text text-muted">{{ field.help_text }}</small>
+                    {% endif %}
                 </div>
-            {% endif %}
-            {% if field.help_text %}
-                <small style="color: #7f8c8d;">{{ field.help_text }}</small>
-            {% endif %}
-        </div>
-    {% endfor %}
-    
-    <div style="margin-top: 1.5rem;">
-        <button type="submit" class="btn btn-success">
-            {% if object %}Update Vehicle{% else %}Add Vehicle{% endif %}
-        </button>
-        <a href="{% if object %}{% url 'vehicle-detail' object.pk %}{% else %}{% url 'vehicle-list' %}{% endif %}" 
-           class="btn" style="margin-left: 1rem;">Cancel</a>
+            {% endfor %}
+            
+            <div class="d-flex justify-content-between align-items-center mt-4">
+                <button type="submit" class="btn btn-success">
+                    {% if object %}Update Vehicle{% else %}Add Vehicle{% endif %}
+                </button>
+                <a href="{% if object %}{% url 'vehicle-detail' object.pk %}{% else %}{% url 'vehicle-list' %}{% endif %}" 
+                   class="btn btn-secondary">Cancel</a>
+            </div>
+        </form>
     </div>
-</form>
+</div>
 {% endblock %}

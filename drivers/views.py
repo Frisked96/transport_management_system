@@ -12,8 +12,8 @@ from django.contrib.auth.models import User
 from .models import Driver, DriverTransaction
 from .forms import DriverForm, DriverTransactionForm
 from fleet.models import Vehicle
-from trips.models import Trip, TripLeg
-from ledger.models import FinancialRecord
+from trips.models import Trip
+from ledger.models import FinancialRecord, TransactionCategory
 
 
 class DriverListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
@@ -45,33 +45,25 @@ class DriverDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
         # Vehicles driven (History)
         # Distinct vehicles from trips assigned to this driver
         context['vehicles_driven'] = Vehicle.objects.filter(
-            trips__driver=driver.user
+            trips__driver=driver
         ).distinct()
 
         # Trips history
-        context['trips'] = Trip.objects.filter(driver=driver.user).order_by('-created_at')
+        context['trips'] = Trip.objects.filter(driver=driver).order_by('-created_at')
 
         # Profit Calculation
-        # 1. Total Revenue: Sum of (Weight * Price) for all legs of trips by this driver
-        total_revenue = TripLeg.objects.filter(
-            trip__driver=driver.user
+        # 1. Total Revenue: Sum of (Weight * Rate per Ton) for all trips by this driver
+        total_revenue = Trip.objects.filter(
+            driver=driver
         ).aggregate(
-            total=Sum(F('weight') * F('price_per_ton'), output_field=DecimalField())
+            total=Sum(F('weight') * F('rate_per_ton'), output_field=DecimalField())
         )['total'] or 0
 
         # 2. Total Expenses
         # FinancialRecords associated with trips by this driver, that are expenses
-        expense_categories = [
-            FinancialRecord.CATEGORY_FUEL_EXPENSE,
-            FinancialRecord.CATEGORY_MAINTENANCE_EXPENSE,
-            FinancialRecord.CATEGORY_DRIVER_PAYMENT,
-            FinancialRecord.CATEGORY_OTHER
-        ]
-
-        # We filter FinancialRecords by the trips assigned to this driver
         total_expenses = FinancialRecord.objects.filter(
-            associated_trip__driver=driver.user,
-            category__in=expense_categories
+            associated_trip__driver=driver,
+            category__type=TransactionCategory.TYPE_EXPENSE
         ).aggregate(total=Sum('amount'))['total'] or 0
 
         context['total_revenue'] = total_revenue
@@ -80,8 +72,8 @@ class DriverDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
 
         # Expenses List (for the panel)
         context['expenses_list'] = FinancialRecord.objects.filter(
-            associated_trip__driver=driver.user,
-            category__in=expense_categories
+            associated_trip__driver=driver,
+            category__type=TransactionCategory.TYPE_EXPENSE
         ).order_by('-date')
 
         # Pocket Transactions
@@ -162,86 +154,13 @@ class DriverLedgerView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        driver_user = self.object.user
+        driver = self.object
         
         # Get all financial records associated with this driver
-        records = FinancialRecord.objects.filter(driver=driver_user).order_by('-date')
+        records = FinancialRecord.objects.filter(driver=driver).order_by('-date')
         context['financial_records'] = records
         
         # Calculate Balance
-        # Logic: 
-        # Positive (Asset/Owe Us): Loans, Advances (Category: Driver Payment?)
-        # Negative (Liability/We Owe): Salary, Allowance (Category: Driver Payment?)
-        # 
-        # Current FinancialRecord Categories:
-        # - FREIGHT_INCOME (Income)
-        # - FUEL_EXPENSE (Expense)
-        # - MAINTENANCE_EXPENSE (Expense)
-        # - DRIVER_PAYMENT (Expense) -> Usually "Cash Out"
-        # - OTHER (Expense)
-        #
-        # If we use "Driver Payment" for "Cash Out" (We paid them):
-        # This reduces our liability (or increases their debt).
-        # So "Driver Payment" records should probably be POSITIVE in the Driver Ledger (They received money).
-        #
-        # But where do we record "Salary Accrual"? 
-        # We might need to use "Other" or assume a starting balance?
-        # Or perhaps we simply treat "Driver Payment" as NEGATIVE (Expense for us) and just show the net?
-        #
-        # User request: "drivers also need to be in negative when we have to pay them"
-        # So: "We owe Driver" = Negative Balance.
-        # "Driver Payment" (Cash Out) = Reduces what we owe = Positive impact on balance.
-        # 
-        # But FinancialRecord 'amount' is just a number.
-        # And 'category' determines if it's income/expense for the COMPANY.
-        # DRIVER_PAYMENT is an EXPENSE for Company.
-        # 
-        # Let's assume:
-        # All FinancialRecords linked to Driver are payments TO the driver (Debit Driver, Credit Cash).
-        # So all these records INCREASE the balance (make it more positive / less negative).
-        #
-        # What decreases the balance (We owe them)?
-        # Currently, the system might not track "Salary Accrual" automatically.
-        # So the balance might just show "Total Paid to Driver".
-        # 
-        # However, `drivers.models.DriverTransaction` exists for "Pocket/Wallet".
-        # It has TYPE_SALARY (Credit +), TYPE_PAYMENT (Debit -).
-        # 
-        # Use Case Conflict:
-        # The user asked for "Driver Ledger" using `FinancialRecord`?
-        # "similarly drivers also need to be in negative when we have to pay them... and positive when they owe us"
-        # 
-        # If I use `FinancialRecord` for this, I only have "Payments".
-        # Unless I add a category "Driver Credit" (Salary/Allowance).
-        # 
-        # Let's stick to what we have:
-        # `DriverTransaction` seems to ALREADY implement this logic!
-        # "Positive: Company owes Driver. Negative: Driver owes Company." (Wait, looking at model docstring)
-        # Docstring says: "Positive: Company owes Driver."
-        # User wants: "negative when we have to pay them" (Company owes Driver).
-        # So User wants NEGATIVE = Company owes Driver.
-        # Existing Model `DriverTransaction` says POSITIVE = Company owes Driver.
-        # 
-        # I should probably just use the existing `DriverTransaction` system but flip the sign display?
-        # OR, the user is asking for `FinancialRecord` integration.
-        # 
-        # Let's integrate `FinancialRecord` into the `DriverLedgerView` but primarily rely on `DriverTransaction` logic if it's robust?
-        # NO, the user request implies `FinancialRecord` context ("making ledger entry...").
-        #
-        # Let's calculate balance from `FinancialRecord` linked to Driver.
-        # Assume these are PAYMENTS (Money given to driver).
-        # To make sense of "Balance", we need the "Accrual" side.
-        # 
-        # For now, I will just sum the `FinancialRecords` (Payments) as POSITIVE (Money given).
-        # And I will mention in the template that this is "Total Payments".
-        # 
-        # WAIT, if I want to support "Negative (We owe them)", I need to record "Salary Due".
-        # Can I use `FinancialRecord` with negative amount?
-        # Or a new category?
-        # 
-        # Let's just list the records for now and sum them.
-        # I will assume records with `driver` set are payments/advances (Money to Driver).
-        
         total_payments = records.aggregate(total=Sum('amount'))['total'] or 0
         context['balance'] = total_payments
         

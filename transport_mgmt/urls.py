@@ -23,6 +23,7 @@ urlpatterns = [
     path('fleet/', include('fleet.urls')),
     path('ledger/', include('ledger.urls')),
     path('drivers/', include('drivers.urls')),
+    path('documents/', include('documents.urls')),
     
     # Dashboard URLs
     path('manager/', include('trips.urls_manager')),

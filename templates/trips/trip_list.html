@@ -1,257 +1,204 @@
 {% extends 'base.html' %}
 
-{% block title %}Trips Logbook - Transport Management System{% endblock %}
+{% block title %}Daily Trip Log - {{ view_date|date:"F d, Y" }}{% endblock %}
 
 {% block content %}
-<style>
-    .logbook-day {
-        background: #fff;
-        border: 1px solid #ddd;
-        margin-bottom: 2rem;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        border-radius: 4px;
-        overflow: hidden;
-    }
-    
-    .day-header {
-        background: #f8f9fa;
-        padding: 1rem;
-        margin: 0;
-        border-bottom: 2px solid #e9ecef;
-        font-size: 1.2rem;
-        color: #2c3e50;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-
-    .trip-entry {
-        border-bottom: 1px solid #eee;
-        padding: 0;
-    }
-    
-    .trip-entry:last-child {
-        border-bottom: none;
-    }
-
-    .trip-summary {
-        background: #fff;
-        padding: 1rem;
-        display: grid;
-        grid-template-columns: 1fr 1fr 1fr 1fr auto;
-        gap: 1rem;
-        align-items: center;
-        cursor: pointer;
-        transition: background-color 0.2s;
-    }
-
-    .trip-summary:hover {
-        background-color: #f8f9fa;
-    }
-
-    .trip-details {
-        padding: 0 1rem 1rem 1rem;
-        background: #fafafa;
-        border-top: 1px dashed #ddd;
-    }
-
-    .legs-table {
-        width: 100%;
-        margin-top: 0.5rem;
-        font-size: 0.9rem;
-        border-collapse: collapse;
-    }
-
-    .legs-table th {
-        text-align: left;
-        padding: 0.5rem;
-        border-bottom: 1px solid #ddd;
-        color: #666;
-        font-weight: 600;
-    }
-
-    .legs-table td {
-        padding: 0.5rem;
-        border-bottom: 1px solid #eee;
-    }
-    
-    .trip-number {
-        font-weight: bold;
-        color: #2c3e50;
-    }
-    
-    .trip-stats {
-        font-size: 0.85rem;
-        color: #7f8c8d;
-    }
-
-    .toggle-icon {
-        transition: transform 0.3s;
-    }
-    
-    .expanded .toggle-icon {
-        transform: rotate(180deg);
-    }
-</style>
-
-<div class="clearfix mb-1">
-    <h2 style="float: left;">Trips Logbook</h2>
-    
-    {% if perms.trips.add_trip %}
-        <a href="{% url 'trip-create' %}" class="btn btn-success" style="float: right;">+ Add New Trip</a>
-    {% endif %}
+<div class="row mb-3 align-items-center">
+    <div class="col-4 text-start">
+        <a href="?date={{ previous_date|date:'Y-m-d' }}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-chevron-left"></i> <span class="d-none d-sm-inline">{{ previous_date|date:"M d" }}</span>
+        </a>
+    </div>
+    <div class="col-4 text-center">
+        <h4 class="mb-0 d-md-none">{{ view_date|date:"M d, Y" }}</h4>
+        <h2 class="mb-0 d-none d-md-block">{{ view_date|date:"l, F d, Y" }}</h2>
+        {% if view_date != today %}
+        <a href="?date={{ today|date:'Y-m-d' }}" class="btn btn-sm btn-link text-decoration-none">Go to Today</a>
+        {% endif %}
+    </div>
+    <div class="col-4 text-end">
+        <a href="?date={{ next_date|date:'Y-m-d' }}" class="btn btn-outline-secondary btn-sm">
+            <span class="d-none d-sm-inline">{{ next_date|date:"M d" }}</span> <i class="bi bi-chevron-right"></i>
+        </a>
+    </div>
 </div>
 
-<!-- Search and Filter -->
-<form method="get" class="mb-2" style="background: #f8f9fa; padding: 1rem; border-radius: 4px;">
-    <div style="display: flex; gap: 1rem; align-items: end; flex-wrap: wrap;">
-        <div style="flex: 1; min-width: 200px;">
-            <label for="search" style="display: block; margin-bottom: 0.5rem;">Search:</label>
-            <input type="text" id="search" name="search" value="{{ search_term }}" 
-                   placeholder="Trip #, Client, Location..." style="width: 100%; padding: 0.5rem;">
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <!-- Optional: Date Picker to jump -->
+        <form method="get" class="d-inline-block">
+            <div class="input-group input-group-sm">
+                <input type="date" name="date" class="form-control" value="{{ view_date|date:'Y-m-d' }}">
+                <button class="btn btn-outline-secondary" type="submit">Go</button>
+            </div>
+        </form>
+    </div>
+    <div>
+        <a href="{% url 'trip-map' %}" class="btn btn-outline-info me-2">
+            <i class="bi bi-map"></i> <span class="d-none d-sm-inline">Map View</span>
+        </a>
+        {% if perms.trips.add_trip %}
+        <a href="{% url 'trip-create' %}?date={{ view_date|date:'Y-m-d' }}" class="btn btn-success">
+            <i class="bi bi-plus-lg"></i> <span class="d-none d-sm-inline">Add Trip for {{ view_date|date:"M d" }}</span><span class="d-sm-none">Add Trip</span>
+        </a>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Filters & Search -->
+<div class="card mb-4 border-0 bg-transparent">
+    <form method="get" class="row g-2 align-items-end">
+        <input type="hidden" name="date" value="{{ view_date|date:'Y-m-d' }}">
+        <div class="col-md-5">
+            <label for="search" class="form-label text-muted small text-uppercase fw-bold">Search</label>
+            <div class="input-group">
+                <span class="input-group-text border-end-0"><i class="bi bi-search"></i></span>
+                <input type="text" id="search" name="search" class="form-control border-start-0 ps-0"
+                    value="{{ search_term }}" placeholder="Trip #, Vehicle, Party...">
+            </div>
         </div>
-        
-        <div style="min-width: 150px;">
-            <label for="status" style="display: block; margin-bottom: 0.5rem;">Status:</label>
-            <select id="status" name="status" style="width: 100%; padding: 0.5rem;">
+        <div class="col-md-3">
+            <label for="status" class="form-label text-muted small text-uppercase fw-bold">Status</label>
+            <select id="status" name="status" class="form-select">
                 <option value="">All Statuses</option>
                 {% for value, label in status_choices %}
-                    <option value="{{ value }}" {% if current_status == value %}selected{% endif %}>
-                        {{ label }}
-                    </option>
+                <option value="{{ value }}" {% if current_status == value %}selected{% endif %}>{{ label }}</option>
                 {% endfor %}
             </select>
         </div>
-        
-        <div>
-            <button type="submit" class="btn btn-primary">Filter</button>
-            <a href="{% url 'trip-list' %}" class="btn btn-secondary">Clear</a>
+        <div class="col-md-2">
+            <label class="form-label d-none d-md-block">&nbsp;</label>
+            <button type="submit" class="btn btn-primary w-100">Filter</button>
         </div>
-    </div>
-</form>
+        {% if perms.trips.add_trip %}
+        <div class="col-md-2">
+            <label class="form-label d-none d-md-block">&nbsp;</label>
+            <a href="{% url 'trip-create' %}?date={{ view_date|date:'Y-m-d' }}" class="btn btn-outline-success w-100">
+                <i class="bi bi-plus-lg"></i> New Trip
+            </a>
+        </div>
+        {% endif %}
+    </form>
+</div>
 
 {% if trips %}
-    {% regroup trips by effective_date|date:"l, F d, Y" as date_list %}
-    
-    {% for date_group in date_list %}
-    <div class="logbook-day">
-        <div class="day-header">
-            <span>📅 {{ date_group.grouper }}</span>
-            <span style="font-size: 0.9rem; color: #666; font-weight: normal;">{{ date_group.list|length }} Trip(s)</span>
-        </div>
-        
-        <div class="day-content">
-            {% for trip in date_group.list %}
-            <div class="trip-entry">
-                <!-- Summary Row (Click to toggle details) -->
-                <div class="trip-summary" onclick="toggleDetails('trip-{{ trip.pk }}')">
-                    <div>
-                        <div class="trip-number">{{ trip.trip_number }}</div>
-                        <div class="trip-stats">
-                            <span class="status-badge status-{{ trip.status|slugify }}">{{ trip.status }}</span>
-                        </div>
-                    </div>
-                    <div>
-                        <strong>Driver:</strong> {{ trip.driver.get_full_name|default:trip.driver.username }}<br>
-                        <strong>Vehicle:</strong> {{ trip.vehicle.registration_plate }}
-                    </div>
-                    <div>
-                        <strong>Total Weight:</strong> {{ trip.total_weight|floatformat:2 }} T<br>
-                        <strong>Total Cost:</strong> ${{ trip.total_cost|floatformat:2 }}
-                    </div>
-                    <div>
-                         <strong>Revenue:</strong> ${{ trip.total_revenue|floatformat:2 }}
-                    </div>
-                    <div style="text-align: right;">
-                         <a href="{% url 'trip-detail' trip.pk %}" class="btn btn-primary btn-sm" onclick="event.stopPropagation();">View Full</a>
-                         <span class="toggle-icon">▼</span>
-                    </div>
-                </div>
-
-                <!-- Detailed Legs Table -->
-                <div id="trip-{{ trip.pk }}" class="trip-details" style="display: none;">
-                    <table class="legs-table">
-                        <thead>
-                            <tr>
-                                <th style="width: 15%;">Date</th>
-                                <th style="width: 20%;">Party</th>
-                                <th style="width: 25%;">Pickup</th>
-                                <th style="width: 20%;">Delivery</th>
-                                <th style="width: 7%;">Weight</th>
-                                <th style="width: 7%;">Price/T</th>
-                                <th style="width: 6%;">Total</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for leg in trip.legs.all %}
-                            <tr>
-                                <td>{{ leg.date|date:"d/m/Y" }}</td>
-                                <td>{{ leg.party.name }}</td>
-                                <td>{{ leg.pickup_location }}</td>
-                                <td>{{ leg.delivery_location }}</td>
-                                <td>{{ leg.weight|floatformat:2 }} T</td>
-                                <td>${{ leg.price_per_ton }}</td>
-                                <td>${{ leg.revenue|floatformat:2 }}</td>
-                            </tr>
-                            {% empty %}
-                            <tr>
-                                <td colspan="7" style="text-align: center; color: #999; padding: 1rem;">No legs added yet.</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-            {% endfor %}
+<!-- Desktop View (Data Dense Table) -->
+<div class="d-none d-lg-block">
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th class="ps-3">Trip Details</th>
+                        <th>Route</th>
+                        <th class="text-end">Weight</th>
+                        <th class="text-end">Rate</th>
+                        <th class="text-end">Revenue</th>
+                        <th class="text-center">Status</th>
+                        <th class="text-end pe-3">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for trip in trips %}
+                    <tr>
+                        <td class="ps-3">
+                            <div class="d-flex flex-column">
+                                <a href="{% url 'trip-detail' trip.pk %}" class="fw-bold text-primary">{{
+                                    trip.trip_number }}</a>
+                                <span class="small text-muted">{{ trip.vehicle.registration_plate }} &bull; {% if trip.party %}{{ trip.party.name|truncatechars:20 }}{% else %}-{% endif %}</span>
+                            </div>
+                        </td>
+                        <td class="small text-muted">
+                            {% if trip.pickup_location or trip.delivery_location %}
+                            {{ trip.pickup_location|default:"-"|truncatechars:15 }} <i
+                                class="bi bi-arrow-right mx-1 opacity-50"></i> {{
+                            trip.delivery_location|default:"-"|truncatechars:15 }}
+                            {% else %}
+                            <span class="opacity-50">-</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end font-monospace">{{ trip.weight|default:"-" }}</td>
+                        <td class="text-end font-monospace text-muted">{{ trip.rate_per_ton|default:"-" }}</td>
+                        <td class="text-end fw-bold font-monospace text-success">
+                            {% if trip.revenue > 0 %}{{ trip.revenue|floatformat:2 }}{% else %}-{% endif %}
+                        </td>
+                        <td class="text-center">
+                            <span
+                                class="badge bg-{% if trip.status == 'Completed' %}success{% elif trip.status == 'Cancelled' %}danger{% else %}secondary{% endif %} bg-opacity-10 text-{% if trip.status == 'Completed' %}success{% elif trip.status == 'Cancelled' %}danger{% else %}secondary{% endif %} border border-{% if trip.status == 'Completed' %}success{% elif trip.status == 'Cancelled' %}danger{% else %}secondary{% endif %} border-opacity-25">
+                                {{ trip.status }}
+                            </span>
+                        </td>
+                        <td class="text-end pe-3">
+                            <a href="{% url 'trip-detail' trip.pk %}"
+                                class="btn btn-sm btn-link text-decoration-none p-0 text-muted me-2">View</a>
+                            {% if perms.trips.change_trip %}
+                            <a href="{% url 'trip-update' trip.pk %}"
+                                class="btn btn-sm btn-link text-decoration-none p-0 text-muted">Edit</a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot class="border-top-2">
+                    <tr class="fw-bold bg-light">
+                        <td colspan="2" class="ps-3 text-uppercase small text-muted">Daily Total</td>
+                        <td class="text-end text-primary">{{ total_weight|floatformat:2 }}</td>
+                        <td></td>
+                        <td colspan="3"></td>
+                    </tr>
+                </tfoot>
+            </table>
         </div>
     </div>
-    {% endfor %}
+</div>
 
-    <!-- Pagination -->
-    {% if is_paginated %}
-        <div class="text-center mt-2">
-            <div>
-                {% if page_obj.has_previous %}
-                    <a href="?page=1{% if search_term %}&search={{ search_term }}{% endif %}" class="btn">First</a>
-                    <a href="?page={{ page_obj.previous_page_number }}{% if search_term %}&search={{ search_term }}{% endif %}" class="btn">Previous</a>
-                {% endif %}
-                
-                <span style="margin: 0 1rem;">
-                    Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
-                </span>
-                
-                {% if page_obj.has_next %}
-                    <a href="?page={{ page_obj.next_page_number }}{% if search_term %}&search={{ search_term }}{% endif %}" class="btn">Next</a>
-                    <a href="?page={{ page_obj.paginator.num_pages }}{% if search_term %}&search={{ search_term }}{% endif %}" class="btn">Last</a>
-                {% endif %}
+<!-- Mobile/Tablet View (Clean List) -->
+<div class="d-lg-none">
+    <div class="list-group list-group-flush border rounded-2 overflow-hidden">
+        {% for trip in trips %}
+        <a href="{% url 'trip-detail' trip.pk %}" class="list-group-item list-group-item-action p-3 border-bottom">
+            <div class="d-flex w-100 justify-content-between align-items-center mb-2">
+                <h6 class="mb-0 fw-bold text-primary">{{ trip.trip_number }}</h6>
+                <span
+                    class="badge bg-{% if trip.status == 'Completed' %}success{% elif trip.status == 'Cancelled' %}danger{% else %}secondary{% endif %} bg-opacity-10 text-{% if trip.status == 'Completed' %}success{% elif trip.status == 'Cancelled' %}danger{% else %}secondary{% endif %} border border-{% if trip.status == 'Completed' %}success{% elif trip.status == 'Cancelled' %}danger{% else %}secondary{% endif %} border-opacity-25">{{
+                    trip.status }}</span>
             </div>
-        </div>
-    {% endif %}
+            <div class="row g-0 mb-2">
+                <div class="col-8">
+                    <div class="text-muted small mb-1">
+                        <i class="bi bi-truck me-1"></i> {{ trip.vehicle.registration_plate }}
+                    </div>
+                    <div class="text-muted small">
+                        <i class="bi bi-building me-1"></i> {% if trip.party %}{{ trip.party.name }}{% else %}No Party{% endif %}
+                    </div>
+                </div>
+                <div class="col-4 text-end">
+                    <div class="fw-bold fs-5 text-success">{% if trip.revenue > 0 %}{{ trip.revenue|floatformat:0 }}{% else %}-{% endif %}</div>
+                    <div class="small text-muted">{{ trip.weight|default:"-" }}t</div>
+                </div>
+            </div>
+            {% if trip.pickup_location or trip.delivery_location %}
+            <div class="small text-secondary border-top pt-2 mt-2">
+                {{ trip.pickup_location|default:"?" }} &rarr; {{ trip.delivery_location|default:"?" }}
+            </div>
+            {% endif %}
+        </a>
+        {% endfor %}
+    </div>
+    <div class="mt-3 p-3 bg-surface border rounded text-center">
+        <span class="text-muted small text-uppercase">Total Weight</span>
+        <div class="fw-bold fs-4">{{ total_weight|floatformat:2 }} <span class="fs-6 text-muted">tons</span></div>
+    </div>
+</div>
 
 {% else %}
-    <div class="message warning">
-        No trips found. <a href="{% url 'trip-create' %}">Create your first trip</a>.
-    </div>
+<div class="text-center py-5 text-muted">
+    <i class="bi bi-truck display-1"></i>
+    <p class="mt-3 lead">No trips recorded for {{ view_date|date:"F d, Y" }}.</p>
+    {% if perms.trips.add_trip %}
+    <a href="{% url 'trip-create' %}?date={{ view_date|date:'Y-m-d' }}" class="btn btn-primary mt-2">Add First Trip</a>
+    {% endif %}
+</div>
 {% endif %}
 
-<script>
-    function toggleDetails(id) {
-        var el = document.getElementById(id);
-        var icon = el.previousElementSibling.querySelector('.toggle-icon');
-        
-        if (el.style.display === 'none') {
-            el.style.display = 'block';
-            icon.style.transform = 'rotate(180deg)';
-        } else {
-            el.style.display = 'none';
-            icon.style.transform = 'rotate(0deg)';
-        }
-    }
-
-    // Initialize all details to hidden or shown (User requested "trips shown under will be detailed")
-    // If they want to see them "in it", maybe open by default?
-    // Let's keep them open by default for the "Book" feel, or maybe just styled nicely.
-    // I'll leave them visible by default as the CSS doesn't hide them initially.
-    // Wait, CSS doesn't have display:none. So they are visible.
-</script>
 {% endblock %}

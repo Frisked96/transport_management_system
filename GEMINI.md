@@ -1,79 +1,66 @@
-# Project Context: Transport Management System
+# Application State: Transport Management System
 
-## Project Overview
-The **Transport Management System** is a production-ready internal web application designed to manage transport business operations. It is built using **Django 5.1.4** and **SQLite**. The system facilitates the management of trips, fleet/vehicles, drivers, and financial records.
+## Core Apps & Features
 
-**Key Features:**
-*   **Role-Based Access Control:** Admin, Manager, Supervisor.
-*   **Trip Management:** Scheduling, assigning, and tracking trips.
-*   **Fleet Management:** Vehicle registration, maintenance logs, and tracking.
-*   **Driver Management:** Profiles, history, and financial "pockets" (salary, loans, allowances). Drivers do not have a dedicated login interface.
-*   **Financial Ledger:** Income and expense tracking, associated with trips.
-*   **Dashboards:** Role-specific views for Managers.
+### 1. Trip Management (`trips`)
+*   **Trip Lifecycle:** Create, Update, Status Tracking (In Progress, Completed, Cancelled).
+*   **Fields:** Trip Number (Auto-generated `PLATE-SEQ/MM/YYYY`), Vehicle, Driver, Party, Route (Pickup/Delivery), Weight, Rate per Ton.
+*   **Financials:**
+    *   **Revenue:** Auto-calculated (`Weight * Rate`).
+    *   **Expense Management:** dedicated interface for bulk adding/editing expenses with dynamic rows.
+    *   **Payment Status:** Real-time tracking (Unpaid, Partial, Paid) based on Ledger records.
+    *   **Profit:** Net profit calculation per trip.
+*   **Mobile Optimizations:** Responsive views for details and expense management; Auto-save for draft expenses.
+*   **Autocomplete:** AJAX-based suggestions for locations and expense names.
 
-## Architecture & Technology
-*   **Backend:** Python (Django)
-*   **Database:** SQLite3 (default configuration)
-*   **Configuration:** `transport_mgmt/settings.py` uses `python-decouple` for environment variables (`.env`).
-*   **Frontend:** Server-side rendered Django Templates (HTML).
+### 2. Fleet Management (`fleet`)
+*   **Vehicles:**
+    *   **Profile:** Registration, Model, Odometer, Status (Active, Maintenance, Retired).
+    *   **Dashboard:** Central view for Maintenance, Fuel, Documents, and Tyre history per vehicle.
+*   **Maintenance:**
+    *   **Logs:** Service Date, Type (Oil Change, Tyre Work, Repair, etc.), Cost, Provider.
+    *   **Reminders:** Tracking via Date or Odometer (Mileage-based due checking).
+*   **Fuel Tracking:**
+    *   **Logs:** Date, Odometer, Liters, Rate, Total Cost.
+    *   **Trip Link:** Option to associate fuel entries with specific trips.
+*   **Tyre Inventory (NEW):**
+    *   **Inventory:** Individual Tyre tracking (Serial #, Brand, Size, Purchase Cost).
+    *   **Lifecycle:** Log actions: Mount (assign to Vehicle + Position), Dismount, Repair, Scrap.
+    *   **History:** Complete audit trail of every tyre's movement.
+    *   **Autocomplete:** Smart suggestions for Brands and Sizes.
 
-### Key Directories
-*   `transport_mgmt/`: Main project configuration settings and URLs.
-*   `drivers/`: App for driver profiles and financial transactions.
-*   `fleet/`: App for vehicle management and maintenance logs.
-*   `ledger/`: App for financial records (income/expenses).
-*   `trips/`: App for trip management (creation, assignment, tracking).
-*   `templates/`: Global and app-specific HTML templates.
+### 3. Drivers (`drivers`)
+*   **Profiles:** Employee ID, License Info, Contact Details.
+*   **User Account:** Linked to Django Auth User for login/permissions.
+*   **Financial Ledger (Pocket):**
+    *   **Transactions:** Salary, Allowances, Loans, Payments, Repayments.
+    *   **Balance:** Real-time calculation of "Company owes Driver" vs "Driver owes Company".
 
-## Building and Running
+### 4. Financial Ledger (`ledger`)
+*   **Double-Entry-Like System:**
+    *   **Financial Records:** Income/Expense entries linked to Accounts, Parties, Drivers, or Trips.
+    *   **Categories:** Dynamic types (e.g., "Freight Income", "Diesel Expense").
+    *   **Accounts:** Company Bank/Cash accounts with opening balance and real-time running balance.
+    *   **Parties:** Client/Vendor management with ledger history.
+*   **Trip Payment Linking:**
+    *   **Direct:** Record income directly against a Trip.
+    *   **Allocation:** Split one large payment across multiple trips (Batch Payments).
+*   **Reports:** Monthly Income/Expense/Net Profit summary.
 
-### Prerequisites
-*   Python 3.8+
-*   pip
+### 5. Document Management (`documents`)
+*   **Centralized Storage:** Upload and manage scanned files (PDF/Images).
+*   **Entities:**
+    *   **Vehicle Docs:** Insurance, Permit, Fitness, Tax, Pollution.
+    *   **Driver Docs:** License, ID Proofs.
+*   **Expiry Tracking:** Dates tracked with "Expiring Soon" ( < 30 days) and "Expired" visual alerts.
 
-### Setup Instructions
-1.  **Install Dependencies:**
-    ```bash
-    pip install -r requirements.txt
-    ```
+## Technical Stack
+*   **Backend:** Django 5.1.4, SQLite.
+*   **Frontend:** Django Templates, Bootstrap 5 (Responsive), jQuery (AJAX), Select2 (Searchable Dropdowns).
+*   **Environment:** Python 3.12+, `python-decouple` for `.env`.
+*   **Utilities:** Custom Sequence generator for gap-less numbering (Trip #, Receipt #).
 
-2.  **Environment Setup:**
-    *   Copy `.env.example` to `.env` (if it exists, otherwise create one based on `settings.py`).
-    *   Configure `SECRET_KEY` and `DEBUG` in `.env`.
-
-3.  **Database Setup:**
-    *   Run migrations to set up the SQLite database:
-        ```bash
-        python manage.py migrate
-        ```
-
-    > **Note:** The `README.md` references a `setup_project.py` script for initializing data/permissions, but this file appears to be **missing** from the root directory. You may need to manually create a superuser and set up groups/permissions via the Django Admin.
-    >
-    > To create a superuser:
-    > ```bash
-    > python manage.py createsuperuser
-    > ```
-
-4.  **Run Development Server:**
-    ```bash
-    python manage.py runserver
-    ```
-    Access the application at `http://127.0.0.1:8000`.
-
-### Testing
-*   Run tests using the standard Django test runner:
-    ```bash
-    python manage.py test
-    ```
-
-## Development Conventions
-*   **Code Style:** Follows standard PEP 8 Python guidelines.
-*   **Languages:** python, html, css(minimum), JavaScript(wherever needed).
-*   **Permissions:** Views heavily rely on Django's permission system (Groups). Ensure new views enforce appropriate checks.
-*   **Templates:** Located in the `templates/` directory, organized by app name.
-*   **Static Files:** Served from `static/` (development) or `staticfiles/` (production).
-
-## Common Tasks
-*   **New Migration:** `python manage.py makemigrations`
-*   **Apply Migration:** `python manage.py migrate`
-*   **Create Superuser:** `python manage.py createsuperuser`
+## Current Infrastructure
+*   **Network:** Configured for Local LAN Access (`ALLOWED_HOSTS` includes local IP).
+*   **Static:** Served locally.
+*   **Permissions:** Granular Django Groups (Manager, Supervisor, Driver).

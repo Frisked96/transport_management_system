@@ -1,0 +1,69 @@
+{% extends 'base.html' %}
+
+{% block title %}Log Tyre Action{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card shadow-sm">
+            <div class="card-header bg-success text-white">
+                <h4 class="mb-0">Log Tyre Action</h4>
+            </div>
+            <div class="card-body">
+                <p class="text-muted small">Record movements, repairs, or scrapping of a tyre.</p>
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    <div class="row g-3">
+                        <div class="col-md-12">
+                            <label class="form-label">Tyre</label>
+                            {{ form.tyre }}
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label">Date</label>
+                            {{ form.date }}
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label">Action</label>
+                            {{ form.action }}
+                        </div>
+
+                        <div class="col-md-12">
+                            <hr class="my-2">
+                            <h6 class="text-muted">Vehicle Details (For Mount/Rotation/Dismount)</h6>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label">Vehicle</label>
+                            {{ form.vehicle }}
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label">Position</label>
+                            {{ form.position }}
+                            <small class="text-muted">e.g. Front Left, Rear Right Outer</small>
+                        </div>
+
+                        <div class="col-md-12">
+                            <label class="form-label">Current Vehicle Odometer</label>
+                            {{ form.odometer }}
+                        </div>
+
+                        <div class="col-md-12">
+                            <label class="form-label">Notes</label>
+                            {{ form.notes }}
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-end gap-2 mt-4">
+                        <a href="javascript:history.back()" class="btn btn-outline-secondary">Cancel</a>
+                        <button type="submit" class="btn btn-success">Log Action</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

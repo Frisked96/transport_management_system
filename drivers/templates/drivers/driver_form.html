@@ -3,81 +3,105 @@
 {% block title %}{% if form.instance.pk %}Edit{% else %}Add{% endif %} Driver - Transport Management System{% endblock %}
 
 {% block content %}
-<h1>{% if form.instance.pk %}Edit{% else %}Add{% endif %} Driver</h1>
+<div class="row justify-content-center">
+    <div class="col-md-10 col-lg-8">
+        <h2 class="mb-4">{% if form.instance.pk %}Edit{% else %}Add{% endif %} Driver</h2>
 
-<div style="max-width: 600px;">
-    <form method="post">
-        {% csrf_token %}
+        <form method="post">
+            {% csrf_token %}
 
-        <div>
-            <h3>User Account</h3>
-            {% if form.instance.pk %}
-                <div class="form-group">
-                    <p><strong>Username:</strong> {{ form.instance.user.username }}</p>
-                    <div style="display:none">{{ form.username }}</div>
+            <div class="card mb-4">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">User Account</h5>
                 </div>
-            {% else %}
-                <div class="form-group">
-                    <label for="{{ form.username.id_for_label }}">Username</label>
-                    {{ form.username }}
-                    {% if form.username.errors %}
-                    <div class="message error">{{ form.username.errors }}</div>
+                <div class="card-body">
+                    {% if form.instance.pk %}
+                        <div class="mb-3">
+                            <p><strong>Username:</strong> {{ form.instance.user.username }}</p>
+                            <div class="d-none">{{ form.username }}</div>
+                        </div>
+                    {% else %}
+                        <div class="mb-3">
+                            <label for="{{ form.username.id_for_label }}" class="form-label">Username</label>
+                            {{ form.username }}
+                            {% if form.username.errors %}
+                            <div class="invalid-feedback d-block">{{ form.username.errors }}</div>
+                            {% endif %}
+                        </div>
                     {% endif %}
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="{{ form.first_name.id_for_label }}" class="form-label">First Name</label>
+                                {{ form.first_name }}
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="{{ form.last_name.id_for_label }}" class="form-label">Last Name</label>
+                                {{ form.last_name }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="{{ form.email.id_for_label }}" class="form-label">Email</label>
+                        {{ form.email }}
+                    </div>
                 </div>
-            {% endif %}
-
-            <div class="form-group">
-                <label for="{{ form.first_name.id_for_label }}">First Name</label>
-                {{ form.first_name }}
             </div>
 
-            <div class="form-group">
-                <label for="{{ form.last_name.id_for_label }}">Last Name</label>
-                {{ form.last_name }}
+            <div class="card mb-4">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">Driver Profile</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="{{ form.employee_id.id_for_label }}" class="form-label">Employee ID</label>
+                                {{ form.employee_id }}
+                                {% if form.employee_id.errors %}
+                                <div class="invalid-feedback d-block">{{ form.employee_id.errors }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="{{ form.license_number.id_for_label }}" class="form-label">License Number</label>
+                                {{ form.license_number }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="{{ form.phone_number.id_for_label }}" class="form-label">Phone Number</label>
+                                {{ form.phone_number }}
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="{{ form.joined_date.id_for_label }}" class="form-label">Joined Date</label>
+                                {{ form.joined_date }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="{{ form.address.id_for_label }}" class="form-label">Address</label>
+                        {{ form.address }}
+                    </div>
+                </div>
             </div>
 
-            <div class="form-group">
-                <label for="{{ form.email.id_for_label }}">Email</label>
-                {{ form.email }}
+            <div class="d-flex justify-content-between align-items-center mt-4">
+                <button type="submit" class="btn btn-success">Save Driver</button>
+                <a href="{% url 'driver-list' %}" class="btn btn-secondary">Cancel</a>
             </div>
-        </div>
-
-        <hr class="mb-1 mt-1">
-
-        <div>
-            <h3>Driver Profile</h3>
-
-            <div class="form-group">
-                <label for="{{ form.employee_id.id_for_label }}">Employee ID</label>
-                {{ form.employee_id }}
-                {% if form.employee_id.errors %}
-                <div class="message error">{{ form.employee_id.errors }}</div>
-                {% endif %}
-            </div>
-
-            <div class="form-group">
-                <label for="{{ form.license_number.id_for_label }}">License Number</label>
-                {{ form.license_number }}
-            </div>
-
-            <div class="form-group">
-                <label for="{{ form.phone_number.id_for_label }}">Phone Number</label>
-                {{ form.phone_number }}
-            </div>
-
-            <div class="form-group">
-                <label for="{{ form.address.id_for_label }}">Address</label>
-                {{ form.address }}
-            </div>
-
-            <div class="form-group">
-                <label for="{{ form.joined_date.id_for_label }}">Joined Date</label>
-                {{ form.joined_date }}
-            </div>
-        </div>
-
-        <button type="submit" class="btn btn-success">Save Driver</button>
-        <a href="{% url 'driver-list' %}" class="btn btn-danger">Cancel</a>
-    </form>
+        </form>
+    </div>
 </div>
 {% endblock %}

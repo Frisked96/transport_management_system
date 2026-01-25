@@ -2,10 +2,14 @@
 
 A complete, production-ready internal web application for managing transport business operations, built with Django and SQLite.
 
+## Project Overview
+
+The **Transport Management System** is designed to streamline logistics operations, offering robust management for trips, fleet, drivers, and financial records. It features role-based access control (Admin, Manager, Supervisor, Driver) and provides intuitive dashboards. The user interface has recently undergone a significant overhaul, now utilizing **Bootstrap 5** for a modern, responsive design with a custom "Slate & Teal" theme, ensuring a professional and visually cohesive experience across all modules.
+
 ## Features
 
 - **User Authentication & Authorization**: Role-based access control with four user types (Admin, Manager, Supervisor, Driver)
-- **Trip Management**: Create, assign, and track transport trips
+- **Trip Management**: Single-leg trip structure with daily logbook view. Create, assign, and track transport trips by date.
 - **Fleet Management**: Manage vehicles and maintenance logs
 - **Driver Management**: Comprehensive driver profiles, history, and financial pocket (allowances, salary, loans)
 - **Financial Ledger**: Track income and expenses with trip association
@@ -16,7 +20,7 @@ A complete, production-ready internal web application for managing transport bus
 
 - **Backend**: Django 5.1.4 (LTS)
 - **Database**: SQLite3
-- **Frontend**: Django Templates (HTML only, no CSS frameworks)
+- **Frontend**: Django Templates (HTML) enhanced with **Bootstrap 5** for responsive design and a custom "Slate & Teal" theme. The UI emphasizes clarity, contrast, and usability, with improved button visibility, larger icons, and a consistent visual style across all pages.
 - **Server**: Django Development Server
 
 ## User Roles & Permissions
@@ -89,7 +93,7 @@ transport_management_system/
 │   ├── urls.py             # Main URL configuration
 │   └── wsgi.py             # WSGI configuration
 ├── trips/                  # Trip management app
-│   ├── models.py           # Trip model
+│   ├── models.py           # Trip model (Single Leg)
 │   ├── views.py            # Trip views with permissions
 │   ├── forms.py            # Trip forms
 │   └── urls.py             # Trip URLs
@@ -123,11 +127,12 @@ transport_management_system/
 ## Application Features
 
 ### Trip Management
-- Create and assign trips to drivers and vehicles
+- Create and assign trips to vehicles
+- Date-based trip log view
 - Track trip status (Scheduled, In Progress, Completed, Cancelled)
 - Automatic completion timestamp when status changes to Completed
 - Trip search and filtering
-- Trip-specific financial records
+- Trip-specific financial records and profitability analysis
 
 ### Fleet Management
 - Vehicle registration and status tracking

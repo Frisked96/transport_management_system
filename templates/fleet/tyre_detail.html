@@ -1,0 +1,110 @@
+{% extends 'base.html' %}
+
+{% block title %}Tyre Detail - {{ tyre.serial_number }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="mb-0">{{ tyre.brand }} {{ tyre.size }}</h2>
+        <span class="text-muted small">SN: {{ tyre.serial_number }}</span>
+    </div>
+    <div class="btn-group">
+        <a href="{% url 'tyre-list' %}" class="btn btn-outline-secondary">Back</a>
+        <a href="{% url 'tyre-log-create' %}?tyre={{ tyre.pk }}" class="btn btn-success">Log Action</a>
+        <a href="{% url 'tyre-update' tyre.pk %}" class="btn btn-warning">Edit</a>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-4">
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-light">
+                <h5 class="mb-0">Current Status</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="text-muted small text-uppercase d-block">Status</label>
+                    <span class="fs-4 badge bg-{% if tyre.status == 'Mounted' %}success{% elif tyre.status == 'In Stock' %}primary{% elif tyre.status == 'Scrap' %}danger{% else %}warning{% endif %}">
+                        {{ tyre.status }}
+                    </span>
+                </div>
+                
+                {% if tyre.current_vehicle %}
+                <div class="mb-3">
+                    <label class="text-muted small text-uppercase d-block">Mounted On</label>
+                    <a href="{% url 'vehicle-detail' tyre.current_vehicle.pk %}" class="fs-5 text-decoration-none">
+                        {{ tyre.current_vehicle.registration_plate }}
+                    </a>
+                </div>
+                <div class="mb-3">
+                    <label class="text-muted small text-uppercase d-block">Position</label>
+                    <span class="fs-5">{{ tyre.current_position }}</span>
+                </div>
+                {% endif %}
+
+                <hr>
+
+                <div class="mb-3">
+                    <label class="text-muted small text-uppercase d-block">Purchase Date</label>
+                    <span>{{ tyre.purchase_date|default:"-" }}</span>
+                </div>
+                <div class="mb-3">
+                    <label class="text-muted small text-uppercase d-block">Cost</label>
+                    <span>${{ tyre.purchase_cost }}</span>
+                </div>
+            </div>
+        </div>
+        
+        {% if tyre.notes %}
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-light">
+                <h5 class="mb-0">Notes</h5>
+            </div>
+            <div class="card-body">
+                <p class="mb-0">{{ tyre.notes }}</p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="col-md-8">
+        <div class="card shadow-sm">
+            <div class="card-header bg-light">
+                <h5 class="mb-0">History Log</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Date</th>
+                                <th>Action</th>
+                                <th>Vehicle</th>
+                                <th>Position</th>
+                                <th>Odometer</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for log in logs %}
+                            <tr>
+                                <td>{{ log.date }}</td>
+                                <td>
+                                    <span class="badge rounded-pill bg-secondary">{{ log.action }}</span>
+                                </td>
+                                <td>{{ log.vehicle.registration_plate|default:"-" }}</td>
+                                <td>{{ log.position|default:"-" }}</td>
+                                <td>{{ log.odometer|default:"-" }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="5" class="text-center py-3 text-muted">No history logged yet.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
