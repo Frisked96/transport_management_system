@@ -103,16 +103,14 @@
                     <tr>
                         <td class="ps-3">
                             <div class="d-flex flex-column">
-                                <a href="{% url 'trip-detail' trip.pk %}" class="fw-bold text-primary">{{
-                                    trip.trip_number }}</a>
+                                <a href="{% url 'trip-detail' trip.pk %}" class="fw-bold text-primary">{{ trip.trip_number }}</a>
                                 <span class="small text-muted">{{ trip.vehicle.registration_plate }} &bull; {% if trip.party %}{{ trip.party.name|truncatechars:20 }}{% else %}-{% endif %}</span>
                             </div>
                         </td>
                         <td class="small text-muted">
                             {% if trip.pickup_location or trip.delivery_location %}
                             {{ trip.pickup_location|default:"-"|truncatechars:15 }} <i
-                                class="bi bi-arrow-right mx-1 opacity-50"></i> {{
-                            trip.delivery_location|default:"-"|truncatechars:15 }}
+                                class="bi bi-arrow-right mx-1 opacity-50"></i> {{ trip.delivery_location|default:"-"|truncatechars:15 }}
                             {% else %}
                             <span class="opacity-50">-</span>
                             {% endif %}

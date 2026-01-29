@@ -50,8 +50,7 @@
                         <label class="text-secondary small text-uppercase fw-bold mb-1">Vehicle</label>
                         <div class="fs-5 fw-medium">
                             <a href="{% url 'vehicle-detail' trip.vehicle.pk %}"
-                                class="text-primary text-decoration-none hover-underline">{{
-                                trip.vehicle.registration_plate }}</a>
+                                class="text-primary text-decoration-none hover-underline">{{ trip.vehicle.registration_plate }}</a>
                         </div>
                     </div>
                     <div class="col-md-6">
@@ -85,8 +84,7 @@
                         <label class="text-secondary small text-uppercase fw-bold mb-1">Driver</label>
                         <div class="fw-medium">
                             {% if trip.driver %}
-                            <a href="{% url 'driver-detail' trip.driver.pk %}" class="text-decoration-none">{{
-                                trip.driver }}</a>
+                            <a href="{% url 'driver-detail' trip.driver.pk %}" class="text-decoration-none">{{ trip.driver }}</a>
                             {% else %}
                             <span class="text-muted">Unassigned</span>
                             {% endif %}
@@ -117,13 +115,11 @@
             <div class="card-body text-secondary small">
                 <div class="row">
                     <div class="col-md-6">
-                        Created: <span class="text-primary">{{ trip.created_at|date:"M d, Y H:i" }}</span> by {{
-                        trip.created_by.username|default:"System" }}
+                        Created: <span class="text-primary">{{ trip.created_at|date:"M d, Y H:i" }}</span> by {{ trip.created_by.username|default:"System" }}
                     </div>
                     {% if trip.actual_completion_datetime %}
                     <div class="col-md-6 text-md-end">
-                        Completed: <span class="text-success">{{ trip.actual_completion_datetime|date:"M d, Y H:i"
-                            }}</span>
+                        Completed: <span class="text-success">{{ trip.actual_completion_datetime|date:"M d, Y H:i" }}</span>
                     </div>
                     {% endif %}
                 </div>

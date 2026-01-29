@@ -1,6 +1,7 @@
 from django import forms
 from django.contrib.auth.models import User
-from .models import FinancialRecord, Party, Account
+from django.db import models
+from .models import FinancialRecord, Party, Account, Bill, CompanyProfile
 from trips.models import Trip
 
 
@@ -142,3 +143,63 @@ class AccountForm(forms.ModelForm):
         widgets = {
             'description': forms.Textarea(attrs={'rows': 3}),
         }
+
+class BillForm(forms.ModelForm):
+    class Meta:
+        model = Bill
+        fields = ['party', 'date', 'gst_rate', 'trips']
+        widgets = {
+            'date': forms.DateInput(attrs={'type': 'date'}),
+            'trips': forms.CheckboxSelectMultiple(),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+        # Apply bootstrap classes
+        for name, field in self.fields.items():
+            if name != 'trips': # Checkboxes look bad with form-control
+                field.widget.attrs.update({'class': 'form-control'})
+        
+        # Logic to filter trips based on Party
+        party_id = None
+        
+        if self.is_bound: # POST data
+            party_id = self.data.get('party')
+        elif self.instance and self.instance.pk: # Edit mode
+            party_id = self.instance.party_id
+        elif 'initial' in kwargs and 'party' in kwargs['initial']: # Pre-filled
+            party_id = kwargs['initial']['party']
+            
+        if party_id:
+            try:
+                # Show unbilled trips OR trips already in this bill (if editing)
+                # We usually want 'Completed' trips only
+                qs = Trip.objects.filter(party_id=party_id).exclude(status='Cancelled')
+                
+                if self.instance and self.instance.pk:
+                    # In edit mode, include currently selected trips + unbilled ones
+                    qs = qs.filter(models.Q(bills__isnull=True) | models.Q(bills=self.instance))
+                else:
+                     # Create mode: only unbilled
+                     qs = qs.filter(bills__isnull=True)
+                
+                self.fields['trips'].queryset = qs.distinct().order_by('-date')
+            except (ValueError, TypeError):
+                self.fields['trips'].queryset = Trip.objects.none()
+        else:
+            self.fields['trips'].queryset = Trip.objects.none()
+
+class CompanyProfileForm(forms.ModelForm):
+    class Meta:
+        model = CompanyProfile
+        fields = ['company_name', 'address', 'bank_details', 'authorized_signatory', 'invoice_template']
+        widgets = {
+            'address': forms.Textarea(attrs={'rows': 3}),
+            'bank_details': forms.Textarea(attrs={'rows': 3}),
+        }
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            field.widget.attrs.update({'class': 'form-control'})

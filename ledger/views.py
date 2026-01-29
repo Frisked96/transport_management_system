@@ -13,9 +13,10 @@ from django.utils import timezone
 from decimal import Decimal, InvalidOperation
 from datetime import datetime
 import json
+from django.http import JsonResponse
 
-from .models import FinancialRecord, Party, Account, TripAllocation, TransactionCategory
-from .forms import FinancialRecordForm, PartyForm, AccountForm
+from .models import FinancialRecord, Party, Account, TripAllocation, TransactionCategory, Bill, CompanyProfile
+from .forms import FinancialRecordForm, PartyForm, AccountForm, BillForm, CompanyProfileForm
 from trips.models import Trip
 
 
@@ -77,36 +78,36 @@ class FinancialRecordListView(LoginRequiredMixin, BaseLedgerPermissionMixin, Lis
         
         return queryset.order_by('-date')
     
-        def get_context_data(self, **kwargs):
-    
-            context = super().get_context_data(**kwargs)
-    
-            context['category_choices'] = TransactionCategory.objects.all()
-    
-            context['current_category'] = self.request.GET.get('category', '')
-    
-            
-    
-            # Calculate totals for filtered records
-            records = self.get_queryset()
-    
-            total_income = records.filter(
-                category__type=TransactionCategory.TYPE_INCOME
-            ).exclude(record_type='Invoice').aggregate(total=Sum('amount'))['total'] or 0
-            
-            total_expenses = records.filter(
-                category__type=TransactionCategory.TYPE_EXPENSE
-            ).exclude(record_type='Invoice').aggregate(total=Sum('amount'))['total'] or 0
-    
-            
-    
-            context['total_income'] = total_income
-    
-            context['total_expenses'] = total_expenses
-    
-            context['net_total'] = total_income - total_expenses
-    
-            return context
+    def get_context_data(self, **kwargs):
+
+        context = super().get_context_data(**kwargs)
+
+        context['category_choices'] = TransactionCategory.objects.all()
+
+        context['current_category'] = self.request.GET.get('category', '')
+
+        
+
+        # Calculate totals for filtered records
+        records = self.get_queryset()
+
+        total_income = records.filter(
+            category__type=TransactionCategory.TYPE_INCOME
+        ).exclude(record_type='Invoice').aggregate(total=Sum('amount'))['total'] or 0
+        
+        total_expenses = records.filter(
+            category__type=TransactionCategory.TYPE_EXPENSE
+        ).exclude(record_type='Invoice').aggregate(total=Sum('amount'))['total'] or 0
+
+        
+
+        context['total_income'] = total_income
+
+        context['total_expenses'] = total_expenses
+
+        context['net_total'] = total_income - total_expenses
+
+        return context
 
 
 class FinancialRecordDetailView(LoginRequiredMixin, BaseLedgerPermissionMixin, DetailView):
@@ -523,8 +524,6 @@ class AccountDetailView(LoginRequiredMixin, BaseLedgerPermissionMixin, DetailVie
         return context
 
 
-from django.http import JsonResponse
-
 @login_required
 def get_party_unpaid_trips(request):
     """
@@ -550,3 +549,85 @@ def get_party_unpaid_trips(request):
         return JsonResponse({'trips': data})
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
+
+
+# --- Bill Views ---
+
+class BillListView(LoginRequiredMixin, BaseLedgerPermissionMixin, ListView):
+    model = Bill
+    template_name = 'ledger/bill_list.html'
+    context_object_name = 'bills'
+    paginate_by = 20
+    
+    def get_queryset(self):
+        if self.has_driver_permission():
+            return Bill.objects.none()
+        return Bill.objects.all().select_related('party').order_by('-date', '-created_at')
+
+class BillCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+    model = Bill
+    form_class = BillForm
+    template_name = 'ledger/bill_form.html'
+    permission_required = 'ledger.add_financialrecord'
+    success_url = reverse_lazy('bill-list')
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        if self.request.method == 'GET' and 'party' in self.request.GET:
+            if 'initial' not in kwargs:
+                kwargs['initial'] = {}
+            kwargs['initial']['party'] = self.request.GET.get('party')
+        return kwargs
+
+    def form_valid(self, form):
+        self.object = form.save()
+        messages.success(self.request, 'Bill created successfully!')
+        
+        if 'save_print' in self.request.POST:
+            return redirect('bill-detail', pk=self.object.pk)
+            
+        return super().form_valid(form)
+
+class BillUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+    model = Bill
+    form_class = BillForm
+    template_name = 'ledger/bill_form.html'
+    permission_required = 'ledger.change_financialrecord'
+    
+    def get_success_url(self):
+        return reverse_lazy('bill-list')
+
+    def form_valid(self, form):
+        messages.success(self.request, 'Bill updated successfully!')
+        return super().form_valid(form)
+
+class BillDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
+    model = Bill
+    template_name = 'ledger/bill_confirm_delete.html'
+    permission_required = 'ledger.delete_financialrecord'
+    success_url = reverse_lazy('bill-list')
+
+class BillDetailView(LoginRequiredMixin, BaseLedgerPermissionMixin, DetailView):
+    model = Bill
+    template_name = 'ledger/bill_detail.html'
+    context_object_name = 'bill'
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['company_profile'] = CompanyProfile.objects.first()
+        return context
+
+class CompanyProfileUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+    model = CompanyProfile
+    form_class = CompanyProfileForm
+    template_name = 'ledger/company_profile_form.html'
+    permission_required = 'ledger.change_financialrecord'
+    success_url = reverse_lazy('financial-summary')
+
+    def get_object(self, queryset=None):
+        obj, created = CompanyProfile.objects.get_or_create(pk=1)
+        return obj
+
+    def form_valid(self, form):
+        messages.success(self.request, 'Company Settings updated!')
+        return super().form_valid(form)
