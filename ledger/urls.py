@@ -29,4 +29,14 @@ urlpatterns = [
     path('accounts/<int:pk>/', views.AccountDetailView.as_view(), name='account-detail'),
     path('accounts/<int:pk>/update/', views.AccountUpdateView.as_view(), name='account-update'),
     path('accounts/<int:pk>/delete/', views.AccountDeleteView.as_view(), name='account-delete'),
+
+    # Bill URLs
+    path('bills/', views.BillListView.as_view(), name='bill-list'),
+    path('bills/create/', views.BillCreateView.as_view(), name='bill-create'),
+    path('bills/<int:pk>/', views.BillDetailView.as_view(), name='bill-detail'),
+    path('bills/<int:pk>/update/', views.BillUpdateView.as_view(), name='bill-update'),
+    path('bills/<int:pk>/delete/', views.BillDeleteView.as_view(), name='bill-delete'),
+    
+    # Company Profile
+    path('settings/company/', views.CompanyProfileUpdateView.as_view(), name='company-profile-update'),
 ]

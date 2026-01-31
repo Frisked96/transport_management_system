@@ -4,6 +4,9 @@ Models for Ledger application
 from django.db import models
 from django.contrib.auth.models import User
 from trips.models import Trip
+from django.db.models import Sum, F, DecimalField
+from django.db.models.functions import Coalesce
+from decimal import Decimal
 
 class Sequence(models.Model):
     """
@@ -261,3 +264,97 @@ class TripAllocation(models.Model):
 
     def __str__(self):
         return f"{self.financial_record} -> {self.trip.trip_number}: {self.amount}"
+
+class CompanyProfile(models.Model):
+    """
+    Singleton model to store Company Details for Invoices.
+    """
+    company_name = models.CharField(max_length=200, default="My Transport Company")
+    address = models.TextField(blank=True, verbose_name="Company Address")
+    bank_details = models.TextField(blank=True, verbose_name="Bank Details", help_text="Bank Name, Account No, IFSC, etc.")
+    authorized_signatory = models.CharField(max_length=200, blank=True, verbose_name="Authorized Signatory Name")
+    invoice_template = models.CharField(max_length=100, default="INV-{YYYY}-{SEQ}", help_text="Use {YYYY} for Year, {SEQ} for Sequence Number")
+    
+    def __str__(self):
+        return self.company_name
+
+    class Meta:
+        verbose_name = "Company Profile"
+        verbose_name_plural = "Company Profile"
+
+class Bill(models.Model):
+    """
+    Bill/Invoice Document aggregating multiple trips.
+    """
+    STATUS_DRAFT = 'Draft'
+    STATUS_FINAL = 'Final'
+    STATUS_CHOICES = [
+        (STATUS_DRAFT, 'Draft'),
+        (STATUS_FINAL, 'Final'),
+    ]
+
+    GST_RATE_0 = 0
+    GST_RATE_5 = 5
+    GST_RATE_18 = 18
+    GST_CHOICES = [
+        (GST_RATE_0, '0% GST'),
+        (GST_RATE_5, '5% GST'),
+        (GST_RATE_18, '18% GST'),
+    ]
+
+    bill_number = models.CharField(max_length=50, unique=True, blank=True, null=True, verbose_name="Invoice Number")
+    party = models.ForeignKey(Party, on_delete=models.PROTECT, related_name='bills', verbose_name="Bill To")
+    date = models.DateField(verbose_name="Invoice Date")
+    trips = models.ManyToManyField(Trip, related_name='bills', verbose_name="Included Trips")
+    gst_rate = models.PositiveIntegerField(choices=GST_CHOICES, default=GST_RATE_0, verbose_name="GST Rate (%)")
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=STATUS_DRAFT)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        if not self.bill_number and self.status == self.STATUS_FINAL:
+            # Generate Bill Number only when Final
+            profile = CompanyProfile.objects.first()
+            if not profile:
+                 template = "INV-{YYYY}-{SEQ}"
+            else:
+                 template = profile.invoice_template
+            
+            import datetime
+            now = datetime.datetime.now()
+            
+            # Get Sequence
+            seq_val = Sequence.next_value("bill_sequence")
+            
+            # Format
+            num = template.replace("{YYYY}", str(now.year)).replace("{SEQ}", f"{seq_val:04d}")
+            self.bill_number = num
+            
+        super().save(*args, **kwargs)
+
+    @property
+    def subtotal(self):
+        # Calculate sum of trip revenues
+        # Revenue = weight * rate_per_ton
+        # Handle cases where weight/rate might be None
+        val = self.trips.aggregate(
+            total=Sum(
+                Coalesce(F('weight'), 0, output_field=DecimalField()) * 
+                Coalesce(F('rate_per_ton'), 0, output_field=DecimalField())
+            )
+        )['total']
+        return val or 0
+
+    @property
+    def gst_amount(self):
+        if self.gst_rate > 0:
+            return self.subtotal * (Decimal(self.gst_rate) / Decimal(100))
+        return 0
+
+    @property
+    def total_amount(self):
+        return self.subtotal + self.gst_amount
+
+    def __str__(self):
+        return f"{self.bill_number or 'Draft'} - {self.party.name}"

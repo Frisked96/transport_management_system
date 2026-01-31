@@ -7,47 +7,52 @@
     --bg-surface: #1e293b;    /* Dark slate for cards/nav */
     --bg-surface-hover: #334155;
     
-    /* Text Colors */
-    --text-primary: #f1f5f9;  /* Off-white for high contrast */
-    --text-secondary: #94a3b8; /* Muted cool gray */
-    --text-muted: #64748b;    /* Darker muted */
+    /* Text Colors - High Contrast Mode */
+    --text-primary: #ffffff;  /* Pure white for maximum contrast */
+    --text-secondary: #e2e8f0; /* Very light slate gray */
+    --text-muted: #cbd5e1;    /* Light muted gray - much brighter than before */
 
     /* Brand/Action Colors */
-    --primary: #3b82f6;       /* Standard Professional Blue */
-    --primary-hover: #2563eb;
-    --primary-subtle: rgba(59, 130, 246, 0.1);
+    --primary: #60a5fa;       /* Brighter Blue for dark bg */
+    --primary-hover: #93c5fd;
+    --primary-subtle: rgba(96, 165, 250, 0.15);
     
-    --success: #10b981;       /* Emerald Green */
-    --warning: #f59e0b;       /* Amber */
-    --danger: #ef4444;        /* Red */
-    --info: #0ea5e9;          /* Sky Blue */
+    --success: #34d399;       /* Brighter Emerald */
+    --warning: #fbbf24;       /* Brighter Amber */
+    --danger: #f87171;        /* Brighter Red */
+    --info: #38bdf8;          /* Brighter Sky */
 
     /* Borders & Separators */
-    --border-color: #334155;  /* Visible but subtle border */
-    --border-light: #475569;
+    --border-color: #475569;  /* Lighter border for visibility */
+    --border-light: #64748b;
 
     /* Spacing & Layout */
     --radius-sm: 4px;
     --radius-md: 6px;
     --radius-lg: 8px;
     
-    /* Shadows - Minimal for flat professional look */
-    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
-    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+    /* Shadows */
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.5);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
 }
 
 /* Global Reset & Typography */
 body {
     background-color: var(--bg-body) !important;
-    color: var(--text-primary);
+    color: var(--text-primary) !important; /* Force global text color */
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    font-size: 0.95rem; /* Slightly denser text */
+    font-size: 0.95rem;
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
 }
 
+.bg-body {
+    background-color: var(--bg-body) !important;
+    color: var(--text-primary) !important;
+}
+
 h1, h2, h3, h4, h5, h6 {
-    color: var(--text-primary);
+    color: var(--text-primary) !important;
     font-weight: 600;
     letter-spacing: -0.025em;
     margin-bottom: 1rem;
@@ -64,16 +69,16 @@ a:hover {
 }
 
 /* Utilities */
-.text-muted { color: var(--text-secondary) !important; }
+.text-muted { color: var(--text-muted) !important; }
 .bg-light { background-color: var(--bg-surface) !important; }
 .border { border-color: var(--border-color) !important; }
 
 /* Placeholder Visibility - Global Fix */
-::-webkit-input-placeholder { color: var(--text-secondary) !important; opacity: 1; }
-::-moz-placeholder { color: var(--text-secondary) !important; opacity: 1; }
-:-ms-input-placeholder { color: var(--text-secondary) !important; opacity: 1; }
-::-ms-input-placeholder { color: var(--text-secondary) !important; opacity: 1; }
-::placeholder { color: var(--text-secondary) !important; opacity: 1; }
+::-webkit-input-placeholder { color: var(--text-muted) !important; opacity: 1; }
+::-moz-placeholder { color: var(--text-muted) !important; opacity: 1; }
+:-ms-input-placeholder { color: var(--text-muted) !important; opacity: 1; }
+::-ms-input-placeholder { color: var(--text-muted) !important; opacity: 1; }
+::placeholder { color: var(--text-muted) !important; opacity: 1; }
 
 /* Input Group Addons (Search Icons etc) */
 .input-group-text {
@@ -106,25 +111,29 @@ a:hover {
 .navbar-dark .navbar-nav .nav-link:hover,
 .navbar-dark .navbar-nav .nav-link.active {
     color: var(--text-primary);
-    background-color: rgba(255, 255, 255, 0.05);
+    background-color: rgba(255, 255, 255, 0.1);
 }
 
-/* Cards */
-.card {
+/* Cards & Containers - Explicit Text Color Enforcement */
+.card, .modal-content, .offcanvas, .dropdown-menu {
     background-color: var(--bg-surface);
+    color: var(--text-primary) !important;
     border: 1px solid var(--border-color) !important;
+}
+
+.card {
     border-radius: var(--radius-md);
     box-shadow: var(--shadow-sm);
     margin-bottom: 1.5rem;
 }
 
 .card-header {
-    background-color: rgba(0, 0, 0, 0.2); 
+    background-color: rgba(255, 255, 255, 0.05); 
     border-bottom: 1px solid var(--border-color);
     padding: 1rem 1.25rem;
     font-weight: 600;
     font-size: 0.95rem;
-    color: var(--text-primary);
+    color: var(--text-primary) !important;
 }
 
 .card-body {
@@ -133,21 +142,22 @@ a:hover {
 
 /* Tables - Data Dense */
 .table {
-    color: var(--text-primary);
+    color: var(--text-primary) !important;
     border-color: var(--border-color);
     font-size: 0.9rem;
     margin-bottom: 0;
 }
 
 .table > :not(caption) > * > * {
-    background-color: transparent; /* Let row colors handle it */
+    background-color: transparent;
     border-bottom-color: var(--border-color);
     padding: 0.75rem 1rem;
     vertical-align: middle;
+    color: var(--text-primary);
 }
 
 .table thead th {
-    background-color: rgba(0, 0, 0, 0.2);
+    background-color: rgba(0, 0, 0, 0.3);
     color: var(--text-secondary);
     font-weight: 600;
     text-transform: uppercase;
@@ -163,7 +173,8 @@ a:hover {
 
 /* Striping with subtle alternation */
 .table-striped > tbody > tr:nth-of-type(odd) > * {
-    background-color: rgba(255, 255, 255, 0.02);
+    background-color: rgba(255, 255, 255, 0.03);
+    color: var(--text-primary);
 }
 
 /* Buttons */
@@ -178,11 +189,12 @@ a:hover {
 .btn-primary {
     background-color: var(--primary);
     border-color: var(--primary);
-    color: white;
+    color: #0f172a; /* Dark text on bright button for contrast */
 }
 .btn-primary:hover {
     background-color: var(--primary-hover);
     border-color: var(--primary-hover);
+    color: #0f172a;
 }
 
 .btn-outline-secondary {
@@ -195,18 +207,18 @@ a:hover {
 }
 
 /* Forms */
-.form-control, .form-select {
-    background-color: var(--bg-body); /* Darker input bg */
+.form-control, .form-select, .form-control:disabled, .form-control[readonly] {
+    background-color: var(--bg-body) !important;
     border: 1px solid var(--border-color);
-    color: var(--text-primary);
+    color: var(--text-primary) !important;
     border-radius: var(--radius-sm);
     padding: 0.6rem 0.75rem;
 }
 
 .form-control:focus, .form-select:focus {
-    background-color: var(--bg-surface); /* Slightly lighter on focus */
+    background-color: var(--bg-surface) !important;
     border-color: var(--primary);
-    color: var(--text-primary);
+    color: var(--text-primary) !important;
     box-shadow: 0 0 0 2px var(--primary-subtle);
 }
 
@@ -215,6 +227,12 @@ a:hover {
     font-size: 0.85rem;
     font-weight: 500;
     margin-bottom: 0.4rem;
+}
+
+.form-text, .help-text {
+    color: var(--text-muted) !important;
+    font-size: 0.85rem;
+    margin-top: 0.25rem;
 }
 
 /* Badges */
@@ -239,8 +257,6 @@ a:hover {
 .breadcrumb-item.active { color: var(--text-muted); }
 
 .dropdown-menu {
-    background-color: var(--bg-surface);
-    border: 1px solid var(--border-color);
     box-shadow: var(--shadow-md);
 }
 .dropdown-item {
@@ -253,10 +269,10 @@ a:hover {
 .dropdown-divider { border-top-color: var(--border-color); }
 
 /* Alerts */
-.alert-info { background-color: rgba(14, 165, 233, 0.15); border-color: rgba(14, 165, 233, 0.3); color: #7dd3fc; }
-.alert-success { background-color: rgba(16, 185, 129, 0.15); border-color: rgba(16, 185, 129, 0.3); color: #6ee7b7; }
-.alert-warning { background-color: rgba(245, 158, 11, 0.15); border-color: rgba(245, 158, 11, 0.3); color: #fcd34d; }
-.alert-danger { background-color: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.3); color: #fca5a5; }
+.alert-info { background-color: rgba(56, 189, 248, 0.15); border-color: rgba(56, 189, 248, 0.3); color: #bae6fd; }
+.alert-success { background-color: rgba(52, 211, 153, 0.15); border-color: rgba(52, 211, 153, 0.3); color: #a7f3d0; }
+.alert-warning { background-color: rgba(251, 191, 36, 0.15); border-color: rgba(251, 191, 36, 0.3); color: #fde68a; }
+.alert-danger { background-color: rgba(248, 113, 113, 0.15); border-color: rgba(248, 113, 113, 0.3); color: #fecaca; }
 
 /* Select2 Dark Mode Fixes */
 .select2-container--bootstrap-5 .select2-selection {
@@ -281,5 +297,5 @@ a:hover {
 }
 .select2-results__option--highlighted {
     background-color: var(--primary) !important;
-    color: white !important;
+    color: #0f172a !important; /* Dark text on active selection */
 }

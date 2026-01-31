@@ -188,6 +188,18 @@ $(document).ready(function() {
                     Promise.all([localRequest, mapRequest]).then(([localData, mapData]) => {
                         const results = [];
                         const seen = new Set();
+                        
+                        // 0. Always add the current search term as a "Manual Entry" option first
+                        if (term && term.trim().length > 0) {
+                           const cleanTerm = term.trim();
+                           results.push({
+                               id: cleanTerm,
+                               text: `"${cleanTerm}" (Manual Entry)`,
+                               newOption: true
+                           });
+                           seen.add(cleanTerm);
+                           seen.add(cleanTerm.toLowerCase());
+                        }
 
                         // 1. Process Local History
                         if (localData.results) {

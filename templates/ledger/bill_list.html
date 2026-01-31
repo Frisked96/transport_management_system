@@ -1,0 +1,67 @@
+{% extends 'base.html' %}
+
+{% block title %}Invoices - TMS{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2>Invoices</h2>
+    {% if perms.ledger.add_financialrecord %}
+        <div>
+            <a href="{% url 'bill-create' %}" class="btn btn-success"><i class="bi bi-plus-lg"></i> Create Invoice</a>
+            <a href="{% url 'company-profile-update' %}" class="btn btn-outline-secondary"><i class="bi bi-gear"></i> Settings</a>
+        </div>
+    {% endif %}
+</div>
+
+<!-- List Table -->
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-striped table-hover mb-0">
+                 <thead>
+                    <tr>
+                        <th>Invoice #</th>
+                        <th>Date</th>
+                        <th>Bill To</th>
+                        <th class="text-center">Trips</th>
+                        <th class="text-end">Amount</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                 </thead>
+                 <tbody>
+                    {% for bill in bills %}
+                    <tr>
+                        <td>
+                            <a href="{% url 'bill-detail' bill.pk %}" class="text-decoration-none fw-bold">
+                                {{ bill.bill_number|default:"Draft" }}
+                            </a>
+                        </td>
+                        <td>{{ bill.date }}</td>
+                        <td>{{ bill.party.name }}</td>
+                        <td class="text-center">{{ bill.trips.count }}</td>
+                        <td class="text-end fw-bold">${{ bill.total_amount|floatformat:2 }}</td>
+                        <td>
+                            <span class="badge {% if bill.status == 'Final' %}bg-success{% else %}bg-secondary{% endif %}">
+                                {{ bill.status }}
+                            </span>
+                        </td>
+                        <td>
+                            <div class="btn-group btn-group-sm">
+                                <a href="{% url 'bill-detail' bill.pk %}" class="btn btn-outline-primary" title="View/Print"><i class="bi bi-printer"></i></a>
+                                {% if perms.ledger.change_financialrecord %}
+                                    <a href="{% url 'bill-update' bill.pk %}" class="btn btn-outline-warning" title="Edit"><i class="bi bi-pencil"></i></a>
+                                    <a href="{% url 'bill-delete' bill.pk %}" class="btn btn-outline-danger" title="Delete"><i class="bi bi-trash"></i></a>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="7" class="text-center py-4 text-muted">No invoices found.</td></tr>
+                    {% endfor %}
+                 </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

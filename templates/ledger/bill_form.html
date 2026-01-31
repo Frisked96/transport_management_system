@@ -1,0 +1,96 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if form.instance.pk %}Edit Invoice{% else %}New Invoice{% endif %} - TMS{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-10">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0">{% if form.instance.pk %}Edit Invoice{% else %}New Invoice{% endif %}</h4>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    {% if form.errors %}
+                        <div class="alert alert-danger">
+                            Please correct the errors below.
+                            {{ form.errors }}
+                        </div>
+                    {% endif %}
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            {{ form.party.label_tag }}
+                            {{ form.party }}
+                            <div class="form-text text-muted">Changing the party will reload the page to fetch relevant trips.</div>
+                        </div>
+                        <div class="col-md-6">
+                            {{ form.date.label_tag }}
+                            {{ form.date }}
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        {{ form.trips.label_tag }}
+                        <div class="card p-3 bg-light" style="max-height: 400px; overflow-y: auto;">
+                            {% if form.trips.field.queryset.exists %}
+                                {{ form.trips }}
+                            {% else %}
+                                <p class="text-muted text-center mb-0">
+                                    {% if form.party.value %}
+                                        No unbilled completed trips found for this party.
+                                    {% else %}
+                                        Select a party to see available trips.
+                                    {% endif %}
+                                </p>
+                            {% endif %}
+                        </div>
+                        <div class="form-text">Select trips to include in this invoice. Only completed, unbilled trips are shown.</div>
+                    </div>
+
+                    <div class="row mb-4">
+                        <div class="col-md-4">
+                            {{ form.gst_rate.label_tag }}
+                            {{ form.gst_rate }}
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-between">
+                        <a href="{% url 'bill-list' %}" class="btn btn-outline-secondary">Cancel</a>
+                        <div>
+                            {% if not form.instance.pk or form.instance.status == 'Draft' %}
+                                <button type="submit" class="btn btn-primary me-2">Save Draft</button>
+                            {% else %}
+                                <button type="submit" class="btn btn-primary me-2">Save Changes</button>
+                            {% endif %}
+                            <button type="submit" name="save_print" class="btn btn-success"><i class="bi bi-printer"></i> Save & View</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    $(document).ready(function() {
+        // Initialize Select2
+        $('#id_party').select2({
+            theme: 'bootstrap-5',
+            placeholder: 'Select a Party'
+        });
+        
+        // Reload on party change to fetch trips
+        $('#id_party').on('select2:select', function(e) {
+            var partyId = e.params.data.id;
+            var url = new URL(window.location.href);
+            url.searchParams.set('party', partyId);
+            window.location.href = url.toString();
+        });
+    });
+</script>
+{% endblock %}

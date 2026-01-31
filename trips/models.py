@@ -24,7 +24,7 @@ class TripQuerySet(models.QuerySet):
         direct_payments = FinancialRecord.objects.filter(
             associated_trip=OuterRef('pk'),
             category__type=TransactionCategory.TYPE_INCOME
-        ).values('associated_trip').annotate(
+        ).exclude(record_type=FinancialRecord.RECORD_TYPE_INVOICE).values('associated_trip').annotate(
             total=Sum('amount')
         ).values('total')
 
