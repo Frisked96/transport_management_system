@@ -75,7 +75,7 @@
                     <div class="mb-3">
                         <label class="form-label">Select Party</label>
                         {{ form.party }}
-                        <div class="form-text">Changing party will require saving to update the trip list.</div>
+                        <div class="form-text">Selecting a party will refresh the trip list automatically.</div>
                     </div>
                 </div>
             </div>
@@ -84,47 +84,53 @@
             <div class="mb-5">
                 <h5 class="fw-bold border-bottom pb-2 mb-3">Included Trips</h5>
                 
-                {% if form.trips.field.queryset.exists %}
-                    <div class="table-responsive">
-                        <table class="table table-striped table-hover">
-                            <thead class="table-light">
-                                <tr>
-                                    <th style="width: 40px;">
-                                        <input type="checkbox" id="selectAllTrips">
-                                    </th>
-                                    <th>Date</th>
-                                    <th>Vehicle</th>
-                                    <th>Route</th>
-                                    <th class="text-end">Weight</th>
-                                    <th class="text-end">Rate</th>
-                                    <th class="text-end">Amount</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for trip in form.trips.field.queryset %}
-                                <tr>
-                                    <td>
-                                        <div class="form-check">
-                                            <input class="form-check-input trip-checkbox" type="checkbox" 
-                                                   name="trips" value="{{ trip.pk }}" 
-                                                   id="trip_{{ trip.pk }}"
-                                                   {% if trip.pk in form.initial.trips or trip.pk in form.trips.value %}checked{% endif %}>
-                                        </div>
-                                    </td>
-                                    <td><label for="trip_{{ trip.pk }}">{{ trip.date|date:"d M Y" }}</label></td>
-                                    <td>{{ trip.vehicle.registration_plate }}</td>
-                                    <td>{{ trip.pickup_location }} &rarr; {{ trip.delivery_location }}</td>
-                                    <td class="text-end">{{ trip.weight }}</td>
-                                    <td class="text-end">{{ trip.rate_per_ton }}</td>
-                                    <td class="text-end">{{ trip.revenue }}</td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
+                {% if form.party.value %}
+                    {% if form.trips.field.queryset.exists %}
+                        <div class="table-responsive">
+                            <table class="table table-striped table-hover">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th style="width: 40px;">
+                                            <input type="checkbox" id="selectAllTrips">
+                                        </th>
+                                        <th>Date</th>
+                                        <th>Vehicle</th>
+                                        <th>Route</th>
+                                        <th class="text-end">Weight</th>
+                                        <th class="text-end">Rate</th>
+                                        <th class="text-end">Amount</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for trip in form.trips.field.queryset %}
+                                    <tr>
+                                        <td>
+                                            <div class="form-check">
+                                                <input class="form-check-input trip-checkbox" type="checkbox" 
+                                                       name="trips" value="{{ trip.pk }}" 
+                                                       id="trip_{{ trip.pk }}"
+                                                       {% if trip.pk in form.initial.trips or trip.pk in form.trips.value %}checked{% endif %}>
+                                            </div>
+                                        </td>
+                                        <td><label for="trip_{{ trip.pk }}">{{ trip.date|date:"d M Y" }}</label></td>
+                                        <td>{{ trip.vehicle.registration_plate }}</td>
+                                        <td>{{ trip.pickup_location }} &rarr; {{ trip.delivery_location }}</td>
+                                        <td class="text-end">{{ trip.weight }}</td>
+                                        <td class="text-end">{{ trip.rate_per_ton }}</td>
+                                        <td class="text-end">{{ trip.revenue }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="alert alert-warning">
+                            No unbilled completed trips found for the selected party.
+                        </div>
+                    {% endif %}
                 {% else %}
-                    <div class="alert alert-info">
-                        No unbilled completed trips found for this party.
+                    <div class="alert alert-secondary">
+                        Please select a party to view available trips.
                     </div>
                 {% endif %}
             </div>
@@ -143,6 +149,19 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
+        // Auto-reload on Party change
+        const partySelect = document.getElementById('id_party');
+        if (partySelect) {
+            partySelect.addEventListener('change', function() {
+                const partyId = this.value;
+                if (partyId) {
+                    const url = new URL(window.location.href);
+                    url.searchParams.set('party', partyId);
+                    window.location.href = url.toString();
+                }
+            });
+        }
+
         // Select All functionality
         const selectAll = document.getElementById('selectAllTrips');
         const checkboxes = document.querySelectorAll('.trip-checkbox');

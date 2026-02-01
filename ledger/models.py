@@ -39,6 +39,8 @@ class Party(models.Model):
     phone_number = models.CharField(max_length=20, blank=True, verbose_name='Phone Number')
     state = models.CharField(max_length=100, blank=True, verbose_name='State')
     address = models.TextField(blank=True, verbose_name='Address')
+    gstin = models.CharField(max_length=20, blank=True, verbose_name='GSTIN')
+    bank_details = models.TextField(blank=True, verbose_name='Bank Details')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='Created At')
 
     class Meta:
@@ -271,6 +273,8 @@ class CompanyProfile(models.Model):
     """
     company_name = models.CharField(max_length=200, default="My Transport Company")
     address = models.TextField(blank=True, verbose_name="Company Address")
+    phone_number = models.CharField(max_length=20, blank=True, verbose_name="Phone Number")
+    gstin = models.CharField(max_length=20, blank=True, verbose_name="GSTIN")
     bank_details = models.TextField(blank=True, verbose_name="Bank Details", help_text="Bank Name, Account No, IFSC, etc.")
     authorized_signatory = models.CharField(max_length=200, blank=True, verbose_name="Authorized Signatory Name")
     invoice_template = models.CharField(max_length=100, default="INV-{YYYY}-{SEQ}", help_text="Use {YYYY} for Year, {SEQ} for Sequence Number")
@@ -302,19 +306,42 @@ class Bill(models.Model):
         (GST_RATE_18, '18% GST'),
     ]
 
+    GST_TYPE_INTRA = 'INTRA'
+    GST_TYPE_INTER = 'INTER'
+    GST_TYPE_CHOICES = [
+        (GST_TYPE_INTRA, 'Intra-state (CGST + SGST)'),
+        (GST_TYPE_INTER, 'Inter-state (IGST)'),
+    ]
+
     bill_number = models.CharField(max_length=50, unique=True, blank=True, null=True, verbose_name="Invoice Number")
     party = models.ForeignKey(Party, on_delete=models.PROTECT, related_name='bills', verbose_name="Bill To")
     date = models.DateField(verbose_name="Invoice Date")
     trips = models.ManyToManyField(Trip, related_name='bills', verbose_name="Included Trips")
     gst_rate = models.PositiveIntegerField(choices=GST_CHOICES, default=GST_RATE_0, verbose_name="GST Rate (%)")
+    gst_type = models.CharField(max_length=10, choices=GST_TYPE_CHOICES, default=GST_TYPE_INTRA, verbose_name="GST Type")
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=STATUS_DRAFT)
+    
+    # Snapshot fields for Company Details at time of invoice
+    invoice_company_name = models.CharField(max_length=200, blank=True, verbose_name="Company Name (Snapshot)")
+    invoice_company_address = models.TextField(blank=True, verbose_name="Company Address (Snapshot)")
+    invoice_company_mobile = models.CharField(max_length=20, blank=True, verbose_name="Company Mobile (Snapshot)")
+    invoice_company_gstin = models.CharField(max_length=20, blank=True, verbose_name="Company GSTIN (Snapshot)")
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def save(self, *args, **kwargs):
-        if not self.bill_number and self.status == self.STATUS_FINAL:
-            # Generate Bill Number only when Final
+        # 1. Snapshot Company Details if empty (Creation time mostly)
+        if not self.invoice_company_name:
+            profile = CompanyProfile.objects.first()
+            if profile:
+                self.invoice_company_name = profile.company_name
+                self.invoice_company_address = profile.address
+                self.invoice_company_mobile = profile.phone_number
+                self.invoice_company_gstin = profile.gstin
+        
+        # 2. Generate Bill Number if missing
+        if not self.bill_number:
             profile = CompanyProfile.objects.first()
             if not profile:
                  template = "INV-{YYYY}-{SEQ}"
@@ -355,6 +382,24 @@ class Bill(models.Model):
     @property
     def total_amount(self):
         return self.subtotal + self.gst_amount
+    
+    @property
+    def cgst_amount(self):
+        if self.gst_rate > 0 and self.gst_type == self.GST_TYPE_INTRA:
+            return self.gst_amount / 2
+        return 0
+
+    @property
+    def sgst_amount(self):
+        if self.gst_rate > 0 and self.gst_type == self.GST_TYPE_INTRA:
+            return self.gst_amount / 2
+        return 0
+
+    @property
+    def igst_amount(self):
+        if self.gst_rate > 0 and self.gst_type == self.GST_TYPE_INTER:
+            return self.gst_amount
+        return 0
 
     def __str__(self):
         return f"{self.bill_number or 'Draft'} - {self.party.name}"

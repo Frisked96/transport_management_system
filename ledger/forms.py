@@ -119,10 +119,11 @@ class PartyForm(forms.ModelForm):
     
     class Meta:
         model = Party
-        fields = ['name', 'phone_number', 'state', 'address']
+        fields = ['name', 'phone_number', 'state', 'address', 'gstin', 'bank_details']
         
         widgets = {
             'address': forms.Textarea(attrs={'rows': 3}),
+            'bank_details': forms.Textarea(attrs={'rows': 3}),
         }
 
 
@@ -147,9 +148,21 @@ class AccountForm(forms.ModelForm):
 class BillForm(forms.ModelForm):
     class Meta:
         model = Bill
-        fields = ['party', 'date', 'gst_rate', 'trips']
+        fields = [
+            'bill_number', 
+            'party', 
+            'date', 
+            'gst_type', 
+            'gst_rate', 
+            'invoice_company_name',
+            'invoice_company_address',
+            'invoice_company_mobile',
+            'invoice_company_gstin',
+            'trips'
+        ]
         widgets = {
             'date': forms.DateInput(attrs={'type': 'date'}),
+            'invoice_company_address': forms.Textarea(attrs={'rows': 3}),
             'trips': forms.CheckboxSelectMultiple(),
         }
 
@@ -189,11 +202,46 @@ class BillForm(forms.ModelForm):
                 self.fields['trips'].queryset = Trip.objects.none()
         else:
             self.fields['trips'].queryset = Trip.objects.none()
+        
+        # Pre-fill Company Details and Bill Number if creating new
+        if not self.instance.pk:
+            profile = CompanyProfile.objects.first()
+            if profile:
+                self.fields['invoice_company_name'].initial = profile.company_name
+                self.fields['invoice_company_address'].initial = profile.address
+                self.fields['invoice_company_mobile'].initial = profile.phone_number
+                self.fields['invoice_company_gstin'].initial = profile.gstin
+                
+                # Predict next Bill Number
+                from .models import Sequence
+                import datetime
+                
+                try:
+                    seq_obj = Sequence.objects.get(key="bill_sequence")
+                    next_val = seq_obj.value + 1
+                except Sequence.DoesNotExist:
+                    next_val = 1
+                
+                template = profile.invoice_template or "INV-{YYYY}-{SEQ}"
+                now = datetime.datetime.now()
+                pred_num = template.replace("{YYYY}", str(now.year)).replace("{SEQ}", f"{next_val:04d}")
+                self.fields['bill_number'].initial = pred_num
+
+        # Add labels if needed
+        self.fields['gst_type'].label = "GST Type"
 
 class CompanyProfileForm(forms.ModelForm):
     class Meta:
         model = CompanyProfile
-        fields = ['company_name', 'address', 'bank_details', 'authorized_signatory', 'invoice_template']
+        fields = [
+            'company_name', 
+            'address', 
+            'phone_number', 
+            'gstin', 
+            'bank_details', 
+            'authorized_signatory', 
+            'invoice_template'
+        ]
         widgets = {
             'address': forms.Textarea(attrs={'rows': 3}),
             'bank_details': forms.Textarea(attrs={'rows': 3}),
