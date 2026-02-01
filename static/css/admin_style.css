@@ -1,30 +1,30 @@
-/* Professional Dark Theme - Enterprise Slate & Indigo */
-/* Designed for high data density, readability, and reduced eye strain */
+/* Professional Light Theme - Clean White & Enterprise Blue */
+/* Designed for readability, cleanliness, and modern aesthetics */
 
 :root {
-    /* Color Palette - Slate (Backgrounds/Borders) */
-    --bg-body: #0f172a;       /* Very dark slate */
-    --bg-surface: #1e293b;    /* Dark slate for cards/nav */
-    --bg-surface-hover: #334155;
+    /* Color Palette - Slate/Gray (Backgrounds/Borders) */
+    --bg-body: #f8fafc;       /* Slate 50 - Very light gray/white */
+    --bg-surface: #ffffff;    /* Pure white for cards/nav */
+    --bg-surface-hover: #f1f5f9; /* Slate 100 */
     
-    /* Text Colors - High Contrast Mode */
-    --text-primary: #ffffff;  /* Pure white for maximum contrast */
-    --text-secondary: #e2e8f0; /* Very light slate gray */
-    --text-muted: #cbd5e1;    /* Light muted gray - much brighter than before */
+    /* Text Colors - High Contrast */
+    --text-primary: #0f172a;  /* Slate 900 - Deep dark blue/black */
+    --text-secondary: #475569; /* Slate 600 */
+    --text-muted: #64748b;    /* Slate 500 */
 
     /* Brand/Action Colors */
-    --primary: #60a5fa;       /* Brighter Blue for dark bg */
-    --primary-hover: #93c5fd;
-    --primary-subtle: rgba(96, 165, 250, 0.15);
+    --primary: #2563eb;       /* Standard Blue (Tailwind Blue 600) */
+    --primary-hover: #1d4ed8; /* Darker Blue */
+    --primary-subtle: rgba(37, 99, 235, 0.1);
     
-    --success: #34d399;       /* Brighter Emerald */
-    --warning: #fbbf24;       /* Brighter Amber */
-    --danger: #f87171;        /* Brighter Red */
-    --info: #38bdf8;          /* Brighter Sky */
+    --success: #10b981;       /* Emerald 500 */
+    --warning: #f59e0b;       /* Amber 500 */
+    --danger: #ef4444;        /* Red 500 */
+    --info: #0ea5e9;          /* Sky 500 */
 
     /* Borders & Separators */
-    --border-color: #475569;  /* Lighter border for visibility */
-    --border-light: #64748b;
+    --border-color: #e2e8f0;  /* Slate 200 */
+    --border-light: #f1f5f9;
 
     /* Spacing & Layout */
     --radius-sm: 4px;
@@ -32,14 +32,14 @@
     --radius-lg: 8px;
     
     /* Shadows */
-    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.5);
-    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
 }
 
 /* Global Reset & Typography */
 body {
     background-color: var(--bg-body) !important;
-    color: var(--text-primary) !important; /* Force global text color */
+    color: var(--text-primary) !important;
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     font-size: 0.95rem;
     line-height: 1.5;
@@ -70,27 +70,27 @@ a:hover {
 
 /* Utilities */
 .text-muted { color: var(--text-muted) !important; }
-.bg-light { background-color: var(--bg-surface) !important; }
+.bg-light { background-color: var(--bg-surface-hover) !important; }
 .border { border-color: var(--border-color) !important; }
 
-/* Placeholder Visibility - Global Fix */
+/* Placeholder Visibility */
 ::-webkit-input-placeholder { color: var(--text-muted) !important; opacity: 1; }
 ::-moz-placeholder { color: var(--text-muted) !important; opacity: 1; }
 :-ms-input-placeholder { color: var(--text-muted) !important; opacity: 1; }
 ::-ms-input-placeholder { color: var(--text-muted) !important; opacity: 1; }
 ::placeholder { color: var(--text-muted) !important; opacity: 1; }
 
-/* Input Group Addons (Search Icons etc) */
+/* Input Group Addons */
 .input-group-text {
-    background-color: var(--bg-surface) !important;
+    background-color: var(--bg-surface-hover) !important;
     border-color: var(--border-color) !important;
     color: var(--text-secondary) !important;
 }
 
 /* Navbar */
 .navbar {
-    background-color: var(--bg-surface) !important;
-    border-bottom: 1px solid var(--border-color);
+    background-color: #1e293b !important; /* Dark Slate for Contrast */
+    border-bottom: 1px solid #334155;
     box-shadow: var(--shadow-sm);
     padding: 0.75rem 0;
 }
@@ -98,11 +98,11 @@ a:hover {
 .navbar-brand {
     font-weight: 700;
     font-size: 1.25rem;
-    color: var(--text-primary) !important;
+    color: #ffffff !important;
 }
 
 .navbar-dark .navbar-nav .nav-link {
-    color: var(--text-secondary);
+    color: #cbd5e1; /* Light Slate */
     font-weight: 500;
     font-size: 0.9rem;
     padding: 0.5rem 1rem;
@@ -110,11 +110,11 @@ a:hover {
 }
 .navbar-dark .navbar-nav .nav-link:hover,
 .navbar-dark .navbar-nav .nav-link.active {
-    color: var(--text-primary);
+    color: #ffffff;
     background-color: rgba(255, 255, 255, 0.1);
 }
 
-/* Cards & Containers - Explicit Text Color Enforcement */
+/* Cards & Containers */
 .card, .modal-content, .offcanvas, .dropdown-menu {
     background-color: var(--bg-surface);
     color: var(--text-primary) !important;
@@ -128,19 +128,20 @@ a:hover {
 }
 
 .card-header {
-    background-color: rgba(255, 255, 255, 0.05); 
+    background-color: var(--bg-surface-hover); /* Light gray header */
     border-bottom: 1px solid var(--border-color);
     padding: 1rem 1.25rem;
     font-weight: 600;
     font-size: 0.95rem;
     color: var(--text-primary) !important;
 }
+/* If utility classes are used on card-header, they will override this, which is fine */
 
 .card-body {
     padding: 1.25rem;
 }
 
-/* Tables - Data Dense */
+/* Tables */
 .table {
     color: var(--text-primary) !important;
     border-color: var(--border-color);
@@ -157,7 +158,7 @@ a:hover {
 }
 
 .table thead th {
-    background-color: rgba(0, 0, 0, 0.3);
+    background-color: var(--bg-surface-hover); /* Light gray header */
     color: var(--text-secondary);
     font-weight: 600;
     text-transform: uppercase;
@@ -171,9 +172,9 @@ a:hover {
     color: var(--text-primary);
 }
 
-/* Striping with subtle alternation */
+/* Striping */
 .table-striped > tbody > tr:nth-of-type(odd) > * {
-    background-color: rgba(255, 255, 255, 0.03);
+    background-color: #f8fafc; /* Very subtle stripe */
     color: var(--text-primary);
 }
 
@@ -189,27 +190,27 @@ a:hover {
 .btn-primary {
     background-color: var(--primary);
     border-color: var(--primary);
-    color: #0f172a; /* Dark text on bright button for contrast */
+    color: #ffffff; 
 }
 .btn-primary:hover {
     background-color: var(--primary-hover);
     border-color: var(--primary-hover);
-    color: #0f172a;
+    color: #ffffff;
 }
 
 .btn-outline-secondary {
     color: var(--text-secondary);
-    border-color: var(--border-light);
+    border-color: var(--border-color);
 }
 .btn-outline-secondary:hover {
-    background-color: var(--border-light);
+    background-color: var(--bg-surface-hover);
     color: var(--text-primary);
 }
 
 /* Forms */
 .form-control, .form-select, .form-control:disabled, .form-control[readonly] {
-    background-color: var(--bg-body) !important;
-    border: 1px solid var(--border-color);
+    background-color: var(--bg-surface) !important;
+    border: 1px solid #cbd5e1; /* Slightly darker border for inputs */
     color: var(--text-primary) !important;
     border-radius: var(--radius-sm);
     padding: 0.6rem 0.75rem;
@@ -252,32 +253,33 @@ a:hover {
     font-size: 0.85rem;
 }
 
-/* Bootstrap Overrides for Dark Mode Consistency */
+/* Bootstrap Overrides */
 .breadcrumb-item a { color: var(--text-secondary); }
 .breadcrumb-item.active { color: var(--text-muted); }
 
 .dropdown-menu {
     box-shadow: var(--shadow-md);
+    border: 1px solid var(--border-color);
 }
 .dropdown-item {
     color: var(--text-primary);
 }
 .dropdown-item:hover, .dropdown-item:focus {
     background-color: var(--bg-surface-hover);
-    color: var(--text-primary);
+    color: var(--primary);
 }
 .dropdown-divider { border-top-color: var(--border-color); }
 
-/* Alerts */
-.alert-info { background-color: rgba(56, 189, 248, 0.15); border-color: rgba(56, 189, 248, 0.3); color: #bae6fd; }
-.alert-success { background-color: rgba(52, 211, 153, 0.15); border-color: rgba(52, 211, 153, 0.3); color: #a7f3d0; }
-.alert-warning { background-color: rgba(251, 191, 36, 0.15); border-color: rgba(251, 191, 36, 0.3); color: #fde68a; }
-.alert-danger { background-color: rgba(248, 113, 113, 0.15); border-color: rgba(248, 113, 113, 0.3); color: #fecaca; }
+/* Alerts - Keep them colorful but readable */
+.alert-info { background-color: #e0f2fe; border-color: #bae6fd; color: #0369a1; }
+.alert-success { background-color: #dcfce7; border-color: #86efac; color: #15803d; }
+.alert-warning { background-color: #fef3c7; border-color: #fde68a; color: #b45309; }
+.alert-danger { background-color: #fee2e2; border-color: #fca5a5; color: #b91c1c; }
 
-/* Select2 Dark Mode Fixes */
+/* Select2 Light Mode */
 .select2-container--bootstrap-5 .select2-selection {
-    background-color: var(--bg-body) !important;
-    border-color: var(--border-color) !important;
+    background-color: var(--bg-surface) !important;
+    border-color: #cbd5e1 !important;
     color: var(--text-primary) !important;
 }
 .select2-container--bootstrap-5 .select2-selection--single .select2-selection__rendered {
@@ -288,14 +290,14 @@ a:hover {
     border-color: var(--border-color) !important;
 }
 .select2-search__field {
-    background-color: var(--bg-body) !important;
+    background-color: var(--bg-surface) !important;
     color: var(--text-primary) !important;
-    border-color: var(--border-color) !important;
+    border-color: #cbd5e1 !important;
 }
 .select2-results__option {
     color: var(--text-primary) !important;
 }
 .select2-results__option--highlighted {
     background-color: var(--primary) !important;
-    color: #0f172a !important; /* Dark text on active selection */
+    color: #ffffff !important;
 }
