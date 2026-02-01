@@ -1,0 +1,58 @@
+{% extends 'base.html' %}
+
+{% block title %}Delete Invoice - TMS{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card shadow-sm border-danger">
+            <div class="card-header bg-danger text-white">
+                <h5 class="card-title mb-0">Confirm Delete Invoice</h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                    <strong>Warning!</strong> Are you sure you want to delete this invoice? This action cannot be undone.
+                </div>
+
+                <div class="mb-4">
+                    <table class="table table-sm table-borderless">
+                        <tr>
+                            <th style="width: 40%;">Invoice Number:</th>
+                            <td>{{ object.bill_number|default:"DRAFT" }}</td>
+                        </tr>
+                        <tr>
+                            <th>Date:</th>
+                            <td>{{ object.date|date:"d M Y" }}</td>
+                        </tr>
+                        <tr>
+                            <th>Party:</th>
+                            <td>{{ object.party.name }}</td>
+                        </tr>
+                        <tr>
+                            <th>Total Amount:</th>
+                            <td class="fw-bold">${{ object.total_amount|floatformat:2 }}</td>
+                        </tr>
+                        <tr>
+                            <th>Included Trips:</th>
+                            <td>{{ object.trips.count }}</td>
+                        </tr>
+                    </table>
+                </div>
+
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a href="{% url 'bill-detail' object.pk %}" class="btn btn-outline-secondary px-4">
+                            Cancel
+                        </a>
+                        <button type="submit" class="btn btn-danger px-4">
+                            <i class="bi bi-trash"></i> Yes, Delete Invoice
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

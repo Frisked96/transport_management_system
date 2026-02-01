@@ -309,8 +309,8 @@ class Bill(models.Model):
     GST_TYPE_INTRA = 'INTRA'
     GST_TYPE_INTER = 'INTER'
     GST_TYPE_CHOICES = [
-        (GST_TYPE_INTRA, 'Intra-state (CGST + SGST)'),
-        (GST_TYPE_INTER, 'Inter-state (IGST)'),
+        (GST_TYPE_INTRA, 'Intra-state'),
+        (GST_TYPE_INTER, 'Inter-state'),
     ]
 
     bill_number = models.CharField(max_length=50, unique=True, blank=True, null=True, verbose_name="Invoice Number")
@@ -400,6 +400,17 @@ class Bill(models.Model):
         if self.gst_rate > 0 and self.gst_type == self.GST_TYPE_INTER:
             return self.gst_amount
         return 0
+
+    def get_trip_gst(self, trip):
+        """Calculate GST amount for a specific trip in this bill context"""
+        if not trip.revenue or self.gst_rate == 0:
+            return 0
+        return trip.revenue * (Decimal(self.gst_rate) / Decimal(100))
+
+    def get_trip_total(self, trip):
+        """Calculate Total amount (Revenue + GST) for a specific trip"""
+        rev = trip.revenue or 0
+        return rev + self.get_trip_gst(trip)
 
     def __str__(self):
         return f"{self.bill_number or 'Draft'} - {self.party.name}"

@@ -181,8 +181,12 @@ class BillForm(forms.ModelForm):
             party_id = self.data.get('party')
         elif self.instance and self.instance.pk: # Edit mode
             party_id = self.instance.party_id
-        elif 'initial' in kwargs and 'party' in kwargs['initial']: # Pre-filled
-            party_id = kwargs['initial']['party']
+        else:
+             # Check initial data from kwargs or self.initial
+             if 'initial' in kwargs and 'party' in kwargs['initial']:
+                 party_id = kwargs['initial']['party']
+             elif self.initial.get('party'):
+                 party_id = self.initial.get('party')
             
         if party_id:
             try:

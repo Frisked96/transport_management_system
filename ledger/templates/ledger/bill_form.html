@@ -146,21 +146,27 @@
         </form>
     </div>
 </div>
+{% endblock %}
 
+{% block extra_js %}
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Auto-reload on Party change
-        const partySelect = document.getElementById('id_party');
-        if (partySelect) {
-            partySelect.addEventListener('change', function() {
-                const partyId = this.value;
-                if (partyId) {
-                    const url = new URL(window.location.href);
-                    url.searchParams.set('party', partyId);
-                    window.location.href = url.toString();
-                }
-            });
-        }
+    $(document).ready(function() {
+        // Initialize Select2 for Party dropdown
+        $('#id_party').select2({
+            theme: 'bootstrap-5',
+            placeholder: 'Select a Party',
+            allowClear: true
+        });
+
+        // Auto-reload on Party change (using Select2 event)
+        $('#id_party').on('change', function() {
+            const partyId = $(this).val();
+            if (partyId) {
+                const url = new URL(window.location.href);
+                url.searchParams.set('party', partyId);
+                window.location.href = url.toString();
+            }
+        });
 
         // Select All functionality
         const selectAll = document.getElementById('selectAllTrips');

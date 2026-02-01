@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% load static %}
+{% load ledger_extras %}
 
 {% block title %}Invoice {{ bill.bill_number }} - TMS{% endblock %}
 
@@ -42,10 +43,6 @@
                         <th class="text-end py-1">Date:</th>
                         <td class="text-end py-1">{{ bill.date|date:"d M Y" }}</td>
                     </tr>
-                    <tr>
-                        <th class="text-end py-1">GST Mode:</th>
-                        <td class="text-end py-1">{{ bill.get_gst_type_display }}</td>
-                    </tr>
                 </table>
             </div>
         </div>
@@ -74,6 +71,10 @@
                         <th class="text-end">Weight (Ton)</th>
                         <th class="text-end">Rate</th>
                         <th class="text-end">Amount</th>
+                        {% if bill.gst_rate > 0 %}
+                            <th class="text-end">GST</th>
+                            <th class="text-end">Total</th>
+                        {% endif %}
                     </tr>
                 </thead>
                 <tbody>
@@ -87,37 +88,49 @@
                         <td class="text-end">{{ trip.weight }}</td>
                         <td class="text-end">{{ trip.rate_per_ton }}</td>
                         <td class="text-end">{{ trip.revenue|floatformat:2 }}</td>
+                        {% if bill.gst_rate > 0 %}
+                            {% with gst_amt=bill|calculate_trip_gst:trip %}
+                                <td class="text-end">{{ gst_amt|floatformat:2 }}</td>
+                                <td class="text-end">{{ trip.revenue|add_decimal:gst_amt|floatformat:2 }}</td>
+                            {% endwith %}
+                        {% endif %}
                     </tr>
                     {% endfor %}
                 </tbody>
                 <tfoot class="table-light">
+                    {% with col_span=bill.gst_rate|yesno:"7,5" %}
                     <tr>
-                        <td colspan="5" class="text-end fw-bold">Subtotal</td>
+                        <td colspan="{{ col_span }}" class="text-end fw-bold">Subtotal</td>
                         <td class="text-end fw-bold">{{ bill.subtotal|floatformat:2 }}</td>
                     </tr>
                     {% if bill.gst_rate > 0 %}
+                        <tr>
+                            <td colspan="{{ col_span }}" class="text-end fw-bold">Total GST ({{ bill.gst_rate }}%)</td>
+                            <td class="text-end fw-bold">{{ bill.gst_amount|floatformat:2 }}</td>
+                        </tr>
                         {% if bill.gst_type == 'INTRA' %}
                             <!-- Intra-state: CGST + SGST -->
                             <tr>
-                                <td colspan="5" class="text-end">CGST ({{ bill.gst_rate|divisibleby:2|yesno:"half,half" }}%)</td>
+                                <td colspan="{{ col_span }}" class="text-end">CGST ({% widthratio bill.gst_rate 2 1 %}%)</td>
                                 <td class="text-end">{{ bill.cgst_amount|floatformat:2 }}</td>
                             </tr>
                             <tr>
-                                <td colspan="5" class="text-end">SGST ({{ bill.gst_rate|divisibleby:2|yesno:"half,half" }}%)</td>
+                                <td colspan="{{ col_span }}" class="text-end">SGST ({% widthratio bill.gst_rate 2 1 %}%)</td>
                                 <td class="text-end">{{ bill.sgst_amount|floatformat:2 }}</td>
                             </tr>
                         {% else %}
                             <!-- Inter-state: IGST -->
                             <tr>
-                                <td colspan="5" class="text-end">IGST ({{ bill.gst_rate }}%)</td>
+                                <td colspan="{{ col_span }}" class="text-end">IGST ({{ bill.gst_rate }}%)</td>
                                 <td class="text-end">{{ bill.igst_amount|floatformat:2 }}</td>
                             </tr>
                         {% endif %}
                     {% endif %}
                     <tr class="bg-primary text-white">
-                        <td colspan="5" class="text-end fw-bold fs-5">Total</td>
+                        <td colspan="{{ col_span }}" class="text-end fw-bold fs-5">Grand Total</td>
                         <td class="text-end fw-bold fs-5">{{ bill.total_amount|floatformat:2 }}</td>
                     </tr>
+                    {% endwith %}
                 </tfoot>
             </table>
         </div>
