@@ -275,6 +275,7 @@ class CompanyProfile(models.Model):
     address = models.TextField(blank=True, verbose_name="Company Address")
     phone_number = models.CharField(max_length=20, blank=True, verbose_name="Phone Number")
     gstin = models.CharField(max_length=20, blank=True, verbose_name="GSTIN")
+    pan = models.CharField(max_length=20, blank=True, verbose_name="PAN")
     bank_details = models.TextField(blank=True, verbose_name="Bank Details", help_text="Bank Name, Account No, IFSC, etc.")
     authorized_signatory = models.CharField(max_length=200, blank=True, verbose_name="Authorized Signatory Name")
     invoice_template = models.CharField(max_length=100, default="INV-{YYYY}-{SEQ}", help_text="Use {YYYY} for Year, {SEQ} for Sequence Number")
@@ -359,29 +360,6 @@ class Bill(models.Model):
             self.bill_number = num
             
         super().save(*args, **kwargs)
-
-    @property
-    def subtotal(self):
-        # Calculate sum of trip revenues
-        # Revenue = weight * rate_per_ton
-        # Handle cases where weight/rate might be None
-        val = self.trips.aggregate(
-            total=Sum(
-                Coalesce(F('weight'), 0, output_field=DecimalField()) * 
-                Coalesce(F('rate_per_ton'), 0, output_field=DecimalField())
-            )
-        )['total']
-        return val or 0
-
-    @property
-    def gst_amount(self):
-        if self.gst_rate > 0:
-            return self.subtotal * (Decimal(self.gst_rate) / Decimal(100))
-        return 0
-
-    @property
-    def total_amount(self):
-        return self.subtotal + self.gst_amount
     
     @property
     def cgst_amount(self):
@@ -414,3 +392,40 @@ class Bill(models.Model):
 
     def __str__(self):
         return f"{self.bill_number or 'Draft'} - {self.party.name}"
+    
+    description = models.TextField(blank=True, verbose_name="Item Description",
+                                   help_text="Description shown on invoice (e.g., destination/material)")
+    hsn_code = models.CharField(max_length=20, default="996511", verbose_name="HSN Code")
+    reverse_charge = models.BooleanField(default=False, verbose_name="Reverse Charge")
+
+    @property
+    def trips_count(self):
+        return self.trips.count()
+
+    @property
+    def total_weight(self):
+        return self.trips.aggregate(total=models.Sum('weight'))['total'] or 0
+
+    @property
+    def subtotal(self):
+        # revenue = weight * rate_per_ton
+        return self.trips.aggregate(
+            total=models.Sum(models.F('weight') * models.F('rate_per_ton'))
+        )['total'] or 0
+
+    @property
+    def gst_amount(self):
+        return self.subtotal * (Decimal(self.gst_rate) / Decimal(100))
+
+    @property
+    def total_amount(self):
+        return self.subtotal + self.gst_amount
+
+    @property
+    def rounded_total(self):
+        # Round to nearest whole rupee
+        return self.total_amount.quantize(Decimal('1'), rounding='ROUND_HALF_UP')
+
+    @property
+    def roundoff(self):
+        return self.rounded_total - self.total_amount

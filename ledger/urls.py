@@ -37,6 +37,11 @@ urlpatterns = [
     path('bills/<int:pk>/update/', views.BillUpdateView.as_view(), name='bill-update'),
     path('bills/<int:pk>/delete/', views.BillDeleteView.as_view(), name='bill-delete'),
     
+    # New print views
+    path('bills/<int:pk>/print/', views.print_invoice, name='print-invoice'),
+    path('bills/<int:pk>/annexure/', views.print_annexure, name='print-annexure'),
+    path('bills/<int:pk>/print-combined/', views.print_combined_bill, name='print-combined-bill'),
+
     # Company Profile
     path('settings/company/', views.CompanyProfileUpdateView.as_view(), name='company-profile-update'),
 ]

@@ -631,3 +631,68 @@ class CompanyProfileUpdateView(LoginRequiredMixin, PermissionRequiredMixin, Upda
     def form_valid(self, form):
         messages.success(self.request, 'Company Settings updated!')
         return super().form_valid(form)
+
+from django.shortcuts import get_object_or_404, render
+from .models import Bill, CompanyProfile
+
+def print_invoice(request, pk):
+    """Render print‑optimized invoice."""
+    bill = get_object_or_404(Bill, pk=pk)
+    company_profile = CompanyProfile.objects.first()
+    context = {
+        'bill': bill,
+        'company_profile': company_profile,
+    }
+    return render(request, 'ledger/invoice_print.html', context)
+
+def print_annexure(request, pk):
+    """Render annexure with trip‑by‑trip details and date‑wise subtotals."""
+    bill = get_object_or_404(Bill, pk=pk)
+    company_profile = CompanyProfile.objects.first()
+    # Fetch trips ordered by date
+    trips = bill.trips.select_related('vehicle').order_by('date')
+    
+    # Group by date and calculate subtotals
+    from itertools import groupby
+    from operator import attrgetter
+    date_groups = []
+    for date, group in groupby(trips, key=attrgetter('date')):
+        trip_list = list(group)
+        date_groups.append({
+            'date': date,
+            'trips': trip_list,
+            'total_weight': sum(t.weight or 0 for t in trip_list),
+            'total_amount': sum(t.revenue or 0 for t in trip_list),
+        })
+    context = {
+        'bill': bill,
+        'company_profile': company_profile,
+        'date_groups': date_groups,
+    }
+    return render(request, 'ledger/annexure_print.html', context)
+
+def print_combined_bill(request, pk):
+    """Render a combined invoice and annexure for printing."""
+    bill = get_object_or_404(Bill, pk=pk)
+    company_profile = CompanyProfile.objects.first()
+    
+    # For annexure
+    trips = bill.trips.select_related('vehicle').order_by('date')
+    from itertools import groupby
+    from operator import attrgetter
+    date_groups = []
+    for date, group in groupby(trips, key=attrgetter('date')):
+        trip_list = list(group)
+        date_groups.append({
+            'date': date,
+            'trips': trip_list,
+            'total_weight': sum(t.weight or 0 for t in trip_list),
+            'total_amount': sum(t.revenue or 0 for t in trip_list),
+        })
+
+    context = {
+        'bill': bill,
+        'company_profile': company_profile,
+        'date_groups': date_groups,
+    }
+    return render(request, 'ledger/combined_bill_print.html', context)

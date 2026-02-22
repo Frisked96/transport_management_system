@@ -1,0 +1,201 @@
+{% load humanize %}
+{% load ledger_extras %}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Invoice {{ bill.bill_number }}</title>
+    <style>
+        /* Print styles */
+        @page {
+            size: A4;
+            margin: 1.5cm;
+        }
+        body {
+            font-family: 'Trebuchet MS', 'Lucida Sans Unicode', 'Lucida Grande', 'Lucida Sans', Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: white;
+        }
+        .print-area {
+            min-height: 980px;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+        td, th {
+            border: 1px solid black;
+            padding: 5px;
+            vertical-align: top;
+        }
+        .no-border td, .no-border th {
+            border: none;
+        }
+        .border-bottom {
+            border-bottom: 1px solid black;
+        }
+        .fw-bold {
+            font-weight: bold;
+        }
+        .text-end {
+            text-align: right;
+        }
+        .text-center {
+            text-align: center;
+        }
+        .bg-white {
+            background-color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="print-area">
+        <table cellspacing="0" style="min-height: 980px;">
+            <!-- Header: Company details -->
+            <tr style="height: 80px;">
+                <td colspan="7" class="text-center fw-bold">
+                    <h3>{{ bill.invoice_company_name|default:company_profile.company_name }}</h3>
+                    <div>{{ bill.invoice_company_address|linebreaksbr|default:company_profile.address }}</div>
+                    <div>Mob No: {{ bill.invoice_company_mobile|default:company_profile.phone_number }}</div>
+                    <div>Email: {{ company_profile.email|default:"" }}</div>
+                </td>
+            </tr>
+
+            <!-- Title -->
+            <tr style="height: 30px;">
+                <td colspan="7" class="text-center fw-bold" style="font-size: large;">TAX INVOICE</td>
+            </tr>
+
+            <!-- Bill To and metadata -->
+            <tr style="vertical-align: top;">
+                <td colspan="2" rowspan="6" width="70%">
+                    <b>TO,<br> {{ bill.party.name }}<br></b>
+                    {{ bill.party.address|linebreaksbr }}<br>
+                    {{ bill.party.state }} {{ bill.party.pincode }}<br>
+                    <b>GST NO:</b> {{ bill.party.gstin }}<br>
+                    <b>PAN NO:</b> {{ bill.party.pan|default:"" }}
+                </td>
+                <td colspan="2"><b>BILL NO</b></td>
+                <td colspan="3"><b>{{ bill.bill_number }}</b></td>
+            </tr>
+            <tr>
+                <td colspan="2"><b>DATE</b></td>
+                <td colspan="3"><b>{{ bill.date|date:"d-m-Y" }}</b></td>
+            </tr>
+            <tr>
+                <td colspan="2"><b>GST NO</b></td>
+                <td colspan="3"><b>{{ company_profile.gstin }}</b></td>
+            </tr>
+            <tr>
+                <td colspan="2"><b>STATE</b></td>
+                <td colspan="3"><b>{{ company_profile.state|default:"" }}</b></td>
+            </tr>
+            <tr>
+                <td colspan="2"><b>STATE CODE</b></td>
+                <td colspan="3"><b>{{ company_profile.state_code|default:"N/A" }}</b></td>
+            </tr>
+            <tr>
+                <td colspan="2"><b>PAN NO</b></td>
+                <td colspan="3"><b>{{ company_profile.pan }}</b></td>
+            </tr>
+
+            <!-- Dispatch label -->
+            <tr>
+                <td colspan="7"><b>Bill for dispatch from LSYK</b></td>
+            </tr>
+
+            <!-- Table headers -->
+            <tr>
+                <th>S.No.</th>
+                <th>Description Of Goods/Service</th>
+                <th>Trips</th>
+                <th>HSN Code</th>
+                <th>Quantity(MT)</th>
+                <th>Rate/MT</th>
+                <th>Amount in Rs.</th>
+            </tr>
+
+            <!-- Data row (aggregated) -->
+            <tr>
+                <td class="text-center">1</td>
+                <td>{{ bill.description|default:"Transportation Service" }}</td>
+                <td class="text-center">{{ bill.trips_count }}</td>
+                <td class="text-center">{{ bill.hsn_code }}</td>
+                <td class="text-end">{{ bill.total_weight|floatformat:3 }}</td>
+                <td class="text-end">{{ bill.trips.first.rate_per_ton|floatformat:2 }}</td>
+                <td class="text-end">{{ bill.subtotal|floatformat:2 }}</td>
+            </tr>
+
+            <!-- Subtotal row -->
+            <tr>
+                <td colspan="2" class="text-end fw-bold">Sub Total:</td>
+                <td class="text-center fw-bold">{{ bill.trips_count }}</td>
+                <td></td>
+                <td class="text-end fw-bold">{{ bill.total_weight|floatformat:3 }}</td>
+                <td></td>
+                <td class="text-end fw-bold">{{ bill.subtotal|floatformat:2 }}</td>
+            </tr>
+
+            <!-- Gross total -->
+            <tr>
+                <td colspan="6" class="text-end fw-bold">GROSS TOTAL</td>
+                <td class="text-end fw-bold">{{ bill.subtotal|floatformat:2 }}</td>
+            </tr>
+
+            <!-- GST lines -->
+            {% if bill.gst_rate > 0 %}
+                {% if bill.gst_type == 'INTRA' %}
+                    <tr>
+                        <td colspan="6" class="text-end fw-bold">CGST {% widthratio bill.gst_rate 2 1 %}%</td>
+                        <td class="text-end fw-bold">{{ bill.cgst_amount|floatformat:2 }}</td>
+                    </tr>
+                    <tr>
+                        <td colspan="6" class="text-end fw-bold">SGST {% widthratio bill.gst_rate 2 1 %}%</td>
+                        <td class="text-end fw-bold">{{ bill.sgst_amount|floatformat:2 }}</td>
+                    </tr>
+                {% else %}
+                    <tr>
+                        <td colspan="6" class="text-end fw-bold">IGST {{ bill.gst_rate }}%</td>
+                        <td class="text-end fw-bold">{{ bill.igst_amount|floatformat:2 }}</td>
+                    </tr>
+                {% endif %}
+            {% endif %}
+
+            <!-- Amount in words and round off -->
+            <tr>
+                <td colspan="3" class="fw-bold">{{ bill.rounded_total|num2words }}</td>
+                <td colspan="3" class="text-end fw-bold">ROUNDOFF(-/+)</td>
+                <td class="text-end fw-bold">{{ bill.roundoff|floatformat:2 }}</td>
+            </tr>
+
+            <!-- Total bill amount -->
+            <tr>
+                <td colspan="6" class="text-end fw-bold">TOTAL BILL AMOUNT</td>
+                <td class="text-end fw-bold">{{ bill.rounded_total|floatformat:2 }}</td>
+            </tr>
+
+            <!-- Reverse charge -->
+            <tr>
+                <td colspan="7" class="fw-bold">
+                    Whether the tax is payable on reverse charge basis: {% if bill.reverse_charge %}YES{% else %}NO{% endif %}
+                </td>
+            </tr>
+
+            <!-- Bank details and signature -->
+            <tr style="height: 120px;">
+                <td colspan="3" valign="top">
+                    <p class="fw-bold">Bank Details:</p>
+                    {{ company_profile.bank_details|linebreaksbr }}
+                </td>
+                <td colspan="4" class="text-end" style="border-left:none; vertical-align: bottom;">
+                    <div style="border-top: 1px solid black; display: inline-block; min-width: 200px; padding-top: 5px;">
+                        <b>For {{ bill.invoice_company_name|default:company_profile.company_name }}</b><br><br><br>
+                        <b>Authorised Signatory</b>
+                    </div>
+                </td>
+            </tr>
+        </table>
+    </div>
+</body>
+</html>

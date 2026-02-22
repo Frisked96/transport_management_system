@@ -1,0 +1,93 @@
+{% load humanize %}
+{% load ledger_extras %}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Annexure for Invoice {{ bill.bill_number }}</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 1.5cm;
+        }
+        body {
+            font-family: 'Trebuchet MS', 'Lucida Sans Unicode', 'Lucida Grande', 'Lucida Sans', Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: white;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+        td, th {
+            border: 1px solid black;
+            padding: 5px;
+            vertical-align: top;
+        }
+        .text-end {
+            text-align: right;
+        }
+        .text-center {
+            text-align: center;
+        }
+        .fw-bold {
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <table>
+        <thead>
+            <tr>
+                <td colspan="7" class="text-center fw-bold" style="font-size: large;">ANNEXURE</td>
+            </tr>
+            <tr>
+                <td colspan="7" class="text-center fw-bold">{{ bill.invoice_company_name|default:company_profile.company_name }}</td>
+            </tr>
+            <tr>
+                <td colspan="7" class="text-center fw-bold">{{ bill.party.name }}</td>
+            </tr>
+            <tr>
+                <th>S.No.</th>
+                <th>Pass No</th>
+                <th>Trip Date</th>
+                <th>Vehicle No</th>
+                <th>Rate</th>
+                <th>Net Weight</th>
+                <th>Bill Amount</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% regroup bill.trips.all by date as trips_by_date %}
+            {% for date_group in trips_by_date %}
+                {% for trip in date_group.list %}
+                <tr>
+                    <td class="text-center">{{ forloop.parentloop.counter0|add:forloop.counter }}</td>  <!-- simple running number -->
+                    <td class="text-center">{{ trip.pass_no|default:"" }}</td>
+                    <td class="text-center">{{ trip.date|date:"d-m-Y" }}</td>
+                    <td class="text-center">{{ trip.vehicle.registration_plate }}</td>
+                    <td class="text-end">{{ trip.rate_per_ton|floatformat:2 }}</td>
+                    <td class="text-end">{{ trip.weight|floatformat:3 }}</td>
+                    <td class="text-end">{{ trip.revenue|floatformat:2 }}</td>
+                </tr>
+                {% endfor %}
+                <!-- Subtotal for this date -->
+                {% with date_total_weight=date_group.list|sum_attribute:'weight' date_total_amount=date_group.list|sum_attribute:'revenue' %}
+                <tr style="font-weight: bold;">
+                    <td colspan="5" class="text-end">Total</td>
+                    <td class="text-end">{{ date_total_weight|floatformat:3 }}</td>
+                    <td class="text-end">{{ date_total_amount|floatformat:2 }}</td>
+                </tr>
+                {% endwith %}
+            {% endfor %}
+            <!-- Grand total -->
+            <tr style="font-weight: bold;">
+                <td colspan="5" class="text-end">Grand Total</td>
+                <td class="text-end">{{ bill.total_weight|floatformat:3 }}</td>
+                <td class="text-end">{{ bill.subtotal|floatformat:2 }}</td>
+            </tr>
+        </tbody>
+    </table>
+</body>
+</html>
