@@ -380,15 +380,20 @@ class PartyDetailView(LoginRequiredMixin, BaseLedgerPermissionMixin, DetailView)
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         
-        # Get associated trips
-        trips = self.object.trip_set.all().order_by('-date')
-        context['trips'] = trips
+        # Get associated trips with annotations (Payment & Billing Info)
+        # Use Trip.objects.filter() to ensure we can use the custom Manager methods
+        all_trips = Trip.objects.filter(party=self.object).with_payment_info().with_billing_info().order_by('-date')
+        context['trips'] = all_trips
+
+        # Get Bills
+        context['bills'] = self.object.bills.all().order_by('-date')
         
         # Get associated financial records
-        financial_records = self.object.financial_records.all().order_by('-date')
+        financial_records = self.object.financial_records.all().select_related('category', 'associated_trip', 'associated_bill').order_by('-date')
         context['financial_records'] = financial_records
         
         # Calculate Total Billed (Sum of Invoices)
+        # This includes Trip Revenue Records AND Bill GST Records
         total_billed = financial_records.filter(
             record_type=FinancialRecord.RECORD_TYPE_INVOICE
         ).aggregate(total=Sum('amount'))['total'] or 0
@@ -573,20 +578,29 @@ class BillCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
-        if self.request.method == 'GET' and 'party' in self.request.GET:
+        if self.request.method == 'GET':
             if 'initial' not in kwargs:
                 kwargs['initial'] = {}
-            kwargs['initial']['party'] = self.request.GET.get('party')
+
+            if 'party' in self.request.GET:
+                kwargs['initial']['party'] = self.request.GET.get('party')
+
+            if 'trip_ids' in self.request.GET:
+                # Handle multiple values for checkboxes
+                kwargs['initial']['trips'] = self.request.GET.getlist('trip_ids')
         return kwargs
 
     def form_valid(self, form):
-        self.object = form.save()
+        response = super().form_valid(form)
+        # Update GST record after M2M data is saved
+        self.object.update_ledger_gst_record()
+
         messages.success(self.request, 'Bill created successfully!')
         
         if 'save_print' in self.request.POST:
             return redirect('bill-detail', pk=self.object.pk)
             
-        return super().form_valid(form)
+        return response
 
 class BillUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
     model = Bill
@@ -598,8 +612,11 @@ class BillUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
         return reverse_lazy('bill-list')
 
     def form_valid(self, form):
+        response = super().form_valid(form)
+        # Update GST record after M2M data is saved
+        self.object.update_ledger_gst_record()
         messages.success(self.request, 'Bill updated successfully!')
-        return super().form_valid(form)
+        return response
 
 class BillDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
     model = Bill

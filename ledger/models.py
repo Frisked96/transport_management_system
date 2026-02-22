@@ -158,6 +158,14 @@ class FinancialRecord(models.Model):
         related_name='financial_records',
         verbose_name='Associated Trip'
     )
+    associated_bill = models.ForeignKey(
+        'Bill',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='financial_records',
+        verbose_name='Associated Bill'
+    )
 
     record_type = models.CharField(
         max_length=20,
@@ -360,6 +368,55 @@ class Bill(models.Model):
             self.bill_number = num
             
         super().save(*args, **kwargs)
+
+        # Handle GST Financial Record
+        self.update_ledger_gst_record()
+
+    def update_ledger_gst_record(self):
+        """
+        Create/Update/Delete the GST FinancialRecord for this Bill.
+        This ensures the ledger reflects the Tax component of the Bill.
+        """
+        # We only want to record GST if the Bill is Final and has GST
+        should_have_record = (self.status == self.STATUS_FINAL and self.gst_amount > 0)
+
+        gst_record = FinancialRecord.objects.filter(associated_bill=self).first()
+
+        if should_have_record:
+            # Create or Update
+            cat_name = "GST Output"
+            gst_category, _ = TransactionCategory.objects.get_or_create(
+                name=cat_name,
+                defaults={
+                    'type': TransactionCategory.TYPE_INCOME,
+                    'description': 'Tax collected on Sales/Services'
+                }
+            )
+
+            description = f"GST for Bill {self.bill_number}"
+            amount = self.gst_amount
+
+            if gst_record:
+                if gst_record.amount != amount or gst_record.party != self.party:
+                    gst_record.amount = amount
+                    gst_record.party = self.party
+                    gst_record.date = self.date
+                    gst_record.save()
+            else:
+                FinancialRecord.objects.create(
+                    associated_bill=self,
+                    party=self.party,
+                    date=self.date,
+                    category=gst_category,
+                    amount=amount,
+                    record_type=FinancialRecord.RECORD_TYPE_INVOICE,
+                    description=description,
+                    # No driver for GST
+                )
+        else:
+            # Delete if exists
+            if gst_record:
+                gst_record.delete()
     
     @property
     def cgst_amount(self):
