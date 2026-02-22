@@ -75,7 +75,7 @@
                     <div class="mb-3">
                         <label class="form-label">Select Party</label>
                         {{ form.party }}
-                        <div class="form-text">Changing party will require saving to update the trip list.</div>
+                        <div class="form-text">Selecting a party will refresh the trip list automatically.</div>
                     </div>
                 </div>
             </div>
@@ -141,8 +141,28 @@
     </div>
 </div>
 
+{% endblock %}
+
+{% block extra_js %}
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
+    $(document).ready(function() {
+        // Initialize Select2 for Party dropdown
+        $('#id_party').select2({
+            theme: 'bootstrap-5',
+            placeholder: 'Select a Party',
+            allowClear: true
+        });
+
+        // Auto-reload on Party change (using Select2 event)
+        $('#id_party').on('change', function() {
+            const partyId = $(this).val();
+            if (partyId) {
+                const url = new URL(window.location.href);
+                url.searchParams.set('party', partyId);
+                window.location.href = url.toString();
+            }
+        });
+
         // Select All functionality
         const selectAll = document.getElementById('selectAllTrips');
         const checkboxes = document.querySelectorAll('.trip-checkbox');
