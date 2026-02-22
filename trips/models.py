@@ -50,12 +50,27 @@ class TripQuerySet(models.QuerySet):
             )
         )
 
+    def with_billing_info(self):
+        """Annotate queryset with billing status"""
+        from django.db.models import Exists, OuterRef
+        # Import internally to avoid circular dependency
+        from ledger.models import Bill
+
+        return self.annotate(
+            is_billed=Exists(
+                Bill.objects.filter(trips=OuterRef('pk'))
+            )
+        )
+
 class TripManager(models.Manager):
     def get_queryset(self):
         return TripQuerySet(self.model, using=self._db)
     
     def with_payment_info(self):
         return self.get_queryset().with_payment_info()
+
+    def with_billing_info(self):
+        return self.get_queryset().with_billing_info()
 
 class Trip(models.Model):
     # ... (rest of model) ...

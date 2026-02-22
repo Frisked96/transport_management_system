@@ -1,174 +1,352 @@
 {% extends 'base.html' %}
+{% load static %}
 
 {% block title %}{{ party.name }} - Transport Management System{% endblock %}
 
 {% block content %}
+<!-- Header -->
 <div class="d-flex justify-content-between align-items-center mb-3">
-    <h2>{{ party.name }}</h2>
+    <div>
+        <h2 class="mb-0">{{ party.name }}</h2>
+        <span class="text-muted small"><i class="bi bi-geo-alt"></i> {{ party.state|default:"No State" }}</span>
+    </div>
     <div>
         <a href="{% url 'party-list' %}" class="btn btn-outline-secondary me-2">Back to List</a>
-        {% if perms.ledger.change_financialrecord %}
-            <a href="{% url 'party-update' party.pk %}" class="btn btn-warning me-2"><i class="bi bi-pencil"></i> Edit</a>
-        {% endif %}
-        {% if perms.ledger.delete_financialrecord %}
-            <a href="{% url 'party-delete' party.pk %}" class="btn btn-danger"><i class="bi bi-trash"></i> Delete</a>
-        {% endif %}
+        <div class="btn-group">
+            {% if perms.ledger.change_financialrecord %}
+                <a href="{% url 'party-update' party.pk %}" class="btn btn-outline-primary"><i class="bi bi-pencil"></i> Edit Profile</a>
+            {% endif %}
+            {% if perms.ledger.add_financialrecord %}
+                <a href="{% url 'financialrecord-create' %}?party={{ party.pk }}" class="btn btn-success"><i class="bi bi-cash-coin"></i> Record Payment</a>
+            {% endif %}
+        </div>
     </div>
 </div>
 
-<div class="row">
-    <!-- Left Column: Details & Stats -->
-    <div class="col-lg-8">
-        <div class="card mb-4">
-            <div class="card-header bg-light">
-                <h5 class="mb-0">Contact Information</h5>
-            </div>
-            <div class="card-body">
-                <table class="table table-borderless">
-                    <tr>
-                        <th style="width: 150px;">Phone:</th>
-                        <td>{{ party.phone_number|default:"-" }}</td>
-                    </tr>
-                    <tr>
-                        <th>State:</th>
-                        <td>{{ party.state|default:"-" }}</td>
-                    </tr>
-                    <tr>
-                        <th>Address:</th>
-                        <td>{{ party.address|linebreaks|default:"-" }}</td>
-                    </tr>
-                    <tr>
-                        <th>Created At:</th>
-                        <td>{{ party.created_at|date:"M d, Y" }}</td>
-                    </tr>
-                </table>
+<!-- Summary Cards -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card bg-light border-0 shadow-sm">
+            <div class="card-body text-center">
+                <h6 class="text-muted text-uppercase small">Total Billed</h6>
+                <h3 class="mb-0 text-dark">${{ total_billed|floatformat:2 }}</h3>
             </div>
         </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card bg-light border-0 shadow-sm">
+            <div class="card-body text-center">
+                <h6 class="text-muted text-uppercase small">Total Paid</h6>
+                <h3 class="mb-0 text-success">${{ total_received|floatformat:2 }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card {% if balance > 0 %}bg-danger text-white{% else %}bg-success text-white{% endif %} border-0 shadow-sm">
+            <div class="card-body text-center">
+                <h6 class="text-white-50 text-uppercase small">Outstanding Balance</h6>
+                <h3 class="mb-0">${{ balance|floatformat:2 }}</h3>
+            </div>
+        </div>
+    </div>
+</div>
 
-        <!-- Transactions -->
-        <div class="card mb-4">
-            <div class="card-header bg-light d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">Transaction History</h5>
-                {% if perms.ledger.add_financialrecord %}
-                    <a href="{% url 'financialrecord-create' %}?party={{ party.pk }}" class="btn btn-sm btn-success"><i class="bi bi-plus-lg"></i> Add Transaction</a>
-                {% endif %}
+<!-- Tabs -->
+<ul class="nav nav-tabs mb-3" id="partyTab" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="trips-tab" data-bs-toggle="tab" data-bs-target="#trips" type="button" role="tab" aria-controls="trips" aria-selected="true">
+            <i class="bi bi-truck"></i> Trips & Operations
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="invoices-tab" data-bs-toggle="tab" data-bs-target="#invoices" type="button" role="tab" aria-controls="invoices" aria-selected="false">
+            <i class="bi bi-receipt"></i> Invoices (Bills)
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="ledger-tab" data-bs-toggle="tab" data-bs-target="#ledger" type="button" role="tab" aria-controls="ledger" aria-selected="false">
+            <i class="bi bi-journal-text"></i> Financial Ledger
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="profile-tab" data-bs-toggle="tab" data-bs-target="#profile" type="button" role="tab" aria-controls="profile" aria-selected="false">
+            <i class="bi bi-person-lines-fill"></i> Profile Details
+        </button>
+    </li>
+</ul>
+
+<!-- Tab Content -->
+<div class="tab-content" id="partyTabContent">
+
+    <!-- TRIPS TAB -->
+    <div class="tab-pane fade show active" id="trips" role="tabpanel" aria-labelledby="trips-tab">
+        <div class="card shadow-sm border-0">
+            <div class="card-body">
+                <form method="GET" action="{% url 'bill-create' %}" id="create-bill-form">
+                    <input type="hidden" name="party" value="{{ party.pk }}">
+
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="card-title mb-0">Trip List</h5>
+                        <div class="d-flex gap-2">
+                            <!-- Filters could go here -->
+                             <button type="submit" class="btn btn-primary" id="btn-create-invoice" disabled>
+                                <i class="bi bi-plus-circle"></i> Generate Invoice from Selection
+                             </button>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="width: 40px;"><input type="checkbox" class="form-check-input" id="select-all-trips"></th>
+                                    <th>Date</th>
+                                    <th>Trip #</th>
+                                    <th>Vehicle</th>
+                                    <th>Route</th>
+                                    <th class="text-end">Revenue</th>
+                                    <th class="text-end">Balance</th>
+                                    <th class="text-center">Billed?</th>
+                                    <th class="text-center">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for trip in trips %}
+                                    <tr class="{% if not trip.is_billed %}table-warning{% endif %}">
+                                        <td>
+                                            {% if not trip.is_billed and trip.revenue > 0 %}
+                                                <input type="checkbox" name="trip_ids" value="{{ trip.pk }}" class="form-check-input trip-checkbox">
+                                            {% else %}
+                                                <input type="checkbox" class="form-check-input" disabled>
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ trip.date|date:"d/m/Y" }}</td>
+                                        <td><a href="{% url 'trip-detail' trip.pk %}" class="text-decoration-none fw-bold">{{ trip.trip_number }}</a></td>
+                                        <td>{{ trip.vehicle.registration_plate }}</td>
+                                        <td>
+                                            <small class="d-block text-muted">{{ trip.pickup_location|truncatechars:15 }} &rarr;</small>
+                                            <small>{{ trip.delivery_location|truncatechars:15 }}</small>
+                                        </td>
+                                        <td class="text-end">${{ trip.revenue|floatformat:2 }}</td>
+                                        <td class="text-end fw-bold {% if trip.outstanding_balance > 0 %}text-danger{% else %}text-success{% endif %}">
+                                            ${{ trip.outstanding_balance|floatformat:2 }}
+                                        </td>
+                                        <td class="text-center">
+                                            {% if trip.is_billed %}
+                                                <span class="badge bg-success"><i class="bi bi-check-circle"></i> Yes</span>
+                                            {% else %}
+                                                <span class="badge bg-secondary">No</span>
+                                            {% endif %}
+                                        </td>
+                                        <td class="text-center">
+                                            <span class="badge bg-{% if trip.payment_status == 'Paid' %}success{% elif trip.payment_status == 'Partially Paid' %}warning{% else %}danger{% endif %}">
+                                                {{ trip.payment_status }}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                {% empty %}
+                                    <tr><td colspan="9" class="text-center text-muted py-4">No trips found.</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- INVOICES TAB -->
+    <div class="tab-pane fade" id="invoices" role="tabpanel" aria-labelledby="invoices-tab">
+        <div class="card shadow-sm border-0">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="card-title mb-0">Invoices</h5>
+                    <a href="{% url 'bill-create' %}?party={{ party.pk }}" class="btn btn-outline-primary btn-sm">
+                        <i class="bi bi-plus-lg"></i> New Manual Invoice
+                    </a>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Invoice #</th>
+                                <th>Date</th>
+                                <th>Trips</th>
+                                <th class="text-end">Subtotal</th>
+                                <th class="text-end">GST</th>
+                                <th class="text-end">Total</th>
+                                <th>Status</th>
+                                <th class="text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for bill in bills %}
+                                <tr>
+                                    <td><a href="{% url 'bill-detail' bill.pk %}" class="fw-bold text-decoration-none">{{ bill.bill_number|default:"Draft" }}</a></td>
+                                    <td>{{ bill.date|date:"d/m/Y" }}</td>
+                                    <td><span class="badge bg-info text-dark">{{ bill.trips.count }} Trips</span></td>
+                                    <td class="text-end">${{ bill.subtotal|floatformat:2 }}</td>
+                                    <td class="text-end">${{ bill.gst_amount|floatformat:2 }}</td>
+                                    <td class="text-end fw-bold">${{ bill.total_amount|floatformat:2 }}</td>
+                                    <td>
+                                        <span class="badge bg-{% if bill.status == 'Final' %}success{% else %}secondary{% endif %}">
+                                            {{ bill.status }}
+                                        </span>
+                                    </td>
+                                    <td class="text-end">
+                                        <div class="btn-group btn-group-sm">
+                                            <a href="{% url 'print-invoice' bill.pk %}" class="btn btn-outline-secondary" target="_blank" title="Print Invoice"><i class="bi bi-printer"></i></a>
+                                            <a href="{% url 'bill-update' bill.pk %}" class="btn btn-outline-primary" title="Edit"><i class="bi bi-pencil"></i></a>
+                                        </div>
+                                    </td>
+                                </tr>
+                            {% empty %}
+                                <tr><td colspan="8" class="text-center text-muted py-4">No invoices generated yet.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- LEDGER TAB -->
+    <div class="tab-pane fade" id="ledger" role="tabpanel" aria-labelledby="ledger-tab">
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Financial Transactions</h5>
+                <div>
+                     <span class="badge bg-success">Income (+)</span>
+                     <span class="badge bg-danger">Expense (-)</span>
+                </div>
             </div>
             <div class="card-body p-0">
                 <div class="table-responsive">
                     <table class="table table-hover mb-0">
-                        <thead>
+                        <thead class="table-light">
                             <tr>
                                 <th>Date</th>
-                                <th>Category</th>
+                                <th>Type / Category</th>
+                                <th>Reference</th>
                                 <th class="text-end">Amount</th>
                                 <th>Description</th>
-                                <th>Actions</th>
+                                <th class="text-end">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for record in financial_records %}
                                 <tr>
                                     <td>{{ record.date|date:"d/m/Y" }}</td>
-                                    <td><span class="badge bg-secondary">{{ record.category }}</span></td>
-                                    <td class="text-end fw-bold {% if record.is_income %}text-success{% else %}text-danger{% endif %}">
-                                        {% if record.is_income %}+{% else %}-{% endif %}${{ record.amount|floatformat:2 }}
-                                    </td>
-                                    <td>{{ record.description|truncatechars:30 }}</td>
                                     <td>
-                                        <a href="{% url 'financialrecord-detail' record.pk %}" class="btn btn-sm btn-outline-primary"><i class="bi bi-eye"></i></a>
+                                        {% if record.is_invoice %}
+                                            <span class="badge bg-primary">Invoice/Bill</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">{{ record.category.name }}</span>
+                                        {% endif %}
                                     </td>
-                                </tr>
-                            {% empty %}
-                                <tr><td colspan="5" class="text-center text-muted">No transactions recorded yet.</td></tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Trip History -->
-        <div class="card">
-            <div class="card-header bg-light">
-                <h5 class="mb-0">Trip History</h5>
-            </div>
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-hover mb-0">
-                        <thead>
-                            <tr>
-                                <th>Date</th>
-                                <th>Trip #</th>
-                                <th>Route</th>
-                                <th>Weight</th>
-                                <th class="text-end">Revenue</th>
-                                <th class="text-end">Paid</th>
-                                <th class="text-end">Balance</th>
-                                <th>Status</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for trip in trips %}
-                                <tr>
-                                    <td>{{ trip.date|date:"d/m/Y" }}</td>
-                                    <td><a href="{% url 'trip-detail' trip.pk %}" class="text-decoration-none">{{ trip.trip_number }}</a></td>
                                     <td>
-                                        {% if trip.pickup_location or trip.delivery_location %}
-                                            {{ trip.pickup_location|default:"?" }} &rarr; {{ trip.delivery_location|default:"?" }}
+                                        {% if record.associated_bill %}
+                                            <a href="{% url 'bill-detail' record.associated_bill.pk %}">{{ record.associated_bill.bill_number }}</a>
+                                        {% elif record.associated_trip %}
+                                            <a href="{% url 'trip-detail' record.associated_trip.pk %}">{{ record.associated_trip.trip_number }}</a>
                                         {% else %}
                                             -
                                         {% endif %}
                                     </td>
-                                    <td>{{ trip.weight|floatformat:2 }} T</td>
-                                    <td class="text-end">${{ trip.revenue|floatformat:2 }}</td>
-                                    <td class="text-end">${{ trip.amount_received|floatformat:2 }}</td>
-                                    <td class="text-end fw-bold {% if trip.outstanding_balance > 0 %}text-danger{% else %}text-success{% endif %}">
-                                        ${{ trip.outstanding_balance|floatformat:2 }}
+                                    <td class="text-end fw-bold {% if record.is_income %}text-success{% else %}text-danger{% endif %}">
+                                        {% if record.is_income %}+{% else %}-{% endif %}${{ record.amount|floatformat:2 }}
                                     </td>
-                                    <td>
-                                        <span class="badge bg-{% if trip.payment_status == 'Paid' %}success{% elif trip.payment_status == 'Partially Paid' %}warning{% else %}danger{% endif %}">
-                                            {{ trip.payment_status }}
-                                        </span>
+                                    <td>{{ record.description|truncatechars:40 }}</td>
+                                    <td class="text-end">
+                                        <a href="{% url 'financialrecord-detail' record.pk %}" class="btn btn-sm btn-light"><i class="bi bi-eye"></i></a>
                                     </td>
                                 </tr>
                             {% empty %}
-                                <tr><td colspan="8" class="text-center text-muted">No trips associated with this party.</td></tr>
+                                <tr><td colspan="6" class="text-center text-muted py-4">No transactions found.</td></tr>
                             {% endfor %}
                         </tbody>
                     </table>
                 </div>
             </div>
         </div>
-
     </div>
 
-    <!-- Right Column: Balance Summary -->
-    <div class="col-lg-4">
-        <div class="card shadow-sm sticky-top" style="top: 2rem;">
-            <div class="card-header bg-primary text-white">
-                <h5 class="mb-0">Financial Summary</h5>
-            </div>
+    <!-- PROFILE TAB -->
+    <div class="tab-pane fade" id="profile" role="tabpanel" aria-labelledby="profile-tab">
+        <div class="card shadow-sm border-0">
             <div class="card-body">
-                <div class="d-flex justify-content-between mb-2">
-                    <span>Total Billed:</span>
-                    <span class="fw-bold text-dark">${{ total_billed|floatformat:2 }}</span>
+                <div class="row">
+                    <div class="col-md-6">
+                        <h5 class="card-title">Contact Information</h5>
+                        <table class="table table-borderless">
+                            <tr>
+                                <th style="width: 150px;">Phone:</th>
+                                <td>{{ party.phone_number|default:"-" }}</td>
+                            </tr>
+                            <tr>
+                                <th>Email:</th>
+                                <td>{{ party.email|default:"-" }}</td>
+                            </tr>
+                            <tr>
+                                <th>State:</th>
+                                <td>{{ party.state|default:"-" }}</td>
+                            </tr>
+                            <tr>
+                                <th>Address:</th>
+                                <td>{{ party.address|linebreaks|default:"-" }}</td>
+                            </tr>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <h5 class="card-title">Billing Details</h5>
+                        <table class="table table-borderless">
+                            <tr>
+                                <th style="width: 150px;">GSTIN:</th>
+                                <td>{{ party.gstin|default:"-" }}</td>
+                            </tr>
+                            <tr>
+                                <th>PAN:</th>
+                                <td>{{ party.pan|default:"-" }}</td>
+                            </tr>
+                            <tr>
+                                <th>Bank Details:</th>
+                                <td>{{ party.bank_details|linebreaks|default:"-" }}</td>
+                            </tr>
+                        </table>
+                    </div>
                 </div>
-                <div class="d-flex justify-content-between mb-2">
-                    <span>Total Paid:</span>
-                    <span class="fw-bold text-success">${{ total_received|floatformat:2 }}</span>
-                </div>
-                <hr>
-                <div class="d-flex justify-content-between align-items-center">
-                    <span class="h5 mb-0">Outstanding:</span>
-                    <span class="h4 mb-0 {% if balance > 0 %}text-danger{% else %}text-success{% endif %}">
-                        ${{ balance|floatformat:2 }}
-                    </span>
-                </div>
-                <div class="mt-3 text-muted small">
-                    <i class="bi bi-info-circle"></i> Positive balance indicates amount party owes us (Receivables).
+                <div class="mt-3 text-end">
+                    <span class="text-muted small">Created: {{ party.created_at|date:"M d, Y" }}</span>
                 </div>
             </div>
         </div>
     </div>
+
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const selectAll = document.getElementById('select-all-trips');
+    const checkboxes = document.querySelectorAll('.trip-checkbox');
+    const createBtn = document.getElementById('btn-create-invoice');
+
+    function updateBtnState() {
+        const anyChecked = Array.from(checkboxes).some(cb => cb.checked);
+        createBtn.disabled = !anyChecked;
+    }
+
+    if (selectAll) {
+        selectAll.addEventListener('change', function() {
+            checkboxes.forEach(cb => {
+                if (!cb.disabled) cb.checked = selectAll.checked;
+            });
+            updateBtnState();
+        });
+    }
+
+    checkboxes.forEach(cb => {
+        cb.addEventListener('change', updateBtnState);
+    });
+});
+</script>
 {% endblock %}
