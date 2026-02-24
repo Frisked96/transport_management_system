@@ -651,14 +651,66 @@ class CompanyProfileUpdateView(LoginRequiredMixin, PermissionRequiredMixin, Upda
 
 from django.shortcuts import get_object_or_404, render
 from .models import Bill, CompanyProfile
+from itertools import groupby
+from operator import attrgetter
+
+def group_trips_for_bill(bill):
+    """
+    Groups trips by (Pickup, Delivery, Rate) and returns a list of dictionaries.
+    """
+    trips = list(bill.trips.select_related('vehicle').all())
+
+    # Pre-calculate sort key values to avoid repeated attribute access
+    def get_sort_key(trip):
+        return (
+            trip.pickup_location or '',
+            trip.delivery_location or '',
+            trip.rate_per_ton or 0
+        )
+
+    # Sort trips
+    trips.sort(key=get_sort_key)
+
+    grouped_items = []
+
+    for key, group in groupby(trips, key=get_sort_key):
+        items = list(group)
+        pickup, delivery, rate = key
+
+        # Build Description
+        if pickup and delivery:
+            desc = f"Freight charges from {pickup} to {delivery}"
+        elif pickup:
+            desc = f"Freight charges from {pickup}"
+        elif delivery:
+            desc = f"Freight charges to {delivery}"
+        else:
+            desc = "Transportation Charges"
+
+        total_weight = sum((t.weight or 0) for t in items)
+        total_amount = sum((t.revenue or 0) for t in items)
+
+        grouped_items.append({
+            'description': desc,
+            'rate': rate,
+            'weight': total_weight,
+            'amount': total_amount,
+            'count': len(items),
+        })
+
+    return grouped_items
 
 def print_invoice(request, pk):
     """Render print‑optimized invoice."""
     bill = get_object_or_404(Bill, pk=pk)
     company_profile = CompanyProfile.objects.first()
+
+    invoice_items = group_trips_for_bill(bill)
+
     context = {
         'bill': bill,
         'company_profile': company_profile,
+        'invoice_items': invoice_items,
     }
     return render(request, 'ledger/invoice_print.html', context)
 
@@ -670,8 +722,6 @@ def print_annexure(request, pk):
     trips = bill.trips.select_related('vehicle').order_by('date')
     
     # Group by date and calculate subtotals
-    from itertools import groupby
-    from operator import attrgetter
     date_groups = []
     for date, group in groupby(trips, key=attrgetter('date')):
         trip_list = list(group)
@@ -693,10 +743,11 @@ def print_combined_bill(request, pk):
     bill = get_object_or_404(Bill, pk=pk)
     company_profile = CompanyProfile.objects.first()
     
+    # For invoice section
+    invoice_items = group_trips_for_bill(bill)
+
     # For annexure
     trips = bill.trips.select_related('vehicle').order_by('date')
-    from itertools import groupby
-    from operator import attrgetter
     date_groups = []
     for date, group in groupby(trips, key=attrgetter('date')):
         trip_list = list(group)
@@ -710,6 +761,7 @@ def print_combined_bill(request, pk):
     context = {
         'bill': bill,
         'company_profile': company_profile,
+        'invoice_items': invoice_items,
         'date_groups': date_groups,
     }
     return render(request, 'ledger/combined_bill_print.html', context)

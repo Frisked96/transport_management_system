@@ -105,6 +105,12 @@
                 <td colspan="7"><b>Bill for dispatch from LSYK</b></td>
             </tr>
 
+            {% if bill.description %}
+            <tr>
+                <td colspan="7"><b>Remarks:</b> {{ bill.description }}</td>
+            </tr>
+            {% endif %}
+
             <!-- Table headers -->
             <tr>
                 <th>S.No.</th>
@@ -116,7 +122,19 @@
                 <th>Amount in Rs.</th>
             </tr>
 
-            <!-- Data row (aggregated) -->
+            <!-- Data rows (grouped) -->
+            {% for item in invoice_items %}
+            <tr>
+                <td class="text-center">{{ forloop.counter }}</td>
+                <td>{{ item.description }}</td>
+                <td class="text-center">{{ item.count }}</td>
+                <td class="text-center">{{ bill.hsn_code }}</td>
+                <td class="text-end">{{ item.weight|floatformat:3 }}</td>
+                <td class="text-end">{{ item.rate|floatformat:2 }}</td>
+                <td class="text-end">{{ item.amount|floatformat:2 }}</td>
+            </tr>
+            {% empty %}
+            <!-- Fallback if no items (should not happen for valid bills) -->
             <tr>
                 <td class="text-center">1</td>
                 <td>{{ bill.description|default:"Transportation Service" }}</td>
@@ -126,6 +144,7 @@
                 <td class="text-end">{{ bill.trips.first.rate_per_ton|floatformat:2 }}</td>
                 <td class="text-end">{{ bill.subtotal|floatformat:2 }}</td>
             </tr>
+            {% endfor %}
 
             <!-- Subtotal row -->
             <tr>
