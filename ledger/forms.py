@@ -2,7 +2,7 @@ from django import forms
 from django.contrib.auth.models import User
 from django.db import models
 import json
-from .models import FinancialRecord, Party, Account, Bill, CompanyProfile
+from .models import FinancialRecord, Party, CompanyAccount, Bill, CompanyProfile
 from trips.models import Trip
 
 
@@ -87,6 +87,7 @@ class FinancialRecordForm(forms.ModelForm):
             'party',
             'driver',
             'associated_trip',
+            'associated_bill',
             'payment_distribution',
             'category',
             'amount',
@@ -120,17 +121,21 @@ class PartyForm(forms.ModelForm):
     
     class Meta:
         model = Party
-        fields = ['name', 'phone_number', 'state', 'address', 'gstin', 'bank_details']
+        fields = [
+            'name', 'phone_number', 'state', 'address', 'gstin',
+            'bank_name', 'account_number', 'ifsc_code', 'account_holder_name',
+            'bank_details'
+        ]
         
         widgets = {
             'address': forms.Textarea(attrs={'rows': 3}),
-            'bank_details': forms.Textarea(attrs={'rows': 3}),
+            'bank_details': forms.Textarea(attrs={'rows': 2, 'placeholder': 'Legacy details if any...'}),
         }
 
 
-class AccountForm(forms.ModelForm):
+class CompanyAccountForm(forms.ModelForm):
     """
-    Form for creating and editing company accounts
+    Form for creating and editing company accounts (Firms)
     """
     
     def __init__(self, *args, **kwargs):
@@ -139,11 +144,16 @@ class AccountForm(forms.ModelForm):
             field.widget.attrs.update({'class': 'form-control'})
     
     class Meta:
-        model = Account
-        fields = ['name', 'account_number', 'opening_balance', 'description']
+        model = CompanyAccount
+        fields = [
+            'name', 'address', 'phone_number', 'gstin', 'pan',
+            'bank_name', 'account_number', 'ifsc_code', 'account_holder_name',
+            'opening_balance', 'description'
+        ]
         
         widgets = {
-            'description': forms.Textarea(attrs={'rows': 3}),
+            'address': forms.Textarea(attrs={'rows': 2}),
+            'description': forms.Textarea(attrs={'rows': 2}),
         }
 
 class BillForm(forms.ModelForm):
@@ -154,20 +164,16 @@ class BillForm(forms.ModelForm):
         model = Bill
         fields = [
             'bill_number', 
+            'issuer',
             'party', 
             'date', 
             'gst_type', 
             'gst_rate', 
-            'invoice_company_name',
-            'invoice_company_address',
-            'invoice_company_mobile',
-            'invoice_company_gstin',
             'trips',
             'trips_data'
         ]
         widgets = {
             'date': forms.DateInput(attrs={'type': 'date'}),
-            'invoice_company_address': forms.Textarea(attrs={'rows': 3}),
             'trips': forms.CheckboxSelectMultiple(),
         }
 
@@ -212,28 +218,6 @@ class BillForm(forms.ModelForm):
             from .models import BillTrip
             bt_data = {bt.trip_id: bt.lr_no for bt in self.instance.bill_trips.all()}
             self.fields['trips_data'].initial = json.dumps(bt_data)
-        
-        # Pre-fill Company Details and Bill Number
-        if not self.instance.pk:
-            profile = CompanyProfile.objects.first()
-            if profile:
-                self.fields['invoice_company_name'].initial = profile.company_name
-                self.fields['invoice_company_address'].initial = profile.address
-                self.fields['invoice_company_mobile'].initial = profile.phone_number
-                self.fields['invoice_company_gstin'].initial = profile.gstin
-                
-                from .models import Sequence
-                import datetime
-                try:
-                    seq_obj = Sequence.objects.get(key="bill_sequence")
-                    next_val = seq_obj.value + 1
-                except Sequence.DoesNotExist:
-                    next_val = 1
-                
-                template = profile.invoice_template or "INV-{YYYY}-{SEQ}"
-                now = datetime.datetime.now()
-                pred_num = template.replace("{YYYY}", str(now.year)).replace("{SEQ}", f"{next_val:04d}")
-                self.fields['bill_number'].initial = pred_num
 
     def save(self, commit=True):
         instance = super().save(commit=False)

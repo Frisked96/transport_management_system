@@ -10,7 +10,21 @@
     <div class="d-flex justify-content-between align-items-center">
         <div>
             <a href="{% url 'bill-list' %}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Back to List</a>
-            <a href="{% url 'print-combined-bill' bill.pk %}" target="_blank" class="btn btn-primary ms-2"><i class="bi bi-printer"></i> Print Invoice</a>
+            <div class="btn-group ms-2">
+                <a href="{% url 'print-combined-bill' bill.pk %}" target="_blank" class="btn btn-primary"><i class="bi bi-printer"></i> Print Invoice</a>
+                <button type="button" class="btn btn-primary dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown" aria-expanded="false">
+                    <span class="visually-hidden">Toggle Dropdown</span>
+                </button>
+                <ul class="dropdown-menu">
+                    <li><a class="dropdown-item" href="{% url 'print-invoice' bill.pk %}" target="_blank">Print Invoice Only</a></li>
+                    <li><a class="dropdown-item" href="{% url 'print-annexure' bill.pk %}" target="_blank">Print Annexure Only</a></li>
+                </ul>
+            </div>
+            {% if perms.ledger.add_financialrecord %}
+                <a href="{% url 'financialrecord-create' %}?party={{ bill.party.pk }}&associated_bill={{ bill.pk }}&amount={{ bill.rounded_total }}&description=Payment+for+Invoice+{{ bill.bill_number }}" class="btn btn-success ms-2">
+                    <i class="bi bi-cash-coin"></i> Record Payment
+                </a>
+            {% endif %}
         </div>
         <div>
             {% if bill.status == 'Draft' %}
@@ -207,15 +221,14 @@
         <!-- Company Header -->
         <div class="company-section">
             <div class="company-logo">
-                {{ bill.invoice_company_name|default:company_profile.company_name|make_list|first }}
+                {{ bill.invoice_company_name|make_list|first }}
             </div>
             <div class="company-info">
-                <h2 class="company-name">{{ bill.invoice_company_name|default:company_profile.company_name }}</h2>
-                <div class="company-address">{{ bill.invoice_company_address|linebreaksbr|default:company_profile.address|linebreaksbr }}</div>
+                <h2 class="company-name">{{ bill.invoice_company_name }}</h2>
+                <div class="company-address">{{ bill.invoice_company_address|linebreaksbr }}</div>
                 <div class="company-contact">
-                    <span>Phone: <strong>{{ bill.invoice_company_mobile|default:company_profile.phone_number }}</strong></span>
-                    <span>GSTIN: <strong>{{ company_profile.gstin }}</strong></span>
-                    <span>State: <strong>{{ company_profile.state }}</strong></span>
+                    <span>Phone: <strong>{{ bill.invoice_company_mobile }}</strong></span>
+                    <span>GSTIN: <strong>{{ bill.invoice_company_gstin }}</strong></span>
                 </div>
             </div>
         </div>
@@ -374,11 +387,13 @@
             <div class="bank-details">
                 <div class="section-label mb-2">Bank Details</div>
                 <div class="small">
-                    {{ company_profile.bank_details|linebreaksbr|default:"Bank details not configured." }}
+                    <div>Bank: <strong>{{ bill.invoice_bank_name }}</strong></div>
+                    <div>Account No: <strong>{{ bill.invoice_bank_account }}</strong></div>
+                    <div>IFSC Code: <strong>{{ bill.invoice_bank_ifsc }}</strong></div>
                 </div>
             </div>
             <div class="signature-area">
-                <div class="small fw-bold">For {{ bill.invoice_company_name|default:company_profile.company_name|upper }}</div>
+                <div class="small fw-bold">For {{ bill.invoice_company_name|upper }}</div>
                 <div>
                     <div class="sig-line small">Authorized Signatory</div>
                 </div>

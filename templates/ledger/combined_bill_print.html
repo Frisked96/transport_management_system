@@ -226,18 +226,14 @@
         <!-- Company Section -->
         <div class="company-section">
             <div class="company-logo">
-                <!-- Fallback to first letters of company name if no logo -->
-                {{ bill.invoice_company_name|default:company_profile.company_name|make_list|first }}
+                {{ bill.invoice_company_name|make_list|first }}
             </div>
             <div class="company-info">
-                <h2 class="company-name">{{ bill.invoice_company_name|default:company_profile.company_name }}</h2>
-                <div class="company-address">{{ bill.invoice_company_address|linebreaksbr|default:company_profile.address|linebreaksbr }}</div>
+                <h2 class="company-name">{{ bill.invoice_company_name }}</h2>
+                <div class="company-address">{{ bill.invoice_company_address|linebreaksbr }}</div>
                 <div class="company-contact">
-                    <p>Phone: <strong>{{ bill.invoice_company_mobile|default:company_profile.phone_number }}</strong></p>
-                    <p>GSTIN: <strong>{{ company_profile.gstin }}</strong></p>
-                </div>
-                <div class="company-contact">
-                    <p>State: <strong>{{ company_profile.state|default:"" }}</strong></p>
+                    <p>Phone: <strong>{{ bill.invoice_company_mobile }}</strong></p>
+                    <p>GSTIN: <strong>{{ bill.invoice_company_gstin }}</strong></p>
                 </div>
             </div>
         </div>
@@ -430,11 +426,13 @@
             <div class="bank-details">
                 <div class="section-header">Bank Details:</div>
                 <div class="bank-details-content">
-                    {{ company_profile.bank_details|linebreaksbr|default:"No bank details provided." }}
+                    Bank: <strong>{{ bill.invoice_bank_name }}</strong><br>
+                    Account No: <strong>{{ bill.invoice_bank_account }}</strong><br>
+                    IFSC Code: <strong>{{ bill.invoice_bank_ifsc }}</strong>
                 </div>
             </div>
             <div class="signature-box">
-                <div style="text-align: right; width: 100%; font-size: 11px; color: #555;">For {{ bill.invoice_company_name|default:company_profile.company_name|upper }}:</div>
+                <div style="text-align: right; width: 100%; font-size: 11px; color: #555;">For {{ bill.invoice_company_name|upper }}:</div>
                 <div style="margin-top: 40px; border-top: 1px solid #ccc; width: 80%; text-align: center; color: #555;">
                     Authorized Signatory
                 </div>

@@ -24,11 +24,11 @@ urlpatterns = [
     path('api/party-unpaid-trips/', views.get_party_unpaid_trips, name='get-party-unpaid-trips'),
 
     # Account URLs
-    path('accounts/', views.AccountListView.as_view(), name='account-list'),
-    path('accounts/create/', views.AccountCreateView.as_view(), name='account-create'),
-    path('accounts/<int:pk>/', views.AccountDetailView.as_view(), name='account-detail'),
-    path('accounts/<int:pk>/update/', views.AccountUpdateView.as_view(), name='account-update'),
-    path('accounts/<int:pk>/delete/', views.AccountDeleteView.as_view(), name='account-delete'),
+    path('accounts/', views.CompanyAccountListView.as_view(), name='account-list'),
+    path('accounts/create/', views.CompanyAccountCreateView.as_view(), name='account-create'),
+    path('accounts/<int:pk>/', views.CompanyAccountDetailView.as_view(), name='account-detail'),
+    path('accounts/<int:pk>/update/', views.CompanyAccountUpdateView.as_view(), name='account-update'),
+    path('accounts/<int:pk>/delete/', views.CompanyAccountDeleteView.as_view(), name='account-delete'),
 
     # Bill URLs
     path('bills/', views.BillListView.as_view(), name='bill-list'),

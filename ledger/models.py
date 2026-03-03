@@ -40,7 +40,14 @@ class Party(models.Model):
     state = models.CharField(max_length=100, blank=True, verbose_name='State')
     address = models.TextField(blank=True, verbose_name='Address')
     gstin = models.CharField(max_length=20, blank=True, verbose_name='GSTIN')
-    bank_details = models.TextField(blank=True, verbose_name='Bank Details')
+    
+    # Structured Bank Details
+    bank_name = models.CharField(max_length=200, blank=True, verbose_name='Bank Name')
+    account_number = models.CharField(max_length=50, blank=True, verbose_name='Account Number')
+    ifsc_code = models.CharField(max_length=20, blank=True, verbose_name='IFSC Code')
+    account_holder_name = models.CharField(max_length=200, blank=True, verbose_name='Account Holder Name')
+    
+    bank_details = models.TextField(blank=True, verbose_name='Legacy Bank Details (Text)')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='Created At')
 
     class Meta:
@@ -73,24 +80,35 @@ class TransactionCategory(models.Model):
     def __str__(self):
         return f"{self.name} ({self.type})"
 
-class Account(models.Model):
+class CompanyAccount(models.Model):
     """
-    Company Financial Accounts (Bank, Cash, etc.)
+    Company Financial Accounts / Firms.
+    Each account represents a separate firm/entity.
     """
-    name = models.CharField(max_length=200, unique=True, verbose_name='Account Name')
+    name = models.CharField(max_length=200, unique=True, verbose_name='Firm Name')
+    address = models.TextField(blank=True, verbose_name='Firm Address')
+    phone_number = models.CharField(max_length=20, blank=True, verbose_name='Phone Number')
+    gstin = models.CharField(max_length=20, blank=True, verbose_name='GSTIN')
+    pan = models.CharField(max_length=20, blank=True, verbose_name='PAN')
+    
+    # Primary Bank Details for this Firm
+    bank_name = models.CharField(max_length=200, blank=True, verbose_name='Bank Name')
     account_number = models.CharField(max_length=50, blank=True, verbose_name='Account Number')
-    description = models.TextField(blank=True, verbose_name='Description')
+    ifsc_code = models.CharField(max_length=20, blank=True, verbose_name='IFSC Code')
+    account_holder_name = models.CharField(max_length=200, blank=True, verbose_name='Account Holder Name')
+    
     opening_balance = models.DecimalField(
         max_digits=12, 
         decimal_places=2, 
         default=0, 
         verbose_name='Opening Balance'
     )
+    description = models.TextField(blank=True, verbose_name='Notes/Description')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='Created At')
 
     class Meta:
-        verbose_name = 'Account'
-        verbose_name_plural = 'Accounts'
+        verbose_name = 'Company Account'
+        verbose_name_plural = 'Company Accounts'
         ordering = ['name']
 
     def __str__(self):
@@ -127,7 +145,7 @@ class FinancialRecord(models.Model):
 
     date = models.DateField(verbose_name='Transaction Date')
     account = models.ForeignKey(
-        Account,
+        CompanyAccount,
         on_delete=models.PROTECT,
         null=True,
         blank=True,
@@ -323,6 +341,7 @@ class Bill(models.Model):
     ]
 
     bill_number = models.CharField(max_length=50, unique=True, blank=True, null=True, verbose_name="Invoice Number")
+    issuer = models.ForeignKey(CompanyAccount, on_delete=models.PROTECT, related_name='bills', verbose_name="Issued From", null=True)
     party = models.ForeignKey(Party, on_delete=models.PROTECT, related_name='bills', verbose_name="Bill To")
     date = models.DateField(verbose_name="Invoice Date")
     trips = models.ManyToManyField(Trip, through='BillTrip', related_name='bills', verbose_name="Included Trips")
@@ -336,32 +355,37 @@ class Bill(models.Model):
     invoice_company_mobile = models.CharField(max_length=20, blank=True, verbose_name="Company Mobile (Snapshot)")
     invoice_company_gstin = models.CharField(max_length=20, blank=True, verbose_name="Company GSTIN (Snapshot)")
     
+    # Bank Details Snapshot
+    invoice_bank_name = models.CharField(max_length=200, blank=True, verbose_name="Bank Name (Snapshot)")
+    invoice_bank_account = models.CharField(max_length=50, blank=True, verbose_name="Bank Account (Snapshot)")
+    invoice_bank_ifsc = models.CharField(max_length=20, blank=True, verbose_name="Bank IFSC (Snapshot)")
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def save(self, *args, **kwargs):
-        # 1. Snapshot Company Details if empty (Creation time mostly)
-        if not self.invoice_company_name:
-            profile = CompanyProfile.objects.first()
-            if profile:
-                self.invoice_company_name = profile.company_name
-                self.invoice_company_address = profile.address
-                self.invoice_company_mobile = profile.phone_number
-                self.invoice_company_gstin = profile.gstin
+        # 1. Snapshot Company Details from Issuer
+        if self.issuer and not self.invoice_company_name:
+            self.invoice_company_name = self.issuer.name
+            self.invoice_company_address = self.issuer.address
+            self.invoice_company_mobile = self.issuer.phone_number
+            self.invoice_company_gstin = self.issuer.gstin
+            self.invoice_bank_name = self.issuer.bank_name
+            self.invoice_bank_account = self.issuer.account_number
+            self.invoice_bank_ifsc = self.issuer.ifsc_code
         
         # 2. Generate Bill Number if missing
-        if not self.bill_number:
-            profile = CompanyProfile.objects.first()
-            if not profile:
-                 template = "INV-{YYYY}-{SEQ}"
-            else:
-                 template = profile.invoice_template
+        if not self.bill_number and self.issuer:
+            # Try to get template from issuer notes or use default
+            # For now, default template logic
+            template = "INV/{YYYY}/{SEQ}"
             
             import datetime
             now = datetime.datetime.now()
             
-            # Get Sequence
-            seq_val = Sequence.next_value("bill_sequence")
+            # Get Sequence per Issuer
+            seq_key = f"bill_sequence_{self.issuer.pk}"
+            seq_val = Sequence.next_value(seq_key)
             
             # Format
             num = template.replace("{YYYY}", str(now.year)).replace("{SEQ}", f"{seq_val:04d}")

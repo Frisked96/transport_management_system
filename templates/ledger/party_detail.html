@@ -298,21 +298,35 @@
                         </table>
                     </div>
                     <div class="col-md-6">
-                        <h5 class="card-title">Billing Details</h5>
-                        <table class="table table-borderless">
+                        <h5 class="card-title border-bottom pb-2 mb-3">Billing & Bank Details</h5>
+                        <table class="table table-sm table-borderless">
                             <tr>
-                                <th style="width: 150px;">GSTIN:</th>
-                                <td>{{ party.gstin|default:"-" }}</td>
+                                <th style="width: 150px;" class="text-muted">GSTIN:</th>
+                                <td><span class="badge bg-light text-dark border">{{ party.gstin|default:"-" }}</span></td>
                             </tr>
                             <tr>
-                                <th>PAN:</th>
-                                <td>{{ party.pan|default:"-" }}</td>
+                                <th class="text-muted">Bank Name:</th>
+                                <td class="fw-bold">{{ party.bank_name|default:"-" }}</td>
                             </tr>
                             <tr>
-                                <th>Bank Details:</th>
-                                <td>{{ party.bank_details|linebreaks|default:"-" }}</td>
+                                <th class="text-muted">Account No:</th>
+                                <td>{{ party.account_number|default:"-" }}</td>
+                            </tr>
+                            <tr>
+                                <th class="text-muted">IFSC Code:</th>
+                                <td>{{ party.ifsc_code|default:"-" }}</td>
+                            </tr>
+                            <tr>
+                                <th class="text-muted">Holder Name:</th>
+                                <td>{{ party.account_holder_name|default:"-" }}</td>
                             </tr>
                         </table>
+                        {% if party.bank_details %}
+                        <div class="mt-2 p-2 bg-light rounded small">
+                            <span class="text-muted d-block border-bottom mb-1">Legacy Details:</span>
+                            {{ party.bank_details|linebreaks }}
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
                 <div class="mt-3 text-end">

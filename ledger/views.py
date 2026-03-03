@@ -15,8 +15,8 @@ from datetime import datetime
 import json
 from django.http import JsonResponse
 
-from .models import FinancialRecord, Party, Account, TripAllocation, TransactionCategory, Bill, CompanyProfile
-from .forms import FinancialRecordForm, PartyForm, AccountForm, BillForm, CompanyProfileForm
+from .models import FinancialRecord, Party, CompanyAccount, TripAllocation, TransactionCategory, Bill, CompanyProfile
+from .forms import FinancialRecordForm, PartyForm, CompanyAccountForm, BillForm, CompanyProfileForm
 from trips.models import Trip
 
 
@@ -156,6 +156,20 @@ class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, Cre
                 initial['driver'] = driver_user
             except User.DoesNotExist:
                 pass
+                
+        bill_id = self.request.GET.get('associated_bill')
+        if bill_id:
+            try:
+                bill = Bill.objects.get(pk=bill_id)
+                initial['associated_bill'] = bill
+            except Bill.DoesNotExist:
+                pass
+        
+        if 'amount' in self.request.GET:
+            initial['amount'] = self.request.GET.get('amount')
+            
+        if 'description' in self.request.GET:
+            initial['description'] = self.request.GET.get('description')
                 
         return initial
 
@@ -474,11 +488,11 @@ class PartyDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
 
 # --- Account Views ---
 
-class AccountListView(LoginRequiredMixin, BaseLedgerPermissionMixin, ListView):
+class CompanyAccountListView(LoginRequiredMixin, BaseLedgerPermissionMixin, ListView):
     """
     List view for company accounts
     """
-    model = Account
+    model = CompanyAccount
     template_name = 'ledger/account_list.html'
     context_object_name = 'accounts'
     paginate_by = 20
@@ -486,16 +500,16 @@ class AccountListView(LoginRequiredMixin, BaseLedgerPermissionMixin, ListView):
     def get_queryset(self):
         # Drivers have no access
         if self.has_driver_permission():
-            return Account.objects.none()
+            return CompanyAccount.objects.none()
             
-        return Account.objects.all().order_by('name')
+        return CompanyAccount.objects.all().order_by('name')
 
-class AccountCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+class CompanyAccountCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
     """
     Create view for new account
     """
-    model = Account
-    form_class = AccountForm
+    model = CompanyAccount
+    form_class = CompanyAccountForm
     template_name = 'ledger/account_form.html'
     permission_required = 'ledger.add_financialrecord'
     success_url = reverse_lazy('account-list')
@@ -504,12 +518,12 @@ class AccountCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView)
         messages.success(self.request, 'Account created successfully!')
         return super().form_valid(form)
 
-class AccountUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+class CompanyAccountUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
     """
     Update view for existing account
     """
-    model = Account
-    form_class = AccountForm
+    model = CompanyAccount
+    form_class = CompanyAccountForm
     template_name = 'ledger/account_form.html'
     permission_required = 'ledger.change_financialrecord'
     success_url = reverse_lazy('account-list')
@@ -518,11 +532,11 @@ class AccountUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView)
         messages.success(self.request, 'Account updated successfully!')
         return super().form_valid(form)
 
-class AccountDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
+class CompanyAccountDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
     """
     Delete view for account
     """
-    model = Account
+    model = CompanyAccount
     template_name = 'ledger/account_confirm_delete.html'
     permission_required = 'ledger.delete_financialrecord'
     success_url = reverse_lazy('account-list')
@@ -531,11 +545,11 @@ class AccountDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView)
         messages.success(self.request, 'Account deleted successfully!')
         return super().delete(request, *args, **kwargs)
 
-class AccountDetailView(LoginRequiredMixin, BaseLedgerPermissionMixin, DetailView):
+class CompanyAccountDetailView(LoginRequiredMixin, BaseLedgerPermissionMixin, DetailView):
     """
     Detail view for an account (showing transaction history)
     """
-    model = Account
+    model = CompanyAccount
     template_name = 'ledger/account_detail.html'
     context_object_name = 'account'
     
