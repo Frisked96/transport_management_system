@@ -111,13 +111,27 @@
             <div class="card-body text-center py-4">
                 <div class="mb-2"><i class="bi bi-person-check fs-1 text-primary"></i></div>
                 <h6 class="text-muted mb-1">Recorded By</h6>
-                <p class="h5 mb-0">{{ record.recorded_by.get_full_name|default:record.recorded_by.username }}</p>
+                <p class="h5 mb-0">
+                    {% if record.recorded_by %}
+                        {{ record.recorded_by.get_full_name|default:record.recorded_by.username }}
+                    {% else %}
+                        System Generated
+                    {% endif %}
+                </p>
                 <hr>
                 <h6 class="text-muted mb-1">Entity Reference</h6>
                 {% if record.party %}
                     <a href="{% url 'party-detail' record.party.pk %}" class="btn btn-outline-dark btn-sm mt-2 w-100">{{ record.party.name }}</a>
                 {% elif record.driver %}
-                    <span class="badge bg-secondary mt-2 w-100 py-2">{{ record.driver.get_full_name|default:record.driver.username }}</span>
+                    <span class="badge bg-secondary mt-2 w-100 py-2">
+                        {% if record.driver.get_full_name %}
+                            {{ record.driver.get_full_name }}
+                        {% elif record.driver.username %}
+                            {{ record.driver.username }}
+                        {% else %}
+                            {{ record.driver }}
+                        {% endif %}
+                    </span>
                 {% else %}
                     <span class="text-muted">No entity linked</span>
                 {% endif %}

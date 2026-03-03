@@ -35,6 +35,8 @@
                         <th>Name</th>
                         <th>Phone Number</th>
                         <th>State</th>
+                        <th class="text-end">Total Billed</th>
+                        <th class="text-end">Total Paid</th>
                         <th class="text-end">Outstanding Balance</th>
                         <th>Actions</th>
                     </tr>
@@ -49,6 +51,8 @@
                         </td>
                         <td>{{ party.phone_number }}</td>
                         <td>{{ party.state }}</td>
+                        <td class="text-end text-muted">${{ party.total_billed|floatformat:2 }}</td>
+                        <td class="text-end text-success">${{ party.total_received|floatformat:2 }}</td>
                         <td class="text-end fw-bold {% if party.outstanding_balance > 0 %}text-danger{% else %}text-success{% endif %}">
                             ${{ party.outstanding_balance|floatformat:2 }}
                         </td>
@@ -63,7 +67,7 @@
                     </tr>
                     {% empty %}
                         <tr>
-                            <td colspan="5" class="text-center py-4 text-muted">
+                            <td colspan="7" class="text-center py-4 text-muted">
                                 No parties found.
                             </td>
                         </tr>

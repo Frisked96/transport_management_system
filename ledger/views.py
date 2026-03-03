@@ -343,10 +343,20 @@ class PartyListView(LoginRequiredMixin, BaseLedgerPermissionMixin, ListView):
             )
             
         # Correctly calculate totals using Subquery to avoid cross-join multiplication
-        # Total Billed = Sum of Invoices
+        # Total Revenue = Sum of all Invoices (Trip Revenue + Bill GST)
+        revenue_subquery = FinancialRecord.objects.filter(
+            party=OuterRef('pk'),
+            record_type=FinancialRecord.RECORD_TYPE_INVOICE
+        ).values('party').annotate(
+            total=Sum('amount')
+        ).values('total')
+
+        # Total Billed = Sum of Formal Bills (Records linked to a Bill or Billed Trip)
         billed_subquery = FinancialRecord.objects.filter(
             party=OuterRef('pk'),
             record_type=FinancialRecord.RECORD_TYPE_INVOICE
+        ).filter(
+            Q(associated_bill__isnull=False) | Q(associated_trip__bills__isnull=False)
         ).values('party').annotate(
             total=Sum('amount')
         ).values('total')
@@ -359,14 +369,14 @@ class PartyListView(LoginRequiredMixin, BaseLedgerPermissionMixin, ListView):
         ).values('party').annotate(
             total=Sum('amount')
         ).values('total')
-        
+
         queryset = queryset.annotate(
+            total_revenue=Coalesce(Subquery(revenue_subquery, output_field=DecimalField()), Value(0, output_field=DecimalField())),
             total_billed=Coalesce(Subquery(billed_subquery, output_field=DecimalField()), Value(0, output_field=DecimalField())),
             total_received=Coalesce(Subquery(received_subquery, output_field=DecimalField()), Value(0, output_field=DecimalField()))
         ).annotate(
-            outstanding_balance=F('total_billed') - F('total_received')
+            outstanding_balance=F('total_revenue') - F('total_received')
         )
-        
         return queryset.order_by('name')
 
 class PartyDetailView(LoginRequiredMixin, BaseLedgerPermissionMixin, DetailView):
@@ -392,11 +402,17 @@ class PartyDetailView(LoginRequiredMixin, BaseLedgerPermissionMixin, DetailView)
         financial_records = self.object.financial_records.all().select_related('category', 'associated_trip', 'associated_bill').order_by('-date')
         context['financial_records'] = financial_records
         
-        # Calculate Total Billed (Sum of Invoices)
-        # This includes Trip Revenue Records AND Bill GST Records
-        total_billed = financial_records.filter(
+        # Calculate Total Revenue (Sum of all Invoices: Trip Revenue + Bill GST)
+        total_revenue = financial_records.filter(
             record_type=FinancialRecord.RECORD_TYPE_INVOICE
         ).aggregate(total=Sum('amount'))['total'] or 0
+
+        # Calculate Total Billed (Sum of Formal Bills: Linked to a Bill or Billed Trip)
+        total_billed = financial_records.filter(
+            record_type=FinancialRecord.RECORD_TYPE_INVOICE
+        ).filter(
+            Q(associated_bill__isnull=False) | Q(associated_trip__bills__isnull=False)
+        ).distinct().aggregate(total=Sum('amount'))['total'] or 0
 
         # Calculate Total Received (Payments from Party - Transactions Only)
         total_received = financial_records.filter(
@@ -406,7 +422,7 @@ class PartyDetailView(LoginRequiredMixin, BaseLedgerPermissionMixin, DetailView)
         
         context['total_billed'] = total_billed
         context['total_received'] = total_received
-        context['balance'] = total_billed - total_received
+        context['balance'] = total_revenue - total_received # Total Outstanding
         
         return context
 

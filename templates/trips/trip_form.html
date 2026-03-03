@@ -220,12 +220,8 @@ $(document).ready(function() {
                                 const c_code = (p.countrycode || '').toUpperCase();
                                 const c_name = (p.country || '').toLowerCase();
                                 if (c_code === 'IN' || c_name === 'india') {
-                                    let parts = [];
-                                    if (p.name) parts.push(p.name);
-                                    if (p.city && p.city !== p.name) parts.push(p.city);
-                                    if (p.state) parts.push(p.state);
-                                    
-                                    const displayName = parts.join(', ');
+                                    // Use only the primary name (city/town) to avoid "Mumbai, Maharashtra"
+                                    const displayName = p.name || p.city || p.town || p.village || '';
                                     if (displayName && !seen.has(displayName)) {
                                         results.push({
                                             id: displayName,
