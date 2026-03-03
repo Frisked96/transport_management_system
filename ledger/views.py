@@ -656,24 +656,25 @@ from operator import attrgetter
 
 def group_trips_for_bill(bill):
     """
-    Groups trips by (Pickup, Delivery, Rate) and returns a list of dictionaries.
+    Groups bill_trips by (Pickup, Delivery, Rate) and returns a list of dictionaries.
     """
-    trips = list(bill.trips.select_related('vehicle').all())
+    bill_trips = list(bill.bill_trips.select_related('trip', 'trip__vehicle').all())
 
-    # Pre-calculate sort key values to avoid repeated attribute access
-    def get_sort_key(trip):
+    # Pre-calculate sort key values
+    def get_sort_key(bt):
+        trip = bt.trip
         return (
             trip.pickup_location or '',
             trip.delivery_location or '',
             trip.rate_per_ton or 0
         )
 
-    # Sort trips
-    trips.sort(key=get_sort_key)
+    # Sort bill_trips
+    bill_trips.sort(key=get_sort_key)
 
     grouped_items = []
 
-    for key, group in groupby(trips, key=get_sort_key):
+    for key, group in groupby(bill_trips, key=get_sort_key):
         items = list(group)
         pickup, delivery, rate = key
 
@@ -687,8 +688,8 @@ def group_trips_for_bill(bill):
         else:
             desc = "Transportation Charges"
 
-        total_weight = sum((t.weight or 0) for t in items)
-        total_amount = sum((t.revenue or 0) for t in items)
+        total_weight = sum((bt.trip.weight or 0) for bt in items)
+        total_amount = sum((bt.trip.revenue or 0) for bt in items)
 
         grouped_items.append({
             'description': desc,
@@ -696,66 +697,37 @@ def group_trips_for_bill(bill):
             'weight': total_weight,
             'amount': total_amount,
             'count': len(items),
+            'bill_trips': items, # Keep track of actual bill_trips in this group
         })
 
     return grouped_items
 
 def print_invoice(request, pk):
-    """Render print‑optimized invoice."""
-    bill = get_object_or_404(Bill, pk=pk)
-    company_profile = CompanyProfile.objects.first()
-
-    invoice_items = group_trips_for_bill(bill)
-
-    context = {
-        'bill': bill,
-        'company_profile': company_profile,
-        'invoice_items': invoice_items,
-    }
-    return render(request, 'ledger/invoice_print.html', context)
+    """Render print‑optimized invoice using the combined format."""
+    return print_combined_bill(request, pk)
 
 def print_annexure(request, pk):
-    """Render annexure with trip‑by‑trip details and date‑wise subtotals."""
-    bill = get_object_or_404(Bill, pk=pk)
-    company_profile = CompanyProfile.objects.first()
-    # Fetch trips ordered by date
-    trips = bill.trips.select_related('vehicle').order_by('date')
-    
-    # Group by date and calculate subtotals
-    date_groups = []
-    for date, group in groupby(trips, key=attrgetter('date')):
-        trip_list = list(group)
-        date_groups.append({
-            'date': date,
-            'trips': trip_list,
-            'total_weight': sum(t.weight or 0 for t in trip_list),
-            'total_amount': sum(t.revenue or 0 for t in trip_list),
-        })
-    context = {
-        'bill': bill,
-        'company_profile': company_profile,
-        'date_groups': date_groups,
-    }
-    return render(request, 'ledger/annexure_print.html', context)
+    """Render annexure using the combined format (legacy link support)."""
+    return print_combined_bill(request, pk)
 
 def print_combined_bill(request, pk):
     """Render a combined invoice and annexure for printing."""
     bill = get_object_or_404(Bill, pk=pk)
     company_profile = CompanyProfile.objects.first()
-    
+
     # For invoice section
     invoice_items = group_trips_for_bill(bill)
 
     # For annexure
-    trips = bill.trips.select_related('vehicle').order_by('date')
+    bill_trips = bill.bill_trips.select_related('trip', 'trip__vehicle').order_by('trip__date')
     date_groups = []
-    for date, group in groupby(trips, key=attrgetter('date')):
-        trip_list = list(group)
+    for date, group in groupby(bill_trips, key=lambda bt: bt.trip.date.date()):
+        bt_list = list(group)
         date_groups.append({
             'date': date,
-            'trips': trip_list,
-            'total_weight': sum(t.weight or 0 for t in trip_list),
-            'total_amount': sum(t.revenue or 0 for t in trip_list),
+            'bill_trips': bt_list,
+            'total_weight': sum(bt.trip.weight or 0 for bt in bt_list),
+            'total_amount': sum(bt.trip.revenue or 0 for bt in bt_list),
         })
 
     context = {
@@ -763,5 +735,6 @@ def print_combined_bill(request, pk):
         'company_profile': company_profile,
         'invoice_items': invoice_items,
         'date_groups': date_groups,
+        'bill_trips': bill_trips,
     }
     return render(request, 'ledger/combined_bill_print.html', context)

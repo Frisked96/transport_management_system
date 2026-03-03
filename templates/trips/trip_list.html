@@ -1,63 +1,37 @@
 {% extends 'base.html' %}
 
-{% block title %}Daily Trip Log - {{ view_date|date:"F d, Y" }}{% endblock %}
+{% block title %}Trips List{% endblock %}
 
 {% block content %}
-<div class="row mb-3 align-items-center">
-    <div class="col-4 text-start">
-        <a href="?date={{ previous_date|date:'Y-m-d' }}" class="btn btn-outline-secondary btn-sm">
-            <i class="bi bi-chevron-left"></i> <span class="d-none d-sm-inline">{{ previous_date|date:"M d" }}</span>
-        </a>
-    </div>
-    <div class="col-4 text-center">
-        <h4 class="mb-0 d-md-none">{{ view_date|date:"M d, Y" }}</h4>
-        <h2 class="mb-0 d-none d-md-block">{{ view_date|date:"l, F d, Y" }}</h2>
-        {% if view_date != today %}
-        <a href="?date={{ today|date:'Y-m-d' }}" class="btn btn-sm btn-link text-decoration-none">Go to Today</a>
-        {% endif %}
-    </div>
-    <div class="col-4 text-end">
-        <a href="?date={{ next_date|date:'Y-m-d' }}" class="btn btn-outline-secondary btn-sm">
-            <span class="d-none d-sm-inline">{{ next_date|date:"M d" }}</span> <i class="bi bi-chevron-right"></i>
-        </a>
-    </div>
-</div>
-
-<div class="d-flex justify-content-between align-items-center mb-3">
+<div class="d-flex justify-content-between align-items-center mb-4">
     <div>
-        <!-- Optional: Date Picker to jump -->
-        <form method="get" class="d-inline-block">
-            <div class="input-group input-group-sm">
-                <input type="date" name="date" class="form-control" value="{{ view_date|date:'Y-m-d' }}">
-                <button class="btn btn-outline-secondary" type="submit">Go</button>
-            </div>
-        </form>
+        <h2 class="mb-0">Trips</h2>
+        <p class="text-muted mb-0">Total {{ total_count }} trips found</p>
     </div>
     <div>
         <a href="{% url 'trip-map' %}" class="btn btn-outline-info me-2">
             <i class="bi bi-map"></i> <span class="d-none d-sm-inline">Map View</span>
         </a>
         {% if perms.trips.add_trip %}
-        <a href="{% url 'trip-create' %}?date={{ view_date|date:'Y-m-d' }}" class="btn btn-success">
-            <i class="bi bi-plus-lg"></i> <span class="d-none d-sm-inline">Add Trip for {{ view_date|date:"M d" }}</span><span class="d-sm-none">Add Trip</span>
+        <a href="{% url 'trip-create' %}" class="btn btn-success">
+            <i class="bi bi-plus-lg"></i> <span class="d-none d-sm-inline">Add Trip</span><span class="d-sm-none">Add</span>
         </a>
         {% endif %}
     </div>
 </div>
 
 <!-- Filters & Search -->
-<div class="card mb-4 border-0 bg-transparent">
+<div class="card mb-4 border-0 bg-light p-3 shadow-sm">
     <form method="get" class="row g-2 align-items-end">
-        <input type="hidden" name="date" value="{{ view_date|date:'Y-m-d' }}">
-        <div class="col-md-5">
+        <div class="col-md-3">
             <label for="search" class="form-label text-muted small text-uppercase fw-bold">Search</label>
             <div class="input-group">
-                <span class="input-group-text border-end-0"><i class="bi bi-search"></i></span>
+                <span class="input-group-text border-end-0 bg-white"><i class="bi bi-search text-muted"></i></span>
                 <input type="text" id="search" name="search" class="form-control border-start-0 ps-0"
                     value="{{ search_term }}" placeholder="Trip #, Vehicle, Party...">
             </div>
         </div>
-        <div class="col-md-3">
+        <div class="col-md-2">
             <label for="status" class="form-label text-muted small text-uppercase fw-bold">Status</label>
             <select id="status" name="status" class="form-select">
                 <option value="">All Statuses</option>
@@ -67,29 +41,41 @@
             </select>
         </div>
         <div class="col-md-2">
-            <label class="form-label d-none d-md-block">&nbsp;</label>
+            <label for="start_date" class="form-label text-muted small text-uppercase fw-bold">From</label>
+            <input type="date" id="start_date" name="start_date" class="form-control" value="{{ start_date }}">
+        </div>
+        <div class="col-md-2">
+            <label for="end_date" class="form-label text-muted small text-uppercase fw-bold">To</label>
+            <input type="date" id="end_date" name="end_date" class="form-control" value="{{ end_date }}">
+        </div>
+        <div class="col-md-2">
+            <label for="sort" class="form-label text-muted small text-uppercase fw-bold">Sort By</label>
+            <select id="sort" name="sort" class="form-select">
+                <option value="-date" {% if current_sort == '-date' %}selected{% endif %}>Date (Newest)</option>
+                <option value="date" {% if current_sort == 'date' %}selected{% endif %}>Date (Oldest)</option>
+                <option value="trip_number" {% if current_sort == 'trip_number' %}selected{% endif %}>Trip # (A-Z)</option>
+                <option value="-trip_number" {% if current_sort == '-trip_number' %}selected{% endif %}>Trip # (Z-A)</option>
+                <option value="-weight" {% if current_sort == '-weight' %}selected{% endif %}>Weight (High)</option>
+                <option value="weight" {% if current_sort == 'weight' %}selected{% endif %}>Weight (Low)</option>
+                <option value="-revenue" {% if current_sort == '-revenue' %}selected{% endif %}>Revenue (High)</option>
+            </select>
+        </div>
+        <div class="col-md-1">
             <button type="submit" class="btn btn-primary w-100">Filter</button>
         </div>
-        {% if perms.trips.add_trip %}
-        <div class="col-md-2">
-            <label class="form-label d-none d-md-block">&nbsp;</label>
-            <a href="{% url 'trip-create' %}?date={{ view_date|date:'Y-m-d' }}" class="btn btn-outline-success w-100">
-                <i class="bi bi-plus-lg"></i> New Trip
-            </a>
-        </div>
-        {% endif %}
     </form>
 </div>
 
 {% if trips %}
 <!-- Desktop View (Data Dense Table) -->
 <div class="d-none d-lg-block">
-    <div class="card">
+    <div class="card shadow-sm border-0">
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
-                <thead>
+                <thead class="bg-light">
                     <tr>
-                        <th class="ps-3">Trip Details</th>
+                        <th class="ps-3">Date</th>
+                        <th>Trip Details</th>
                         <th>Route</th>
                         <th class="text-end">Weight</th>
                         <th class="text-end">Rate</th>
@@ -102,6 +88,12 @@
                     {% for trip in trips %}
                     <tr>
                         <td class="ps-3">
+                            <div class="d-flex flex-column">
+                                <span class="fw-bold">{{ trip.date|date:"M d, Y" }}</span>
+                                <span class="small text-muted">{{ trip.date|date:"H:i" }}</span>
+                            </div>
+                        </td>
+                        <td>
                             <div class="d-flex flex-column">
                                 <a href="{% url 'trip-detail' trip.pk %}" class="fw-bold text-primary">{{ trip.trip_number }}</a>
                                 <span class="small text-muted">{{ trip.vehicle.registration_plate }} &bull; {% if trip.party %}{{ trip.party.name|truncatechars:20 }}{% else %}-{% endif %}</span>
@@ -127,19 +119,28 @@
                             </span>
                         </td>
                         <td class="text-end pe-3">
-                            <a href="{% url 'trip-detail' trip.pk %}"
-                                class="btn btn-sm btn-link text-decoration-none p-0 text-muted me-2">View</a>
-                            {% if perms.trips.change_trip %}
-                            <a href="{% url 'trip-update' trip.pk %}"
-                                class="btn btn-sm btn-link text-decoration-none p-0 text-muted">Edit</a>
-                            {% endif %}
+                            <div class="dropdown">
+                                <button class="btn btn-sm btn-light" type="button" data-bs-toggle="dropdown">
+                                    <i class="bi bi-three-dots"></i>
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end">
+                                    <li><a class="dropdown-item" href="{% url 'trip-detail' trip.pk %}"><i class="bi bi-eye me-2"></i>View Details</a></li>
+                                    {% if perms.trips.change_trip %}
+                                    <li><a class="dropdown-item" href="{% url 'trip-update' trip.pk %}"><i class="bi bi-pencil me-2"></i>Edit Trip</a></li>
+                                    {% endif %}
+                                    {% if perms.trips.delete_trip %}
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><a class="dropdown-item text-danger" href="{% url 'trip-delete' trip.pk %}"><i class="bi bi-trash me-2"></i>Delete</a></li>
+                                    {% endif %}
+                                </ul>
+                            </div>
                         </td>
                     </tr>
                     {% endfor %}
                 </tbody>
                 <tfoot class="border-top-2">
                     <tr class="fw-bold bg-light">
-                        <td colspan="2" class="ps-3 text-uppercase small text-muted">Daily Total</td>
+                        <td colspan="3" class="ps-3 text-uppercase small text-muted">Filtered Total (All Results)</td>
                         <td class="text-end text-primary">{{ total_weight|floatformat:2 }}</td>
                         <td></td>
                         <td colspan="3"></td>
@@ -152,11 +153,14 @@
 
 <!-- Mobile/Tablet View (Clean List) -->
 <div class="d-lg-none">
-    <div class="list-group list-group-flush border rounded-2 overflow-hidden">
+    <div class="list-group list-group-flush border rounded-2 overflow-hidden shadow-sm">
         {% for trip in trips %}
         <a href="{% url 'trip-detail' trip.pk %}" class="list-group-item list-group-item-action p-3 border-bottom">
             <div class="d-flex w-100 justify-content-between align-items-center mb-2">
-                <h6 class="mb-0 fw-bold text-primary">{{ trip.trip_number }}</h6>
+                <div>
+                    <span class="text-muted small me-2">{{ trip.date|date:"d M" }}</span>
+                    <h6 class="mb-0 fw-bold d-inline text-primary">{{ trip.trip_number }}</h6>
+                </div>
                 <span
                     class="badge bg-{% if trip.status == 'Completed' %}success{% elif trip.status == 'Cancelled' %}danger{% else %}secondary{% endif %} bg-opacity-10 text-{% if trip.status == 'Completed' %}success{% elif trip.status == 'Cancelled' %}danger{% else %}secondary{% endif %} border border-{% if trip.status == 'Completed' %}success{% elif trip.status == 'Cancelled' %}danger{% else %}secondary{% endif %} border-opacity-25">{{
                     trip.status }}</span>
@@ -183,18 +187,59 @@
         </a>
         {% endfor %}
     </div>
-    <div class="mt-3 p-3 bg-surface border rounded text-center">
-        <span class="text-muted small text-uppercase">Total Weight</span>
+    <div class="mt-3 p-3 bg-white border rounded text-center shadow-sm">
+        <span class="text-muted small text-uppercase">Total Filtered Weight</span>
         <div class="fw-bold fs-4">{{ total_weight|floatformat:2 }} <span class="fs-6 text-muted">tons</span></div>
     </div>
 </div>
 
+<!-- Pagination -->
+{% if is_paginated %}
+<nav aria-label="Page navigation" class="mt-4">
+    <ul class="pagination justify-content-center">
+        {% if page_obj.has_previous %}
+        <li class="page-item">
+            <a class="page-link" href="?page=1{% if search_term %}&search={{ search_term }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if current_sort %}&sort={{ current_sort }}{% endif %}" aria-label="First">
+                <span aria-hidden="true">&laquo;&laquo;</span>
+            </a>
+        </li>
+        <li class="page-item">
+            <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if search_term %}&search={{ search_term }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if current_sort %}&sort={{ current_sort }}{% endif %}" aria-label="Previous">
+                <span aria-hidden="true">&laquo;</span>
+            </a>
+        </li>
+        {% endif %}
+
+        {% for num in page_obj.paginator.page_range %}
+            {% if page_obj.number == num %}
+            <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+            {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+            <li class="page-item"><a class="page-link" href="?page={{ num }}{% if search_term %}&search={{ search_term }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if current_sort %}&sort={{ current_sort }}{% endif %}">{{ num }}</a></li>
+            {% endif %}
+        {% endfor %}
+
+        {% if page_obj.has_next %}
+        <li class="page-item">
+            <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if search_term %}&search={{ search_term }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if current_sort %}&sort={{ current_sort }}{% endif %}" aria-label="Next">
+                <span aria-hidden="true">&raquo;</span>
+            </a>
+        </li>
+        <li class="page-item">
+            <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if search_term %}&search={{ search_term }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if current_sort %}&sort={{ current_sort }}{% endif %}" aria-label="Last">
+                <span aria-hidden="true">&raquo;&raquo;</span>
+            </a>
+        </li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+
 {% else %}
-<div class="text-center py-5 text-muted">
-    <i class="bi bi-truck display-1"></i>
-    <p class="mt-3 lead">No trips recorded for {{ view_date|date:"F d, Y" }}.</p>
+<div class="text-center py-5 text-muted bg-white rounded shadow-sm border mt-4">
+    <i class="bi bi-truck display-1 opacity-25"></i>
+    <p class="mt-3 lead">No trips found matching your criteria.</p>
     {% if perms.trips.add_trip %}
-    <a href="{% url 'trip-create' %}?date={{ view_date|date:'Y-m-d' }}" class="btn btn-primary mt-2">Add First Trip</a>
+    <a href="{% url 'trip-create' %}" class="btn btn-primary mt-2">Add First Trip</a>
     {% endif %}
 </div>
 {% endif %}

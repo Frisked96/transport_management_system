@@ -325,7 +325,7 @@ class Bill(models.Model):
     bill_number = models.CharField(max_length=50, unique=True, blank=True, null=True, verbose_name="Invoice Number")
     party = models.ForeignKey(Party, on_delete=models.PROTECT, related_name='bills', verbose_name="Bill To")
     date = models.DateField(verbose_name="Invoice Date")
-    trips = models.ManyToManyField(Trip, related_name='bills', verbose_name="Included Trips")
+    trips = models.ManyToManyField(Trip, through='BillTrip', related_name='bills', verbose_name="Included Trips")
     gst_rate = models.PositiveIntegerField(choices=GST_CHOICES, default=GST_RATE_0, verbose_name="GST Rate (%)")
     gst_type = models.CharField(max_length=10, choices=GST_TYPE_CHOICES, default=GST_TYPE_INTRA, verbose_name="GST Type")
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=STATUS_DRAFT)
@@ -486,3 +486,19 @@ class Bill(models.Model):
     @property
     def roundoff(self):
         return self.rounded_total - self.total_amount
+
+class BillTrip(models.Model):
+    """
+    Through model for Bill and Trip to store LR No for each trip in a bill context.
+    """
+    bill = models.ForeignKey(Bill, on_delete=models.CASCADE, related_name='bill_trips')
+    trip = models.ForeignKey(Trip, on_delete=models.CASCADE, related_name='bill_trips')
+    lr_no = models.CharField(max_length=100, blank=True, null=True, verbose_name="LR No")
+    
+    class Meta:
+        verbose_name = 'Bill Trip'
+        verbose_name_plural = 'Bill Trips'
+        unique_together = ('bill', 'trip')
+
+    def __str__(self):
+        return f"{self.bill.bill_number} - {self.trip.trip_number} (LR: {self.lr_no or 'N/A'})"

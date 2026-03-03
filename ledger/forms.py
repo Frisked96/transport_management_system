@@ -1,6 +1,7 @@
 from django import forms
 from django.contrib.auth.models import User
 from django.db import models
+import json
 from .models import FinancialRecord, Party, Account, Bill, CompanyProfile
 from trips.models import Trip
 
@@ -146,6 +147,9 @@ class AccountForm(forms.ModelForm):
         }
 
 class BillForm(forms.ModelForm):
+    # Hidden field to store JSON mapping of trip_id -> lr_no
+    trips_data = forms.CharField(widget=forms.HiddenInput(), required=False)
+
     class Meta:
         model = Bill
         fields = [
@@ -158,7 +162,8 @@ class BillForm(forms.ModelForm):
             'invoice_company_address',
             'invoice_company_mobile',
             'invoice_company_gstin',
-            'trips'
+            'trips',
+            'trips_data'
         ]
         widgets = {
             'date': forms.DateInput(attrs={'type': 'date'}),
@@ -171,7 +176,7 @@ class BillForm(forms.ModelForm):
         
         # Apply bootstrap classes
         for name, field in self.fields.items():
-            if name != 'trips': # Checkboxes look bad with form-control
+            if name not in ['trips', 'trips_data']:
                 field.widget.attrs.update({'class': 'form-control'})
         
         # Logic to filter trips based on Party
@@ -182,23 +187,18 @@ class BillForm(forms.ModelForm):
         elif self.instance and self.instance.pk: # Edit mode
             party_id = self.instance.party_id
         else:
-             # Check initial data from kwargs or self.initial
-             if 'initial' in kwargs and 'party' in kwargs['initial']:
-                 party_id = kwargs['initial']['party']
-             elif self.initial.get('party'):
+             if self.initial.get('party'):
                  party_id = self.initial.get('party')
             
         if party_id:
             try:
-                # Show unbilled trips OR trips already in this bill (if editing)
-                # We usually want 'Completed' trips only
+                # Show trips for this party
                 qs = Trip.objects.filter(party_id=party_id).exclude(status='Cancelled')
                 
                 if self.instance and self.instance.pk:
-                    # In edit mode, include currently selected trips + unbilled ones
+                    # Include currently selected trips + unbilled ones
                     qs = qs.filter(models.Q(bills__isnull=True) | models.Q(bills=self.instance))
                 else:
-                     # Create mode: only unbilled
                      qs = qs.filter(bills__isnull=True)
                 
                 self.fields['trips'].queryset = qs.distinct().order_by('-date')
@@ -206,8 +206,14 @@ class BillForm(forms.ModelForm):
                 self.fields['trips'].queryset = Trip.objects.none()
         else:
             self.fields['trips'].queryset = Trip.objects.none()
+
+        # If editing, populate trips_data with existing LR Nos
+        if self.instance and self.instance.pk:
+            from .models import BillTrip
+            bt_data = {bt.trip_id: bt.lr_no for bt in self.instance.bill_trips.all()}
+            self.fields['trips_data'].initial = json.dumps(bt_data)
         
-        # Pre-fill Company Details and Bill Number if creating new
+        # Pre-fill Company Details and Bill Number
         if not self.instance.pk:
             profile = CompanyProfile.objects.first()
             if profile:
@@ -216,10 +222,8 @@ class BillForm(forms.ModelForm):
                 self.fields['invoice_company_mobile'].initial = profile.phone_number
                 self.fields['invoice_company_gstin'].initial = profile.gstin
                 
-                # Predict next Bill Number
                 from .models import Sequence
                 import datetime
-                
                 try:
                     seq_obj = Sequence.objects.get(key="bill_sequence")
                     next_val = seq_obj.value + 1
@@ -231,8 +235,37 @@ class BillForm(forms.ModelForm):
                 pred_num = template.replace("{YYYY}", str(now.year)).replace("{SEQ}", f"{next_val:04d}")
                 self.fields['bill_number'].initial = pred_num
 
-        # Add labels if needed
-        self.fields['gst_type'].label = "GST Type"
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        if commit:
+            instance.save()
+            
+            # Handle BillTrip relationships with LR No
+            selected_trips = self.cleaned_data.get('trips', [])
+            trips_data_json = self.cleaned_data.get('trips_data', '{}')
+            
+            try:
+                trips_extra = json.loads(trips_data_json) if trips_data_json else {}
+            except json.JSONDecodeError:
+                trips_extra = {}
+
+            # Remove existing trips not in selected
+            instance.bill_trips.exclude(trip__in=selected_trips).delete()
+
+            # Create or update BillTrip for each selected trip
+            from .models import BillTrip
+            for trip in selected_trips:
+                lr_no = trips_extra.get(str(trip.id)) or trips_extra.get(trip.id)
+                BillTrip.objects.update_or_create(
+                    bill=instance,
+                    trip=trip,
+                    defaults={'lr_no': lr_no}
+                )
+            
+            # Update GST record
+            instance.update_ledger_gst_record()
+            
+        return instance
 
 class CompanyProfileForm(forms.ModelForm):
     class Meta:

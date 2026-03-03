@@ -55,30 +55,16 @@ class BaseTripPermissionMixin:
 
 class TripListView(LoginRequiredMixin, BaseTripPermissionMixin, ListView):
     """
-    List view for trips, organized by Date (Page).
-    One date per page.
+    List view for trips, showing all trips in a list with filters and sorting.
     """
     model = Trip
     template_name = 'trips/trip_list.html'
     context_object_name = 'trips'
-    paginate_by = None # Disable standard pagination as we use date pagination
+    paginate_by = 25
     
     def get_queryset(self):
-        """Filter trips based on date and user permissions"""
+        """Filter and sort trips based on user input and permissions"""
         queryset = self.get_queryset_for_user().select_related('vehicle', 'party', 'driver')
-        
-        # Date filtering
-        date_str = self.request.GET.get('date')
-        if date_str:
-            try:
-                self.view_date = datetime.strptime(date_str, '%Y-%m-%d').date()
-            except ValueError:
-                self.view_date = timezone.now().date()
-        else:
-            self.view_date = timezone.now().date()
-
-        # Filter by the specific date
-        queryset = queryset.filter(date__date=self.view_date)
         
         # Search functionality
         search = self.request.GET.get('search')
@@ -96,23 +82,58 @@ class TripListView(LoginRequiredMixin, BaseTripPermissionMixin, ListView):
         if status:
             queryset = queryset.filter(status=status)
             
-        return queryset.order_by('-created_at')
+        # Date range filtering
+        start_date = self.request.GET.get('start_date')
+        end_date = self.request.GET.get('end_date')
+        if start_date:
+            try:
+                queryset = queryset.filter(date__date__gte=start_date)
+            except (ValueError, TypeError):
+                pass
+        if end_date:
+            try:
+                queryset = queryset.filter(date__date__lte=end_date)
+            except (ValueError, TypeError):
+                pass
+
+        # Sorting
+        sort = self.request.GET.get('sort', '-date')
+        # Map of sort keys to actual model fields
+        sort_mapping = {
+            'date': 'date',
+            '-date': '-date',
+            'trip_number': 'trip_number',
+            '-trip_number': '-trip_number',
+            'weight': 'weight',
+            '-weight': '-weight',
+            'revenue': 'revenue_calculated', # We'll need annotation for this if we want to sort by it
+        }
+        
+        if sort == 'revenue' or sort == '-revenue':
+            queryset = queryset.annotate(
+                revenue_calculated=F('weight') * F('rate_per_ton')
+            )
+            
+        if sort in sort_mapping:
+            queryset = queryset.order_by(sort_mapping[sort], '-created_at')
+        else:
+            queryset = queryset.order_by('-date', '-created_at')
+            
+        return queryset
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['status_choices'] = Trip.STATUS_CHOICES
         context['current_status'] = self.request.GET.get('status', '')
         context['search_term'] = self.request.GET.get('search', '')
+        context['start_date'] = self.request.GET.get('start_date', '')
+        context['end_date'] = self.request.GET.get('end_date', '')
+        context['current_sort'] = self.request.GET.get('sort', '-date')
         
-        # Date Navigation
-        context['view_date'] = self.view_date
-        context['previous_date'] = self.view_date - timedelta(days=1)
-        context['next_date'] = self.view_date + timedelta(days=1)
-        context['today'] = timezone.now().date()
-        
-        # Summary for the day
-        trips = context['trips']
-        context['total_weight'] = trips.aggregate(Sum('weight'))['weight__sum'] or 0
+        # Summary for the filtered queryset (all pages)
+        queryset = self.get_queryset()
+        context['total_weight'] = queryset.aggregate(Sum('weight'))['weight__sum'] or 0
+        context['total_count'] = queryset.count()
         
         return context
 
@@ -238,8 +259,8 @@ class TripCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
         return super().form_valid(form)
     
     def get_success_url(self):
-        # Redirect back to the trip list for the same date
-        return reverse_lazy('trip-list') + f"?date={self.object.date.strftime('%Y-%m-%d')}"
+        # Redirect back to the trip list
+        return reverse_lazy('trip-list')
 
 
 class TripUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
@@ -301,7 +322,7 @@ class TripDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
     permission_required = 'trips.delete_trip'
     
     def get_success_url(self):
-        return reverse_lazy('trip-list') + f"?date={self.object.date.strftime('%Y-%m-%d')}"
+        return reverse_lazy('trip-list')
     
     def delete(self, request, *args, **kwargs):
         messages.success(self.request, 'Trip deleted successfully!')

@@ -79,10 +79,10 @@ def num2words(num):
         n %= 1000
     words += convert_upto_999(n)
 
-    result = "INR " + words.strip() + " Only"
+    result = words.strip()
     # Add paise if needed (optional)
     if d > 0:
-        result = result.replace(" Only", f" and {d:02d}/100 Only")
+        result = result + f" and {d:02d}/100"
     return result
 
 @register.filter
