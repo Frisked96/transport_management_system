@@ -3,26 +3,66 @@
 {% block title %}Update Trip Expenses - Transport Management System{% endblock %}
 
 {% block content %}
-<h2>Update Fixed Expenses for {{ trip.trip_number }}</h2>
+<!-- BEGIN: Page Header -->
+<header class="mb-8 max-w-2xl mx-auto">
+    <h1 class="text-3xl font-bold text-slate-900">Fixed Expenses</h1>
+    <p class="text-sm font-semibold text-emerald-600 mt-1 uppercase tracking-widest">{{ trip.trip_number }}</p>
+</header>
+<!-- END: Page Header -->
 
-<form method="post">
-    {% csrf_token %}
-    
-    {% for field in form %}
-        <div class="form-group">
-            {{ field.label_tag }}
-            {{ field }}
-            {% if field.errors %}
-                <div class="error" style="color: #e74c3c; margin-top: 5px;">
-                    {{ field.errors }}
-                </div>
-            {% endif %}
+<div class="max-w-2xl mx-auto">
+    <div class="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
+        <div class="bg-slate-800 px-6 py-4">
+            <h2 class="text-sm font-bold text-white uppercase tracking-widest flex items-center">
+                <i class="fa-solid fa-calculator mr-3 text-slate-400"></i>
+                Update Fixed Trip Expenses
+            </h2>
         </div>
-    {% endfor %}
-    
-    <div style="margin-top: 1.5rem;">
-        <button type="submit" class="btn btn-success">Save Expenses</button>
-        <a href="{% url 'trip-detail' trip.pk %}" class="btn" style="margin-left: 1rem;">Cancel</a>
+        
+        <div class="p-6">
+            <form method="post" class="space-y-6">
+                {% csrf_token %}
+                
+                <div class="space-y-4">
+                    {% for field in form %}
+                    <div>
+                        <label class="block text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider" for="{{ field.id_for_label }}">
+                            {{ field.label }}
+                        </label>
+                        {{ field }}
+                        {% if field.errors %}
+                            <p class="mt-1 text-sm text-red-600 font-medium">{{ field.errors.as_text }}</p>
+                        {% endif %}
+                        {% if field.help_text %}
+                            <p class="mt-1 text-xs text-slate-500 italic">{{ field.help_text }}</p>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+                
+                <div class="pt-6 border-t border-slate-100 flex items-center space-x-3">
+                    <button type="submit" class="px-6 py-2 bg-emerald-600 text-white rounded-md font-bold hover:bg-emerald-700 shadow-sm transition-colors uppercase tracking-widest text-xs">
+                        Save Expenses
+                    </button>
+                    <a href="{% url 'trip-detail' trip.pk %}" 
+                       class="px-6 py-2 border border-slate-300 rounded-md text-slate-700 bg-white hover:bg-slate-50 font-bold transition-colors uppercase tracking-widest text-xs">
+                        Cancel
+                    </a>
+                </div>
+            </form>
+        </div>
     </div>
-</form>
+</div>
+
+<script>
+    // Ensure consistent styling for form fields if not already handled by forms.py
+    document.addEventListener('DOMContentLoaded', function() {
+        const inputs = document.querySelectorAll('input[type="number"], input[type="text"], select, textarea');
+        inputs.forEach(input => {
+            if (!input.classList.contains('bg-white')) {
+                input.className = 'block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white';
+            }
+        });
+    });
+</script>
 {% endblock %}

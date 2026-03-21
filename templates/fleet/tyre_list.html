@@ -1,97 +1,176 @@
 {% extends 'base.html' %}
 
-{% block title %}Tyre Inventory{% endblock %}
+{% block title %}Tyre Inventory - Transport Management System{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <h2>Tyre Inventory</h2>
-    <a href="{% url 'tyre-create' %}" class="btn btn-primary">
-        <i class="bi bi-plus-circle"></i> Add Tyre
-    </a>
-</div>
-
-<div class="card shadow-sm mb-4">
-    <div class="card-body">
-        <form method="get" class="row g-3">
-            <div class="col-md-6">
-                <input type="text" name="search" class="form-control" placeholder="Search Serial, Brand, Size..." value="{{ request.GET.search }}">
-            </div>
-            <div class="col-md-4">
-                <select name="status" class="form-select">
-                    <option value="">All Statuses</option>
-                    <option value="In Stock" {% if request.GET.status == 'In Stock' %}selected{% endif %}>In Stock</option>
-                    <option value="Mounted" {% if request.GET.status == 'Mounted' %}selected{% endif %}>Mounted</option>
-                    <option value="Under Repair" {% if request.GET.status == 'Under Repair' %}selected{% endif %}>Under Repair</option>
-                    <option value="Scrap" {% if request.GET.status == 'Scrap' %}selected{% endif %}>Scrap</option>
-                </select>
-            </div>
-            <div class="col-md-2">
-                <button type="submit" class="btn btn-secondary w-100">Filter</button>
-            </div>
-        </form>
+<!-- BEGIN: Page Header -->
+<header class="flex flex-col md:flex-row md:items-center justify-between mb-8">
+    <div>
+        <h1 class="text-3xl font-bold text-slate-900">Tyre Inventory</h1>
+        <p class="text-sm text-slate-600 mt-1">Manage fleet tyre stock and maintenance</p>
     </div>
-</div>
-
-<div class="card shadow-sm">
-    <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0">
-            <thead class="table-light">
-                <tr>
-                    <th>Serial Number</th>
-                    <th>Brand & Size</th>
-                    <th>Status</th>
-                    <th>Vehicle/Position</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for tyre in tyres %}
-                <tr>
-                    <td><strong>{{ tyre.serial_number }}</strong></td>
-                    <td>{{ tyre.brand }} <br><small class="text-muted">{{ tyre.size }}</small></td>
-                    <td>
-                        <span class="badge bg-{% if tyre.status == 'Mounted' %}success{% elif tyre.status == 'In Stock' %}primary{% elif tyre.status == 'Scrap' %}danger{% else %}warning{% endif %}">
-                            {{ tyre.status }}
-                        </span>
-                    </td>
-                    <td>
-                        {% if tyre.current_vehicle %}
-                            <a href="{% url 'vehicle-detail' tyre.current_vehicle.pk %}" class="text-decoration-none">
-                                {{ tyre.current_vehicle.registration_plate }}
-                            </a>
-                            <br><small class="text-muted">{{ tyre.current_position }}</small>
-                        {% else %}
-                            -
-                        {% endif %}
-                    </td>
-                    <td>
-                        <div class="btn-group">
-                            <a href="{% url 'tyre-detail' tyre.pk %}" class="btn btn-sm btn-outline-info"><i class="bi bi-eye"></i></a>
-                            <a href="{% url 'tyre-log-create' %}?tyre={{ tyre.pk }}" class="btn btn-sm btn-outline-success"><i class="bi bi-gear"></i></a>
-                        </div>
-                    </td>
-                </tr>
-                {% empty %}
-                <tr>
-                    <td colspan="5" class="text-center py-4 text-muted">No tyres found in inventory.</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+    <div class="mt-4 md:mt-0">
+        <a href="{% url 'tyre-create' %}" class="flex items-center space-x-2 px-4 py-2 bg-emerald-600 text-white rounded-md text-sm font-medium hover:bg-emerald-700 shadow-sm transition-colors">
+            <i class="fa-solid fa-plus"></i>
+            <span>Add Tyre</span>
+        </a>
     </div>
+</header>
+<!-- END: Page Header -->
+
+<!-- BEGIN: Search & Filter Bar -->
+<section class="bg-white p-5 rounded-lg border border-slate-200 mb-8 shadow-sm">
+    <form method="get" class="grid grid-cols-1 md:grid-cols-12 gap-4">
+        <!-- Search -->
+        <div class="md:col-span-6 flex flex-col">
+            <label for="search" class="text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">Search</label>
+            <div class="relative">
+                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                    <i class="fa-solid fa-magnifying-glass text-sm"></i>
+                </div>
+                <input type="text" id="search" name="search" class="block w-full pl-10 pr-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white" 
+                       value="{{ request.GET.search }}" placeholder="Search Serial, Brand, Size...">
+            </div>
+        </div>
+        
+        <!-- Status -->
+        <div class="md:col-span-4 flex flex-col">
+            <label for="status" class="text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">Status</label>
+            <select id="status" name="status" class="block w-full pl-3 pr-10 py-2 border border-slate-300 rounded-md text-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white">
+                <option value="">All Statuses</option>
+                <option value="In Stock" {% if request.GET.status == 'In Stock' %}selected{% endif %}>In Stock</option>
+                <option value="Mounted" {% if request.GET.status == 'Mounted' %}selected{% endif %}>Mounted</option>
+                <option value="Under Repair" {% if request.GET.status == 'Under Repair' %}selected{% endif %}>Under Repair</option>
+                <option value="Scrap" {% if request.GET.status == 'Scrap' %}selected{% endif %}>Scrap</option>
+            </select>
+        </div>
+        
+        <!-- Actions -->
+        <div class="md:col-span-2 flex items-end">
+            <button type="submit" class="w-full px-4 py-2 bg-slate-800 text-white rounded-md text-sm font-medium hover:bg-slate-700 transition-colors shadow-sm">
+                <i class="fa-solid fa-filter mr-2"></i>Filter
+            </button>
+        </div>
+    </form>
+</section>
+<!-- END: Search & Filter Bar -->
+
+<!-- BEGIN: Tyre List -->
+{% if tyres %}
+<div class="space-y-4">
+    {% for tyre in tyres %}
+    <div class="bg-white border border-slate-200 rounded-lg p-5 flex flex-col md:flex-row items-start md:items-center gap-6 hover:shadow-md transition-shadow">
+        <!-- Serial & Brand -->
+        <div class="flex-1 min-w-[200px]">
+            <div class="flex items-center gap-3 mb-1">
+                <div class="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center text-slate-500">
+                    <i class="fa-solid fa-circle-notch text-lg"></i>
+                </div>
+                <div>
+                    <h3 class="font-bold text-slate-900 leading-tight">
+                        <a href="{% url 'tyre-detail' tyre.pk %}" class="hover:text-emerald-600 transition-colors">{{ tyre.serial_number }}</a>
+                    </h3>
+                    <p class="text-xs text-slate-500 uppercase tracking-wider font-semibold">{{ tyre.brand }} • {{ tyre.size }}</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Status -->
+        <div class="w-32">
+            <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">Status</span>
+            <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium 
+                {% if tyre.status == 'Mounted' %}bg-emerald-100 text-emerald-800
+                {% elif tyre.status == 'In Stock' %}bg-blue-100 text-blue-800
+                {% elif tyre.status == 'Scrap' %}bg-red-100 text-red-800
+                {% else %}bg-orange-100 text-orange-800{% endif %}">
+                {% if tyre.status == 'Mounted' %}<i class="fa-solid fa-truck-pickup mr-1"></i>{% endif %}
+                {% if tyre.status == 'In Stock' %}<i class="fa-solid fa-warehouse mr-1"></i>{% endif %}
+                {% if tyre.status == 'Scrap' %}<i class="fa-solid fa-trash-can mr-1"></i>{% endif %}
+                {% if tyre.status == 'Under Repair' %}<i class="fa-solid fa-screwdriver-wrench mr-1"></i>{% endif %}
+                {{ tyre.status }}
+            </span>
+        </div>
+        
+        <!-- Vehicle Assignment -->
+        <div class="flex-1">
+            <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">Current Assignment</span>
+            {% if tyre.current_vehicle %}
+                <div class="flex items-center gap-2">
+                    <a href="{% url 'vehicle-detail' tyre.current_vehicle.pk %}" class="text-sm font-medium text-emerald-600 hover:text-emerald-800 transition-colors">
+                        {{ tyre.current_vehicle.registration_plate }}
+                    </a>
+                    <span class="text-slate-400">•</span>
+                    <span class="text-sm text-slate-600">{{ tyre.current_position }}</span>
+                </div>
+            {% else %}
+                <p class="text-sm text-slate-400 italic">Not assigned</p>
+            {% endif %}
+        </div>
+        
+        <!-- Actions -->
+        <div class="flex items-center gap-2">
+            <a href="{% url 'tyre-detail' tyre.pk %}" class="p-2 text-slate-400 hover:text-emerald-600 transition-colors" title="View Details">
+                <i class="fa-regular fa-eye text-lg"></i>
+            </a>
+            <a href="{% url 'tyre-log-create' %}?tyre={{ tyre.pk }}" class="p-2 text-slate-400 hover:text-emerald-600 transition-colors" title="Add Log Entry">
+                <i class="fa-solid fa-plus-circle text-lg"></i>
+            </a>
+            <div class="relative group/menu ml-2">
+                <button class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 transition-colors">
+                    <i class="fa-solid fa-ellipsis-vertical"></i>
+                </button>
+                <div class="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-20 hidden group-hover/menu:block border border-slate-100">
+                    <a href="{% url 'tyre-detail' tyre.pk %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">
+                        <i class="fa-solid fa-circle-info mr-2"></i>Full History
+                    </a>
+                    <a href="{% url 'tyre-log-create' %}?tyre={{ tyre.pk }}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">
+                        <i class="fa-solid fa-pen-to-square mr-2"></i>Log Activity
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
 </div>
 
+<!-- BEGIN: Pagination -->
 {% if is_paginated %}
-<nav class="mt-4">
-    <ul class="pagination justify-content-center">
+<nav class="mt-10 flex justify-center">
+    <div class="flex space-x-1">
         {% if page_obj.has_previous %}
-            <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}">Previous</a></li>
+        <a href="?page={{ page_obj.previous_page_number }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}" 
+           class="px-4 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50 transition-colors">
+            <i class="fa-solid fa-angle-left mr-2"></i>Previous
+        </a>
         {% endif %}
-        <li class="page-item active"><span class="page-link">{{ page_obj.number }}</span></li>
+
+        <span class="px-4 py-2 bg-emerald-600 text-white border border-emerald-600 rounded-md text-sm font-medium">
+            {{ page_obj.number }}
+        </span>
+
         {% if page_obj.has_next %}
-            <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}">Next</a></li>
+        <a href="?page={{ page_obj.next_page_number }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}" 
+           class="px-4 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50 transition-colors">
+            Next<i class="fa-solid fa-angle-right ml-2"></i>
+        </a>
         {% endif %}
-    </ul>
+    </div>
 </nav>
 {% endif %}
+<!-- END: Pagination -->
+
+{% else %}
+<div class="text-center py-20 bg-white rounded-lg border border-slate-200 shadow-sm">
+    <div class="inline-flex items-center justify-center w-20 h-20 bg-slate-50 rounded-full mb-6">
+        <i class="fa-solid fa-circle-notch text-4xl text-slate-300"></i>
+    </div>
+    <h2 class="text-xl font-bold text-slate-900 mb-2">No tyres found</h2>
+    <p class="text-slate-600 mb-8 max-w-xs mx-auto">Start by adding your first tyre to the inventory.</p>
+    <a href="{% url 'tyre-create' %}" class="inline-flex items-center space-x-2 px-6 py-3 bg-emerald-600 text-white rounded-md font-medium hover:bg-emerald-700 shadow-sm transition-colors">
+        <i class="fa-solid fa-plus"></i>
+        <span>Add Your First Tyre</span>
+    </a>
+</div>
+{% endif %}
+
 {% endblock %}

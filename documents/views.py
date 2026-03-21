@@ -14,8 +14,17 @@ from django import forms
 class DocumentForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        for field in self.fields.values():
-            field.widget.attrs.update({'class': 'form-control'})
+        # Standard tailwind classes for most inputs
+        tailwind_classes = "block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white"
+        
+        for field_name, field in self.fields.items():
+            if field_name == 'scanned_copy':
+                # Special styling for file input
+                field.widget.attrs.update({
+                    'class': 'block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100'
+                })
+            else:
+                field.widget.attrs.update({'class': tailwind_classes})
 
     class Meta:
         model = Document

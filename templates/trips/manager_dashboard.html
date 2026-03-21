@@ -3,142 +3,176 @@
 {% block title %}Manager Dashboard - Transport Management System{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h2>Manager Dashboard</h2>
+<!-- BEGIN: Page Header -->
+<header class="flex flex-col md:flex-row md:items-center justify-between mb-8">
     <div>
-        <a href="{% url 'trip-list' %}" class="btn btn-primary">View All Trips</a>
-        <a href="{% url 'financial-summary' %}" class="btn btn-outline-secondary ms-2">Financial Reports</a>
+        <h1 class="text-3xl font-bold text-slate-900">Manager Dashboard</h1>
+        <p class="text-sm text-slate-600 mt-1">Real-time overview of operations and finance</p>
     </div>
-</div>
+    <div class="mt-4 md:mt-0 flex space-x-3">
+        <a href="{% url 'trip-list' %}" class="flex items-center space-x-2 px-4 py-2 bg-emerald-600 text-white rounded-md text-sm font-medium hover:bg-emerald-700 shadow-sm transition-colors">
+            <i class="fa-solid fa-truck"></i>
+            <span>View All Trips</span>
+        </a>
+        <a href="{% url 'financial-summary' %}" class="flex items-center space-x-2 px-4 py-2 border border-slate-300 rounded-md bg-white text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors">
+            <i class="fa-solid fa-chart-line"></i>
+            <span>Financial Reports</span>
+        </a>
+    </div>
+</header>
+<!-- END: Page Header -->
 
-<!-- Key Metrics -->
-<div class="row mb-4">
-    <div class="col-md-3">
-        <div class="card h-100 border-start border-primary border-4">
-            <div class="card-body">
-                <h6 class="card-subtitle mb-2 text-muted">Active Trips</h6>
-                <h2 class="card-title text-primary">{{ active_trips }}</h2>
-                <small class="text-muted">In Progress</small>
+<!-- Key Operational Metrics -->
+<section class="mb-10">
+    <div class="flex items-center space-x-2 mb-6">
+        <div class="h-6 w-1 bg-blue-500 rounded-full"></div>
+        <h2 class="text-sm font-bold text-slate-700 uppercase tracking-wider">Operational Status</h2>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div class="bg-white border border-slate-200 rounded-lg p-5 shadow-sm border-l-4 border-l-blue-500">
+            <div class="flex items-center justify-between mb-2">
+                <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Active Trips</h3>
+                <i class="fa-solid fa-truck-fast text-blue-500 opacity-20 text-xl"></i>
             </div>
+            <div class="text-3xl font-bold text-blue-600">{{ active_trips }}</div>
+            <p class="text-[10px] text-slate-400 mt-1 font-medium uppercase italic">In Progress</p>
+        </div>
+        
+        <div class="bg-white border border-slate-200 rounded-lg p-5 shadow-sm border-l-4 border-l-emerald-500">
+            <div class="flex items-center justify-between mb-2">
+                <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Completed (Month)</h3>
+                <i class="fa-solid fa-circle-check text-emerald-500 opacity-20 text-xl"></i>
+            </div>
+            <div class="text-3xl font-bold text-emerald-600">{{ completed_this_month }}</div>
+            <p class="text-[10px] text-slate-400 mt-1 font-medium uppercase italic">Trips Finished</p>
+        </div>
+        
+        <div class="bg-white border border-slate-200 rounded-lg p-5 shadow-sm border-l-4 border-l-amber-500">
+            <div class="flex items-center justify-between mb-2">
+                <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Maintenance Due</h3>
+                <i class="fa-solid fa-screwdriver-wrench text-amber-500 opacity-20 text-xl"></i>
+            </div>
+            <div class="text-3xl font-bold text-amber-600">{{ vehicles_due_maintenance }}</div>
+            <p class="text-[10px] text-slate-400 mt-1 font-medium uppercase italic">Within 7 days</p>
+        </div>
+        
+        <div class="bg-white border border-slate-200 rounded-lg p-5 shadow-sm border-l-4 border-l-red-500">
+            <div class="flex items-center justify-between mb-2">
+                <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wider">In Maintenance</h3>
+                <i class="fa-solid fa-ban text-red-500 opacity-20 text-xl"></i>
+            </div>
+            <div class="text-3xl font-bold text-red-600">{{ vehicles_in_maintenance }}</div>
+            <p class="text-[10px] text-slate-400 mt-1 font-medium uppercase italic">Unavailable</p>
         </div>
     </div>
-    
-    <div class="col-md-3">
-        <div class="card h-100 border-start border-success border-4">
-            <div class="card-body">
-                <h6 class="card-subtitle mb-2 text-muted">Completed (Month)</h6>
-                <h2 class="card-title text-success">{{ completed_this_month }}</h2>
-                <small class="text-muted">Trips Finished</small>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-md-3">
-        <div class="card h-100 border-start border-warning border-4">
-            <div class="card-body">
-                <h6 class="card-subtitle mb-2 text-muted">Maintenance Due</h6>
-                <h2 class="card-title text-warning">{{ vehicles_due_maintenance }}</h2>
-                <small class="text-muted">Within 7 days</small>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-md-3">
-        <div class="card h-100 border-start border-danger border-4">
-            <div class="card-body">
-                <h6 class="card-subtitle mb-2 text-muted">In Maintenance</h6>
-                <h2 class="card-title text-danger">{{ vehicles_in_maintenance }}</h2>
-                <small class="text-muted">Unavailable</small>
-            </div>
-        </div>
-    </div>
-</div>
+</section>
 
-<!-- Financial Summary -->
-<div class="row mb-4">
-    <div class="col-md-4">
-        <div class="card h-100 bg-success text-white">
-            <div class="card-body">
-                <h5 class="card-title">Income</h5>
-                <h2 class="fw-bold">${{ income_this_month|floatformat:2 }}</h2>
-                <p class="card-text small opacity-75">Freight Income (This Month)</p>
+<!-- Financial Insights -->
+<section class="mb-12">
+    <div class="flex items-center space-x-2 mb-6">
+        <div class="h-6 w-1 bg-emerald-500 rounded-full"></div>
+        <h2 class="text-sm font-bold text-slate-700 uppercase tracking-wider">Financial Insights (This Month)</h2>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div class="bg-emerald-600 rounded-lg p-6 shadow-md text-white">
+            <h3 class="text-xs font-bold text-emerald-100 uppercase tracking-widest mb-3 opacity-80">Income</h3>
+            <div class="text-3xl font-extrabold mb-1">${{ income_this_month|floatformat:2 }}</div>
+            <p class="text-xs text-emerald-100 italic opacity-75">Freight Income</p>
+        </div>
+        
+        <div class="bg-red-600 rounded-lg p-6 shadow-md text-white">
+            <h3 class="text-xs font-bold text-red-100 uppercase tracking-widest mb-3 opacity-80">Expenses</h3>
+            <div class="text-3xl font-extrabold mb-1">${{ expenses_this_month|floatformat:2 }}</div>
+            <p class="text-xs text-red-100 italic opacity-75">Operational Costs</p>
+        </div>
+        
+        <div class="bg-white border border-slate-200 rounded-lg p-6 shadow-sm flex flex-col justify-center">
+            <h3 class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Estimated Net Profit</h3>
+            <div class="text-3xl font-extrabold {% if net_profit >= 0 %}text-emerald-600{% else %}text-red-600{% endif %} mb-1">
+                {% if net_profit >= 0 %}+{% endif %}${{ net_profit|floatformat:2 }}
             </div>
+            <p class="text-xs text-slate-400 italic font-medium uppercase tracking-tighter">Estimated Margin</p>
         </div>
     </div>
-    
-    <div class="col-md-4">
-        <div class="card h-100 bg-danger text-white">
-            <div class="card-body">
-                <h5 class="card-title">Expenses</h5>
-                <h2 class="fw-bold">${{ expenses_this_month|floatformat:2 }}</h2>
-                <p class="card-text small opacity-75">Operational Costs (This Month)</p>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-md-4">
-        <div class="card h-100 bg-light border">
-            <div class="card-body">
-                <h5 class="card-title text-muted">Net Profit</h5>
-                <h2 class="fw-bold {% if net_profit >= 0 %}text-success{% else %}text-danger{% endif %}">
-                    {% if net_profit >= 0 %}+{% endif %}${{ net_profit|floatformat:2 }}
-                </h2>
-                <p class="card-text small text-muted">Estimated Margin (This Month)</p>
-            </div>
-        </div>
-    </div>
-</div>
+</section>
 
-<!-- Recent Trips -->
-<div class="card">
-    <div class="card-header bg-white">
-        <h5 class="mb-0 text-primary">Recent Trips</h5>
+<!-- Recent Trips Section -->
+<section>
+    <div class="flex items-center space-x-2 mb-6 border-b border-slate-100 pb-2">
+        <i class="fa-solid fa-clock-rotate-left text-slate-400"></i>
+        <h2 class="text-sm font-bold text-slate-700 uppercase tracking-wider">Recent Trips</h2>
     </div>
-    <div class="card-body p-0">
-        <div class="table-responsive">
-            <table class="table table-hover mb-0 align-middle">
-                <thead class="table-light">
+
+    <div class="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-sm">
+                <thead class="bg-slate-50 text-slate-500 uppercase text-[10px] font-bold tracking-widest">
                     <tr>
-                        <th>Trip Number</th>
-                        <th>Driver</th>
-                        <th>Vehicle</th>
-                        <th>Start Date</th>
-                        <th>Status</th>
-                        <th>Actions</th>
+                        <th class="px-6 py-4">Trip Number</th>
+                        <th class="px-6 py-4">Driver & Vehicle</th>
+                        <th class="px-6 py-4">Start Date</th>
+                        <th class="px-6 py-4">Status</th>
+                        <th class="px-6 py-4 text-right">Actions</th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody class="divide-y divide-slate-100">
                     {% for trip in recent_trips|slice:":10" %}
-                        <tr>
-                            <td><a href="{% url 'trip-detail' trip.pk %}" class="fw-bold text-decoration-none">{{ trip.trip_number }}</a></td>
-                            <td>
-                                {% if trip.driver %}
-                                    {{ trip.driver.user.get_full_name|default:trip.driver.user.username }}
-                                {% else %}
-                                    <span class="text-muted">Unassigned</span>
-                                {% endif %}
+                        <tr class="hover:bg-slate-50 transition-colors">
+                            <td class="px-6 py-4">
+                                <a href="{% url 'trip-detail' trip.pk %}" class="font-bold text-slate-900 hover:text-emerald-600 transition-colors">
+                                    {{ trip.trip_number }}
+                                </a>
                             </td>
-                            <td>{{ trip.vehicle.registration_plate }}</td>
-                            <td>{{ trip.start_date|date:"M d, Y H:i" }}</td>
-                            <td>
-                                <span class="badge bg-{% if trip.status == 'Completed' %}success{% elif trip.status == 'Cancelled' %}secondary{% else %}primary{% endif %} rounded-pill">
+                            <td class="px-6 py-4">
+                                <div class="font-medium text-slate-700">
+                                    {% if trip.driver %}
+                                        {{ trip.driver.user.get_full_name|default:trip.driver.user.username }}
+                                    {% else %}
+                                        <span class="text-slate-400 italic">Unassigned</span>
+                                    {% endif %}
+                                </div>
+                                <div class="text-[10px] text-slate-500 uppercase font-semibold">{{ trip.vehicle.registration_plate }}</div>
+                            </td>
+                            <td class="px-6 py-4 text-slate-600">
+                                {{ trip.start_date|date:"M d, Y" }}
+                                <div class="text-[10px] text-slate-400">{{ trip.start_date|date:"H:i" }}</div>
+                            </td>
+                            <td class="px-6 py-4">
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider
+                                    {% if trip.status == 'Completed' %}bg-emerald-100 text-emerald-800
+                                    {% elif trip.status == 'Cancelled' %}bg-slate-100 text-slate-800
+                                    {% else %}bg-blue-100 text-blue-800{% endif %}">
                                     {{ trip.status }}
                                 </span>
                             </td>
-                            <td>
-                                <a href="{% url 'trip-detail' trip.pk %}" class="btn btn-sm btn-outline-primary">View</a>
+                            <td class="px-6 py-4 text-right">
+                                <a href="{% url 'trip-detail' trip.pk %}" class="inline-flex items-center space-x-1 px-3 py-1 border border-slate-200 rounded bg-white text-xs font-bold text-slate-600 hover:bg-slate-50 hover:text-emerald-600 transition-colors">
+                                    <i class="fa-regular fa-eye"></i>
+                                    <span>View</span>
+                                </a>
                             </td>
                         </tr>
                     {% empty %}
                         <tr>
-                            <td colspan="6" class="text-center py-4 text-muted">
-                                No recent trips found.
+                            <td colspan="5" class="px-6 py-12 text-center">
+                                <div class="inline-flex items-center justify-center w-12 h-12 bg-slate-50 rounded-full mb-3">
+                                    <i class="fa-solid fa-truck text-slate-300"></i>
+                                </div>
+                                <h3 class="text-sm font-bold text-slate-900">No recent trips found</h3>
+                                <p class="text-xs text-slate-500 mt-1">Start by adding a new trip to the system.</p>
                             </td>
                         </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
+        {% if recent_trips|length > 10 %}
+        <div class="bg-slate-50 px-6 py-3 border-t border-slate-100 text-center">
+            <a href="{% url 'trip-list' %}" class="text-xs font-bold text-emerald-600 hover:text-emerald-700 uppercase tracking-widest">
+                View All Trips <i class="fa-solid fa-arrow-right ml-1 text-[8px]"></i>
+            </a>
+        </div>
+        {% endif %}
     </div>
-</div>
+</section>
 {% endblock %}

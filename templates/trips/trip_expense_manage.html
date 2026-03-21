@@ -3,99 +3,121 @@
 {% block title %}Manage Expenses - {{ object.trip_number }}{% endblock %}
 
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-lg-10">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <h2>Manage Expenses: {{ object.trip_number }}</h2>
-            <a href="{% url 'trip-detail' object.pk %}" class="btn btn-outline-secondary">Back to Trip</a>
-        </div>
+<!-- BEGIN: Page Header -->
+<header class="flex flex-col md:flex-row md:items-center justify-between mb-8 max-w-5xl mx-auto">
+    <div>
+        <h1 class="text-3xl font-bold text-slate-900">Manage Expenses</h1>
+        <p class="text-sm font-semibold text-emerald-600 mt-1 uppercase tracking-widest">{{ object.trip_number }}</p>
+    </div>
+    <div class="mt-4 md:mt-0 flex space-x-3">
+        <a href="{% url 'trip-detail' object.pk %}" class="flex items-center space-x-2 px-4 py-2 border border-slate-300 rounded-md bg-white text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors">
+            <i class="fa-solid fa-arrow-left"></i>
+            <span>Back to Trip</span>
+        </a>
+    </div>
+</header>
+<!-- END: Page Header -->
 
-        <form method="post">
-            {% csrf_token %}
+<div class="max-w-5xl mx-auto">
+    <form method="post" id="expense-form">
+        {% csrf_token %}
+        
+        <div class="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden mb-8">
+            <div class="bg-slate-800 px-6 py-4 flex justify-between items-center">
+                <h3 class="text-sm font-bold text-white uppercase tracking-widest flex items-center">
+                    <i class="fa-solid fa-receipt mr-3 text-slate-400"></i>
+                    Trip Expenses
+                </h3>
+                <button type="button" class="flex items-center space-x-2 px-3 py-1 bg-white/10 hover:bg-white/20 text-white rounded text-xs font-bold transition-colors uppercase tracking-widest border border-white/20 add-expense-btn">
+                    <i class="fa-solid fa-plus-circle"></i>
+                    <span>Add Expense</span>
+                </button>
+            </div>
             
-            <div class="card mb-4">
-                <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0">Trip Expenses</h5>
-                    <button type="button" class="btn btn-sm btn-light" id="add-expense-btn">
-                        <i class="bi bi-plus-circle"></i> Add Expense
-                    </button>
-                </div>
-                <div class="card-body">
-                    {{ expense_formset.management_form }}
-                    
-                    <div id="expense-forms-container">
-                        {% for form in expense_formset %}
-                            <div class="expense-row row align-items-end mb-3 pb-3 border-bottom">
-                                {{ form.id }}
-                                <div class="col-7 col-md-4">
-                                    <label class="form-label small">Expense Name</label>
+            <div class="p-6">
+                {{ expense_formset.management_form }}
+                
+                <div id="expense-forms-container" class="space-y-6">
+                    {% for form in expense_formset %}
+                        <div class="expense-row group relative bg-slate-50/50 p-4 rounded-lg border border-slate-100 hover:border-emerald-200 hover:bg-emerald-50/10 transition-all">
+                            {{ form.id }}
+                            <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+                                <div class="md:col-span-4">
+                                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Expense Name</label>
                                     {{ form.name }}
-                                    {% if form.name.errors %}<div class="text-danger small">{{ form.name.errors }}</div>{% endif %}
+                                    {% if form.name.errors %}<p class="mt-1 text-[10px] text-red-600 font-bold uppercase tracking-tighter">{{ form.name.errors.as_text }}</p>{% endif %}
                                 </div>
-                                <div class="col-5 col-md-3">
-                                    <label class="form-label small">Amount</label>
+                                <div class="md:col-span-3">
+                                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Amount</label>
                                     {{ form.amount }}
-                                    {% if form.amount.errors %}<div class="text-danger small">{{ form.amount.errors }}</div>{% endif %}
+                                    {% if form.amount.errors %}<p class="mt-1 text-[10px] text-red-600 font-bold uppercase tracking-tighter">{{ form.amount.errors.as_text }}</p>{% endif %}
                                 </div>
-                                <div class="col-10 col-md-4 mt-2 mt-md-0">
-                                    <label class="form-label small">Notes</label>
+                                <div class="md:col-span-4">
+                                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Notes</label>
                                     {{ form.notes }}
                                 </div>
-                                <div class="col-2 col-md-1 mt-2 mt-md-0 text-end d-flex align-items-end justify-content-end">
+                                <div class="md:col-span-1 flex justify-end">
                                     {% if expense_formset.can_delete %}
-                                        <div class="form-check d-none">
+                                        <div class="hidden">
                                             {{ form.DELETE }}
                                         </div>
-                                        <button type="button" class="btn btn-outline-danger btn-sm remove-expense-btn">
-                                            <i class="bi bi-trash"></i>
+                                        <button type="button" class="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors remove-expense-btn" title="Remove Expense">
+                                            <i class="fa-regular fa-trash-can"></i>
                                         </button>
                                     {% endif %}
                                 </div>
                             </div>
-                        {% endfor %}
-                    </div>
-                    
-                    <div class="mt-3 mb-3">
-                        <button type="button" class="btn btn-outline-primary btn-sm" id="add-expense-btn-bottom">
-                            <i class="bi bi-plus-circle"></i> Add Another Expense
-                        </button>
-                    </div>
-                    
-                    <!-- Empty Form Template (Hidden) -->
-                    <div id="empty-form" class="d-none">
-                        <div class="expense-row row align-items-end mb-3 pb-3 border-bottom">
-                            {{ expense_formset.empty_form.id }}
-                            <div class="col-7 col-md-4">
-                                <label class="form-label small">Expense Name</label>
+                        </div>
+                    {% endfor %}
+                </div>
+                
+                <div class="mt-8 pt-6 border-t border-slate-100">
+                    <button type="button" class="flex items-center space-x-2 px-4 py-2 border-2 border-dashed border-slate-300 rounded-md text-slate-500 hover:border-emerald-500 hover:text-emerald-600 hover:bg-emerald-50 text-sm font-bold transition-all w-full justify-center uppercase tracking-widest add-expense-btn">
+                        <i class="fa-solid fa-plus-circle"></i>
+                        <span>Add Another Expense</span>
+                    </button>
+                </div>
+                
+                <!-- Empty Form Template (Hidden) -->
+                <div id="empty-form" class="hidden">
+                    <div class="expense-row group relative bg-slate-50/50 p-4 rounded-lg border border-slate-100 hover:border-emerald-200 hover:bg-emerald-50/10 transition-all">
+                        {{ expense_formset.empty_form.id }}
+                        <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+                            <div class="md:col-span-4">
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Expense Name</label>
                                 {{ expense_formset.empty_form.name }}
                             </div>
-                            <div class="col-5 col-md-3">
-                                <label class="form-label small">Amount</label>
+                            <div class="md:col-span-3">
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Amount</label>
                                 {{ expense_formset.empty_form.amount }}
                             </div>
-                            <div class="col-10 col-md-4 mt-2 mt-md-0">
-                                <label class="form-label small">Notes</label>
+                            <div class="md:col-span-4">
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Notes</label>
                                 {{ expense_formset.empty_form.notes }}
                             </div>
-                            <div class="col-2 col-md-1 mt-2 mt-md-0 text-end d-flex align-items-end justify-content-end">
-                                <div class="form-check d-none">
+                            <div class="md:col-span-1 flex justify-end">
+                                <div class="hidden">
                                     {{ expense_formset.empty_form.DELETE }}
                                 </div>
-                                <button type="button" class="btn btn-outline-danger btn-sm remove-expense-btn">
-                                    <i class="bi bi-trash"></i>
+                                <button type="button" class="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors remove-expense-btn" title="Remove Expense">
+                                    <i class="fa-regular fa-trash-can"></i>
                                 </button>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-            
-            <div class="d-flex justify-content-end gap-2 mb-5">
-                <a href="{% url 'trip-detail' object.pk %}" class="btn btn-secondary">Cancel</a>
-                <button type="submit" class="btn btn-success">Save Expenses</button>
-            </div>
-        </form>
-    </div>
+        </div>
+        
+        <div class="flex items-center justify-end space-x-4 mb-12">
+            <a href="{% url 'trip-detail' object.pk %}" class="px-6 py-2 border border-slate-300 rounded-md text-slate-700 bg-white hover:bg-slate-50 font-bold transition-colors uppercase tracking-widest text-xs">
+                Cancel
+            </a>
+            <button type="submit" class="px-8 py-2 bg-emerald-600 text-white rounded-md font-bold hover:bg-emerald-700 shadow-sm transition-colors uppercase tracking-widest text-xs">
+                Save Expenses
+            </button>
+        </div>
+    </form>
 </div>
 {% endblock %}
 
@@ -106,18 +128,27 @@ $(document).ready(function() {
     const totalForms = $('#id_custom_expenses-TOTAL_FORMS');
     const emptyFormHtml = $('#empty-form').html();
     
+    // Add custom styling to formset fields on the fly to match the project's Tailwind style
+    function styleFields(row) {
+        row.find('input, select, textarea').addClass('block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white');
+    }
+    
+    // Initial styling
+    styleFields($('.expense-row'));
+
     function addForm() {
         const formIdx = parseInt(totalForms.val());
         const newFormHtml = emptyFormHtml.replace(/__prefix__/g, formIdx);
-        container.append(newFormHtml);
+        const newRow = $(newFormHtml);
+        container.append(newRow);
+        styleFields(newRow);
         totalForms.val(formIdx + 1);
         
         // Initialize autocomplete on the new row's name field
         initExpenseAutocomplete(container.find(`input[name="custom_expenses-${formIdx}-name"]`));
     }
 
-    $('#add-expense-btn').on('click', addForm);
-    $('#add-expense-btn-bottom').on('click', addForm);
+    $('.add-expense-btn').on('click', addForm);
     
     container.on('click', '.remove-expense-btn', function() {
         const row = $(this).closest('.expense-row');
@@ -125,11 +156,10 @@ $(document).ready(function() {
         const deleteCheckbox = row.find('input[type="checkbox"][name$="-DELETE"]');
         if (deleteCheckbox.length) {
             deleteCheckbox.prop('checked', true);
-            row.hide();
+            row.addClass('hidden');
         } else {
             // New unsaved row, just remove DOM
             row.remove();
-            // We don't decrement TOTAL_FORMS, Django handles gaps fine
         }
     });
 
@@ -197,7 +227,6 @@ $(document).ready(function() {
             if (data.timestamp) {
                 const age = new Date().getTime() - data.timestamp;
                 if (age > DRAFT_MAX_AGE_MS) {
-                    console.log("Draft expired. Clearing storage.");
                     localStorage.removeItem(STORAGE_KEY);
                     return;
                 }
@@ -222,25 +251,31 @@ $(document).ready(function() {
                     } else {
                         element.val(value);
                     }
+                    
+                    // If it was hidden (deleted), re-hide it
+                    if (name.endsWith('-DELETE') && value === true) {
+                        element.closest('.expense-row').addClass('hidden');
+                    }
                 }
             });
             
-            // Show notification
+            // Show notification (Tailwind style)
             const toastHtml = `
-                <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 11">
-                    <div id="draftToast" class="toast align-items-center text-white bg-info border-0" role="alert" aria-live="assertive" aria-atomic="true">
-                        <div class="d-flex">
-                            <div class="toast-body">
-                                Unsaved changes restored.
-                            </div>
-                            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
-                        </div>
-                    </div>
+                <div id="draftToast" class="fixed bottom-6 right-6 bg-slate-900 text-white px-6 py-3 rounded-lg shadow-xl z-50 flex items-center space-x-3 transform transition-all duration-500 translate-y-20 opacity-0">
+                    <i class="fa-solid fa-clock-rotate-left text-emerald-400"></i>
+                    <span class="text-sm font-bold uppercase tracking-widest text-[10px]">Unsaved changes restored</span>
+                    <button type="button" onclick="this.parentElement.remove()" class="ml-4 text-slate-400 hover:text-white">&times;</button>
                 </div>
             `;
             $('body').append(toastHtml);
-            const toast = new bootstrap.Toast($('#draftToast'));
-            toast.show();
+            setTimeout(() => {
+                $('#draftToast').removeClass('translate-y-20 opacity-0');
+            }, 100);
+            
+            setTimeout(() => {
+                $('#draftToast').addClass('translate-y-20 opacity-0');
+                setTimeout(() => $('#draftToast').remove(), 500);
+            }, 5000);
             
         } catch (e) {
             console.error("Error restoring draft:", e);
@@ -253,17 +288,13 @@ $(document).ready(function() {
         saveDraft();
     });
 
-    // Clear draft on successful submit (optional, but good practice to avoid stale drafts)
-    $('form').on('submit', function() {
-        // We generally don't clear on submit immediately in case of server error (page reload).
-        // If the save is successful, the user is redirected, and the draft remains but is harmless.
-        // Or we can rely on the fact that next time they load, the DB data will match the draft anyway.
-        // For now, we leave the draft. It will be overwritten if they make new changes.
-        // Optionally, clear it: localStorage.removeItem(STORAGE_KEY);
-    });
-    
     // Restore on Load
     restoreDraft();
+    
+    // Initialize autocomplete for initial rows
+    container.find('input[name$="-name"]').each(function() {
+        initExpenseAutocomplete($(this));
+    });
 });
 </script>
 {% endblock %}

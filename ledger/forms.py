@@ -77,7 +77,7 @@ class FinancialRecordForm(forms.ModelForm):
         # Add basic styling for clarity
         for field_name, field in self.fields.items():
             if field_name != 'payment_distribution':
-                field.widget.attrs.update({'class': 'form-control'})
+                field.widget.attrs.update({'class': 'block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white'})
     
     class Meta:
         model = FinancialRecord
@@ -117,7 +117,7 @@ class PartyForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         for field in self.fields.values():
-            field.widget.attrs.update({'class': 'form-control'})
+            field.widget.attrs.update({'class': 'block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white'})
     
     class Meta:
         model = Party
@@ -141,7 +141,7 @@ class CompanyAccountForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         for field in self.fields.values():
-            field.widget.attrs.update({'class': 'form-control'})
+            field.widget.attrs.update({'class': 'block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white'})
     
     class Meta:
         model = CompanyAccount
@@ -180,10 +180,10 @@ class BillForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         
-        # Apply bootstrap classes
+        # Apply Tailwind classes
         for name, field in self.fields.items():
             if name not in ['trips', 'trips_data']:
-                field.widget.attrs.update({'class': 'form-control'})
+                field.widget.attrs.update({'class': 'block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white'})
         
         # Logic to filter trips based on Party
         party_id = None
@@ -271,4 +271,4 @@ class CompanyProfileForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         for field in self.fields.values():
-            field.widget.attrs.update({'class': 'form-control'})
+            field.widget.attrs.update({'class': 'block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white'})

@@ -3,107 +3,148 @@
 {% block title %}Parties - Transport Management System{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <h2>Parties</h2>
-    {% if perms.ledger.add_financialrecord %}
-        <a href="{% url 'party-create' %}" class="btn btn-success"><i class="bi bi-plus-lg"></i> Add New Party</a>
-    {% endif %}
-</div>
-
-<!-- Search -->
-<div class="card mb-4 bg-light">
-    <div class="card-body">
-        <form method="get" class="row g-3 align-items-end">
-            <div class="col-md-9">
-                <label for="search" class="form-label">Search</label>
-                <input type="text" id="search" name="search" class="form-control" value="{{ request.GET.search }}" placeholder="Name, Phone, State...">
-            </div>
-            <div class="col-md-3">
-                <button type="submit" class="btn btn-primary me-2">Search</button>
-                <a href="{% url 'party-list' %}" class="btn btn-outline-secondary">Clear</a>
-            </div>
-        </form>
+<!-- BEGIN: Page Header -->
+<header class="flex flex-col md:flex-row md:items-center justify-between mb-6">
+    <div>
+        <h1 class="text-3xl font-bold text-slate-900">Parties</h1>
+        <p class="text-sm text-slate-600 mt-1">Total {{ paginator.count }} parties found</p>
     </div>
-</div>
+    <div class="mt-4 md:mt-0 flex space-x-3">
+        {% if perms.ledger.add_financialrecord %}
+        <a href="{% url 'party-create' %}" class="flex items-center space-x-2 px-4 py-2 bg-emerald-600 text-white rounded-md text-sm font-medium hover:bg-emerald-700 shadow-sm transition-colors">
+            <i class="fa-solid fa-plus"></i>
+            <span>Add New Party</span>
+        </a>
+        {% endif %}
+    </div>
+</header>
+<!-- END: Page Header -->
 
-<div class="card">
-    <div class="card-body p-0">
-        <div class="table-responsive">
-            <table class="table table-striped table-hover mb-0">
-                <thead class="table-light">
-                    <tr>
-                        <th>Name</th>
-                        <th>Phone Number</th>
-                        <th>State</th>
-                        <th class="text-end">Total Billed</th>
-                        <th class="text-end">Total Paid</th>
-                        <th class="text-end">Outstanding Balance</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for party in parties %}
-                    <tr>
-                        <td>
-                            <a href="{% url 'party-detail' party.pk %}" class="text-decoration-none fw-bold">
-                                {{ party.name }}
-                            </a>
-                        </td>
-                        <td>{{ party.phone_number }}</td>
-                        <td>{{ party.state }}</td>
-                        <td class="text-end text-muted">${{ party.total_billed|floatformat:2 }}</td>
-                        <td class="text-end text-success">${{ party.total_received|floatformat:2 }}</td>
-                        <td class="text-end fw-bold {% if party.outstanding_balance > 0 %}text-danger{% else %}text-success{% endif %}">
-                            ${{ party.outstanding_balance|floatformat:2 }}
-                        </td>
-                        <td>
-                            <div class="btn-group btn-group-sm">
-                                <a href="{% url 'party-detail' party.pk %}" class="btn btn-outline-primary" title="View"><i class="bi bi-eye"></i></a>
-                                {% if perms.ledger.change_financialrecord %}
-                                    <a href="{% url 'party-update' party.pk %}" class="btn btn-outline-warning" title="Edit"><i class="bi bi-pencil"></i></a>
-                                {% endif %}
-                            </div>
-                        </td>
-                    </tr>
-                    {% empty %}
-                        <tr>
-                            <td colspan="7" class="text-center py-4 text-muted">
-                                No parties found.
-                            </td>
-                        </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+<!-- BEGIN: Search Bar -->
+<section class="bg-slate-100 p-5 rounded-lg border border-slate-200 mb-6">
+    <form method="get">
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
+            <!-- Search -->
+            <div class="md:col-span-10 flex flex-col">
+                <label for="search" class="text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">Search</label>
+                <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <i class="fa-solid fa-magnifying-glass text-slate-400"></i>
+                    </div>
+                    <input type="text" id="search" name="search" class="block w-full pl-10 pr-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white" 
+                           value="{{ request.GET.search }}" placeholder="Name, Phone, State...">
+                </div>
+            </div>
+            
+            <!-- Actions -->
+            <div class="md:col-span-2 flex flex-col justify-end">
+                <div class="flex space-x-2">
+                    <button type="submit" class="flex-grow bg-emerald-600 text-white px-3 py-2 rounded-md hover:bg-emerald-700 transition-colors text-sm font-medium">
+                        Search
+                    </button>
+                    <a href="{% url 'party-list' %}" class="px-3 py-2 border border-slate-300 rounded-md bg-white text-slate-700 hover:bg-slate-50 transition-colors text-sm font-medium">
+                        Clear
+                    </a>
+                </div>
+            </div>
+        </div>
+    </form>
+</section>
+<!-- END: Search Bar -->
+
+<!-- BEGIN: Party List -->
+{% if parties %}
+<div class="space-y-4">
+    {% for party in parties %}
+    <!-- Party Card -->
+    <div class="bg-white border border-slate-200 rounded-lg p-5 flex flex-col md:flex-row items-start md:items-center gap-4 hover:shadow-sm transition-shadow">
+        <div class="flex-1 min-w-[200px]">
+            <h3 class="font-bold text-lg text-slate-900 leading-tight">
+                <a href="{% url 'party-detail' party.pk %}" class="hover:text-emerald-600 transition-colors">{{ party.name }}</a>
+            </h3>
+            <p class="text-sm text-slate-600">{{ party.phone_number|default:"No phone" }} • {{ party.state|default:"No state" }}</p>
+        </div>
+        
+        <div class="flex-1 min-w-[150px]">
+            <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">Total Billed</span>
+            <p class="text-sm text-slate-800 font-medium">${{ party.total_billed|floatformat:2 }}</p>
+        </div>
+        
+        <div class="flex-1 min-w-[150px]">
+            <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">Total Paid</span>
+            <p class="text-sm text-emerald-600 font-medium">${{ party.total_received|floatformat:2 }}</p>
+        </div>
+        
+        <div class="flex-1 min-w-[150px]">
+            <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">Outstanding</span>
+            <p class="text-sm font-bold {% if party.outstanding_balance > 0 %}text-red-600{% else %}text-emerald-600{% endif %}">
+                ${{ party.outstanding_balance|floatformat:2 }}
+            </p>
+        </div>
+        
+        <div class="ml-4 relative group/menu">
+            <button class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 transition-colors">
+                <i class="fa-solid fa-ellipsis"></i>
+            </button>
+            <div class="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-20 hidden group-hover/menu:block border border-slate-100">
+                <a href="{% url 'party-detail' party.pk %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"><i class="fa-regular fa-eye mr-2"></i>View Details</a>
+                {% if perms.ledger.change_financialrecord %}
+                <a href="{% url 'party-update' party.pk %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"><i class="fa-regular fa-pen-to-square mr-2"></i>Edit Party</a>
+                {% endif %}
+            </div>
         </div>
     </div>
+    {% endfor %}
 </div>
 
-<!-- Pagination -->
+<!-- BEGIN: Pagination -->
 {% if is_paginated %}
-    <nav class="mt-4">
-        <ul class="pagination justify-content-center">
-            {% if page_obj.has_previous %}
-                <li class="page-item">
-                    <a class="page-link" href="?page=1{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}">&laquo; First</a>
-                </li>
-                <li class="page-item">
-                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}">Previous</a>
-                </li>
-            {% endif %}
+<nav class="mt-8 flex justify-center">
+    <div class="flex space-x-1">
+        {% if page_obj.has_previous %}
+        <a href="?page=1{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
+            <i class="fa-solid fa-angles-left"></i>
+        </a>
+        <a href="?page={{ page_obj.previous_page_number }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
+            <i class="fa-solid fa-angle-left"></i>
+        </a>
+        {% endif %}
 
-            <li class="page-item disabled">
-                <span class="page-link">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
-            </li>
-
-            {% if page_obj.has_next %}
-                <li class="page-item">
-                    <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}">Next</a>
-                </li>
-                <li class="page-item">
-                    <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}">Last &raquo;</a>
-                </li>
+        {% for num in page_obj.paginator.page_range %}
+            {% if page_obj.number == num %}
+            <span class="px-4 py-2 bg-emerald-600 text-white border border-emerald-600 rounded-md text-sm font-medium">{{ num }}</span>
+            {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+            <a href="?page={{ num }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}" class="px-4 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">{{ num }}</a>
             {% endif %}
-        </ul>
-    </nav>
+        {% endfor %}
+
+        {% if page_obj.has_next %}
+        <a href="?page={{ page_obj.next_page_number }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
+            <i class="fa-solid fa-angle-right"></i>
+        </a>
+        <a href="?page={{ page_obj.paginator.num_pages }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
+            <i class="fa-solid fa-angles-right"></i>
+        </a>
+        {% endif %}
+    </div>
+</nav>
 {% endif %}
+<!-- END: Pagination -->
+
+{% else %}
+<div class="text-center py-16 bg-white rounded-lg border border-slate-200 shadow-sm">
+    <div class="inline-flex items-center justify-center w-20 h-20 bg-slate-50 rounded-full mb-4">
+        <i class="fa-solid fa-users text-4xl text-slate-300"></i>
+    </div>
+    <h2 class="text-xl font-bold text-slate-900 mb-2">No parties found</h2>
+    <p class="text-slate-600 mb-6 max-w-xs mx-auto">We couldn't find any parties matching your search.</p>
+    {% if perms.ledger.add_financialrecord %}
+    <a href="{% url 'party-create' %}" class="inline-flex items-center space-x-2 px-6 py-3 bg-emerald-600 text-white rounded-md font-medium hover:bg-emerald-700 shadow-sm transition-colors">
+        <i class="fa-solid fa-plus"></i>
+        <span>Add Your First Party</span>
+    </a>
+    {% endif %}
+</div>
+{% endif %}
+
 {% endblock %}

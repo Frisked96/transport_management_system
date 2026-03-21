@@ -3,97 +3,110 @@
 {% block title %}{{ trip.trip_number }} - Transport Management System{% endblock %}
 
 {% block content %}
-<!-- Header / Meta -->
-<div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4">
+<!-- BEGIN: Page Header -->
+<header class="flex flex-col md:flex-row md:items-center justify-between mb-8">
     <div>
-        <h2 class="mb-1 text-primary">{{ trip.trip_number }}</h2>
-        <div class="text-secondary small text-uppercase fw-bold ls-1">
-            {{ trip.date|date:"l, F d, Y" }}
+        <div class="flex items-center space-x-3">
+            <h1 class="text-3xl font-bold text-slate-900">{{ trip.trip_number }}</h1>
+            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider
+                {% if trip.status == 'Completed' %}bg-emerald-100 text-emerald-800
+                {% elif trip.status == 'Cancelled' %}bg-red-100 text-red-800
+                {% else %}bg-blue-100 text-blue-800{% endif %}">
+                {{ trip.status }}
+            </span>
         </div>
+        <p class="text-sm font-semibold text-slate-500 mt-1 uppercase tracking-widest">{{ trip.date|date:"l, F d, Y" }}</p>
     </div>
-    <div class="d-flex gap-2">
-        <a href="{% url 'trip-list' %}?date={{ trip.date|date:'Y-m-d' }}" class="btn btn-outline-secondary">
-            <i class="bi bi-arrow-left"></i> Back
+    <div class="mt-4 md:mt-0 flex flex-wrap gap-3">
+        <a href="{% url 'trip-list' %}?date={{ trip.date|date:'Y-m-d' }}" class="flex items-center space-x-2 px-4 py-2 border border-slate-300 rounded-md bg-white text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors">
+            <i class="fa-solid fa-arrow-left"></i>
+            <span>Back</span>
         </a>
+        
         {% if perms.trips.can_update_trip_status or user == trip.driver %}
-        <a href="{% url 'trip-status-update' trip.pk %}" class="btn btn-primary">Update Status</a>
+        <a href="{% url 'trip-status-update' trip.pk %}" class="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 shadow-sm transition-colors">
+            <i class="fa-solid fa-arrows-rotate"></i>
+            <span>Update Status</span>
+        </a>
         {% endif %}
+        
         {% if perms.trips.change_trip %}
-        <div class="btn-group">
-            <a href="{% url 'trip-update' trip.pk %}" class="btn btn-outline-secondary" title="Edit"><i
-                    class="bi bi-pencil"></i></a>
+        <div class="flex border border-slate-300 rounded-md overflow-hidden bg-white">
+            <a href="{% url 'trip-update' trip.pk %}" class="px-4 py-2 text-slate-700 hover:bg-slate-50 border-r border-slate-300 transition-colors" title="Edit">
+                <i class="fa-regular fa-pen-to-square"></i>
+            </a>
             {% if perms.trips.delete_trip %}
-            <a href="{% url 'trip-delete' trip.pk %}" class="btn btn-outline-danger" title="Delete"><i
-                    class="bi bi-trash"></i></a>
+            <a href="{% url 'trip-delete' trip.pk %}" class="px-4 py-2 text-red-600 hover:bg-red-50 transition-colors" title="Delete">
+                <i class="fa-regular fa-trash-can"></i>
+            </a>
             {% endif %}
         </div>
         {% endif %}
     </div>
-</div>
+</header>
+<!-- END: Page Header -->
 
-<!-- Main Grid -->
-<div class="row g-4">
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
     <!-- Left Col: Operational Data -->
-    <div class="col-lg-8">
-        <!-- Key Metrics Section -->
-        <div class="card mb-4">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <span class="text-uppercase small fw-bold ls-1">Trip Overview</span>
-                <span
-                    class="badge bg-{% if trip.status == 'Completed' %}success{% elif trip.status == 'Cancelled' %}danger{% else %}info{% endif %} bg-opacity-25 text-{% if trip.status == 'Completed' %}success{% elif trip.status == 'Cancelled' %}danger{% else %}info{% endif %} border border-{% if trip.status == 'Completed' %}success{% elif trip.status == 'Cancelled' %}danger{% else %}info{% endif %}">
-                    {{ trip.status }}
-                </span>
+    <div class="lg:col-span-2 space-y-6">
+        <!-- Trip Overview Card -->
+        <div class="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
+            <div class="bg-slate-50 border-b border-slate-200 px-6 py-4 flex justify-between items-center">
+                <h3 class="text-xs font-bold text-slate-500 uppercase tracking-widest">Trip Overview</h3>
             </div>
-            <div class="card-body">
-                <div class="row g-4 mb-4">
-                    <div class="col-md-6">
-                        <label class="text-secondary small text-uppercase fw-bold mb-1">Vehicle</label>
-                        <div class="fs-5 fw-medium">
-                            <a href="{% url 'vehicle-detail' trip.vehicle.pk %}"
-                                class="text-primary text-decoration-none hover-underline">{{ trip.vehicle.registration_plate }}</a>
+            <div class="p-6 space-y-8">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div>
+                        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">Vehicle</span>
+                        <div class="text-lg font-bold">
+                            <a href="{% url 'vehicle-detail' trip.vehicle.pk %}" class="text-emerald-600 hover:text-emerald-700 underline decoration-emerald-200 underline-offset-4">
+                                {{ trip.vehicle.registration_plate }}
+                            </a>
                         </div>
                     </div>
-                    <div class="col-md-6">
-                        <label class="text-secondary small text-uppercase fw-bold mb-1">Party</label>
-                        <div class="fs-5 fw-medium">
-                            {% if trip.party %}{{ trip.party.name }}{% else %}<span
-                                class="text-muted fst-italic">None</span>{% endif %}
-                        </div>
-                    </div>
-                </div>
-
-                <div class="row g-4 mb-4 pt-3 border-top border-light">
-                    <div class="col-12">
-                        <label class="text-secondary small text-uppercase fw-bold mb-1">Route</label>
-                        <div class="d-flex align-items-center bg-body p-3 rounded border">
-                            <span class="fw-medium">
-                                {% if trip.pickup_location %}{{ trip.pickup_location }}{% else %}<span
-                                    class="text-muted">Origin</span>{% endif %}
-                            </span>
-                            <i class="bi bi-arrow-right mx-3 text-secondary"></i>
-                            <span class="fw-medium">
-                                {% if trip.delivery_location %}{{ trip.delivery_location }}{% else %}<span
-                                    class="text-muted">Destination</span>{% endif %}
-                            </span>
+                    <div>
+                        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">Party</span>
+                        <div class="text-lg font-bold text-slate-900">
+                            {% if trip.party %}{{ trip.party.name }}{% else %}<span class="text-slate-400 italic">None</span>{% endif %}
                         </div>
                     </div>
                 </div>
 
-                <div class="row g-4">
-                    <div class="col-md-6">
-                        <label class="text-secondary small text-uppercase fw-bold mb-1">Driver</label>
-                        <div class="fw-medium">
+                <div class="pt-6 border-t border-slate-100">
+                    <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-3">Route</span>
+                    <div class="flex flex-col md:flex-row md:items-center bg-slate-50 p-4 rounded-lg border border-slate-200">
+                        <div class="flex-1 text-center md:text-left">
+                            <p class="text-xs text-slate-500 uppercase font-bold mb-1 tracking-tighter">Origin</p>
+                            <p class="font-bold text-slate-900">{% if trip.pickup_location %}{{ trip.pickup_location }}{% else %}Not specified{% endif %}</p>
+                        </div>
+                        <div class="my-4 md:my-0 md:mx-8 flex justify-center">
+                            <i class="fa-solid fa-arrow-right text-slate-300 text-xl hidden md:block"></i>
+                            <i class="fa-solid fa-arrow-down text-slate-300 text-xl md:hidden"></i>
+                        </div>
+                        <div class="flex-1 text-center md:text-right">
+                            <p class="text-xs text-slate-500 uppercase font-bold mb-1 tracking-tighter">Destination</p>
+                            <p class="font-bold text-slate-900">{% if trip.delivery_location %}{{ trip.delivery_location }}{% else %}Not specified{% endif %}</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8 pt-6 border-t border-slate-100">
+                    <div>
+                        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">Driver</span>
+                        <div class="font-bold text-slate-800">
                             {% if trip.driver %}
-                            <a href="{% url 'driver-detail' trip.driver.pk %}" class="text-decoration-none">{{ trip.driver }}</a>
+                            <a href="{% url 'driver-detail' trip.driver.pk %}" class="hover:text-emerald-600">
+                                <i class="fa-solid fa-user-circle text-slate-400 mr-2"></i>{{ trip.driver }}
+                            </a>
                             {% else %}
-                            <span class="text-muted">Unassigned</span>
+                            <span class="text-slate-400 italic">Unassigned</span>
                             {% endif %}
                         </div>
                     </div>
-                    <div class="col-md-6">
-                        <label class="text-secondary small text-uppercase fw-bold mb-1">Odometer</label>
-                        <div class="font-monospace text-muted">
-                            {{ trip.start_odometer|default:"-" }} &rarr; {{ trip.end_odometer|default:"-" }}
+                    <div>
+                        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">Odometer History</span>
+                        <div class="font-mono text-slate-600 bg-slate-50 px-3 py-1 rounded inline-block text-sm">
+                            {{ trip.start_odometer|default:"-" }} <i class="fa-solid fa-chevron-right text-[10px] mx-2 text-slate-300"></i> {{ trip.end_odometer|default:"-" }}
                         </div>
                     </div>
                 </div>
@@ -102,87 +115,85 @@
 
         <!-- Notes -->
         {% if trip.notes %}
-        <div class="card mb-4 border-start border-4 border-info">
-            <div class="card-body">
-                <h6 class="text-info fw-bold mb-2"><i class="bi bi-info-circle me-2"></i>Notes</h6>
-                <div class="text-secondary">{{ trip.notes|linebreaks }}</div>
+        <div class="bg-blue-50 border-l-4 border-blue-500 rounded-r-lg p-5">
+            <div class="flex items-center space-x-2 mb-2 text-blue-700">
+                <i class="fa-solid fa-circle-info"></i>
+                <h4 class="text-xs font-bold uppercase tracking-wider">Trip Notes</h4>
             </div>
+            <div class="text-sm text-blue-800 leading-relaxed">{{ trip.notes|linebreaks }}</div>
         </div>
         {% endif %}
 
-        <!-- Timeline / Meta -->
-        <div class="card">
-            <div class="card-body text-secondary small">
-                <div class="row">
-                    <div class="col-md-6">
-                        Created: <span class="text-primary">{{ trip.created_at|date:"M d, Y H:i" }}</span> by {{ trip.created_by.username|default:"System" }}
-                    </div>
-                    {% if trip.actual_completion_datetime %}
-                    <div class="col-md-6 text-md-end">
-                        Completed: <span class="text-success">{{ trip.actual_completion_datetime|date:"M d, Y H:i" }}</span>
-                    </div>
-                    {% endif %}
-                </div>
+        <!-- Metadata Card -->
+        <div class="bg-white border border-slate-200 rounded-lg p-4 flex flex-col md:flex-row justify-between items-center text-[10px] text-slate-500 uppercase font-bold tracking-widest">
+            <div>
+                Created <span class="text-slate-900">{{ trip.created_at|date:"M d, Y H:i" }}</span> by <span class="text-slate-900">{{ trip.created_by.username|default:"System" }}</span>
             </div>
+            {% if trip.actual_completion_datetime %}
+            <div class="mt-2 md:mt-0">
+                Completed <span class="text-emerald-600">{{ trip.actual_completion_datetime|date:"M d, Y H:i" }}</span>
+            </div>
+            {% endif %}
         </div>
     </div>
 
     <!-- Right Col: Financial Data -->
-    <div class="col-lg-4">
-        <!-- Financial Overview -->
-        <div class="card mb-4">
-            <div class="card-header">
-                <span class="text-uppercase small fw-bold ls-1">Financials</span>
+    <div class="space-y-6">
+        <!-- Financial Overview Card -->
+        <div class="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
+            <div class="bg-slate-50 border-b border-slate-200 px-6 py-4 flex justify-between items-center">
+                <h3 class="text-xs font-bold text-slate-500 uppercase tracking-widest">Financials</h3>
             </div>
-            <div class="card-body p-0">
-                <table class="table table-borderless mb-0">
-                    <tbody class="border-bottom">
-                        <tr>
-                            <td class="text-secondary ps-3">Weight</td>
-                            <td class="text-end fw-medium pe-3">{{ trip.weight|default:"-" }} t</td>
-                        </tr>
-                        <tr>
-                            <td class="text-secondary ps-3">Rate/Ton</td>
-                            <td class="text-end fw-medium pe-3">{{ trip.rate_per_ton|default:"-" }}</td>
-                        </tr>
-                        <tr class="bg-body">
-                            <td class="ps-3 fw-bold">Revenue</td>
-                            <td class="text-end fw-bold text-success pe-3 fs-5">${{ trip.revenue|floatformat:0 }}</td>
-                        </tr>
-                    </tbody>
-                </table>
-
-                <!-- Expenses Summary -->
-                <div class="p-3 border-bottom">
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <span class="text-uppercase small fw-bold text-secondary">Expenses</span>
-                        {% if perms.trips.change_trip %}
-                        <a href="{% url 'trip-expenses-manage' trip.pk %}"
-                            class="btn btn-sm btn-link p-0 text-decoration-none">Manage</a>
-                        {% endif %}
+            <div class="divide-y divide-slate-100">
+                <div class="px-6 py-4 space-y-3">
+                    <div class="flex justify-between text-sm">
+                        <span class="text-slate-500 font-medium">Weight</span>
+                        <span class="font-bold text-slate-900">{{ trip.weight|default:"-" }} tons</span>
                     </div>
-                    {% if trip.custom_expenses.all %}
-                    {% for expense in trip.custom_expenses.all %}
-                    <div class="d-flex justify-content-between small mb-1">
-                        <span class="text-muted">{{ expense.name }}</span>
-                        <span>${{ expense.amount|floatformat:2 }}</span>
+                    <div class="flex justify-between text-sm">
+                        <span class="text-slate-500 font-medium">Rate / Ton</span>
+                        <span class="font-bold text-slate-900">${{ trip.rate_per_ton|default:"0.00" }}</span>
                     </div>
-                    {% endfor %}
-                    {% else %}
-                    <div class="text-muted small fst-italic">No expenses logged.</div>
-                    {% endif %}
-                    <div class="d-flex justify-content-between fw-bold mt-2 pt-2 border-top border-light">
-                        <span class="text-danger">Total Cost</span>
-                        <span class="text-danger">${{ trip.total_cost|floatformat:2 }}</span>
+                    <div class="flex justify-between pt-2">
+                        <span class="text-sm font-bold text-slate-900">Total Revenue</span>
+                        <span class="text-2xl font-black text-emerald-600">${{ trip.revenue|floatformat:2 }}</span>
                     </div>
                 </div>
 
-                <!-- Net Profit -->
-                <div class="p-3 bg-surface-hover">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <span class="text-uppercase small fw-bold text-secondary">Est. Net Profit</span>
+                <!-- Expenses Summary -->
+                <div class="px-6 py-4 bg-slate-50/50">
+                    <div class="flex justify-between items-center mb-4">
+                        <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Expenses</span>
+                        {% if perms.trips.change_trip %}
+                        <a href="{% url 'trip-expenses-manage' trip.pk %}" class="text-[10px] font-bold text-emerald-600 hover:text-emerald-700 uppercase tracking-widest underline decoration-emerald-200">Manage</a>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="space-y-2">
+                        {% if trip.custom_expenses.all %}
+                        {% for expense in trip.custom_expenses.all %}
+                        <div class="flex justify-between text-[11px]">
+                            <span class="text-slate-500">{{ expense.name }}</span>
+                            <span class="font-medium text-slate-700">${{ expense.amount|floatformat:2 }}</span>
+                        </div>
+                        {% endfor %}
+                        {% else %}
+                        <p class="text-[11px] text-slate-400 italic">No operational expenses logged.</p>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="flex justify-between pt-4 mt-4 border-t border-slate-200">
+                        <span class="text-[10px] font-bold text-red-600 uppercase tracking-widest">Total Cost</span>
+                        <span class="text-sm font-bold text-red-600">${{ trip.total_cost|floatformat:2 }}</span>
+                    </div>
+                </div>
+
+                <!-- Estimated Net Profit -->
+                <div class="px-6 py-6 bg-slate-900 text-white">
+                    <div class="flex justify-between items-center">
+                        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Est. Net Profit</span>
                         {% with profit=trip.revenue|add:"-"|add:trip.total_cost %}
-                        <span class="fw-bold fs-4 {% if profit < 0 %}text-danger{% else %}text-success{% endif %}">
+                        <span class="text-3xl font-black {% if profit < 0 %}text-red-400{% else %}text-emerald-400{% endif %}">
                             ${{ profit|floatformat:2 }}
                         </span>
                         {% endwith %}
@@ -191,49 +202,55 @@
             </div>
         </div>
 
-        <!-- Payment Status -->
-        <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <span class="text-uppercase small fw-bold ls-1">Payments</span>
+        <!-- Payment Status Card -->
+        <div class="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
+            <div class="bg-slate-50 border-b border-slate-200 px-6 py-4 flex justify-between items-center">
+                <h3 class="text-xs font-bold text-slate-500 uppercase tracking-widest">Payments</h3>
                 {% if trip.party %}
                 <a href="{% url 'financialrecord-create' %}?party={{ trip.party.pk }}&associated_trip={{ trip.pk }}"
-                    class="btn btn-sm btn-outline-primary py-0"><i class="bi bi-plus"></i> Add</a>
+                    class="w-6 h-6 bg-emerald-600 text-white rounded-full flex items-center justify-center hover:bg-emerald-700 transition-colors shadow-sm" title="Add Payment">
+                    <i class="fa-solid fa-plus text-[10px]"></i>
+                </a>
                 {% endif %}
             </div>
-            <div class="card-body">
-                <div class="mb-3 text-center">
-                    <div class="mb-1 text-secondary small text-uppercase">Outstanding</div>
-                    <div
-                        class="display-6 fw-bold {% if trip.outstanding_balance > 0 %}text-danger{% else %}text-success{% endif %}">
+            <div class="p-6">
+                <div class="text-center pb-6">
+                    <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Outstanding Balance</p>
+                    <div class="text-4xl font-black {% if trip.outstanding_balance > 0 %}text-red-600{% else %}text-emerald-600{% endif %} mb-3">
                         ${{ trip.outstanding_balance|floatformat:0 }}
                     </div>
-                    <span
-                        class="badge bg-{% if trip.payment_status == 'Paid' %}success{% elif trip.payment_status == 'Partially Paid' %}warning{% else %}danger{% endif %} bg-opacity-25 text-{% if trip.payment_status == 'Paid' %}success{% elif trip.payment_status == 'Partially Paid' %}warning{% else %}danger{% endif %} border border-{% if trip.payment_status == 'Paid' %}success{% elif trip.payment_status == 'Partially Paid' %}warning{% else %}danger{% endif %} mt-2">
+                    <span class="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest
+                        {% if trip.payment_status == 'Paid' %}bg-emerald-100 text-emerald-800
+                        {% elif trip.payment_status == 'Partially Paid' %}bg-orange-100 text-orange-800
+                        {% else %}bg-red-100 text-red-800{% endif %}">
                         {{ trip.payment_status }}
                     </span>
                 </div>
 
                 {% if trip.payment_allocations.all or trip.financial_records.all %}
-                <ul class="list-group list-group-flush border rounded small">
-                    {% for allocation in trip.payment_allocations.all %}
-                    <li class="list-group-item bg-body d-flex justify-content-between align-items-center px-2">
-                        <div>
-                            <div class="fw-medium text-success">Received</div>
-                            <div class="text-muted xxs">{{ allocation.financial_record.date|date:"d M" }}</div>
+                <div class="space-y-2 mt-4">
+                    <h4 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Transaction History</h4>
+                    <div class="space-y-2">
+                        {% for allocation in trip.payment_allocations.all %}
+                        <div class="flex justify-between items-center p-3 bg-slate-50 rounded-md border border-slate-100">
+                            <div>
+                                <p class="text-[11px] font-bold text-emerald-700 uppercase tracking-tighter">Received</p>
+                                <p class="text-[9px] text-slate-400">{{ allocation.financial_record.date|date:"d M, Y" }}</p>
+                            </div>
+                            <span class="text-sm font-bold text-emerald-600">+${{ allocation.amount|floatformat:0 }}</span>
                         </div>
-                        <span class="fw-bold text-success">+{{ allocation.amount|floatformat:0 }}</span>
-                    </li>
-                    {% endfor %}
-                    {% for record in trip.financial_records.all %}
-                    <li class="list-group-item bg-body d-flex justify-content-between align-items-center px-2">
-                        <div>
-                            <div class="fw-medium text-success">Direct Payment</div>
-                            <div class="text-muted xxs">{{ record.date|date:"d M" }}</div>
+                        {% endfor %}
+                        {% for record in trip.financial_records.all %}
+                        <div class="flex justify-between items-center p-3 bg-slate-50 rounded-md border border-slate-100">
+                            <div>
+                                <p class="text-[11px] font-bold text-blue-700 uppercase tracking-tighter">Direct Payment</p>
+                                <p class="text-[9px] text-slate-400">{{ record.date|date:"d M, Y" }}</p>
+                            </div>
+                            <span class="text-sm font-bold text-blue-600">+${{ record.amount|floatformat:0 }}</span>
                         </div>
-                        <span class="fw-bold text-success">+{{ record.amount|floatformat:0 }}</span>
-                    </li>
-                    {% endfor %}
-                </ul>
+                        {% endfor %}
+                    </div>
+                </div>
                 {% endif %}
             </div>
         </div>

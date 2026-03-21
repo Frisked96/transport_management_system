@@ -3,31 +3,61 @@
 {% block title %}{% if object %}Edit{% else %}Add{% endif %} Account - Transport Management System{% endblock %}
 
 {% block content %}
-<h2>{% if object %}Edit Account{% else %}Add Account{% endif %}</h2>
+<!-- BEGIN: Page Header -->
+<header class="mb-6">
+    <h1 class="text-3xl font-bold text-slate-900">{% if object %}Edit Account{% else %}Add New Account{% endif %}</h1>
+    <p class="text-sm text-slate-600 mt-1">{% if object %}Update information for {{ object.name }}{% else %}Register a new company firm or bank account{% endif %}</p>
+</header>
+<!-- END: Page Header -->
 
-<form method="post">
-    {% csrf_token %}
-    
-    {% for field in form %}
-        <div class="form-group">
-            {{ field.label_tag }}
-            {{ field }}
-            {% if field.errors %}
-                <div class="error" style="color: #e74c3c; margin-top: 5px;">
-                    {{ field.errors }}
+<div class="max-w-4xl">
+    <div class="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
+        <form method="post" class="p-6">
+            {% csrf_token %}
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {% for field in form %}
+                <div class="{% if field.name == 'address' or field.name == 'description' %}md:col-span-2{% endif %} flex flex-col">
+                    <label for="{{ field.id_for_label }}" class="block text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider">
+                        {{ field.label }}
+                    </label>
+                    
+                    {{ field }}
+                    
+                    {% if field.errors %}
+                    <div class="mt-1 text-sm text-red-600">
+                        {{ field.errors }}
+                    </div>
+                    {% endif %}
+                    
+                    {% if field.help_text %}
+                    <p class="mt-1 text-xs text-slate-500">{{ field.help_text }}</p>
+                    {% endif %}
                 </div>
-            {% endif %}
-            {% if field.help_text %}
-                <small style="color: #7f8c8d;">{{ field.help_text }}</small>
-            {% endif %}
-        </div>
-    {% endfor %}
-    
-    <div style="margin-top: 1.5rem;">
-        <button type="submit" class="btn btn-success">
-            {% if object %}Update Account{% else %}Create Account{% endif %}
-        </button>
-        <a href="{% url 'account-list' %}" class="btn" style="margin-left: 1rem;">Cancel</a>
+                {% endfor %}
+            </div>
+            
+            <div class="mt-8 pt-6 border-t border-slate-100 flex items-center space-x-4">
+                <button type="submit" class="px-6 py-2 bg-emerald-600 text-white rounded-md font-medium hover:bg-emerald-700 shadow-sm transition-colors">
+                    {% if object %}Update Account{% else %}Create Account{% endif %}
+                </button>
+                <a href="{% url 'account-list' %}" 
+                   class="px-6 py-2 border border-slate-300 rounded-md text-slate-700 bg-white hover:bg-slate-50 font-medium transition-colors">
+                    Cancel
+                </a>
+            </div>
+        </form>
     </div>
-</form>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const inputs = document.querySelectorAll('input:not([type="checkbox"]):not([type="radio"]), select, textarea');
+        inputs.forEach(input => {
+            if (!input.classList.contains('block')) {
+                input.classList.add('block', 'w-full', 'px-3', 'py-2', 'border', 'border-slate-300', 'rounded-md', 'text-sm', 'focus:ring-emerald-500', 'focus:border-emerald-500', 'bg-white');
+            }
+        });
+    });
+</script>
 {% endblock %}

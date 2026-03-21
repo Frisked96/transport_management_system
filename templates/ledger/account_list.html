@@ -1,62 +1,85 @@
 {% extends 'base.html' %}
 
-{% block title %}Accounts - Transport Management System{% endblock %}
+{% block title %}Company Accounts - Transport Management System{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <h2>Company Accounts</h2>
-    {% if perms.ledger.add_financialrecord %}
-        <a href="{% url 'account-create' %}" class="btn btn-success"><i class="bi bi-plus-lg"></i> Add New Account</a>
-    {% endif %}
-</div>
+<!-- BEGIN: Page Header -->
+<header class="flex flex-col md:flex-row md:items-center justify-between mb-6">
+    <div>
+        <h1 class="text-3xl font-bold text-slate-900">Company Accounts</h1>
+        <p class="text-sm text-slate-600 mt-1">Manage your internal company bank accounts and firms</p>
+    </div>
+    <div class="mt-4 md:mt-0 flex space-x-3">
+        {% if perms.ledger.add_financialrecord %}
+        <a href="{% url 'account-create' %}" class="flex items-center space-x-2 px-4 py-2 bg-emerald-600 text-white rounded-md text-sm font-medium hover:bg-emerald-700 shadow-sm transition-colors">
+            <i class="fa-solid fa-plus"></i>
+            <span>Add New Account</span>
+        </a>
+        {% endif %}
+    </div>
+</header>
+<!-- END: Page Header -->
 
+<!-- BEGIN: Account List -->
 {% if accounts %}
-    <div class="card">
-        <div class="card-body p-0">
-            <div class="table-responsive">
-                <table class="table table-striped table-hover mb-0">
-                    <thead class="table-light">
-                        <tr>
-                            <th>Firm Name</th>
-                            <th>GSTIN</th>
-                            <th>Bank Account</th>
-                            <th class="text-end px-3">Current Balance</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for account in accounts %}
-                        <tr>
-                            <td>
-                                <a href="{% url 'account-detail' account.pk %}" class="text-decoration-none fw-bold">{{ account.name }}</a>
-                                <div class="text-muted small">{{ account.address|truncatechars:40 }}</div>
-                            </td>
-                            <td><span class="badge bg-light text-dark border">{{ account.gstin|default:"N/A" }}</span></td>
-                            <td>
-                                <div class="small fw-bold">{{ account.bank_name|default:"-" }}</div>
-                                <div class="small text-muted">{{ account.account_number|default:"-" }}</div>
-                            </td>
-                            <td class="text-end fw-bold px-3 {% if account.current_balance >= 0 %}text-success{% else %}text-danger{% endif %}">
-                                ${{ account.current_balance|floatformat:2 }}
-                            </td>
-                            <td>
-                                <div class="btn-group btn-group-sm">
-                                    <a href="{% url 'account-detail' account.pk %}" class="btn btn-outline-primary" title="View"><i class="bi bi-eye"></i></a>
-                                    {% if perms.ledger.change_financialrecord %}
-                                        <a href="{% url 'account-update' account.pk %}" class="btn btn-outline-warning" title="Edit"><i class="bi bi-pencil"></i></a>
-                                    {% endif %}
-                                </div>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+<div class="space-y-4">
+    {% for account in accounts %}
+    <!-- Account Card -->
+    <div class="bg-white border border-slate-200 rounded-lg p-5 flex flex-col md:flex-row items-start md:items-center gap-4 hover:shadow-sm transition-shadow">
+        <div class="flex-1 min-w-[250px]">
+            <h3 class="font-bold text-lg text-slate-900 leading-tight">
+                <a href="{% url 'account-detail' account.pk %}" class="hover:text-emerald-600 transition-colors">{{ account.name }}</a>
+            </h3>
+            <p class="text-sm text-slate-500 mt-1 truncate max-w-md">{{ account.address|default:"No address provided" }}</p>
+        </div>
+        
+        <div class="flex-1 min-w-[150px]">
+            <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">GSTIN</span>
+            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-800 border border-slate-200">
+                {{ account.gstin|default:"N/A" }}
+            </span>
+        </div>
+        
+        <div class="flex-1 min-w-[200px]">
+            <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">Bank Account</span>
+            <p class="text-sm text-slate-800 font-medium">{{ account.bank_name|default:"-" }}</p>
+            <p class="text-xs text-slate-500">{{ account.account_number|default:"-" }}</p>
+        </div>
+        
+        <div class="flex-1 min-w-[150px] text-right">
+            <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1 text-right">Current Balance</span>
+            <p class="text-lg font-bold {% if account.current_balance >= 0 %}text-emerald-600{% else %}text-red-600{% endif %}">
+                ${{ account.current_balance|floatformat:2 }}
+            </p>
+        </div>
+        
+        <div class="ml-4 relative group/menu">
+            <button class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 transition-colors">
+                <i class="fa-solid fa-ellipsis"></i>
+            </button>
+            <div class="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-20 hidden group-hover/menu:block border border-slate-100">
+                <a href="{% url 'account-detail' account.pk %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"><i class="fa-regular fa-eye mr-2"></i>View Details</a>
+                {% if perms.ledger.change_financialrecord %}
+                <a href="{% url 'account-update' account.pk %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"><i class="fa-regular fa-pen-to-square mr-2"></i>Edit Account</a>
+                {% endif %}
             </div>
         </div>
     </div>
+    {% endfor %}
+</div>
 {% else %}
-    <div class="alert alert-warning">
-        No accounts found. <a href="{% url 'account-create' %}">Create your first account</a>.
+<div class="text-center py-16 bg-white rounded-lg border border-slate-200 shadow-sm">
+    <div class="inline-flex items-center justify-center w-20 h-20 bg-slate-50 rounded-full mb-4">
+        <i class="fa-solid fa-building-columns text-4xl text-slate-300"></i>
     </div>
+    <h2 class="text-xl font-bold text-slate-900 mb-2">No accounts found</h2>
+    <p class="text-slate-600 mb-6 max-w-xs mx-auto">You haven't added any company accounts yet.</p>
+    {% if perms.ledger.add_financialrecord %}
+    <a href="{% url 'account-create' %}" class="inline-flex items-center space-x-2 px-6 py-3 bg-emerald-600 text-white rounded-md font-medium hover:bg-emerald-700 shadow-sm transition-colors">
+        <i class="fa-solid fa-plus"></i>
+        <span>Add Your First Account</span>
+    </a>
+    {% endif %}
+</div>
 {% endif %}
 {% endblock %}
