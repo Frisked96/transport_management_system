@@ -3,113 +3,127 @@
 {% block title %}{% if object %}Edit{% else %}Create{% endif %} Trip - Transport Management System{% endblock %}
 
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-lg-10">
-        <h2 class="mb-4">{% if object %}Edit Trip: {{ object.trip_number }}{% else %}Create New Trip{% endif %}</h2>
+<div class="max-w-4xl mx-auto">
+    <div class="mb-6 flex items-center justify-between">
+        <h2 class="text-2xl font-bold text-slate-900">
+            {% if object %}Edit Trip: {{ object.trip_number }}{% else %}Create New Trip{% endif %}
+        </h2>
+        <a href="{% if object %}{% url 'trip-detail' object.pk %}{% else %}{% url 'trip-list' %}{% endif %}" 
+           class="text-sm text-slate-600 hover:text-emerald-600 transition-colors">
+            <i class="fa-solid fa-arrow-left mr-1"></i> Back
+        </a>
+    </div>
 
-        <form method="post">
-            {% csrf_token %}
-            {% if form.non_field_errors %}
-                <div class="alert alert-danger">
-                    {{ form.non_field_errors }}
-                </div>
-            {% endif %}
-            
-            <div class="card mb-4">
-                <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0">Trip Details</h5>
-                </div>
-                <div class="card-body">
-                    <div class="row">
-                        <!-- Vehicle & Driver -->
-                        <div class="col-md-6 mb-3">
-                            <label for="{{ form.vehicle.id_for_label }}" class="form-label">Vehicle</label>
-                            {{ form.vehicle }}
-                            {% if form.vehicle.errors %}<div class="text-danger small">{{ form.vehicle.errors }}</div>{% endif %}
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label for="{{ form.driver.id_for_label }}" class="form-label">Driver</label>
-                            {{ form.driver }}
-                            {% if form.driver.errors %}<div class="text-danger small">{{ form.driver.errors }}</div>{% endif %}
-                        </div>
+    <form method="post" class="space-y-6">
+        {% csrf_token %}
+        {% if form.non_field_errors %}
+            <div class="bg-red-50 border border-red-200 text-red-700 p-4 rounded-md">
+                {{ form.non_field_errors }}
+            </div>
+        {% endif %}
+        
+        <div class="bg-white shadow-sm border border-slate-200 rounded-lg overflow-hidden">
+            <div class="bg-slate-800 px-6 py-4">
+                <h5 class="text-white font-semibold flex items-center">
+                    <i class="fa-solid fa-circle-info mr-2 opacity-75"></i> Trip Details
+                </h5>
+            </div>
+            <div class="p-6">
+                <div class="grid grid-cols-1 md:grid-cols-12 gap-6">
+                    <!-- Vehicle & Driver -->
+                    <div class="md:col-span-6">
+                        <label for="{{ form.vehicle.id_for_label }}" class="block text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider">Vehicle</label>
+                        {{ form.vehicle }}
+                        {% if form.vehicle.errors %}<div class="text-red-600 text-xs mt-1">{{ form.vehicle.errors }}</div>{% endif %}
+                    </div>
+                    <div class="md:col-span-6">
+                        <label for="{{ form.driver.id_for_label }}" class="block text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider">Driver</label>
+                        {{ form.driver }}
+                        {% if form.driver.errors %}<div class="text-red-600 text-xs mt-1">{{ form.driver.errors }}</div>{% endif %}
+                    </div>
 
-                        <!-- Party & Locations -->
-                        <div class="col-md-12 mb-3">
-                            <label for="{{ form.party.id_for_label }}" class="form-label">Party</label>
-                            {{ form.party }}
-                            {% if form.party.errors %}<div class="text-danger small">{{ form.party.errors }}</div>{% endif %}
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label for="{{ form.pickup_location.id_for_label }}" class="form-label">Pickup Location</label>
-                            {{ form.pickup_location }}
-                            {{ form.pickup_lat }}
-                            {{ form.pickup_lng }}
-                            {% if form.pickup_location.errors %}<div class="text-danger small">{{ form.pickup_location.errors }}</div>{% endif %}
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label for="{{ form.delivery_location.id_for_label }}" class="form-label">Delivery Location</label>
-                            {{ form.delivery_location }}
-                            {{ form.delivery_lat }}
-                            {{ form.delivery_lng }}
-                             {% if form.delivery_location.errors %}<div class="text-danger small">{{ form.delivery_location.errors }}</div>{% endif %}
-                        </div>
+                    <!-- Party -->
+                    <div class="md:col-span-12">
+                        <label for="{{ form.party.id_for_label }}" class="block text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider">Party</label>
+                        {{ form.party }}
+                        {% if form.party.errors %}<div class="text-red-600 text-xs mt-1">{{ form.party.errors }}</div>{% endif %}
+                    </div>
 
-                        <!-- Cargo Details -->
-                        <div class="col-md-6 mb-3">
-                            <label for="{{ form.weight.id_for_label }}" class="form-label">Weight (Tons)</label>
-                            {{ form.weight }}
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label for="{{ form.rate_per_ton.id_for_label }}" class="form-label">Rate per Ton</label>
-                            {{ form.rate_per_ton }}
-                        </div>
+                    <!-- Locations - Full Width -->
+                    <div class="md:col-span-12">
+                        <label for="{{ form.pickup_location.id_for_label }}" class="block text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider">Pickup Location</label>
+                        {{ form.pickup_location }}
+                        {{ form.pickup_lat }}
+                        {{ form.pickup_lng }}
+                        {% if form.pickup_location.errors %}<div class="text-red-600 text-xs mt-1">{{ form.pickup_location.errors }}</div>{% endif %}
+                    </div>
+                    <div class="md:col-span-12">
+                        <label for="{{ form.delivery_location.id_for_label }}" class="block text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider">Delivery Location</label>
+                        {{ form.delivery_location }}
+                        {{ form.delivery_lat }}
+                        {{ form.delivery_lng }}
+                         {% if form.delivery_location.errors %}<div class="text-red-600 text-xs mt-1">{{ form.delivery_location.errors }}</div>{% endif %}
+                    </div>
 
-                        <!-- Odometer -->
-                        <div class="col-md-6 mb-3">
-                            <label for="{{ form.start_odometer.id_for_label }}" class="form-label">Start Odometer</label>
-                            {{ form.start_odometer }}
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label for="{{ form.end_odometer.id_for_label }}" class="form-label">End Odometer</label>
-                            {{ form.end_odometer }}
-                        </div>
+                    <!-- Cargo Details -->
+                    <div class="md:col-span-6">
+                        <label for="{{ form.weight.id_for_label }}" class="block text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider">Weight (Tons)</label>
+                        {{ form.weight }}
+                        {% if form.weight.errors %}<div class="text-red-600 text-xs mt-1">{{ form.weight.errors }}</div>{% endif %}
+                    </div>
+                    <div class="md:col-span-6">
+                        <label for="{{ form.rate_per_ton.id_for_label }}" class="block text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider">Rate per Ton</label>
+                        {{ form.rate_per_ton }}
+                        {% if form.rate_per_ton.errors %}<div class="text-red-600 text-xs mt-1">{{ form.rate_per_ton.errors }}</div>{% endif %}
+                    </div>
 
-                        <!-- Notes -->
-                        <div class="col-12 mb-3">
-                            <label for="{{ form.notes.id_for_label }}" class="form-label">Notes</label>
-                            {{ form.notes }}
-                        </div>
+                    <!-- Odometer -->
+                    <div class="md:col-span-6">
+                        <label for="{{ form.start_odometer.id_for_label }}" class="block text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider">Start Odometer</label>
+                        {{ form.start_odometer }}
+                        {% if form.start_odometer.errors %}<div class="text-red-600 text-xs mt-1">{{ form.start_odometer.errors }}</div>{% endif %}
+                    </div>
+                    <div class="md:col-span-6">
+                        <label for="{{ form.end_odometer.id_for_label }}" class="block text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider">End Odometer</label>
+                        {{ form.end_odometer }}
+                        {% if form.end_odometer.errors %}<div class="text-red-600 text-xs mt-1">{{ form.end_odometer.errors }}</div>{% endif %}
+                    </div>
+
+                    <!-- Notes -->
+                    <div class="md:col-span-12">
+                        <label for="{{ form.notes.id_for_label }}" class="block text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider">Notes</label>
+                        {{ form.notes }}
+                        {% if form.notes.errors %}<div class="text-red-600 text-xs mt-1">{{ form.notes.errors }}</div>{% endif %}
                     </div>
                 </div>
             </div>
+        </div>
 
-            <div class="d-flex justify-content-end gap-2 mb-5">
-                <a href="{% if object %}{% url 'trip-detail' object.pk %}{% else %}{% url 'trip-list' %}{% endif %}" 
-                   class="btn btn-secondary">Cancel</a>
-                <button type="submit" class="btn btn-success">
-                    {% if object %}Update Trip{% else %}Create Trip{% endif %}
-                </button>
-            </div>
-        </form>
-    </div>
+        <div class="flex justify-end space-x-3 mb-10">
+            <a href="{% if object %}{% url 'trip-detail' object.pk %}{% else %}{% url 'trip-list' %}{% endif %}" 
+               class="px-6 py-2 border border-slate-300 rounded-md text-slate-700 bg-white hover:bg-slate-50 font-medium transition-colors">
+                Cancel
+            </a>
+            <button type="submit" class="px-6 py-2 bg-emerald-600 text-white rounded-md font-medium hover:bg-emerald-700 shadow-sm transition-colors">
+                {% if object %}Update Trip{% else %}Create Trip{% endif %}
+            </button>
+        </div>
+    </form>
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
 $(document).ready(function() {
-    // 1. Initialize Standard Select2
+    // 1. Initialize Standard Select2 (default theme for custom styles)
     $('#id_vehicle').select2({
-        theme: 'bootstrap-5',
         placeholder: 'Select Vehicle'
     });
     $('#id_driver').select2({
-        theme: 'bootstrap-5',
         placeholder: 'Select Driver',
         allowClear: true
     });
     $('#id_party').select2({
-        theme: 'bootstrap-5',
         placeholder: 'Select Party'
     });
 
@@ -119,141 +133,83 @@ $(document).ready(function() {
         const latInput = $(fieldSelector.replace('location', 'lat'));
         const lngInput = $(fieldSelector.replace('location', 'lng'));
 
-        // Replace the input with a Select2-compatible select if it's currently a text input
-        // (Django renders CharField as input type="text", but Select2 works best on <select>)
-        // However, Select2 can attach to input type="text" too, but tagging behaves differently.
-        // Best practice for AJAX+Tagging: Use <select> or attach to input with specific config.
-        // We will stick to the existing input but rely on Select2's ability to handle it.
-        // Actually, for proper AJAX tagging support, standard Select2 expects a <select>.
-        // Let's assume we attach to the text input but we might need to handle the UI carefully.
-        
-        // BETTER APPROACH: We'll use the existing input but configure Select2 to use it as a data source
-        // Wait, standard Select2 attaches to <select>. Attaching to <input type="text"> is deprecated/removed in v4.
-        // We need to transform the input into a select or use a wrapper.
-        // Simplest: Just hide the real input and insert a <select> for Select2 to control?
-        // No, let's keep it simple. If we use tagging=true on a <select>, it works.
-        // But the form renders an <input>. 
-        // We will convert the <input> to a <select> on the fly.
-        
-        // 1. Get current value
+        // Replace the input with a select element for AJAX+Tagging
         const initialValue = select.val();
-        
-        // 2. Create a new <select> element
-        const newSelect = $('<select class="form-select"></select>');
+        const newSelect = $('<select class="block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white"></select>');
         newSelect.attr('id', select.attr('id'));
         newSelect.attr('name', select.attr('name'));
         if (initialValue) {
             newSelect.append(new Option(initialValue, initialValue, true, true));
         }
-        
-        // 3. Replace old input
         select.replaceWith(newSelect);
         
-        // 4. Init Select2 with Custom Parallel Transport
         newSelect.select2({
-            theme: 'bootstrap-5',
             placeholder: 'Search or type location...',
-            tags: true, // Allow custom typing
-            minimumInputLength: 0, // START INSTANTLY
+            tags: true, 
+            minimumInputLength: 0,
             ajax: {
-                delay: 0, // REMOVE DELAY FOR INSTANT FEEL
+                delay: 0,
                 transport: function (params, success, failure) {
                     const term = params.data.term || '';
-                    
-                    // Promise 1: Local History (Always fetch if 0+ chars)
                     const localRequest = $.ajax({
                         url: '{% url "autocomplete-suggestions" %}',
                         dataType: 'json',
-                        data: {
-                            term: term,
-                            field: fieldName
-                        }
+                        data: { term: term, field: fieldName }
                     });
 
-                    // Promise 2: Map Suggestions (External) - START AT 2 CHARS
                     let mapRequest = Promise.resolve({ features: [] });
                     if (term.length >= 2) {
-                        // Optimizations:
-                        // 1. limit=20: Fetch more candidates
-                        // 2. lat=22.0&lon=79.0: Bias towards India center
-                        // 3. osm_tag=place:...: ONLY fetch cities, towns, villages (removes shops, hospitals, etc.)
                         const mapUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(term)}&limit=20&lat=22.0&lon=79.0&osm_tag=place:city&osm_tag=place:town&osm_tag=place:village&lang=en`;
-                        mapRequest = $.ajax({
-                            url: mapUrl,
-                            dataType: 'json'
-                        }).catch(() => ({ features: [] })); // Fail silently
+                        mapRequest = $.ajax({ url: mapUrl, dataType: 'json' }).catch(() => ({ features: [] }));
                     }
 
-                    // Wait for BOTH to finish
                     Promise.all([localRequest, mapRequest]).then(([localData, mapData]) => {
                         const results = [];
                         const seen = new Set();
                         
-                        // 0. Always add the current search term as a "Manual Entry" option first
                         if (term && term.trim().length > 0) {
                            const cleanTerm = term.trim();
-                           results.push({
-                               id: cleanTerm,
-                               text: `"${cleanTerm}" (Manual Entry)`,
-                               newOption: true
-                           });
-                           seen.add(cleanTerm);
+                           results.push({ id: cleanTerm, text: `"${cleanTerm}" (Manual Entry)`, newOption: true });
                            seen.add(cleanTerm.toLowerCase());
                         }
 
-                        // 1. Process Local History
                         if (localData.results) {
                             localData.results.forEach(item => {
-                                if (!seen.has(item.id)) {
+                                if (!seen.has(item.id.toLowerCase())) {
                                     results.push(item);
-                                    seen.add(item.id);
+                                    seen.add(item.id.toLowerCase());
                                 }
                             });
                         }
 
-                        // 2. Process Map Data
                         if (mapData && mapData.features) {
                             mapData.features.forEach(feature => {
                                 const p = feature.properties;
-                                const coords = feature.geometry.coordinates; // [lng, lat]
-                                
+                                const coords = feature.geometry.coordinates;
                                 const c_code = (p.countrycode || '').toUpperCase();
-                                const c_name = (p.country || '').toLowerCase();
-                                if (c_code === 'IN' || c_name === 'india') {
-                                    // Use only the primary name (city/town) to avoid "Mumbai, Maharashtra"
+                                if (c_code === 'IN') {
                                     const displayName = p.name || p.city || p.town || p.village || '';
-                                    if (displayName && !seen.has(displayName)) {
-                                        results.push({
-                                            id: displayName,
-                                            text: `🌍 ${displayName}`,
-                                            lat: coords[1],
-                                            lng: coords[0]
-                                        });
-                                        seen.add(displayName);
+                                    if (displayName && !seen.has(displayName.toLowerCase())) {
+                                        results.push({ id: displayName, text: `🌍 ${displayName}`, lat: coords[1], lng: coords[0] });
+                                        seen.add(displayName.toLowerCase());
                                     }
                                 }
                             });
                         }
-
                         success({ results: results });
                     }).catch(failure);
                 },
-                processResults: function (data) {
-                    return data; // Data is already formatted in transport
-                },
+                processResults: function (data) { return data; },
                 cache: true
             }
         });
 
-        // 5. Handle Selection (Capture Coordinates)
         newSelect.on('select2:select', function (e) {
             const data = e.params.data;
             if (data.lat && data.lng) {
-                // Round to 6 decimal places to satisfy DB constraint (max_digits=9, decimal_places=6)
                 latInput.val(parseFloat(data.lat).toFixed(6));
                 lngInput.val(parseFloat(data.lng).toFixed(6));
             } else {
-                // If user selected history or typed custom text, we might not have coords.
                 latInput.val('');
                 lngInput.val('');
             }
