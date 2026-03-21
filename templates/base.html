@@ -61,14 +61,16 @@
                 </a>
                 
                 {% if user.is_authenticated %}
-                <div class="relative group">
-                    <button class="flex items-center space-x-2 text-slate-300 hover:text-white focus:outline-none">
+                <div class="relative dropdown-container">
+                    <button class="flex items-center space-x-2 text-slate-300 hover:text-white focus:outline-none dropdown-toggle">
                         <i class="fa-solid fa-truck-fast"></i><span>Fleet</span><i class="fa-solid fa-chevron-down text-xs ml-1"></i>
                     </button>
-                    <div class="absolute left-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 hidden group-hover:block">
-                        <a href="{% url 'vehicle-list' %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Vehicles</a>
-                        <a href="{% url 'maintenance-log-list' %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Maintenance Logs</a>
-                        <a href="{% url 'tyre-list' %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Tyre Inventory</a>
+                    <div class="absolute left-0 pt-2 w-48 z-50 hidden dropdown-menu">
+                        <div class="bg-white rounded-md shadow-lg py-1 border border-slate-200">
+                            <a href="{% url 'vehicle-list' %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Vehicles</a>
+                            <a href="{% url 'maintenance-log-list' %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Maintenance Logs</a>
+                            <a href="{% url 'tyre-list' %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Tyre Inventory</a>
+                        </div>
                     </div>
                 </div>
 
@@ -82,18 +84,20 @@
                 {% endif %}
 
                 {% if user.is_superuser or user.groups.all.0.name == 'manager' or user.groups.all.0.name == 'supervisor' %}
-                <div class="relative group">
-                    <button class="flex items-center space-x-2 text-slate-300 hover:text-white focus:outline-none">
+                <div class="relative dropdown-container">
+                    <button class="flex items-center space-x-2 text-slate-300 hover:text-white focus:outline-none dropdown-toggle">
                         <i class="fa-solid fa-wallet"></i><span>Finance</span><i class="fa-solid fa-chevron-down text-xs ml-1"></i>
                     </button>
-                    <div class="absolute left-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 hidden group-hover:block">
-                        <a href="{% url 'bill-list' %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Invoices</a>
-                        <a href="{% url 'financialrecord-list' %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Ledger</a>
-                        <a href="{% url 'party-list' %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Parties</a>
-                        <a href="{% url 'account-list' %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Company Accounts</a>
-                        <a href="{% url 'company-profile-update' %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Company Profile</a>
-                        <hr class="my-1 border-slate-200">
-                        <a href="{% url 'financial-summary' %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Reports</a>
+                    <div class="absolute left-0 pt-2 w-48 z-50 hidden dropdown-menu">
+                        <div class="bg-white rounded-md shadow-lg py-1 border border-slate-200">
+                            <a href="{% url 'bill-list' %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Invoices</a>
+                            <a href="{% url 'financialrecord-list' %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Ledger</a>
+                            <a href="{% url 'party-list' %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Parties</a>
+                            <a href="{% url 'account-list' %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Company Accounts</a>
+                            <a href="{% url 'company-profile-update' %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Company Profile</a>
+                            <hr class="my-1 border-slate-200">
+                            <a href="{% url 'financial-summary' %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Reports</a>
+                        </div>
                     </div>
                 </div>
                 {% endif %}
@@ -103,17 +107,19 @@
         
         <div class="flex items-center space-x-4">
             {% if user.is_authenticated %}
-            <div class="relative group">
-                <button class="flex items-center space-x-2 text-sm font-medium focus:outline-none">
+            <div class="relative dropdown-container">
+                <button class="flex items-center space-x-2 text-sm font-medium focus:outline-none dropdown-toggle">
                     <i class="fa-solid fa-user-circle text-lg"></i>
                     <span>{{ user.username }}</span>
                     <i class="fa-solid fa-caret-down text-xs"></i>
                 </button>
-                <div class="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 hidden group-hover:block">
-                    {% if user.is_superuser %}
-                    <a href="/admin/" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Django Admin</a>
-                    {% endif %}
-                    <a href="{% url 'logout' %}" class="block px-4 py-2 text-sm text-red-600 hover:bg-slate-100">Logout</a>
+                <div class="absolute right-0 pt-2 w-48 z-50 hidden dropdown-menu">
+                    <div class="bg-white rounded-md shadow-lg py-1 border border-slate-200">
+                        {% if user.is_superuser %}
+                        <a href="/admin/" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Django Admin</a>
+                        {% endif %}
+                        <a href="{% url 'logout' %}" class="block px-4 py-2 text-sm text-red-600 hover:bg-slate-100">Logout</a>
+                    </div>
                 </div>
             </div>
             {% else %}
@@ -148,6 +154,37 @@
     <!-- Scripts (Using jQuery for Select2 compatibility) -->
     <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    
+    <script>
+        $(document).ready(function() {
+            // Toggle dropdown on click
+            $(document).on('click', '.dropdown-toggle', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                const $container = $(this).closest('.dropdown-container');
+                const $menu = $container.find('.dropdown-menu');
+                
+                // Close all other dropdowns
+                $('.dropdown-menu').not($menu).addClass('hidden');
+                
+                // Toggle current dropdown
+                $menu.toggleClass('hidden');
+            });
+            
+            // Close dropdowns when clicking outside
+            $(document).on('click', function(e) {
+                if (!$(e.target).closest('.dropdown-container').length) {
+                    $('.dropdown-menu').addClass('hidden');
+                }
+            });
+
+            // Prevent closing when clicking inside the menu
+            $(document).on('click', '.dropdown-menu', function(e) {
+                e.stopPropagation();
+            });
+        });
+    </script>
     
     {% block extra_js %}{% endblock %}
 </body>

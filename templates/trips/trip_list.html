@@ -149,19 +149,21 @@
             <p class="text-sm font-bold text-slate-900">{{ trip.revenue|floatformat:2|default:"0.00" }}</p>
         </div>
         
-        <div class="ml-4 relative group/menu">
-            <button class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 transition-colors">
+        <div class="ml-4 relative dropdown-container">
+            <button class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 transition-colors dropdown-toggle">
                 <i class="fa-solid fa-ellipsis"></i>
             </button>
-            <div class="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-20 hidden group-hover/menu:block border border-slate-100">
-                <a href="{% url 'trip-detail' trip.pk %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"><i class="fa-regular fa-eye mr-2"></i>View Details</a>
-                {% if perms.trips.change_trip %}
-                <a href="{% url 'trip-update' trip.pk %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"><i class="fa-regular fa-pen-to-square mr-2"></i>Edit Trip</a>
-                {% endif %}
-                {% if perms.trips.delete_trip %}
-                <hr class="my-1 border-slate-100">
-                <a href="{% url 'trip-delete' trip.pk %}" class="block px-4 py-2 text-sm text-red-600 hover:bg-slate-50"><i class="fa-regular fa-trash-can mr-2"></i>Delete</a>
-                {% endif %}
+            <div class="absolute right-0 pt-2 w-48 z-20 dropdown-menu hidden">
+                <div class="bg-white rounded-md shadow-lg py-1 border border-slate-200">
+                    <a href="{% url 'trip-detail' trip.pk %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"><i class="fa-regular fa-eye mr-2"></i>View Details</a>
+                    {% if perms.trips.change_trip %}
+                    <a href="{% url 'trip-update' trip.pk %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"><i class="fa-regular fa-pen-to-square mr-2"></i>Edit Trip</a>
+                    {% endif %}
+                    {% if perms.trips.delete_trip %}
+                    <hr class="my-1 border-slate-100">
+                    <a href="{% url 'trip-delete' trip.pk %}" class="block px-4 py-2 text-sm text-red-600 hover:bg-slate-100"><i class="fa-regular fa-trash-can mr-2"></i>Delete</a>
+                    {% endif %}
+                </div>
             </div>
         </div>
     </div>

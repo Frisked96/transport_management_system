@@ -81,6 +81,7 @@ class DocumentUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView
     form_class = DocumentForm
     template_name = 'documents/document_form.html'
     permission_required = 'documents.change_document'
+    object: Document
 
     def get_success_url(self):
         messages.success(self.request, 'Document updated successfully!')
@@ -94,6 +95,7 @@ class DocumentDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView
     model = Document
     template_name = 'documents/document_confirm_delete.html'
     permission_required = 'documents.delete_document'
+    object: Document
 
     def get_success_url(self):
         messages.success(self.request, 'Document deleted successfully!')

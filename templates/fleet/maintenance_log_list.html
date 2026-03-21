@@ -105,15 +105,17 @@
             {% endif %}
         </div>
         
-        <div class="ml-4 relative group/menu">
-            <button class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 transition-colors">
+        <div class="ml-4 relative dropdown-container">
+            <button class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 transition-colors dropdown-toggle">
                 <i class="fa-solid fa-ellipsis"></i>
             </button>
-            <div class="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-20 hidden group-hover/menu:block border border-slate-100">
-                <a href="{% url 'maintenance-log-detail' log.pk %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"><i class="fa-regular fa-eye mr-2"></i>View Details</a>
-                {% if perms.fleet.change_maintenancelog %}
-                <a href="{% url 'maintenance-log-update' log.pk %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"><i class="fa-regular fa-pen-to-square mr-2"></i>Edit Log</a>
-                {% endif %}
+            <div class="absolute right-0 pt-2 w-48 z-20 dropdown-menu hidden">
+                <div class="bg-white rounded-md shadow-lg py-1 border border-slate-100">
+                    <a href="{% url 'maintenance-log-detail' log.pk %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"><i class="fa-regular fa-eye mr-2"></i>View Details</a>
+                    {% if perms.fleet.change_maintenancelog %}
+                    <a href="{% url 'maintenance-log-update' log.pk %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"><i class="fa-regular fa-pen-to-square mr-2"></i>Edit Log</a>
+                    {% endif %}
+                </div>
             </div>
         </div>
     </div>

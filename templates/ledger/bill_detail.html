@@ -18,10 +18,12 @@
                 <i class="fa-solid fa-print mr-2"></i>Print Options
                 <i class="fa-solid fa-chevron-down ml-2 text-xs"></i>
             </button>
-            <div class="absolute left-0 mt-2 w-56 bg-white rounded-md shadow-lg py-1 z-50 hidden group-hover:block border border-slate-200">
-                <a href="{% url 'print-combined-bill' bill.pk %}" target="_blank" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"><i class="fa-solid fa-file-invoice mr-2"></i>Combined Invoice & Annexure</a>
-                <a href="{% url 'print-invoice' bill.pk %}" target="_blank" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"><i class="fa-solid fa-file-lines mr-2"></i>Invoice Only</a>
-                <a href="{% url 'print-annexure' bill.pk %}" target="_blank" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"><i class="fa-solid fa-list-check mr-2"></i>Annexure Only</a>
+            <div class="absolute left-0 pt-2 w-56 z-50 hidden group-hover:block">
+                <div class="bg-white rounded-md shadow-lg py-1 border border-slate-200">
+                    <a href="{% url 'print-combined-bill' bill.pk %}" target="_blank" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"><i class="fa-solid fa-file-invoice mr-2"></i>Combined Invoice & Annexure</a>
+                    <a href="{% url 'print-invoice' bill.pk %}" target="_blank" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"><i class="fa-solid fa-file-lines mr-2"></i>Invoice Only</a>
+                    <a href="{% url 'print-annexure' bill.pk %}" target="_blank" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"><i class="fa-solid fa-list-check mr-2"></i>Annexure Only</a>
+                </div>
             </div>
         </div>
 
