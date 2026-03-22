@@ -3,21 +3,31 @@
 {% block title %}Maintenance Logs - Transport Management System{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <h2>Maintenance Logs</h2>
-    
-    {% if perms.fleet.create_maintenance_log %}
-        <a href="{% url 'maintenance-log-create' %}" class="btn btn-success"><i class="bi bi-plus-lg"></i> Add Maintenance Log</a>
-    {% endif %}
-</div>
+<!-- BEGIN: Page Header -->
+<header class="flex flex-col md:flex-row md:items-center justify-between mb-6">
+    <div>
+        <h1 class="text-3xl font-bold text-slate-900">Maintenance Logs</h1>
+        <p class="text-sm text-slate-600 mt-1">Track vehicle repairs and scheduled services</p>
+    </div>
+    <div class="mt-4 md:mt-0 flex space-x-3">
+        {% if perms.fleet.create_maintenance_log %}
+        <a href="{% url 'maintenance-log-create' %}" class="flex items-center space-x-2 px-4 py-2 bg-emerald-600 text-white rounded-md text-sm font-medium hover:bg-emerald-700 shadow-sm transition-colors">
+            <i class="fa-solid fa-plus"></i>
+            <span>Add Maint. Log</span>
+        </a>
+        {% endif %}
+    </div>
+</header>
+<!-- END: Page Header -->
 
-<!-- Filter Form -->
-<div class="card mb-4 bg-light">
-    <div class="card-body">
-        <form method="get" class="row g-3 align-items-end">
-            <div class="col-md-auto">
-                <label for="vehicle" class="form-label">Vehicle:</label>
-                <select id="vehicle" name="vehicle" class="form-select">
+<!-- BEGIN: Filter Bar -->
+<section class="bg-slate-100 p-5 rounded-lg border border-slate-200 mb-6">
+    <form method="get">
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
+            <!-- Vehicle Filter -->
+            <div class="md:col-span-5 flex flex-col">
+                <label for="vehicle" class="text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">Vehicle:</label>
+                <select id="vehicle" name="vehicle" class="block w-full pl-3 pr-10 py-2 border border-slate-300 rounded-md text-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white">
                     <option value="">All Vehicles</option>
                     {% for vehicle in vehicles %}
                         <option value="{{ vehicle.pk }}" {% if selected_vehicle == vehicle.pk|stringformat:"s" %}selected{% endif %}>
@@ -27,9 +37,10 @@
                 </select>
             </div>
             
-            <div class="col-md-auto">
-                <label for="type" class="form-label">Type:</label>
-                <select id="type" name="type" class="form-select">
+            <!-- Type Filter -->
+            <div class="md:col-span-4 flex flex-col">
+                <label for="type" class="text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">Type:</label>
+                <select id="type" name="type" class="block w-full pl-3 pr-10 py-2 border border-slate-300 rounded-md text-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white">
                     <option value="">All Types</option>
                     {% for value, label in type_choices %}
                         <option value="{{ value }}" {% if current_type == value %}selected{% endif %}>
@@ -39,104 +50,122 @@
                 </select>
             </div>
             
-            <div class="col-md-auto">
-                <button type="submit" class="btn btn-primary">Filter</button>
+            <!-- Actions -->
+            <div class="md:col-span-3 flex items-end space-x-2">
+                <button type="submit" class="flex-grow bg-emerald-600 text-white px-4 py-2 rounded-md hover:bg-emerald-700 transition-colors text-sm font-medium">
+                    Filter
+                </button>
+                <a href="{% url 'maintenance-log-list' %}" class="px-4 py-2 border border-slate-300 rounded-md text-slate-700 bg-white hover:bg-slate-50 text-sm font-medium transition-colors">
+                    Clear
+                </a>
             </div>
-            <div class="col-md-auto">
-                <a href="{% url 'maintenance-log-list' %}" class="btn btn-outline-secondary">Clear</a>
-            </div>
-        </form>
-    </div>
-</div>
+        </div>
+    </form>
+</section>
+<!-- END: Filter Bar -->
 
-<!-- Maintenance Logs Table -->
+<!-- BEGIN: Maintenance Log List -->
 {% if maintenance_logs %}
-    <div class="card mt-3">
-        <div class="card-body p-0">
-            <div class="table-responsive">
-                <table class="table table-striped table-hover mb-0">
-                    <thead>
-                        <tr>
-                            <th>Date</th>
-                            <th>Vehicle</th>
-                            <th>Type</th>
-                            <th>Description</th>
-                            <th>Cost</th>
-                            <th>Service Provider</th>
-                            <th>Next Due</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for log in maintenance_logs %}
-                            <tr>
-                                <td>{{ log.date|date:"M d, Y" }}</td>
-                                <td>
-                                    <strong>{{ log.vehicle.registration_plate }}</strong><br>
-                                    <small>{{ log.vehicle.make_model }}</small>
-                                </td>
-                                <td>{{ log.type }}</td>
-                                <td>{{ log.description|truncatechars:40 }}</td>
-                                <td class="text-end">${{ log.cost|floatformat:2 }}</td>
-                                <td>{{ log.service_provider }}</td>
-                                <td>
-                                    {% if log.next_service_due %}
-                                        {{ log.next_service_due|date:"M d, Y" }}
-                                        {% if log.is_overdue %}
-                                            <span class="text-danger fw-bold">(OVERDUE)</span>
-                                        {% endif %}
-                                    {% else %}
-                                        <em>N/A</em>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    <div class="btn-group btn-group-sm">
-                                        <a href="{% url 'maintenance-log-detail' log.pk %}" class="btn btn-outline-primary" title="View"><i class="bi bi-eye"></i></a>
-                                        
-                                        {% if perms.fleet.change_maintenancelog %}
-                                            <a href="{% url 'maintenance-log-update' log.pk %}" class="btn btn-outline-warning" title="Edit"><i class="bi bi-pencil"></i></a>
-                                        {% endif %}
-                                    </div>
-                                </td>
-                            </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+<div class="space-y-4">
+    {% for log in maintenance_logs %}
+    <!-- Log Card -->
+    <div class="bg-white border border-slate-200 rounded-lg p-5 flex flex-col md:flex-row items-start md:items-center gap-4 hover:shadow-sm transition-shadow">
+        <div class="flex-1 min-w-[150px]">
+            <h3 class="font-bold text-lg text-slate-900 leading-tight">
+                <a href="{% url 'maintenance-log-detail' log.pk %}" class="hover:text-emerald-600 transition-colors">{{ log.vehicle.registration_plate }}</a>
+            </h3>
+            <p class="text-xs text-slate-500 mt-1">{{ log.date|date:"M d, Y" }}</p>
+        </div>
+        
+        <div class="flex-1">
+            <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">Type</span>
+            <span class="inline-flex items-center px-2 py-1 rounded text-[10px] font-bold uppercase bg-slate-100 text-slate-700">
+                {{ log.type }}
+            </span>
+        </div>
+        
+        <div class="flex-[2] hidden lg:block">
+            <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">Description</span>
+            <p class="text-sm text-slate-600 truncate max-w-[250px]" title="{{ log.description }}">{{ log.description|default:"-" }}</p>
+        </div>
+        
+        <div class="w-24 text-right">
+            <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">Cost</span>
+            <p class="text-sm font-bold text-slate-900">${{ log.cost|floatformat:2 }}</p>
+        </div>
+        
+        <div class="w-32">
+            <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">Next Due</span>
+            {% if log.next_service_due %}
+                <p class="text-sm {% if log.is_overdue %}text-rose-600 font-bold{% else %}text-slate-800{% endif %}">
+                    {{ log.next_service_due|date:"M d, Y" }}
+                </p>
+            {% else %}
+                <p class="text-xs text-slate-400 italic">N/A</p>
+            {% endif %}
+        </div>
+        
+        <div class="ml-4 relative dropdown-container">
+            <button class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 transition-colors dropdown-toggle">
+                <i class="fa-solid fa-ellipsis"></i>
+            </button>
+            <div class="absolute right-0 pt-2 w-48 z-20 dropdown-menu hidden">
+                <div class="bg-white rounded-md shadow-lg py-1 border border-slate-100">
+                    <a href="{% url 'maintenance-log-detail' log.pk %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"><i class="fa-regular fa-eye mr-2"></i>View Details</a>
+                    {% if perms.fleet.change_maintenancelog %}
+                    <a href="{% url 'maintenance-log-update' log.pk %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"><i class="fa-regular fa-pen-to-square mr-2"></i>Edit Log</a>
+                    {% endif %}
+                </div>
             </div>
         </div>
     </div>
+    {% endfor %}
+</div>
 
-    <!-- Pagination -->
-    {% if is_paginated %}
-        <nav class="mt-4">
-            <ul class="pagination justify-content-center">
-                {% if page_obj.has_previous %}
-                    <li class="page-item">
-                        <a class="page-link" href="?page=1{% if selected_vehicle %}&vehicle={{ selected_vehicle }}{% endif %}{% if current_type %}&type={{ current_type }}{% endif %}">&laquo; First</a>
-                    </li>
-                    <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if selected_vehicle %}&vehicle={{ selected_vehicle }}{% endif %}{% if current_type %}&type={{ current_type }}{% endif %}">Previous</a>
-                    </li>
-                {% endif %}
-                
-                <li class="page-item disabled">
-                    <span class="page-link">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
-                </li>
-                
-                {% if page_obj.has_next %}
-                    <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if selected_vehicle %}&vehicle={{ selected_vehicle }}{% endif %}{% if current_type %}&type={{ current_type }}{% endif %}">Next</a>
-                    </li>
-                    <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if selected_vehicle %}&vehicle={{ selected_vehicle }}{% endif %}{% if current_type %}&type={{ current_type }}{% endif %}">Last &raquo;</a>
-                    </li>
-                {% endif %}
-            </ul>
-        </nav>
-    {% endif %}
-{% else %}
-    <div class="alert alert-info mt-3">
-        No maintenance logs found. {% if perms.fleet.create_maintenance_log %}<a href="{% url 'maintenance-log-create' %}" class="alert-link">Add your first maintenance log</a>{% endif %}.
+<!-- BEGIN: Pagination -->
+{% if is_paginated %}
+<nav class="mt-8 flex justify-center">
+    <div class="flex space-x-1">
+        {% if page_obj.has_previous %}
+        <a href="?page=1{% if selected_vehicle %}&vehicle={{ selected_vehicle }}{% endif %}{% if current_type %}&type={{ current_type }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
+            <i class="fa-solid fa-angles-left"></i>
+        </a>
+        <a href="?page={{ page_obj.previous_page_number }}{% if selected_vehicle %}&vehicle={{ selected_vehicle }}{% endif %}{% if current_type %}&type={{ current_type }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
+            <i class="fa-solid fa-angle-left"></i>
+        </a>
+        {% endif %}
+
+        <span class="px-4 py-2 bg-emerald-600 text-white border border-emerald-600 rounded-md text-sm font-medium">
+            Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+        </span>
+
+        {% if page_obj.has_next %}
+        <a href="?page={{ page_obj.next_page_number }}{% if selected_vehicle %}&vehicle={{ selected_vehicle }}{% endif %}{% if current_type %}&type={{ current_type }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
+            <i class="fa-solid fa-angle-right"></i>
+        </a>
+        <a href="?page={{ page_obj.paginator.num_pages }}{% if selected_vehicle %}&vehicle={{ selected_vehicle }}{% endif %}{% if current_type %}&type={{ current_type }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
+            <i class="fa-solid fa-angles-right"></i>
+        </a>
+        {% endif %}
     </div>
+</nav>
 {% endif %}
+<!-- END: Pagination -->
+
+{% else %}
+<div class="text-center py-16 bg-white rounded-lg border border-slate-200 shadow-sm">
+    <div class="inline-flex items-center justify-center w-20 h-20 bg-slate-50 rounded-full mb-4">
+        <i class="fa-solid fa-wrench text-4xl text-slate-300"></i>
+    </div>
+    <h2 class="text-xl font-bold text-slate-900 mb-2">No maintenance logs found</h2>
+    <p class="text-slate-600 mb-6 max-w-xs mx-auto">Track your fleet's health by recording maintenance and repair logs.</p>
+    {% if perms.fleet.create_maintenance_log %}
+    <a href="{% url 'maintenance-log-create' %}" class="inline-flex items-center space-x-2 px-6 py-3 bg-emerald-600 text-white rounded-md font-medium hover:bg-emerald-700 shadow-sm transition-colors">
+        <i class="fa-solid fa-plus"></i>
+        <span>Add Your First Maint. Log</span>
+    </a>
+    {% endif %}
+</div>
+{% endif %}
+<!-- END: Maintenance Log List -->
 {% endblock %}

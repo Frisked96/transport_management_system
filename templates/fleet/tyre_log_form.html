@@ -1,69 +1,145 @@
 {% extends 'base.html' %}
 
-{% block title %}Log Tyre Action{% endblock %}
+{% block title %}Log Tyre Action - Transport Management System{% endblock %}
 
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-md-6">
-        <div class="card shadow-sm">
-            <div class="card-header bg-success text-white">
-                <h4 class="mb-0">Log Tyre Action</h4>
-            </div>
-            <div class="card-body">
-                <p class="text-muted small">Record movements, repairs, or scrapping of a tyre.</p>
-                <form method="post">
-                    {% csrf_token %}
-                    
-                    <div class="row g-3">
-                        <div class="col-md-12">
-                            <label class="form-label">Tyre</label>
-                            {{ form.tyre }}
-                        </div>
+<div class="max-w-2xl mx-auto">
+    <!-- BEGIN: Page Header -->
+    <header class="mb-8">
+        <h1 class="text-3xl font-bold text-slate-900">Log Tyre Action</h1>
+        <p class="text-sm text-slate-600 mt-1">Record movements, repairs, or maintenance for a specific tyre.</p>
+    </header>
+    <!-- END: Page Header -->
 
-                        <div class="col-md-6">
-                            <label class="form-label">Date</label>
+    <div class="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
+        <div class="bg-slate-50 border-b border-slate-200 py-4 px-6">
+            <h3 class="text-sm font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
+                <i class="fa-solid fa-history text-emerald-600"></i>
+                <span>Activity Details</span>
+            </h3>
+        </div>
+        
+        <form method="post" class="p-8 space-y-8">
+            {% csrf_token %}
+
+            {% if form.non_field_errors %}
+            <div class="p-4 bg-red-50 border border-red-100 rounded-md text-red-700 text-sm">
+                {{ form.non_field_errors }}
+            </div>
+            {% endif %}
+
+            <!-- Section 1: Core Info -->
+            <div class="space-y-6">
+                <div>
+                    <label for="{{ form.tyre.id_for_label }}" class="block text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider">
+                        Select Tyre
+                    </label>
+                    {{ form.tyre }}
+                    {% if form.tyre.errors %}
+                        <p class="text-red-500 text-xs mt-1">{{ form.tyre.errors.0 }}</p>
+                    {% endif %}
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label for="{{ form.date.id_for_label }}" class="block text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider">
+                            Date
+                        </label>
+                        <div class="relative">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                                <i class="fa-regular fa-calendar text-sm"></i>
+                            </div>
                             {{ form.date }}
                         </div>
+                    </div>
 
-                        <div class="col-md-6">
-                            <label class="form-label">Action</label>
-                            {{ form.action }}
-                        </div>
+                    <div>
+                        <label for="{{ form.action.id_for_label }}" class="block text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider">
+                            Action Type
+                        </label>
+                        {{ form.action }}
+                    </div>
+                </div>
+            </div>
 
-                        <div class="col-md-12">
-                            <hr class="my-2">
-                            <h6 class="text-muted">Vehicle Details (For Mount/Rotation/Dismount)</h6>
-                        </div>
+            <!-- Section 2: Vehicle Context -->
+            <div class="pt-8 border-t border-slate-100 space-y-6">
+                <div class="flex items-center gap-2">
+                    <h4 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Vehicle Context</h4>
+                    <span class="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">Required for Mounting</span>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label for="{{ form.vehicle.id_for_label }}" class="block text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider">
+                            Vehicle
+                        </label>
+                        {{ form.vehicle }}
+                    </div>
 
-                        <div class="col-md-6">
-                            <label class="form-label">Vehicle</label>
-                            {{ form.vehicle }}
-                        </div>
+                    <div>
+                        <label for="{{ form.position.id_for_label }}" class="block text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider">
+                            Position
+                        </label>
+                        {{ form.position }}
+                        <p class="text-[10px] text-slate-500 mt-1 italic">e.g. Front Left, Rear Right Outer</p>
+                    </div>
 
-                        <div class="col-md-6">
-                            <label class="form-label">Position</label>
-                            {{ form.position }}
-                            <small class="text-muted">e.g. Front Left, Rear Right Outer</small>
-                        </div>
-
-                        <div class="col-md-12">
-                            <label class="form-label">Current Vehicle Odometer</label>
+                    <div class="md:col-span-2">
+                        <label for="{{ form.odometer.id_for_label }}" class="block text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider">
+                            Current Vehicle Odometer
+                        </label>
+                        <div class="relative">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                                <i class="fa-solid fa-gauge-high text-sm"></i>
+                            </div>
                             {{ form.odometer }}
                         </div>
-
-                        <div class="col-md-12">
-                            <label class="form-label">Notes</label>
-                            {{ form.notes }}
-                        </div>
                     </div>
-
-                    <div class="d-flex justify-content-end gap-2 mt-4">
-                        <a href="javascript:history.back()" class="btn btn-outline-secondary">Cancel</a>
-                        <button type="submit" class="btn btn-success">Log Action</button>
-                    </div>
-                </form>
+                </div>
             </div>
-        </div>
+
+            <!-- Section 3: Notes -->
+            <div class="pt-8 border-t border-slate-100">
+                <label for="{{ form.notes.id_for_label }}" class="block text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider">
+                    Additional Notes
+                </label>
+                {{ form.notes }}
+            </div>
+
+            <!-- Form Actions -->
+            <div class="pt-8 border-t border-slate-100 flex flex-col md:flex-row md:justify-end gap-3">
+                <a href="javascript:history.back()" class="px-6 py-2 border border-slate-300 rounded-md text-slate-700 bg-white hover:bg-slate-50 font-medium transition-colors text-center">
+                    Cancel
+                </a>
+                <button type="submit" class="px-6 py-2 bg-emerald-600 text-white rounded-md font-medium hover:bg-emerald-700 shadow-sm transition-colors">
+                    Log Activity
+                </button>
+            </div>
+        </form>
     </div>
 </div>
+
+<style>
+    /* Styling for Django-rendered inputs to match Tailwind */
+    input[type="text"], input[type="number"], input[type="date"], select, textarea {
+        display: block;
+        width: 100%;
+        padding: 0.5rem 0.75rem;
+        border: 1px solid #cbd5e1;
+        border-radius: 0.375rem;
+        font-size: 0.875rem;
+        line-height: 1.25rem;
+        background-color: white;
+    }
+    input[type="text"]:focus, input[type="number"]:focus, input[type="date"]:focus, select:focus, textarea:focus {
+        outline: none;
+        border-color: #10b981;
+        ring: 2px;
+        ring-color: #10b981;
+    }
+    .relative input {
+        padding-left: 2.5rem;
+    }
+</style>
 {% endblock %}

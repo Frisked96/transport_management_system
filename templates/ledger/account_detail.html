@@ -3,155 +3,173 @@
 {% block title %}{{ account.name }} - Transport Management System{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <h2>{{ account.name }}</h2>
+<!-- BEGIN: Page Header -->
+<header class="flex flex-col md:flex-row md:items-center justify-between mb-6">
     <div>
-        <a href="{% url 'account-list' %}" class="btn btn-outline-secondary me-2">Back to List</a>
+        <h1 class="text-3xl font-bold text-slate-900">{{ account.name }}</h1>
+        <p class="text-sm text-slate-600 mt-1">Company Account & Firm Details</p>
+    </div>
+    <div class="mt-4 md:mt-0 flex space-x-3">
+        <a href="{% url 'account-list' %}" class="px-4 py-2 border border-slate-300 rounded-md bg-white text-slate-700 text-sm font-medium hover:bg-slate-50 transition-colors">
+            Back to List
+        </a>
         {% if perms.ledger.change_financialrecord %}
-            <a href="{% url 'account-update' account.pk %}" class="btn btn-warning me-2"><i class="bi bi-pencil"></i> Edit</a>
+        <a href="{% url 'account-update' account.pk %}" class="px-4 py-2 border border-slate-300 rounded-md bg-white text-slate-700 text-sm font-medium hover:bg-slate-50 transition-colors">
+            <i class="fa-regular fa-pen-to-square mr-2"></i>Edit
+        </a>
         {% endif %}
         {% if perms.ledger.delete_financialrecord %}
-            <a href="{% url 'account-delete' account.pk %}" class="btn btn-danger"><i class="bi bi-trash"></i> Delete</a>
+        <a href="{% url 'account-delete' account.pk %}" class="px-4 py-2 border border-red-200 rounded-md bg-red-50 text-red-700 text-sm font-medium hover:bg-red-100 transition-colors">
+            <i class="fa-regular fa-trash-can mr-2"></i>Delete
+        </a>
         {% endif %}
     </div>
-</div>
+</header>
+<!-- END: Page Header -->
 
-<div class="row">
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
     <!-- Left Column: Transaction History -->
-    <div class="col-lg-8">
-        <div class="card">
-            <div class="card-header bg-light">
-                <h5 class="mb-0">Transaction History</h5>
+    <div class="lg:col-span-8">
+        <div class="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-sm">
+            <div class="p-5 border-b border-slate-200">
+                <h3 class="font-bold text-slate-900">Recent Transactions</h3>
             </div>
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-hover mb-0">
-                        <thead class="table-light">
-                            <tr>
-                                <th>Date</th>
-                                <th>Category</th>
-                                <th>Party/Driver</th>
-                                <th class="text-end">Amount</th>
-                                <th>Description</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for record in financial_records %}
-                                <tr>
-                                    <td>{{ record.date|date:"d/m/Y" }}</td>
-                                    <td><span class="badge bg-secondary">{{ record.category }}</span></td>
-                                    <td>
-                                        {% if record.party %}
-                                            <a href="{% url 'party-detail' record.party.pk %}" class="text-decoration-none">{{ record.party.name }}</a>
-                                        {% elif record.driver %}
-                                            {{ record.driver.get_full_name|default:record.driver.username }}
-                                        {% else %}
-                                            <span class="text-muted">-</span>
-                                        {% endif %}
-                                    </td>
-                                    <td class="text-end fw-bold {% if record.is_income %}text-success{% else %}text-danger{% endif %}">
-                                        {% if record.is_income %}+{% else %}-{% endif %}${{ record.amount|floatformat:2 }}
-                                    </td>
-                                    <td>{{ record.description|truncatechars:30 }}</td>
-                                    <td>
-                                        <a href="{% url 'financialrecord-detail' record.pk %}" class="btn btn-sm btn-outline-primary"><i class="bi bi-eye"></i></a>
-                                    </td>
-                                </tr>
-                            {% empty %}
-                                <tr><td colspan="6" class="text-center py-4 text-muted">No transactions recorded for this account.</td></tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-slate-50 border-b border-slate-200">
+                            <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Date</th>
+                            <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Category</th>
+                            <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Party/Driver</th>
+                            <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Amount</th>
+                            <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Description</th>
+                            <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-200">
+                        {% for record in financial_records %}
+                        <tr class="hover:bg-slate-50 transition-colors">
+                            <td class="px-6 py-4 text-sm text-slate-600 whitespace-nowrap">{{ record.date|date:"d/m/Y" }}</td>
+                            <td class="px-6 py-4">
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-700">
+                                    {{ record.category.name }}
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 text-sm text-slate-600">
+                                {% if record.party %}
+                                <a href="{% url 'party-detail' record.party.pk %}" class="text-emerald-600 hover:underline font-medium">{{ record.party.name }}</a>
+                                {% elif record.driver %}
+                                <span class="font-medium text-slate-800">{{ record.driver.get_full_name|default:record.driver.username }}</span>
+                                {% else %}
+                                <span class="text-slate-400">-</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-6 py-4 text-sm text-right font-bold {% if record.is_income %}text-emerald-600{% else %}text-red-600{% endif %}">
+                                {% if record.is_income %}+{% else %}-{% endif %}${{ record.amount|floatformat:2 }}
+                            </td>
+                            <td class="px-6 py-4 text-sm text-slate-500 max-w-xs truncate">{{ record.description|default:"-" }}</td>
+                            <td class="px-6 py-4 text-right">
+                                <a href="{% url 'financialrecord-detail' record.pk %}" class="p-1.5 text-slate-400 hover:text-slate-600 transition-colors">
+                                    <i class="fa-regular fa-eye"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="6" class="px-6 py-10 text-center text-slate-500 italic">No transactions recorded for this account.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>
 
     <!-- Right Column: Firm & Balance Summary -->
-    <div class="col-lg-4">
-        <div class="card shadow-sm mb-4">
-            <div class="card-header bg-primary text-white">
-                <h5 class="mb-0">Firm Details</h5>
+    <div class="lg:col-span-4 space-y-6">
+        <!-- Firm Details Card -->
+        <div class="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
+            <div class="p-4 bg-slate-800 text-white">
+                <h3 class="font-bold text-sm uppercase tracking-wider">Firm Details</h3>
             </div>
-            <div class="card-body">
-                <table class="table table-sm table-borderless mb-0">
-                    <tr>
-                        <td class="text-muted small">Firm Name:</td>
-                        <td class="text-end fw-bold">{{ account.name }}</td>
-                    </tr>
-                    <tr>
-                        <td class="text-muted small">Address:</td>
-                        <td class="text-end small">{{ account.address|default:"-"|linebreaksbr }}</td>
-                    </tr>
-                    <tr>
-                        <td class="text-muted small">Phone:</td>
-                        <td class="text-end small">{{ account.phone_number|default:"-" }}</td>
-                    </tr>
-                    <tr>
-                        <td class="text-muted small">GSTIN:</td>
-                        <td class="text-end small"><span class="badge bg-light text-dark border">{{ account.gstin|default:"N/A" }}</span></td>
-                    </tr>
-                    <tr>
-                        <td class="text-muted small">PAN:</td>
-                        <td class="text-end small">{{ account.pan|default:"N/A" }}</td>
-                    </tr>
-                </table>
+            <div class="p-5">
+                <dl class="space-y-3">
+                    <div class="flex justify-between">
+                        <dt class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Firm Name</dt>
+                        <dd class="text-sm font-bold text-slate-900 text-right">{{ account.name }}</dd>
+                    </div>
+                    <div class="flex justify-between">
+                        <dt class="text-xs font-semibold text-slate-500 uppercase tracking-wider">GSTIN</dt>
+                        <dd class="text-sm font-bold bg-slate-100 px-2 rounded text-slate-800 border border-slate-200">{{ account.gstin|default:"N/A" }}</dd>
+                    </div>
+                    <div class="flex justify-between">
+                        <dt class="text-xs font-semibold text-slate-500 uppercase tracking-wider">PAN</dt>
+                        <dd class="text-sm font-medium text-slate-800 text-right">{{ account.pan|default:"N/A" }}</dd>
+                    </div>
+                    <div class="pt-2">
+                        <dt class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Address</dt>
+                        <dd class="text-xs text-slate-600 leading-relaxed">{{ account.address|default:"-"|linebreaksbr }}</dd>
+                    </div>
+                </dl>
             </div>
         </div>
 
-        <div class="card shadow-sm mb-4 border-info">
-            <div class="card-header bg-info text-white">
-                <h5 class="mb-0">Bank Details</h5>
+        <!-- Bank Details Card -->
+        <div class="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden border-l-4 border-l-blue-500">
+            <div class="p-4 bg-blue-50 border-b border-blue-100 flex justify-between items-center">
+                <h3 class="font-bold text-sm uppercase tracking-wider text-blue-900">Bank Details</h3>
+                <i class="fa-solid fa-building-columns text-blue-400"></i>
             </div>
-            <div class="card-body">
-                <table class="table table-sm table-borderless mb-0">
-                    <tr>
-                        <td class="text-muted small">Bank Name:</td>
-                        <td class="text-end fw-bold small">{{ account.bank_name|default:"-" }}</td>
-                    </tr>
-                    <tr>
-                        <td class="text-muted small">Account No:</td>
-                        <td class="text-end small">{{ account.account_number|default:"-" }}</td>
-                    </tr>
-                    <tr>
-                        <td class="text-muted small">IFSC Code:</td>
-                        <td class="text-end small">{{ account.ifsc_code|default:"-" }}</td>
-                    </tr>
-                    <tr>
-                        <td class="text-muted small">Holder Name:</td>
-                        <td class="text-end small">{{ account.account_holder_name|default:"-" }}</td>
-                    </tr>
-                </table>
+            <div class="p-5">
+                <dl class="space-y-3">
+                    <div class="flex justify-between">
+                        <dt class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Bank Name</dt>
+                        <dd class="text-sm font-bold text-slate-800 text-right">{{ account.bank_name|default:"-" }}</dd>
+                    </div>
+                    <div class="flex justify-between">
+                        <dt class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Account No</dt>
+                        <dd class="text-sm font-medium text-slate-800 text-right">{{ account.account_number|default:"-" }}</dd>
+                    </div>
+                    <div class="flex justify-between">
+                        <dt class="text-xs font-semibold text-slate-500 uppercase tracking-wider">IFSC Code</dt>
+                        <dd class="text-sm font-medium text-slate-800 text-right">{{ account.ifsc_code|default:"-" }}</dd>
+                    </div>
+                    <div class="flex justify-between">
+                        <dt class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Holder Name</dt>
+                        <dd class="text-sm font-medium text-slate-800 text-right">{{ account.account_holder_name|default:"-" }}</dd>
+                    </div>
+                </dl>
             </div>
         </div>
 
-        <div class="card shadow-sm mb-4 border-success">
-            <div class="card-header bg-success text-white">
-                <h5 class="mb-0">Balance Summary</h5>
+        <!-- Balance Summary Card -->
+        <div class="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden border-l-4 border-l-emerald-500">
+            <div class="p-4 bg-emerald-50 border-b border-emerald-100 flex justify-between items-center">
+                <h3 class="font-bold text-sm uppercase tracking-wider text-emerald-900">Balance Summary</h3>
+                <i class="fa-solid fa-wallet text-emerald-400"></i>
             </div>
-            <div class="card-body">
-                <table class="table table-borderless mb-0">
-                    <tr>
-                        <td><strong>Opening Balance:</strong></td>
-                        <td class="text-end">${{ account.opening_balance|floatformat:2 }}</td>
-                    </tr>
-                    <tr class="border-top">
-                        <td><span class="h5 mb-0">Current Balance:</span></td>
-                        <td class="text-end">
-                            <span class="h4 mb-0 {% if account.current_balance >= 0 %}text-success{% else %}text-danger{% endif %}">
+            <div class="p-5">
+                <div class="space-y-4">
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-slate-600 font-medium">Opening Balance</span>
+                        <span class="text-sm font-bold text-slate-900">${{ account.opening_balance|floatformat:2 }}</span>
+                    </div>
+                    <div class="pt-4 border-t border-slate-100">
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="text-base font-bold text-slate-900">Current Balance</span>
+                            <span class="text-2xl font-bold {% if account.current_balance >= 0 %}text-emerald-600{% else %}text-red-600{% endif %}">
                                 ${{ account.current_balance|floatformat:2 }}
                             </span>
-                        </td>
-                    </tr>
-                </table>
-                
-                {% if account.description %}
-                <div class="mt-3 text-muted small border-top pt-2">
-                    <strong>Notes:</strong><br>
-                    {{ account.description|linebreaks }}
+                        </div>
+                    </div>
+                    
+                    {% if account.description %}
+                    <div class="mt-4 p-3 bg-slate-50 rounded text-xs text-slate-500 border border-slate-100 italic">
+                        <span class="font-bold text-slate-700 not-italic block mb-1">Notes:</span>
+                        {{ account.description|linebreaks }}
+                    </div>
+                    {% endif %}
                 </div>
-                {% endif %}
             </div>
         </div>
     </div>

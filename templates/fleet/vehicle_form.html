@@ -3,36 +3,50 @@
 {% block title %}{% if object %}Edit{% else %}Add{% endif %} Vehicle - Transport Management System{% endblock %}
 
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-md-8 col-lg-6">
-        <h2 class="mb-4">{% if object %}Edit Vehicle: {{ object.registration_plate }}{% else %}Add New Vehicle{% endif %}</h2>
+<div class="max-w-2xl mx-auto">
+    <!-- BEGIN: Page Header -->
+    <header class="mb-8">
+        <div class="flex items-center space-x-2 text-sm text-slate-500 mb-2">
+            <a href="{% url 'vehicle-list' %}" class="hover:text-emerald-600 transition-colors">Fleet</a>
+            <i class="fa-solid fa-chevron-right text-xs"></i>
+            <span>{% if object %}Edit Vehicle{% else %}Add New Vehicle{% endif %}</span>
+        </div>
+        <h1 class="text-3xl font-bold text-slate-900">{% if object %}Edit Vehicle{% else %}Add Vehicle{% endif %}</h1>
+        <p class="text-sm text-slate-600 mt-1">{% if object %}Update registration and status details for {{ object.registration_plate }}{% else %}Register a new vehicle in your fleet inventory{% endif %}</p>
+    </header>
+    <!-- END: Page Header -->
 
-        <form method="post">
+    <!-- BEGIN: Form Card -->
+    <div class="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
+        <form method="post" class="p-6 space-y-5">
             {% csrf_token %}
             
             {% for field in form %}
-                <div class="mb-3">
-                    <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
+                <div class="flex flex-col">
+                    <label for="{{ field.id_for_label }}" class="block text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider">
+                        {{ field.label }}
+                    </label>
                     {{ field }}
                     {% if field.errors %}
-                        <div class="invalid-feedback d-block">
-                            {{ field.errors }}
-                        </div>
+                        <p class="mt-1 text-sm text-rose-600 font-medium">{{ field.errors.0 }}</p>
                     {% endif %}
                     {% if field.help_text %}
-                        <small class="form-text text-muted">{{ field.help_text }}</small>
+                        <p class="mt-1 text-xs text-slate-500 italic">{{ field.help_text }}</p>
                     {% endif %}
                 </div>
             {% endfor %}
             
-            <div class="d-flex justify-content-between align-items-center mt-4">
-                <button type="submit" class="btn btn-success">
-                    {% if object %}Update Vehicle{% else %}Add Vehicle{% endif %}
-                </button>
+            <div class="flex items-center justify-between pt-6 border-t border-slate-100 mt-8">
                 <a href="{% if object %}{% url 'vehicle-detail' object.pk %}{% else %}{% url 'vehicle-list' %}{% endif %}" 
-                   class="btn btn-secondary">Cancel</a>
+                   class="px-6 py-2 border border-slate-300 rounded-md text-slate-700 bg-white hover:bg-slate-50 font-medium transition-colors">
+                    Cancel
+                </a>
+                <button type="submit" class="px-6 py-2 bg-emerald-600 text-white rounded-md font-medium hover:bg-emerald-700 shadow-sm transition-colors">
+                    <i class="fa-solid fa-check mr-2"></i>{% if object %}Save Changes{% else %}Add Vehicle{% endif %}
+                </button>
             </div>
         </form>
     </div>
+    <!-- END: Form Card -->
 </div>
 {% endblock %}

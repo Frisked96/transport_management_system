@@ -14,10 +14,7 @@ class VehicleForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         # Add basic styling for clarity
         for field_name, field in self.fields.items():
-            if isinstance(field.widget, (forms.Select,)):
-                field.widget.attrs.update({'class': 'form-select'})
-            else:
-                field.widget.attrs.update({'class': 'form-control'})
+            field.widget.attrs.update({'class': 'block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white'})
     
     class Meta:
         model = Vehicle
@@ -50,10 +47,7 @@ class MaintenanceLogForm(forms.ModelForm):
         
         # Add basic styling for clarity
         for field_name, field in self.fields.items():
-            if isinstance(field.widget, (forms.Select,)):
-                field.widget.attrs.update({'class': 'form-select'})
-            else:
-                field.widget.attrs.update({'class': 'form-control'})
+            field.widget.attrs.update({'class': 'block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white'})
     
     class Meta:
         model = MaintenanceLog
@@ -84,10 +78,7 @@ class TyreForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         for field in self.fields.values():
-            if isinstance(field.widget, (forms.Select,)):
-                field.widget.attrs.update({'class': 'form-select'})
-            else:
-                field.widget.attrs.update({'class': 'form-control'})
+            field.widget.attrs.update({'class': 'block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white'})
         
         # Add data-autocomplete-field for JS to hook into
         self.fields['brand'].widget.attrs.update({'data-autocomplete': 'tyre_brand', 'list': 'tyre_brand_list'})
@@ -112,10 +103,7 @@ class TyreLogForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         for field in self.fields.values():
-            if isinstance(field.widget, (forms.Select,)):
-                field.widget.attrs.update({'class': 'form-select'})
-            else:
-                field.widget.attrs.update({'class': 'form-control'})
+            field.widget.attrs.update({'class': 'block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white'})
 
     class Meta:
         model = TyreLog

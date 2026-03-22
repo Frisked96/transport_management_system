@@ -3,78 +3,130 @@
 {% block title %}Driver Ledger: {{ driver.user.get_full_name }} - Transport Management System{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <h2>Ledger: {{ driver.user.get_full_name|default:driver.user.username }}</h2>
-    <a href="{% url 'driver-detail' driver.pk %}" class="btn btn-outline-secondary">Back to Profile</a>
-</div>
+<!-- BEGIN: Page Header -->
+<header class="flex flex-col md:flex-row md:items-center justify-between mb-8">
+    <div>
+        <h1 class="text-3xl font-bold text-slate-900">Ledger: {{ driver.user.get_full_name|default:driver.user.username }}</h1>
+        <p class="text-sm text-slate-600 mt-1">Financial history and balance overview</p>
+    </div>
+    <div class="mt-4 md:mt-0 flex space-x-3">
+        <a href="{% url 'driver-detail' driver.pk %}" class="flex items-center space-x-2 px-4 py-2 border border-slate-300 rounded-md bg-white text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors">
+            <i class="fa-solid fa-arrow-left"></i>
+            <span>Back to Profile</span>
+        </a>
+        {% if perms.ledger.add_financialrecord %}
+        <a href="{% url 'financialrecord-create' %}?driver={{ driver.user.pk }}" class="flex items-center space-x-2 px-4 py-2 bg-emerald-600 text-white rounded-md text-sm font-medium hover:bg-emerald-700 shadow-sm transition-colors">
+            <i class="fa-solid fa-plus"></i>
+            <span>Add Transaction</span>
+        </a>
+        {% endif %}
+    </div>
+</header>
+<!-- END: Page Header -->
 
-<div class="row">
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
     <!-- Left Column: Transaction History -->
-    <div class="col-lg-8">
-        <div class="card mb-4">
-            <div class="card-header bg-light d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">Transaction History</h5>
-                {% if perms.ledger.add_financialrecord %}
-                    <a href="{% url 'financialrecord-create' %}?driver={{ driver.user.pk }}" class="btn btn-sm btn-success"><i class="bi bi-plus-lg"></i> Add Transaction</a>
-                {% endif %}
+    <div class="lg:col-span-2 space-y-6">
+        <div class="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
+            <div class="bg-slate-50 border-b border-slate-200 py-4 px-5">
+                <h3 class="text-sm font-bold text-slate-700 uppercase tracking-wider">Transaction History</h3>
             </div>
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-striped table-hover mb-0">
-                        <thead>
-                            <tr>
-                                <th>Date</th>
-                                <th>Category</th>
-                                <th class="text-end">Amount</th>
-                                <th>Description</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for record in financial_records %}
-                                <tr>
-                                    <td>{{ record.date|date:"d/m/Y" }}</td>
-                                    <td><span class="badge bg-secondary">{{ record.category }}</span></td>
-                                    <td class="text-end fw-bold {% if record.is_expense %}text-danger{% else %}text-success{% endif %}">
-                                        ${{ record.amount|floatformat:2 }}
-                                    </td>
-                                    <td>{{ record.description|truncatechars:40 }}</td>
-                                    <td>
-                                        <a href="{% url 'financialrecord-detail' record.pk %}" class="btn btn-sm btn-outline-primary"><i class="bi bi-eye"></i></a>
-                                    </td>
-                                </tr>
-                            {% empty %}
-                                <tr><td colspan="5" class="text-center py-4 text-muted">No financial records found for this driver.</td></tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
+            
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-slate-200">
+                    <thead class="bg-slate-50">
+                        <tr>
+                            <th scope="col" class="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Date</th>
+                            <th scope="col" class="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Category</th>
+                            <th scope="col" class="px-5 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Amount</th>
+                            <th scope="col" class="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Description</th>
+                            <th scope="col" class="px-5 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-slate-200">
+                        {% for record in financial_records %}
+                        <tr class="hover:bg-slate-50 transition-colors">
+                            <td class="px-5 py-4 whitespace-nowrap text-sm text-slate-600">
+                                {{ record.date|date:"d/m/Y" }}
+                            </td>
+                            <td class="px-5 py-4 whitespace-nowrap">
+                                <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-slate-100 text-slate-800">
+                                    {{ record.category }}
+                                </span>
+                            </td>
+                            <td class="px-5 py-4 whitespace-nowrap text-sm text-right font-bold {% if record.is_expense %}text-red-600{% else %}text-emerald-600{% endif %}">
+                                ${{ record.amount|floatformat:2 }}
+                            </td>
+                            <td class="px-5 py-4 text-sm text-slate-600">
+                                <div class="max-w-xs truncate" title="{{ record.description }}">
+                                    {{ record.description|default:"-" }}
+                                </div>
+                            </td>
+                            <td class="px-5 py-4 whitespace-nowrap text-center text-sm">
+                                <a href="{% url 'financialrecord-detail' record.pk %}" class="text-emerald-600 hover:text-emerald-900 transition-colors">
+                                    <i class="fa-regular fa-eye text-lg"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5" class="px-5 py-12 text-center">
+                                <div class="inline-flex items-center justify-center w-12 h-12 bg-slate-50 rounded-full mb-3">
+                                    <i class="fa-solid fa-receipt text-2xl text-slate-300"></i>
+                                </div>
+                                <p class="text-slate-500 text-sm">No financial records found for this driver.</p>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>
 
     <!-- Right Column: Balance Summary -->
-    <div class="col-lg-4">
-        <div class="card shadow-sm sticky-top" style="top: 2rem;">
-            <div class="card-header bg-primary text-white">
-                <h5 class="mb-0">Balance Summary</h5>
-            </div>
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <span class="h5 mb-0">Current Balance:</span>
-                    <span class="h4 mb-0 {% if balance >= 0 %}text-success{% else %}text-danger{% endif %}">
-                        {% if balance >= 0 %}+{% endif %}${{ balance|floatformat:2 }}
-                    </span>
+    <div class="lg:col-span-1">
+        <div class="sticky top-8 space-y-6">
+            <div class="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
+                <div class="bg-slate-800 py-4 px-5">
+                    <h3 class="text-sm font-bold text-white uppercase tracking-wider">Balance Summary</h3>
                 </div>
-                
-                <div class="text-muted small">
-                    <p class="mb-1"><i class="bi bi-info-circle-fill"></i> <strong>Negative:</strong> Company owes Driver (e.g., Salary not yet paid).</p>
-                    <p class="mb-3"><i class="bi bi-info-circle-fill"></i> <strong>Positive:</strong> Driver owes Company (e.g., Loan, Advance).</p>
-                    <div class="alert alert-light border small mb-0">
-                        <em>Note: Ensure you record "Salary Accrual" (as a liability) and "Driver Payment" (as payment) to keep this accurate.</em>
+                <div class="p-6">
+                    <div class="flex items-center justify-between mb-6 pb-6 border-b border-slate-100">
+                        <span class="text-slate-600 font-medium">Current Balance</span>
+                        <span class="text-2xl font-bold {% if balance >= 0 %}text-emerald-600{% else %}text-red-600{% endif %}">
+                            {% if balance >= 0 %}+{% endif %}${{ balance|floatformat:2 }}
+                        </span>
+                    </div>
+                    
+                    <div class="space-y-4">
+                        <div class="flex items-start gap-3 text-xs text-slate-600">
+                            <i class="fa-solid fa-circle-info text-emerald-500 mt-0.5"></i>
+                            <p><strong class="text-slate-900">Positive:</strong> Driver owes Company (e.g., Loan, Advance).</p>
+                        </div>
+                        <div class="flex items-start gap-3 text-xs text-slate-600">
+                            <i class="fa-solid fa-circle-info text-red-500 mt-0.5"></i>
+                            <p><strong class="text-slate-900">Negative:</strong> Company owes Driver (e.g., Salary not yet paid).</p>
+                        </div>
+                        
+                        <div class="mt-6 p-4 bg-slate-50 rounded-md border border-slate-100">
+                            <p class="text-xs text-slate-500 italic">
+                                Note: Ensure you record "Salary Accrual" and "Driver Payment" to maintain accurate balances.
+                            </p>
+                        </div>
                     </div>
                 </div>
             </div>
+            
+            {% if perms.ledger.add_financialrecord %}
+            <div class="bg-emerald-50 border border-emerald-100 rounded-lg p-5">
+                <h4 class="text-emerald-800 font-bold text-sm mb-2">Need to record a payment?</h4>
+                <p class="text-emerald-700 text-xs mb-4">Quickly add a new financial record associated with this driver.</p>
+                <a href="{% url 'financialrecord-create' %}?driver={{ driver.user.pk }}" class="block text-center py-2 px-4 bg-emerald-600 text-white rounded-md text-sm font-medium hover:bg-emerald-700 transition-colors">
+                    Add Transaction
+                </a>
+            </div>
+            {% endif %}
         </div>
     </div>
 </div>

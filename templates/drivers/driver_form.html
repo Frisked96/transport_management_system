@@ -3,105 +3,133 @@
 {% block title %}{% if form.instance.pk %}Edit{% else %}Add{% endif %} Driver - Transport Management System{% endblock %}
 
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-md-10 col-lg-8">
-        <h2 class="mb-4">{% if form.instance.pk %}Edit{% else %}Add{% endif %} Driver</h2>
+<div class="max-w-4xl mx-auto">
+    <!-- BEGIN: Page Header -->
+    <header class="mb-8">
+        <div class="flex items-center space-x-2 text-sm text-slate-500 mb-2">
+            <a href="{% url 'driver-list' %}" class="hover:text-emerald-600">Drivers</a>
+            <i class="fa-solid fa-chevron-right text-xs"></i>
+            <span>{% if form.instance.pk %}Edit Profile{% else %}Add New Driver{% endif %}</span>
+        </div>
+        <h1 class="text-3xl font-bold text-slate-900">{% if form.instance.pk %}Edit{% else %}Add{% endif %} Driver</h1>
+        <p class="text-sm text-slate-600 mt-1">{% if form.instance.pk %}Update the details for {{ form.instance.user.get_full_name }}{% else %}Register a new driver in the system{% endif %}</p>
+    </header>
+    <!-- END: Page Header -->
 
-        <form method="post">
-            {% csrf_token %}
+    <form method="post" class="space-y-6">
+        {% csrf_token %}
 
-            <div class="card mb-4">
-                <div class="card-header bg-light">
-                    <h5 class="mb-0">User Account</h5>
+        <!-- User Account Card -->
+        <div class="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
+            <div class="bg-slate-50 px-6 py-4 border-b border-slate-200">
+                <h3 class="text-sm font-bold text-slate-700 uppercase tracking-wider">User Account Information</h3>
+            </div>
+            <div class="p-6 space-y-4">
+                {% if form.instance.pk %}
+                    <div class="bg-slate-50 p-4 rounded-md border border-slate-100 flex items-center justify-between">
+                        <div>
+                            <span class="block text-xs font-semibold text-slate-500 uppercase tracking-wider">Username</span>
+                            <span class="text-slate-900 font-medium">{{ form.instance.user.username }}</span>
+                        </div>
+                        <div class="hidden">{{ form.username }}</div>
+                        <i class="fa-solid fa-lock text-slate-300"></i>
+                    </div>
+                {% else %}
+                    <div>
+                        <label for="{{ form.username.id_for_label }}" class="block text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider">Username</label>
+                        {{ form.username }}
+                        {% if form.username.errors %}
+                        <p class="mt-1 text-sm text-rose-600">{{ form.username.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+                {% endif %}
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="{{ form.first_name.id_for_label }}" class="block text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider">First Name</label>
+                        {{ form.first_name }}
+                        {% if form.first_name.errors %}
+                        <p class="mt-1 text-sm text-rose-600">{{ form.first_name.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+                    <div>
+                        <label for="{{ form.last_name.id_for_label }}" class="block text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider">Last Name</label>
+                        {{ form.last_name }}
+                        {% if form.last_name.errors %}
+                        <p class="mt-1 text-sm text-rose-600">{{ form.last_name.errors.0 }}</p>
+                        {% endif %}
+                    </div>
                 </div>
-                <div class="card-body">
-                    {% if form.instance.pk %}
-                        <div class="mb-3">
-                            <p><strong>Username:</strong> {{ form.instance.user.username }}</p>
-                            <div class="d-none">{{ form.username }}</div>
-                        </div>
-                    {% else %}
-                        <div class="mb-3">
-                            <label for="{{ form.username.id_for_label }}" class="form-label">Username</label>
-                            {{ form.username }}
-                            {% if form.username.errors %}
-                            <div class="invalid-feedback d-block">{{ form.username.errors }}</div>
-                            {% endif %}
-                        </div>
+
+                <div>
+                    <label for="{{ form.email.id_for_label }}" class="block text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider">Email Address</label>
+                    {{ form.email }}
+                    {% if form.email.errors %}
+                    <p class="mt-1 text-sm text-rose-600">{{ form.email.errors.0 }}</p>
                     {% endif %}
-
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="{{ form.first_name.id_for_label }}" class="form-label">First Name</label>
-                                {{ form.first_name }}
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="{{ form.last_name.id_for_label }}" class="form-label">Last Name</label>
-                                {{ form.last_name }}
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="{{ form.email.id_for_label }}" class="form-label">Email</label>
-                        {{ form.email }}
-                    </div>
                 </div>
             </div>
+        </div>
 
-            <div class="card mb-4">
-                <div class="card-header bg-light">
-                    <h5 class="mb-0">Driver Profile</h5>
-                </div>
-                <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="{{ form.employee_id.id_for_label }}" class="form-label">Employee ID</label>
-                                {{ form.employee_id }}
-                                {% if form.employee_id.errors %}
-                                <div class="invalid-feedback d-block">{{ form.employee_id.errors }}</div>
-                                {% endif %}
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="{{ form.license_number.id_for_label }}" class="form-label">License Number</label>
-                                {{ form.license_number }}
-                            </div>
-                        </div>
+        <!-- Driver Profile Card -->
+        <div class="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
+            <div class="bg-slate-50 px-6 py-4 border-b border-slate-200">
+                <h3 class="text-sm font-bold text-slate-700 uppercase tracking-wider">Professional Profile</h3>
+            </div>
+            <div class="p-6 space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="{{ form.employee_id.id_for_label }}" class="block text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider">Employee ID</label>
+                        {{ form.employee_id }}
+                        {% if form.employee_id.errors %}
+                        <p class="mt-1 text-sm text-rose-600">{{ form.employee_id.errors.0 }}</p>
+                        {% endif %}
                     </div>
-
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="{{ form.phone_number.id_for_label }}" class="form-label">Phone Number</label>
-                                {{ form.phone_number }}
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="{{ form.joined_date.id_for_label }}" class="form-label">Joined Date</label>
-                                {{ form.joined_date }}
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="{{ form.address.id_for_label }}" class="form-label">Address</label>
-                        {{ form.address }}
+                    <div>
+                        <label for="{{ form.license_number.id_for_label }}" class="block text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider">License Number</label>
+                        {{ form.license_number }}
+                        {% if form.license_number.errors %}
+                        <p class="mt-1 text-sm text-rose-600">{{ form.license_number.errors.0 }}</p>
+                        {% endif %}
                     </div>
                 </div>
-            </div>
 
-            <div class="d-flex justify-content-between align-items-center mt-4">
-                <button type="submit" class="btn btn-success">Save Driver</button>
-                <a href="{% url 'driver-list' %}" class="btn btn-secondary">Cancel</a>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="{{ form.phone_number.id_for_label }}" class="block text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider">Phone Number</label>
+                        {{ form.phone_number }}
+                        {% if form.phone_number.errors %}
+                        <p class="mt-1 text-sm text-rose-600">{{ form.phone_number.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+                    <div>
+                        <label for="{{ form.joined_date.id_for_label }}" class="block text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider">Joined Date</label>
+                        {{ form.joined_date }}
+                        {% if form.joined_date.errors %}
+                        <p class="mt-1 text-sm text-rose-600">{{ form.joined_date.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div>
+                    <label for="{{ form.address.id_for_label }}" class="block text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider">Residential Address</label>
+                    {{ form.address }}
+                    {% if form.address.errors %}
+                    <p class="mt-1 text-sm text-rose-600">{{ form.address.errors.0 }}</p>
+                    {% endif %}
+                </div>
             </div>
-        </form>
-    </div>
+        </div>
+
+        <!-- Form Actions -->
+        <div class="flex items-center justify-between pt-4 border-t border-slate-200">
+            <a href="{% url 'driver-list' %}" class="px-6 py-2 border border-slate-300 rounded-md text-slate-700 bg-white hover:bg-slate-50 font-medium transition-colors">
+                Cancel
+            </a>
+            <button type="submit" class="px-6 py-2 bg-emerald-600 text-white rounded-md font-medium hover:bg-emerald-700 shadow-sm transition-colors">
+                <i class="fa-solid fa-check mr-2"></i>Save Driver Profile
+            </button>
+        </div>
+    </form>
 </div>
 {% endblock %}

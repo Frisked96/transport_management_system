@@ -20,10 +20,11 @@ class TripForm(forms.ModelForm):
             status=Vehicle.STATUS_ACTIVE
         ).order_by('registration_plate')
         
-        # Add basic styling for clarity
+        # Add basic Tailwind styling for clarity
+        tailwind_classes = "block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white"
         for field_name, field in self.fields.items():
             if isinstance(field.widget, (forms.TextInput, forms.Select, forms.Textarea, forms.DateTimeInput, forms.DateInput, forms.NumberInput)):
-                field.widget.attrs.update({'class': 'form-control'})
+                field.widget.attrs.update({'class': tailwind_classes})
     
     class Meta:
         model = Trip
@@ -47,7 +48,7 @@ class TripForm(forms.ModelForm):
         widgets = {
             'notes': forms.Textarea(
                 attrs={
-                    'rows': 3
+                    'rows': 3,
                 }
             ),
             'pickup_lat': forms.HiddenInput(),
@@ -72,8 +73,9 @@ class TripStatusForm(forms.ModelForm):
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Add basic styling
-        self.fields['status'].widget.attrs.update({'class': 'form-select'})
+        # Add basic Tailwind styling
+        tailwind_classes = "block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white"
+        self.fields['status'].widget.attrs.update({'class': tailwind_classes})
     
     class Meta:
         model = Trip
@@ -90,8 +92,9 @@ class TripExpenseUpdateForm(forms.Form):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        tailwind_classes = "block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white"
         for field in self.fields.values():
-            field.widget.attrs.update({'class': 'form-control'})
+            field.widget.attrs.update({'class': tailwind_classes})
 
 
 class TripCustomExpenseForm(forms.ModelForm):
@@ -101,8 +104,10 @@ class TripCustomExpenseForm(forms.ModelForm):
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        for field in self.fields.values():
-            field.widget.attrs.update({'class': 'form-control'})
+        tailwind_classes = "block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white"
+        for field_name, field in self.fields.items():
+            if isinstance(field.widget, (forms.TextInput, forms.Select, forms.Textarea, forms.DateTimeInput, forms.DateInput, forms.NumberInput)):
+                field.widget.attrs.update({'class': tailwind_classes})
     
     class Meta:
         model = TripExpense
