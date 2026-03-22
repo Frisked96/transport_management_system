@@ -2,22 +2,20 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
     <title>{% block title %}Transport Management System{% endblock %}</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
     <!-- Google Fonts: Inter -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com" rel="preconnect"/>
+    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
     <!-- Font Awesome -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
-    
     <!-- Select2 CSS (Kept for functionality) -->
-    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" />
-    
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet"/>
+    <link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet"/>
     <style>
         body {
             font-family: 'Inter', sans-serif;
@@ -51,111 +49,108 @@
     {% block extra_css %}{% endblock %}
 </head>
 <body class="text-slate-800 flex flex-col min-h-screen">
-    <!-- BEGIN: Top Navigation -->
-    <nav class="bg-slate-800 text-white px-6 py-3 flex items-center justify-between">
-        <div class="flex items-center space-x-8">
-            <a class="text-xl font-bold tracking-wider" href="{% url 'trip-list' %}">TMS</a>
-            <div class="hidden md:flex space-x-6 text-sm font-medium">
-                <a class="flex items-center space-x-2 {% if request.resolver_match.url_name == 'trip-list' %}text-white{% else %}text-slate-300 hover:text-white{% endif %}" href="{% url 'trip-list' %}">
-                    <i class="fa-solid fa-truck"></i><span>Trips</span>
-                </a>
-                
-                {% if user.is_authenticated %}
-                <div class="relative dropdown-container">
-                    <button class="flex items-center space-x-2 text-slate-300 hover:text-white focus:outline-none dropdown-toggle">
-                        <i class="fa-solid fa-truck-fast"></i><span>Fleet</span><i class="fa-solid fa-chevron-down text-xs ml-1"></i>
-                    </button>
-                    <div class="absolute left-0 pt-2 w-48 z-50 hidden dropdown-menu">
-                        <div class="bg-white rounded-md shadow-lg py-1 border border-slate-200">
-                            <a href="{% url 'vehicle-list' %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Vehicles</a>
-                            <a href="{% url 'maintenance-log-list' %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Maintenance Logs</a>
-                            <a href="{% url 'tyre-list' %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Tyre Inventory</a>
-                        </div>
-                    </div>
-                </div>
-
-                {% if user.is_superuser or user.groups.all.0.name == 'manager' %}
-                <a class="flex items-center space-x-2 {% if request.resolver_match.url_name == 'manager-dashboard' %}text-white{% else %}text-slate-300 hover:text-white{% endif %}" href="{% url 'manager-dashboard' %}">
-                    <i class="fa-solid fa-gauge"></i><span>Dashboard</span>
-                </a>
-                <a class="flex items-center space-x-2 {% if request.resolver_match.url_name == 'driver-list' %}text-white{% else %}text-slate-300 hover:text-white{% endif %}" href="{% url 'driver-list' %}">
-                    <i class="fa-solid fa-users"></i><span>Drivers</span>
-                </a>
-                {% endif %}
-
-                {% if user.is_superuser or user.groups.all.0.name == 'manager' or user.groups.all.0.name == 'supervisor' %}
-                <div class="relative dropdown-container">
-                    <button class="flex items-center space-x-2 text-slate-300 hover:text-white focus:outline-none dropdown-toggle">
-                        <i class="fa-solid fa-wallet"></i><span>Finance</span><i class="fa-solid fa-chevron-down text-xs ml-1"></i>
-                    </button>
-                    <div class="absolute left-0 pt-2 w-48 z-50 hidden dropdown-menu">
-                        <div class="bg-white rounded-md shadow-lg py-1 border border-slate-200">
-                            <a href="{% url 'bill-list' %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Invoices</a>
-                            <a href="{% url 'financialrecord-list' %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Ledger</a>
-                            <a href="{% url 'party-list' %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Parties</a>
-                            <a href="{% url 'account-list' %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Company Accounts</a>
-                            <a href="{% url 'company-profile-update' %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Company Profile</a>
-                            <hr class="my-1 border-slate-200">
-                            <a href="{% url 'financial-summary' %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Reports</a>
-                        </div>
-                    </div>
-                </div>
-                {% endif %}
-                {% endif %}
-            </div>
-        </div>
-        
-        <div class="flex items-center space-x-4">
+<!-- BEGIN: Top Navigation -->
+<nav class="bg-slate-800 text-white px-6 py-3 flex items-center justify-between">
+    <div class="flex items-center space-x-8">
+        <a class="text-xl font-bold tracking-wider" href="{% url 'trip-list' %}">TMS</a>
+        <div class="hidden md:flex space-x-6 text-sm font-medium">
+            <a class="flex items-center space-x-2 {% if request.resolver_match.url_name == 'trip-list' %}text-white{% else %}text-slate-300 hover:text-white{% endif %}" href="{% url 'trip-list' %}">
+                <i class="fa-solid fa-truck"></i><span>Trips</span>
+            </a>
+            
             {% if user.is_authenticated %}
             <div class="relative dropdown-container">
-                <button class="flex items-center space-x-2 text-sm font-medium focus:outline-none dropdown-toggle">
-                    <i class="fa-solid fa-user-circle text-lg"></i>
-                    <span>{{ user.username }}</span>
-                    <i class="fa-solid fa-caret-down text-xs"></i>
+                <button class="flex items-center space-x-2 text-slate-300 hover:text-white focus:outline-none dropdown-toggle">
+                    <i class="fa-solid fa-truck-fast"></i><span>Fleet</span><i class="fa-solid fa-chevron-down text-xs ml-1"></i>
                 </button>
-                <div class="absolute right-0 pt-2 w-48 z-50 hidden dropdown-menu">
+                <div class="absolute left-0 pt-2 w-48 z-50 hidden dropdown-menu">
                     <div class="bg-white rounded-md shadow-lg py-1 border border-slate-200">
-                        {% if user.is_superuser %}
-                        <a href="/admin/" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Django Admin</a>
-                        {% endif %}
-                        <a href="{% url 'logout' %}" class="block px-4 py-2 text-sm text-red-600 hover:bg-slate-100">Logout</a>
+                        <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'vehicle-list' %}">Vehicles</a>
+                        <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'maintenance-log-list' %}">Maintenance Logs</a>
+                        <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'tyre-list' %}">Tyre Inventory</a>
                     </div>
                 </div>
             </div>
-            {% else %}
-            <a href="{% url 'login' %}" class="text-sm font-medium hover:text-slate-300">Login</a>
+            
+            {% if user.is_superuser or user.groups.all.0.name == 'manager' %}
+            <a class="flex items-center space-x-2 {% if request.resolver_match.url_name == 'manager-dashboard' %}text-white{% else %}text-slate-300 hover:text-white{% endif %}" href="{% url 'manager-dashboard' %}">
+                <i class="fa-solid fa-gauge"></i><span>Dashboard</span>
+            </a>
+            <a class="flex items-center space-x-2 {% if request.resolver_match.url_name == 'driver-list' %}text-white{% else %}text-slate-300 hover:text-white{% endif %}" href="{% url 'driver-list' %}">
+                <i class="fa-solid fa-users"></i><span>Drivers</span>
+            </a>
+            {% endif %}
+
+            {% if user.is_superuser or user.groups.all.0.name == 'manager' or user.groups.all.0.name == 'supervisor' %}
+            <div class="relative dropdown-container">
+                <button class="flex items-center space-x-2 text-slate-300 hover:text-white focus:outline-none dropdown-toggle">
+                    <i class="fa-solid fa-wallet"></i><span>Finance</span><i class="fa-solid fa-chevron-down text-xs ml-1"></i>
+                </button>
+                <div class="absolute left-0 pt-2 w-48 z-50 hidden dropdown-menu">
+                    <div class="bg-white rounded-md shadow-lg py-1 border border-slate-200">
+                        <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'bill-list' %}">Invoices</a>
+                        <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'financialrecord-list' %}">Ledger</a>
+                        <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'party-list' %}">Parties</a>
+                        <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'account-list' %}">Company Accounts</a>
+                        <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'company-profile-update' %}">Company Profile</a>
+                        <hr class="my-1 border-slate-200"/>
+                        <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'financial-summary' %}">Reports</a>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
             {% endif %}
         </div>
-    </nav>
-    <!-- END: Top Navigation -->
-
-    <main class="flex-grow w-full max-w-7xl mx-auto px-6 py-8">
-        <!-- Messages -->
-        {% if messages %}
-            <div class="mb-6 space-y-2">
-            {% for message in messages %}
-                <div class="p-4 rounded-md {% if message.tags == 'error' %}bg-red-50 text-red-700 border border-red-200{% elif message.tags == 'success' %}bg-green-50 text-green-700 border border-green-200{% else %}bg-blue-50 text-blue-700 border border-blue-200{% endif %} flex justify-between items-center">
-                    <span>{{ message }}</span>
-                    <button onclick="this.parentElement.remove()" class="text-lg font-bold">&times;</button>
+    </div>
+    <div class="flex items-center space-x-4">
+        {% if user.is_authenticated %}
+        <div class="relative dropdown-container">
+            <button class="flex items-center space-x-2 text-sm font-medium focus:outline-none dropdown-toggle">
+                <i class="fa-solid fa-user-circle text-lg"></i>
+                <span>{{ user.username }}</span>
+                <i class="fa-solid fa-caret-down text-xs"></i>
+            </button>
+            <div class="absolute right-0 pt-2 w-48 z-50 hidden dropdown-menu">
+                <div class="bg-white rounded-md shadow-lg py-1 border border-slate-200">
+                    {% if user.is_superuser %}
+                    <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="/admin/">Django Admin</a>
+                    {% endif %}
+                    <a class="block px-4 py-2 text-sm text-red-600 hover:bg-slate-100" href="{% url 'logout' %}">Logout</a>
                 </div>
-            {% endfor %}
             </div>
+        </div>
+        {% else %}
+        <a href="{% url 'login' %}" class="text-sm font-medium hover:text-slate-300">Login</a>
         {% endif %}
-        
-        <!-- Page Content -->
-        {% block content %}
-        {% endblock %}
-    </main>
-    
-    <footer class="bg-white border-t border-slate-200 py-4 mt-auto">
-        <p class="text-center text-sm text-slate-600">&copy; 2024 Transport Management System</p>
-    </footer>
-
-    <!-- Scripts (Using jQuery for Select2 compatibility) -->
-    <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-    
-    <script>
+    </div>
+</nav>
+<!-- END: Top Navigation -->
+<main class="flex-grow w-full max-w-7xl mx-auto px-6 py-8">
+    <!-- Messages -->
+    {% if messages %}
+    <div class="mb-6 space-y-2">
+        {% for message in messages %}
+        <div class="p-4 rounded-md {% if message.tags == 'error' %}bg-red-50 text-red-700 border border-red-200{% elif message.tags == 'success' %}bg-green-50 text-green-700 border border-green-200{% else %}bg-blue-50 text-blue-700 border border-blue-200{% endif %} flex justify-between items-center">
+            <span>{{ message }}</span>
+            <button class="text-lg font-bold" onclick="this.parentElement.remove()">×</button>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    <!-- Page Content -->
+    {% block content %}
+    <div class="bg-white border-2 border-dashed border-slate-200 rounded-lg h-64 flex items-center justify-center">
+        <span class="text-slate-400 font-medium italic">Template Content Block Area</span>
+    </div>
+    {% endblock %}
+</main>
+<footer class="bg-white border-t border-slate-200 py-4 mt-auto">
+    <p class="text-center text-sm text-slate-600">© 2024 Transport Management System</p>
+</footer>
+<!-- Scripts (Using jQuery for Select2 compatibility) -->
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script>
         $(document).ready(function() {
             // Toggle dropdown on click
             $(document).on('click', '.dropdown-toggle', function(e) {
@@ -185,7 +180,6 @@
             });
         });
     </script>
-    
     {% block extra_js %}{% endblock %}
 </body>
 </html>

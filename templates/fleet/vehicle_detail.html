@@ -55,7 +55,6 @@
                     </span>
                 </div>
             </div>
-            
             <div class="p-6">
                 <div class="space-y-4">
                     <div class="flex justify-between items-center py-2 border-b border-slate-50">
@@ -75,7 +74,6 @@
                         <span class="text-sm font-bold text-emerald-600">${{ total_maintenance_cost|floatformat:2 }}</span>
                     </div>
                 </div>
-
                 <div class="mt-6 p-4 bg-slate-50 rounded-lg border border-slate-100">
                     <h4 class="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2 flex items-center">
                         <i class="fa-solid fa-calendar-check mr-2 text-slate-400"></i>Maintenance Status
@@ -106,7 +104,7 @@
         <div class="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-sm">
             <div class="px-5 py-4 border-b border-slate-100 flex justify-between items-center">
                 <h3 class="text-xs font-bold text-slate-700 uppercase tracking-wider">Mounted Tyres</h3>
-                <a href="{% url 'tyre-list' %}" class="text-[10px] font-bold text-emerald-600 hover:text-emerald-700 uppercase">Inventory</a>
+                <a class="text-[10px] font-bold text-emerald-600 hover:text-emerald-700 uppercase" href="{% url 'tyre-list' %}">Inventory</a>
             </div>
             <div class="p-0">
                 {% if vehicle.tyres.exists %}
@@ -127,7 +125,7 @@
                                 <div class="text-[10px] text-slate-400">{{ tyre.size }}</div>
                             </td>
                             <td class="px-4 py-2">
-                                <a href="{% url 'tyre-log-create' %}?tyre={{ tyre.pk }}" class="text-emerald-600 hover:text-emerald-700">
+                                <a class="text-emerald-600 hover:text-emerald-700" href="{% url 'tyre-log-create' %}?tyre={{ tyre.pk }}">
                                     <i class="fa-solid fa-plus-circle"></i>
                                 </a>
                             </td>
@@ -174,12 +172,10 @@
                     </table>
                 </div>
                 <div class="px-6 py-3 bg-slate-50 border-t border-slate-100 text-center">
-                    <a href="{% url 'maintenance-log-list' %}?vehicle={{ vehicle.pk }}" class="text-xs font-bold text-emerald-600 hover:text-emerald-700 uppercase tracking-wider">View All Logs</a>
+                    <a class="text-xs font-bold text-emerald-600 hover:text-emerald-700 uppercase tracking-wider" href="{% url 'maintenance-log-list' %}?vehicle={{ vehicle.pk }}">View All Logs</a>
                 </div>
                 {% else %}
-                <div class="p-8 text-center">
-                    <p class="text-slate-500 italic text-sm">No maintenance records found for this vehicle.</p>
-                </div>
+                <div class="p-8 text-center text-slate-500 italic text-sm">No maintenance records found.</div>
                 {% endif %}
             </div>
         </div>
@@ -189,7 +185,7 @@
             <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center">
                 <h3 class="text-sm font-semibold text-slate-700 uppercase tracking-wider">Recent Fuel Logs</h3>
                 {% if perms.fleet.add_fuellog %}
-                <a href="{% url 'fuel-log-create' vehicle.pk %}" class="text-xs font-semibold text-emerald-600 hover:text-emerald-700">
+                <a class="text-xs font-semibold text-emerald-600 hover:text-emerald-700" href="{% url 'fuel-log-create' vehicle.pk %}">
                     <i class="fa-solid fa-plus mr-1"></i>Add Fuel Log
                 </a>
                 {% endif %}
@@ -214,10 +210,10 @@
                                 <td class="px-6 py-4 text-slate-900 font-bold">${{ log.total_cost }}</td>
                                 <td class="px-6 py-4 text-right flex justify-end space-x-3">
                                     {% if perms.fleet.change_fuellog %}
-                                    <a href="{% url 'fuel-log-update' log.pk %}" class="text-slate-400 hover:text-amber-600"><i class="fa-regular fa-pen-to-square"></i></a>
+                                    <a class="text-slate-400 hover:text-amber-600" href="{% url 'fuel-log-update' log.pk %}"><i class="fa-regular fa-pen-to-square"></i></a>
                                     {% endif %}
                                     {% if perms.fleet.delete_fuellog %}
-                                    <a href="{% url 'fuel-log-delete' log.pk %}" class="text-slate-400 hover:text-rose-600"><i class="fa-regular fa-trash-can"></i></a>
+                                    <a class="text-slate-400 hover:text-rose-600" href="{% url 'fuel-log-delete' log.pk %}"><i class="fa-regular fa-trash-can"></i></a>
                                     {% endif %}
                                 </td>
                             </tr>
@@ -236,7 +232,7 @@
             <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center">
                 <h3 class="text-sm font-semibold text-slate-700 uppercase tracking-wider">Vehicle Documents</h3>
                 {% if perms.documents.add_document %}
-                <a href="{% url 'document-create-vehicle' vehicle.pk %}" class="text-xs font-semibold text-emerald-600 hover:text-emerald-700">
+                <a class="text-xs font-semibold text-emerald-600 hover:text-emerald-700" href="{% url 'document-create-vehicle' vehicle.pk %}">
                     <i class="fa-solid fa-plus mr-1"></i>Add Document
                 </a>
                 {% endif %}
@@ -269,13 +265,13 @@
                                 </td>
                                 <td class="px-6 py-4 text-right flex justify-end space-x-3">
                                     {% if doc.scanned_copy %}
-                                    <a href="{{ doc.scanned_copy.url }}" target="_blank" class="text-slate-400 hover:text-emerald-600"><i class="fa-regular fa-eye"></i></a>
+                                    <a class="text-slate-400 hover:text-emerald-600" href="{{ doc.scanned_copy.url }}" target="_blank"><i class="fa-regular fa-eye"></i></a>
                                     {% endif %}
                                     {% if perms.documents.change_document %}
-                                    <a href="{% url 'document-update' doc.pk %}" class="text-slate-400 hover:text-amber-600"><i class="fa-regular fa-pen-to-square"></i></a>
+                                    <a class="text-slate-400 hover:text-amber-600" href="{% url 'document-update' doc.pk %}"><i class="fa-regular fa-pen-to-square"></i></a>
                                     {% endif %}
                                     {% if perms.documents.delete_document %}
-                                    <a href="{% url 'document-delete' doc.pk %}" class="text-slate-400 hover:text-rose-600"><i class="fa-regular fa-trash-can"></i></a>
+                                    <a class="text-slate-400 hover:text-rose-600" href="{% url 'document-delete' doc.pk %}"><i class="fa-regular fa-trash-can"></i></a>
                                     {% endif %}
                                 </td>
                             </tr>
@@ -309,7 +305,7 @@
                             {% for trip in recent_trips %}
                             <tr class="hover:bg-slate-50 transition-colors">
                                 <td class="px-6 py-4 font-bold text-slate-900">
-                                    <a href="{% url 'trip-detail' trip.pk %}" class="hover:text-emerald-600">{{ trip.trip_number }}</a>
+                                    <a class="hover:text-emerald-600" href="{% url 'trip-detail' trip.pk %}">{{ trip.trip_number }}</a>
                                 </td>
                                 <td class="px-6 py-4 text-slate-600">{{ trip.date|date:"M d, Y" }}</td>
                                 <td class="px-6 py-4">
