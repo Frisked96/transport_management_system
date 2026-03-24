@@ -11,10 +11,6 @@
     </div>
     <div class="mt-4 md:mt-0 flex space-x-3">
         {% if perms.ledger.add_financialrecord %}
-        <a href="{% url 'company-profile-update' %}" class="flex items-center space-x-2 px-4 py-2 border border-slate-300 rounded-md bg-white text-slate-700 text-sm font-medium hover:bg-slate-50 transition-colors">
-            <i class="fa-solid fa-gear"></i>
-            <span>Settings</span>
-        </a>
         <a href="{% url 'bill-create' %}" class="flex items-center space-x-2 px-4 py-2 bg-emerald-600 text-white rounded-md text-sm font-medium hover:bg-emerald-700 shadow-sm transition-colors">
             <i class="fa-solid fa-plus"></i>
             <span>Create Invoice</span>

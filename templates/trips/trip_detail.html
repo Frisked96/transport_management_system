@@ -152,11 +152,21 @@
                     </div>
                     <div class="flex justify-between text-sm">
                         <span class="text-slate-500 font-medium">Rate / Ton</span>
-                        <span class="font-bold text-slate-900">${{ trip.rate_per_ton|default:"0.00" }}</span>
+                        <span class="font-bold text-slate-900">₹{{ trip.rate_per_ton|default:"0.00" }}</span>
                     </div>
+                    {% if trip.gst_amount > 0 %}
+                    <div class="flex justify-between text-sm italic">
+                        <span class="text-slate-500 font-medium">Freight Revenue</span>
+                        <span class="font-bold text-slate-900">₹{{ trip.revenue|floatformat:2 }}</span>
+                    </div>
+                    <div class="flex justify-between text-sm text-emerald-700">
+                        <span class="font-medium italic">GST Component</span>
+                        <span class="font-bold">₹{{ trip.gst_amount|floatformat:2 }}</span>
+                    </div>
+                    {% endif %}
                     <div class="flex justify-between pt-2">
                         <span class="text-sm font-bold text-slate-900">Total Revenue</span>
-                        <span class="text-2xl font-black text-emerald-600">${{ trip.revenue|floatformat:2 }}</span>
+                        <span class="text-2xl font-black text-emerald-600">₹{{ trip.total_revenue|floatformat:2 }}</span>
                     </div>
                 </div>
 
@@ -174,7 +184,7 @@
                         {% for expense in trip.custom_expenses.all %}
                         <div class="flex justify-between text-[11px]">
                             <span class="text-slate-500">{{ expense.name }}</span>
-                            <span class="font-medium text-slate-700">${{ expense.amount|floatformat:2 }}</span>
+                            <span class="font-medium text-slate-700">₹{{ expense.amount|floatformat:2 }}</span>
                         </div>
                         {% endfor %}
                         {% else %}
@@ -184,7 +194,7 @@
                     
                     <div class="flex justify-between pt-4 mt-4 border-t border-slate-200">
                         <span class="text-[10px] font-bold text-red-600 uppercase tracking-widest">Total Cost</span>
-                        <span class="text-sm font-bold text-red-600">${{ trip.total_cost|floatformat:2 }}</span>
+                        <span class="text-sm font-bold text-red-600">₹{{ trip.total_cost|floatformat:2 }}</span>
                     </div>
                 </div>
 
@@ -192,9 +202,10 @@
                 <div class="px-6 py-6 bg-slate-900 text-white">
                     <div class="flex justify-between items-center">
                         <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Est. Net Profit</span>
-                        {% with profit=trip.revenue|add:"-"|add:trip.total_cost %}
-                        <span class="text-3xl font-black {% if profit < 0 %}text-red-400{% else %}text-emerald-400{% endif %}">
-                            ${{ profit|floatformat:2 }}
+                        {% with profit=trip.revenue|add:trip.total_cost|add:"-1" %}
+                        {# Note: Profit calculation usually excludes GST as it is a pass-through tax #}
+                        <span class="text-3xl font-black {% if trip.revenue < trip.total_cost %}text-red-400{% else %}text-emerald-400{% endif %}">
+                            ₹{{ trip.revenue|add:"-0"|add:trip.total_cost|floatformat:2 }}
                         </span>
                         {% endwith %}
                     </div>
@@ -217,7 +228,7 @@
                 <div class="text-center pb-6">
                     <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Outstanding Balance</p>
                     <div class="text-4xl font-black {% if trip.outstanding_balance > 0 %}text-red-600{% else %}text-emerald-600{% endif %} mb-3">
-                        ${{ trip.outstanding_balance|floatformat:0 }}
+                        ₹{{ trip.outstanding_balance|floatformat:0 }}
                     </div>
                     <span class="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest
                         {% if trip.payment_status == 'Paid' %}bg-emerald-100 text-emerald-800
@@ -234,19 +245,23 @@
                         {% for allocation in trip.payment_allocations.all %}
                         <div class="flex justify-between items-center p-3 bg-slate-50 rounded-md border border-slate-100">
                             <div>
-                                <p class="text-[11px] font-bold text-emerald-700 uppercase tracking-tighter">Received</p>
+                                <a href="{% url 'financialrecord-detail' allocation.financial_record.pk %}" class="text-[11px] font-bold text-emerald-700 uppercase tracking-tighter hover:underline">
+                                    Received (Bulk)
+                                </a>
                                 <p class="text-[9px] text-slate-400">{{ allocation.financial_record.date|date:"d M, Y" }}</p>
                             </div>
-                            <span class="text-sm font-bold text-emerald-600">+${{ allocation.amount|floatformat:0 }}</span>
+                            <span class="text-sm font-bold text-emerald-600">+₹{{ allocation.amount|floatformat:0 }}</span>
                         </div>
                         {% endfor %}
                         {% for record in trip.financial_records.all %}
                         <div class="flex justify-between items-center p-3 bg-slate-50 rounded-md border border-slate-100">
                             <div>
-                                <p class="text-[11px] font-bold text-blue-700 uppercase tracking-tighter">Direct Payment</p>
+                                <a href="{% url 'financialrecord-detail' record.pk %}" class="text-[11px] font-bold {% if record.is_invoice %}text-blue-700{% else %}text-emerald-700{% endif %} uppercase tracking-tighter hover:underline">
+                                    {% if record.is_invoice %}Invoice{% else %}Direct Payment{% endif %}
+                                </a>
                                 <p class="text-[9px] text-slate-400">{{ record.date|date:"d M, Y" }}</p>
                             </div>
-                            <span class="text-sm font-bold text-blue-600">+${{ record.amount|floatformat:0 }}</span>
+                            <span class="text-sm font-bold {% if record.is_invoice %}text-blue-600{% else %}text-emerald-600{% endif %}">+₹{{ record.amount|floatformat:0 }}</span>
                         </div>
                         {% endfor %}
                     </div>

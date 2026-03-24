@@ -31,34 +31,30 @@
 
                 <!-- BEGIN: Header Section -->
                 <div class="grid grid-cols-1 lg:grid-cols-12 gap-12 mb-10">
-                    <!-- Company Snapshot -->
-                    <div class="lg:col-span-7">
-                        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 pb-2 border-b border-slate-100">Company Details (Snapshot)</h3>
-                        <div class="space-y-4">
-                            <div>
-                                <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Company Name</label>
-                                {{ form.invoice_company_name }}
+                    <!-- Billing Entities -->
+                    <div class="lg:col-span-7 space-y-6">
+                        <div class="bg-blue-50/50 p-6 rounded-lg border border-blue-100">
+                            <h3 class="text-xs font-bold text-blue-600 uppercase tracking-widest mb-4 pb-2 border-b border-blue-100">Issuer Details</h3>
+                            <div class="max-w-md">
+                                <label class="block text-sm font-semibold text-slate-700 mb-2">Select Company Account (Firm)</label>
+                                {{ form.issuer }}
+                                <p class="mt-2 text-[10px] text-slate-500 italic">Select the firm you are billing from. Bank and firm details will be snapshotted from this account.</p>
                             </div>
-                            <div>
-                                <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Full Address</label>
-                                {{ form.invoice_company_address }}
-                            </div>
-                            <div class="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Mobile No.</label>
-                                    {{ form.invoice_company_mobile }}
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Company GSTIN</label>
-                                    {{ form.invoice_company_gstin }}
-                                </div>
+                        </div>
+
+                        <div class="bg-emerald-50/50 p-6 rounded-lg border border-emerald-100">
+                            <h3 class="text-xs font-bold text-emerald-600 uppercase tracking-widest mb-4 pb-2 border-b border-emerald-100">Bill To</h3>
+                            <div class="max-w-md">
+                                <label class="block text-sm font-semibold text-slate-700 mb-2">Select Party</label>
+                                {{ form.party }}
+                                <p class="mt-2 text-[10px] text-emerald-600 italic"><i class="fa-solid fa-circle-info mr-1"></i>Trip list will update automatically when a party is selected.</p>
                             </div>
                         </div>
                     </div>
                     
                     <!-- Invoice Info -->
                     <div class="lg:col-span-5 bg-slate-50 p-6 rounded-lg border border-slate-200">
-                        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 pb-2 border-b border-slate-200">Invoice Details</h3>
+                        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 pb-2 border-b border-slate-200">Invoice Settings</h3>
                         <div class="space-y-4">
                             <div class="flex items-center justify-between gap-4">
                                 <label class="text-sm font-semibold text-slate-700">Invoice #:</label>
@@ -76,82 +72,75 @@
                                 <label class="text-sm font-semibold text-slate-700">GST Rate (%):</label>
                                 <div class="flex-grow max-w-[200px]">{{ form.gst_rate }}</div>
                             </div>
+                            <div class="flex items-center justify-between gap-4">
+                                <label class="text-sm font-semibold text-slate-700">Status:</label>
+                                <div class="flex-grow max-w-[200px]">{{ form.status }}</div>
+                            </div>
                         </div>
                     </div>
                 </div>
                 <!-- END: Header Section -->
 
-                <!-- BEGIN: Bill To Section -->
-                <div class="mb-10 bg-emerald-50/50 p-6 rounded-lg border border-emerald-100">
-                    <h3 class="text-xs font-bold text-emerald-600 uppercase tracking-widest mb-4 pb-2 border-b border-emerald-100">Bill To</h3>
-                    <div class="max-w-md">
-                        <label class="block text-sm font-semibold text-slate-700 mb-2">Select Party</label>
-                        {{ form.party }}
-                        <p class="mt-2 text-xs text-emerald-600 italic"><i class="fa-solid fa-circle-info mr-1"></i>Selecting a party will refresh the trip list automatically.</p>
-                    </div>
-                </div>
-                <!-- END: Bill To Section -->
-
                 <!-- BEGIN: Trips Selection -->
                 <div class="mb-10">
                     <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 pb-2 border-b border-slate-100">Included Trips</h3>
                     
-                    {% if form.trips.field.queryset.exists %}
-                    <div class="overflow-x-auto border border-slate-200 rounded-lg">
-                        <table class="w-full text-left border-collapse">
-                            <thead>
-                                <tr class="bg-slate-50 border-b border-slate-200">
-                                    <th class="px-6 py-3 w-10 text-center">
-                                        <input type="checkbox" id="selectAllTrips" class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500">
-                                    </th>
-                                    <th class="px-6 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500">LR No.</th>
-                                    <th class="px-6 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500">Date</th>
-                                    <th class="px-6 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500">Vehicle</th>
-                                    <th class="px-6 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500">Route</th>
-                                    <th class="px-6 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 text-right">Weight</th>
-                                    <th class="px-6 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 text-right">Rate</th>
-                                    <th class="px-6 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 text-right">Amount</th>
-                                </tr>
-                            </thead>
-                            <tbody id="tripsTableBody" class="divide-y divide-slate-200">
-                                {% for trip in form.trips.field.queryset %}
-                                <tr class="hover:bg-slate-50 transition-colors">
-                                    <td class="px-6 py-4 text-center">
-                                        <input class="trip-checkbox rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" type="checkbox" 
-                                               name="trips" value="{{ trip.pk }}" 
-                                               id="trip_{{ trip.pk }}"
-                                               {% if trip.pk in form.initial.trips or trip.pk in form.trips.value %}checked{% endif %}>
-                                    </td>
-                                    <td class="px-6 py-4">
-                                        <input type="text" class="lr-input block w-full px-2 py-1 border border-slate-300 rounded text-xs focus:ring-emerald-500 focus:border-emerald-500 bg-white" 
-                                               data-trip-id="{{ trip.pk }}" placeholder="LR No.">
-                                    </td>
-                                    <td class="px-6 py-4 text-xs font-medium text-slate-700">{{ trip.date|date:"d M Y" }}</td>
-                                    <td class="px-6 py-4 text-xs text-slate-600 font-bold uppercase">{{ trip.vehicle.registration_plate }}</td>
-                                    <td class="px-6 py-4 text-[10px] text-slate-500 uppercase leading-tight">
-                                        {{ trip.pickup_location }} <br/> <i class="fa-solid fa-arrow-down my-0.5 ml-2 opacity-30"></i> <br/> {{ trip.delivery_location }}
-                                    </td>
-                                    <td class="px-6 py-4 text-xs text-right font-bold text-slate-900">{{ trip.weight }}</td>
-                                    <td class="px-6 py-4 text-xs text-right text-slate-600">₹{{ trip.rate_per_ton }}</td>
-                                    <td class="px-6 py-4 text-xs text-right font-black text-emerald-600">₹{{ trip.revenue|floatformat:2 }}</td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
+                    <div id="tripsContainer" class="{% if not form.trips.field.queryset.exists %}hidden{% endif %}">
+                        <div class="overflow-x-auto border border-slate-200 rounded-lg">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="bg-slate-50 border-b border-slate-200">
+                                        <th class="px-6 py-3 w-10 text-center">
+                                            <input type="checkbox" id="selectAllTrips" class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500">
+                                        </th>
+                                        <th class="px-6 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500">LR No.</th>
+                                        <th class="px-6 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500">Date</th>
+                                        <th class="px-6 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500">Vehicle</th>
+                                        <th class="px-6 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500">Route</th>
+                                        <th class="px-6 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 text-right">Weight</th>
+                                        <th class="px-6 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 text-right">Rate</th>
+                                        <th class="px-6 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 text-right">Amount</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tripsTableBody" class="divide-y divide-slate-200">
+                                    {% for trip in form.trips.field.queryset %}
+                                    <tr class="hover:bg-slate-50 transition-colors">
+                                        <td class="px-6 py-4 text-center">
+                                            <input class="trip-checkbox rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" type="checkbox" 
+                                                   name="trips" value="{{ trip.pk }}" 
+                                                   id="trip_{{ trip.pk }}"
+                                                   {% if trip.pk in form.trips.value %}checked{% endif %}>
+                                        </td>
+                                        <td class="px-6 py-4">
+                                            <input type="text" class="lr-input block w-full px-2 py-1 border border-slate-300 rounded text-xs focus:ring-emerald-500 focus:border-emerald-500 bg-white" 
+                                                   data-trip-id="{{ trip.pk }}" placeholder="LR No.">
+                                        </td>
+                                        <td class="px-6 py-4 text-xs font-medium text-slate-700">{{ trip.date|date:"d M Y" }}</td>
+                                        <td class="px-6 py-4 text-xs text-slate-600 font-bold uppercase">{{ trip.vehicle.registration_plate }}</td>
+                                        <td class="px-6 py-4 text-[10px] text-slate-500 uppercase leading-tight">
+                                            {{ trip.pickup_location }} <br/> <i class="fa-solid fa-arrow-down my-0.5 ml-2 opacity-30"></i> <br/> {{ trip.delivery_location }}
+                                        </td>
+                                        <td class="px-6 py-4 text-xs text-right font-bold text-slate-900">{{ trip.weight }}</td>
+                                        <td class="px-6 py-4 text-xs text-right text-slate-600">₹{{ trip.rate_per_ton }}</td>
+                                        <td class="px-6 py-4 text-xs text-right font-black text-emerald-600">₹{{ trip.revenue|floatformat:2 }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
-                    {% else %}
-                    <div class="p-8 text-center bg-slate-50 rounded-lg border border-dashed border-slate-300 text-slate-500 italic text-sm">
+
+                    <div id="noTripsMessage" class="p-8 text-center bg-slate-50 rounded-lg border border-dashed border-slate-300 text-slate-500 italic text-sm {% if form.trips.field.queryset.exists %}hidden{% endif %}">
                         <i class="fa-solid fa-circle-exclamation mr-2"></i>No unbilled completed trips found for this party.
                     </div>
-                    {% endif %}
                 </div>
                 <!-- END: Trips Selection -->
 
                 <div class="flex flex-col md:flex-row justify-end items-center gap-4 mt-8 pt-8 border-t border-slate-100">
-                    <button type="submit" id="saveAndPrintBtn" name="save_print" class="w-full md:w-auto px-8 py-3 bg-emerald-600 text-white rounded-md font-bold hover:bg-emerald-700 shadow-md transition-all flex items-center justify-center">
+                    <button type="submit" id="saveAndFinalizeBtn" name="save_print" class="w-full md:w-auto px-8 py-3 bg-emerald-600 text-white rounded-md font-bold hover:bg-emerald-700 shadow-md transition-all flex items-center justify-center">
                         <i class="fa-solid fa-cloud-arrow-up mr-2"></i> Save & View Invoice
                     </button>
-                    <button type="submit" id="saveBtn" class="w-full md:w-auto px-8 py-3 border border-slate-300 rounded-md text-slate-700 bg-white hover:bg-slate-50 font-bold transition-all">
+                    <button type="submit" id="saveDraftBtn" class="w-full md:w-auto px-8 py-3 border border-slate-300 rounded-md text-slate-700 bg-white hover:bg-slate-50 font-bold transition-all">
                         Save as Draft
                     </button>
                 </div>
@@ -159,51 +148,17 @@
         </div>
     </div>
 </div>
-
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Apply tailwind classes to form inputs
-        const inputs = document.querySelectorAll('input:not([type="checkbox"]):not([type="radio"]), select, textarea');
-        inputs.forEach(input => {
-            if (!input.classList.contains('block') && !input.classList.contains('lr-input')) {
-                input.classList.add('block', 'w-full', 'px-3', 'py-2', 'border', 'border-slate-300', 'rounded-md', 'text-sm', 'focus:ring-emerald-500', 'focus:border-emerald-500', 'bg-white');
-            }
-        });
-    });
-</script>
 {% endblock %}
 
 {% block extra_js %}
 <script>
     $(document).ready(function() {
-        // Initialize Select2 for Party dropdown
-        $('#id_party').select2({
+        // Initialize Select2
+        $('#id_issuer, #id_party').select2({
             theme: 'bootstrap-5',
-            placeholder: 'Select a Party',
-            allowClear: true
+            width: '100%'
         });
 
-        // Auto-reload on Party change
-        $('#id_party').on('change', function() {
-            const partyId = $(this).val();
-            if (partyId) {
-                const url = new URL(window.location.href);
-                url.searchParams.set('party', partyId);
-                window.location.href = url.toString();
-            }
-        });
-
-        // Select All functionality
-        const selectAll = document.getElementById('selectAllTrips');
-        const checkboxes = document.querySelectorAll('.trip-checkbox');
-        
-        if(selectAll) {
-            selectAll.addEventListener('change', function() {
-                checkboxes.forEach(cb => cb.checked = selectAll.checked);
-            });
-        }
-
-        // LR No. handling
         const tripsDataInput = document.getElementById('id_trips_data');
         let tripsData = {};
 
@@ -215,19 +170,104 @@
             console.error("Error parsing trips data", e);
         }
 
-        // Populate initial LR inputs
-        $('.lr-input').each(function() {
-            const tripId = $(this).data('trip-id');
-            if (tripsData[tripId]) {
-                $(this).val(tripsData[tripId]);
-            }
+        // Logic for Save as Draft vs Save & Finalize
+        $('#saveDraftBtn').on('click', function(e) {
+            $('#id_status').val('Draft');
         });
 
-        // Sync LR inputs to hidden field on change
-        $('.lr-input').on('input', function() {
-            const tripId = $(this).data('trip-id');
-            tripsData[tripId] = $(this).val();
-            tripsDataInput.value = JSON.stringify(tripsData);
+        $('#saveAndFinalizeBtn').on('click', function(e) {
+            $('#id_status').val('Final');
+        });
+
+        // Function to update trips table via AJAX
+        function updateTripsTable(partyId) {
+            if (!partyId) {
+                $('#tripsContainer').addClass('hidden');
+                $('#noTripsMessage').removeClass('hidden');
+                return;
+            }
+
+            const billId = "{% if form.instance.pk %}{{ form.instance.pk }}{% else %}{% endif %}";
+            
+            $.ajax({
+                url: "{% url 'get-party-unbilled-trips' %}",
+                data: {
+                    'party_id': partyId,
+                    'bill_id': billId
+                },
+                success: function(data) {
+                    const tbody = $('#tripsTableBody');
+                    tbody.empty();
+
+                    if (data.trips.length > 0) {
+                        data.trips.forEach(trip => {
+                            const isChecked = tripsData.hasOwnProperty(trip.id.toString()) || (billId && {{ form.trips.value|safe|default:"[]" }}.includes(trip.id));
+                            const lrNo = tripsData[trip.id] || "";
+                            
+                            const row = `
+                                <tr class="hover:bg-slate-50 transition-colors">
+                                    <td class="px-6 py-4 text-center">
+                                        <input class="trip-checkbox rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" type="checkbox" 
+                                               name="trips" value="${trip.id}" 
+                                               id="trip_${trip.id}"
+                                               ${isChecked ? 'checked' : ''}>
+                                    </td>
+                                    <td class="px-6 py-4">
+                                        <input type="text" class="lr-input block w-full px-2 py-1 border border-slate-300 rounded text-xs focus:ring-emerald-500 focus:border-emerald-500 bg-white" 
+                                               data-trip-id="${trip.id}" value="${lrNo}" placeholder="LR No.">
+                                    </td>
+                                    <td class="px-6 py-4 text-xs font-medium text-slate-700">${trip.date}</td>
+                                    <td class="px-6 py-4 text-xs text-slate-600 font-bold uppercase">${trip.vehicle}</td>
+                                    <td class="px-6 py-4 text-[10px] text-slate-500 uppercase leading-tight">
+                                        ${trip.pickup || ''} <br/> <i class="fa-solid fa-arrow-down my-0.5 ml-2 opacity-30"></i> <br/> ${trip.delivery || ''}
+                                    </td>
+                                    <td class="px-6 py-4 text-xs text-right font-bold text-slate-900">${trip.weight}</td>
+                                    <td class="px-6 py-4 text-xs text-right text-slate-600">₹${trip.rate}</td>
+                                    <td class="px-6 py-4 text-xs text-right font-black text-emerald-600">₹${trip.revenue.toFixed(2)}</td>
+                                </tr>
+                            `;
+                            tbody.append(row);
+                        });
+                        $('#tripsContainer').removeClass('hidden');
+                        $('#noTripsMessage').addClass('hidden');
+                        
+                        // Re-bind events for new elements
+                        bindTableEvents();
+                    } else {
+                        $('#tripsContainer').addClass('hidden');
+                        $('#noTripsMessage').removeClass('hidden');
+                    }
+                },
+                error: function() {
+                    console.error("Failed to fetch trips");
+                }
+            });
+        }
+
+        function bindTableEvents() {
+            // LR No. handling sync
+            $('.lr-input').on('input', function() {
+                const tripId = $(this).data('trip-id');
+                tripsData[tripId] = $(this).val();
+                tripsDataInput.value = JSON.stringify(tripsData);
+            });
+
+            // Re-bind select all
+            const selectAll = document.getElementById('selectAllTrips');
+            const checkboxes = document.querySelectorAll('.trip-checkbox');
+            if(selectAll) {
+                $(selectAll).off('change').on('change', function() {
+                    checkboxes.forEach(cb => cb.checked = this.checked);
+                });
+            }
+        }
+
+        // Initial bind
+        bindTableEvents();
+
+        // AJAX Load on Party change
+        $('#id_party').on('change', function() {
+            updateTripsTable($(this).val());
         });
 
         // Final sync before submission

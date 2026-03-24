@@ -57,7 +57,7 @@ class TripQuerySet(models.QuerySet):
         from ledger.models import Bill
 
         return self.annotate(
-            is_billed=Exists(
+            annotated_is_billed=Exists(
                 Bill.objects.filter(trips=OuterRef('pk'))
             )
         )
@@ -247,64 +247,70 @@ class Trip(models.Model):
     def sync_ledger_invoice(self):
         """
         Synchronize Trip Revenue to FinancialRecord as an Invoice.
+        If the trip is part of a finalized Bill, the individual trip record is removed
+        in favor of the consolidated Bill record.
         """
         from ledger.models import FinancialRecord, TransactionCategory
 
         # 1. Check if we have Revenue info
         has_revenue = self.weight is not None and self.rate_per_ton is not None
 
-        # 2. Find existing invoice record
+        # 2. Check if already part of a bill (any status)
+        is_billed = self.bills.exists()
+
+        # 3. Find existing invoice record
         invoice_qs = FinancialRecord.objects.filter(
             associated_trip=self,
             record_type=FinancialRecord.RECORD_TYPE_INVOICE
         )
 
-        if has_revenue:
-            amount = self.weight * self.rate_per_ton
-
-            # Ensure Category exists
-            cat, _ = TransactionCategory.objects.get_or_create(
-                name="Trip Revenue",
-                defaults={'type': TransactionCategory.TYPE_INCOME, 'description': 'Auto-generated revenue from trips'}
-            )
-
-            if invoice_qs.exists():
-                # Update existing
-                record = invoice_qs.first()
-                # Update fields if changed
-                should_save = False
-                if record.amount != amount:
-                    record.amount = amount
-                    should_save = True
-                if record.party != self.party:
-                    record.party = self.party
-                    should_save = True
-                if record.driver != self.driver:
-                    record.driver = self.driver
-                    should_save = True
-                if record.date != self.date.date():
-                    record.date = self.date.date()
-                    should_save = True
-
-                if should_save:
-                    record.save()
-            else:
-                # Create new
-                if amount >= 0:
-                    FinancialRecord.objects.create(
-                        associated_trip=self,
-                        party=self.party,
-                        driver=self.driver,
-                        date=self.date.date(),
-                        category=cat,
-                        amount=amount,
-                        record_type=FinancialRecord.RECORD_TYPE_INVOICE,
-                        description=f"Invoice for Trip {self.trip_number}"
-                    )
-        else:
-            # If revenue details removed, delete the invoice
+        # If it's part of a bill, we DON'T want an individual trip invoice 
+        # because the Bill (Invoice) will have its own record.
+        if is_billed or not has_revenue:
             if invoice_qs.exists():
                 invoice_qs.delete()
+            return
+
+        # Otherwise, maintain individual record
+        amount = self.weight * self.rate_per_ton
+        cat, _ = TransactionCategory.objects.get_or_create(
+            name="Trip Revenue",
+            defaults={'type': TransactionCategory.TYPE_INCOME, 'description': 'Auto-generated revenue from trips'}
+        )
+
+        if invoice_qs.exists():
+            # Update existing
+            record = invoice_qs.first()
+            # Update fields if changed
+            should_save = False
+            if record.amount != amount:
+                record.amount = amount
+                should_save = True
+            if record.party != self.party:
+                record.party = self.party
+                should_save = True
+            if record.driver != self.driver:
+                record.driver = self.driver
+                should_save = True
+            if record.date != self.date.date():
+                record.date = self.date.date()
+                should_save = True
+
+            if should_save:
+                record.save()
+        else:
+            # Create new
+            if amount >= 0:
+                FinancialRecord.objects.create(
+                    associated_trip=self,
+                    party=self.party,
+                    driver=self.driver,
+                    date=self.date.date(),
+                    category=cat,
+                    amount=amount,
+                    record_type=FinancialRecord.RECORD_TYPE_INVOICE,
+                    description=f"Invoice for Trip {self.trip_number}"
+                )
 
     def save(self, *args, **kwargs):
         """
@@ -378,6 +384,41 @@ class Trip(models.Model):
         return 0
 
     @property
+    def is_billed(self):
+        """Check if this trip is associated with any bill"""
+        if hasattr(self, 'annotated_is_billed'):
+            return self.annotated_is_billed
+        return self.bills.exists()
+
+    @property
+    def associated_bill(self):
+        """Returns the first associated bill (if any)"""
+        return self.bills.first()
+
+    @property
+    def gst_amount(self):
+        """
+        Calculate GST amount for this trip based on its associated bill.
+        If no bill exists or GST rate is 0, returns 0.
+        """
+        bill = self.associated_bill
+        if not bill or bill.gst_rate == 0:
+            return 0
+        
+        # Only apply GST if the bill is FINALized
+        from ledger.models import Bill
+        if bill.status != Bill.STATUS_FINAL:
+            return 0
+
+        from decimal import Decimal
+        return self.revenue * (Decimal(bill.gst_rate) / Decimal(100))
+
+    @property
+    def total_revenue(self):
+        """Total revenue including GST (if billed)"""
+        return self.revenue + self.gst_amount
+
+    @property
     def amount_received(self):
         """Calculate total received from both direct links and allocations"""
         from ledger.models import FinancialRecord, TransactionCategory
@@ -397,16 +438,16 @@ class Trip(models.Model):
         """
         Check if trip should be automatically closed.
         Conditions:
-        1. Revenue > 0
-        2. Fully Paid (Total Received >= Revenue)
+        1. Total Revenue > 0
+        2. Fully Paid (Total Received >= Total Revenue)
         3. Trip Date has passed
         """
         if self.status == self.STATUS_COMPLETED:
             return
 
-        # 1. Revenue
-        revenue = self.revenue
-        if revenue <= 0:
+        # 1. Total Revenue (Incl GST if applicable)
+        total_rev = self.total_revenue
+        if total_rev <= 0:
             return
 
         # 2. Date Check (Must be in past)
@@ -416,7 +457,7 @@ class Trip(models.Model):
         # 3. Paid Amount
         received = self.amount_received
 
-        if received >= revenue:
+        if received >= total_rev:
             self.status = self.STATUS_COMPLETED
             if not self.actual_completion_datetime:
                 self.actual_completion_datetime = timezone.now()
@@ -424,11 +465,14 @@ class Trip(models.Model):
 
     @property
     def payment_status(self):
-        """Calculate payment status dynamically"""
+        """Calculate payment status dynamically based on Total Revenue (incl GST)"""
         received = self.amount_received
-        rev = self.revenue
+        total_rev = self.total_revenue
         
-        if received >= rev and rev > 0:
+        if total_rev <= 0:
+            return self.PAYMENT_STATUS_UNPAID
+
+        if received >= total_rev:
             return self.PAYMENT_STATUS_PAID
         elif received > 0:
             return self.PAYMENT_STATUS_PARTIAL
@@ -437,8 +481,8 @@ class Trip(models.Model):
 
     @property
     def outstanding_balance(self):
-        """Calculate outstanding balance dynamically"""
-        return self.revenue - self.amount_received
+        """Calculate outstanding balance dynamically based on Total Revenue (incl GST)"""
+        return self.total_revenue - self.amount_received
 
     @property
     def total_cost(self):

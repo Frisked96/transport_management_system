@@ -14,3 +14,11 @@ This project is a comprehensive Transport Management System built with Django. I
 *   **`templates/`**: Global HTML templates that define the layout and structure of the application's frontend.
 *   **`static/`**: Static assets such as CSS stylesheets, JavaScript files, and images used across the application.
 *   **`manage.py`**: Django's command-line utility for administrative tasks like running the server, making migrations, and creating superusers.
+
+## Core Financial Logic (Ledger & Billing)
+
+*   **Accrual-Based Revenue**: Revenue is recorded as an "Invoice" type entry in the ledger as soon as a Trip is created or a Bill is generated. This represents earned income before cash is received.
+*   **Ledger Hand-off**: Trip revenue exists in the ledger as either an individual entry (if unbilled) OR as part of a consolidated Bill entry (if billed). When a Bill is created, individual trip ledger entries are deleted, and a single consolidated entry for the Bill is created.
+*   **Consolidated Billing & GST**: "Final" status Bills consolidate revenue and include the GST component in a single "Trip Revenue" ledger entry. "Draft" status Bills show only the subtotal without GST in the ledger.
+*   **Snapshot Principle**: Bill/Invoice models snapshot Firm details (Name, GSTIN, Address, Bank) from the `CompanyAccount` at the time of creation. This ensures historical invoices remain accurate even if the Firm's current details change.
+*   **Balance Calculation**: `CompanyAccount` and `Party` balances are calculated as: `Opening Balance + Total Received - Total Expenses`. "Invoice" type records are excluded from balance calculations as they represent accruals, not actual cash flow.

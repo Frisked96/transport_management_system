@@ -236,7 +236,9 @@
             <div class="p-6 flex flex-col justify-between items-end text-right">
                 <div class="text-[10px] font-black text-slate-900 uppercase tracking-widest">For {{ bill.invoice_company_name }}</div>
                 <div class="mt-16">
-                    <div class="border-t border-slate-900 w-48 pt-1 text-[10px] font-black uppercase tracking-widest text-center">Authorized Signatory</div>
+                    <div class="border-t border-slate-900 w-48 pt-1 text-[10px] font-black uppercase tracking-widest text-center">
+                        {{ bill.invoice_company_authorized_signatory|default:"Authorized Signatory" }}
+                    </div>
                 </div>
             </div>
         </div>

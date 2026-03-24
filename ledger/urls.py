@@ -22,6 +22,7 @@ urlpatterns = [
     path('parties/<int:pk>/update/', views.PartyUpdateView.as_view(), name='party-update'),
     path('parties/<int:pk>/delete/', views.PartyDeleteView.as_view(), name='party-delete'),
     path('api/party-unpaid-trips/', views.get_party_unpaid_trips, name='get-party-unpaid-trips'),
+    path('api/party-unbilled-trips/', views.get_party_unbilled_trips, name='get-party-unbilled-trips'),
 
     # Account URLs
     path('accounts/', views.CompanyAccountListView.as_view(), name='account-list'),
@@ -41,7 +42,4 @@ urlpatterns = [
     path('bills/<int:pk>/print/', views.print_invoice, name='print-invoice'),
     path('bills/<int:pk>/annexure/', views.print_annexure, name='print-annexure'),
     path('bills/<int:pk>/print-combined/', views.print_combined_bill, name='print-combined-bill'),
-
-    # Company Profile
-    path('settings/company/', views.CompanyProfileUpdateView.as_view(), name='company-profile-update'),
 ]

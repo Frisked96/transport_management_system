@@ -4,7 +4,7 @@ Views for Ledger application with permission checks
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.contrib.auth.decorators import login_required
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse_lazy
 from django.contrib import messages
 from django.db.models import Q, Sum, F, DecimalField, Value, Case, When, OuterRef, Subquery
@@ -14,9 +14,11 @@ from decimal import Decimal, InvalidOperation
 from datetime import datetime
 import json
 from django.http import JsonResponse
+from itertools import groupby
+from operator import attrgetter
 
-from .models import FinancialRecord, Party, CompanyAccount, TripAllocation, TransactionCategory, Bill, CompanyProfile
-from .forms import FinancialRecordForm, PartyForm, CompanyAccountForm, BillForm, CompanyProfileForm
+from .models import FinancialRecord, Party, CompanyAccount, TripAllocation, TransactionCategory, Bill
+from .forms import FinancialRecordForm, PartyForm, CompanyAccountForm, BillForm
 from trips.models import Trip
 
 
@@ -585,6 +587,44 @@ def get_party_unpaid_trips(request):
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
 
+@login_required
+def get_party_unbilled_trips(request):
+    """
+    AJAX endpoint to get unbilled/available trips for a party
+    """
+    party_id = request.GET.get('party_id')
+    bill_id = request.GET.get('bill_id')
+    
+    if not party_id:
+        return JsonResponse({'trips': []})
+    
+    try:
+        # Show trips for this party
+        qs = Trip.objects.filter(party_id=party_id).exclude(status='Cancelled')
+        
+        if bill_id:
+            # Include currently selected trips for this bill + unbilled ones
+            qs = qs.filter(Q(bills__isnull=True) | Q(bills__id=bill_id))
+        else:
+            qs = qs.filter(bills__isnull=True)
+            
+        trips = qs.distinct().order_by('-date')
+        
+        data = [{
+            'id': trip.id,
+            'date': trip.date.strftime('%d %b %Y'),
+            'vehicle': trip.vehicle.registration_plate,
+            'pickup': trip.pickup_location,
+            'delivery': trip.delivery_location,
+            'weight': float(trip.weight or 0),
+            'rate': float(trip.rate_per_ton or 0),
+            'revenue': float(trip.revenue or 0),
+        } for trip in trips]
+        
+        return JsonResponse({'trips': data})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
 
 # --- Bill Views ---
 
@@ -622,16 +662,16 @@ class BillCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
 
     def form_valid(self, form):
         response = super().form_valid(form)
-        # Update GST record after M2M data is saved
-        self.object.update_ledger_gst_record()
+        # sync_to_ledger is already called in BillForm.save(), 
+        # but views might also trigger it for safety/clarity.
+        self.object.sync_to_ledger()
 
         messages.success(self.request, 'Bill created successfully!')
-        
+
         if 'save_print' in self.request.POST:
             return redirect('bill-detail', pk=self.object.pk)
-            
-        return response
 
+        return response
 class BillUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
     model = Bill
     form_class = BillForm
@@ -643,9 +683,13 @@ class BillUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
 
     def form_valid(self, form):
         response = super().form_valid(form)
-        # Update GST record after M2M data is saved
-        self.object.update_ledger_gst_record()
+        # sync_to_ledger is already called in BillForm.save()
+        self.object.sync_to_ledger()
         messages.success(self.request, 'Bill updated successfully!')
+        
+        if 'save_print' in self.request.POST:
+            return redirect('bill-detail', pk=self.object.pk)
+            
         return response
 
 class BillDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
@@ -658,31 +702,6 @@ class BillDetailView(LoginRequiredMixin, BaseLedgerPermissionMixin, DetailView):
     model = Bill
     template_name = 'ledger/bill_detail.html'
     context_object_name = 'bill'
-    
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['company_profile'] = CompanyProfile.objects.first()
-        return context
-
-class CompanyProfileUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
-    model = CompanyProfile
-    form_class = CompanyProfileForm
-    template_name = 'ledger/company_profile_form.html'
-    permission_required = 'ledger.change_financialrecord'
-    success_url = reverse_lazy('financial-summary')
-
-    def get_object(self, queryset=None):
-        obj, created = CompanyProfile.objects.get_or_create(pk=1)
-        return obj
-
-    def form_valid(self, form):
-        messages.success(self.request, 'Company Settings updated!')
-        return super().form_valid(form)
-
-from django.shortcuts import get_object_or_404, render
-from .models import Bill, CompanyProfile
-from itertools import groupby
-from operator import attrgetter
 
 def group_trips_for_bill(bill):
     """
@@ -743,7 +762,6 @@ def print_annexure(request, pk):
 def print_combined_bill(request, pk):
     """Render a combined invoice and annexure for printing."""
     bill = get_object_or_404(Bill, pk=pk)
-    company_profile = CompanyProfile.objects.first()
 
     # For invoice section
     invoice_items = group_trips_for_bill(bill)
@@ -762,7 +780,6 @@ def print_combined_bill(request, pk):
 
     context = {
         'bill': bill,
-        'company_profile': company_profile,
         'invoice_items': invoice_items,
         'date_groups': date_groups,
         'bill_trips': bill_trips,

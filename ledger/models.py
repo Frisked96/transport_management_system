@@ -97,6 +97,10 @@ class CompanyAccount(models.Model):
     ifsc_code = models.CharField(max_length=20, blank=True, verbose_name='IFSC Code')
     account_holder_name = models.CharField(max_length=200, blank=True, verbose_name='Account Holder Name')
     
+    # Bill Generation Details
+    authorized_signatory = models.CharField(max_length=200, blank=True, verbose_name="Authorized Signatory")
+    invoice_template = models.CharField(max_length=100, default="INV/{YYYY}/{SEQ}", help_text="Use {YYYY} for Year, {SEQ} for Sequence Number")
+
     opening_balance = models.DecimalField(
         max_digits=12, 
         decimal_places=2, 
@@ -293,26 +297,6 @@ class TripAllocation(models.Model):
     def __str__(self):
         return f"{self.financial_record} -> {self.trip.trip_number}: {self.amount}"
 
-class CompanyProfile(models.Model):
-    """
-    Singleton model to store Company Details for Invoices.
-    """
-    company_name = models.CharField(max_length=200, default="My Transport Company")
-    address = models.TextField(blank=True, verbose_name="Company Address")
-    phone_number = models.CharField(max_length=20, blank=True, verbose_name="Phone Number")
-    gstin = models.CharField(max_length=20, blank=True, verbose_name="GSTIN")
-    pan = models.CharField(max_length=20, blank=True, verbose_name="PAN")
-    bank_details = models.TextField(blank=True, verbose_name="Bank Details", help_text="Bank Name, Account No, IFSC, etc.")
-    authorized_signatory = models.CharField(max_length=200, blank=True, verbose_name="Authorized Signatory Name")
-    invoice_template = models.CharField(max_length=100, default="INV-{YYYY}-{SEQ}", help_text="Use {YYYY} for Year, {SEQ} for Sequence Number")
-    
-    def __str__(self):
-        return self.company_name
-
-    class Meta:
-        verbose_name = "Company Profile"
-        verbose_name_plural = "Company Profile"
-
 class Bill(models.Model):
     """
     Bill/Invoice Document aggregating multiple trips.
@@ -354,6 +338,7 @@ class Bill(models.Model):
     invoice_company_address = models.TextField(blank=True, verbose_name="Company Address (Snapshot)")
     invoice_company_mobile = models.CharField(max_length=20, blank=True, verbose_name="Company Mobile (Snapshot)")
     invoice_company_gstin = models.CharField(max_length=20, blank=True, verbose_name="Company GSTIN (Snapshot)")
+    invoice_company_authorized_signatory = models.CharField(max_length=200, blank=True, verbose_name="Authorized Signatory (Snapshot)")
     
     # Bank Details Snapshot
     invoice_bank_name = models.CharField(max_length=200, blank=True, verbose_name="Bank Name (Snapshot)")
@@ -370,15 +355,15 @@ class Bill(models.Model):
             self.invoice_company_address = self.issuer.address
             self.invoice_company_mobile = self.issuer.phone_number
             self.invoice_company_gstin = self.issuer.gstin
+            self.invoice_company_authorized_signatory = self.issuer.authorized_signatory
             self.invoice_bank_name = self.issuer.bank_name
             self.invoice_bank_account = self.issuer.account_number
             self.invoice_bank_ifsc = self.issuer.ifsc_code
         
         # 2. Generate Bill Number if missing
         if not self.bill_number and self.issuer:
-            # Try to get template from issuer notes or use default
-            # For now, default template logic
-            template = "INV/{YYYY}/{SEQ}"
+            # Use template from issuer or default
+            template = self.issuer.invoice_template or "INV/{YYYY}/{SEQ}"
             
             import datetime
             now = datetime.datetime.now()
@@ -393,55 +378,75 @@ class Bill(models.Model):
             
         super().save(*args, **kwargs)
 
-        # Handle GST Financial Record
-        self.update_ledger_gst_record()
-
-    def update_ledger_gst_record(self):
+    def delete(self, *args, **kwargs):
         """
-        Create/Update/Delete the GST FinancialRecord for this Bill.
-        This ensures the ledger reflects the Tax component of the Bill.
+        Custom delete to ensure associated trips are updated in the ledger.
         """
-        # We only want to record GST if the Bill is Final and has GST
-        should_have_record = (self.status == self.STATUS_FINAL and self.gst_amount > 0)
+        # Get list of trips before deleting
+        trips = list(self.trips.all())
+        super().delete(*args, **kwargs)
+        
+        # After bill is deleted, trips should have their individual revenue records restored
+        for trip in trips:
+            trip.sync_ledger_invoice()
 
-        gst_record = FinancialRecord.objects.filter(associated_bill=self).first()
+    def sync_to_ledger(self):
+        """
+        Main entry point to synchronize this invoice and its trips to the ledger.
+        Must be called AFTER ManyToMany relationships are established.
+        """
+        self.update_ledger_records()
+        self.sync_trips_to_ledger()
 
-        if should_have_record:
-            # Create or Update
-            cat_name = "GST Output"
-            gst_category, _ = TransactionCategory.objects.get_or_create(
-                name=cat_name,
-                defaults={
-                    'type': TransactionCategory.TYPE_INCOME,
-                    'description': 'Tax collected on Sales/Services'
-                }
+    def sync_trips_to_ledger(self):
+        """
+        Trigger sync_ledger_invoice for all trips associated with this bill.
+        This ensures individual trip revenue records are removed if the trip is now billed.
+        """
+        for trip in self.trips.all():
+            trip.sync_ledger_invoice()
+
+    def update_ledger_records(self):
+        """
+        Synchronize the full Invoice record to the ledger.
+        For Final bills, the amount includes GST.
+        """
+        # 1. Handle Consolidated Invoice Record (Total = Subtotal + GST if Final)
+        # Create this for both Draft and Final bills to replace individual trip entries immediately.
+        should_have_invoice = True
+        inv_record = FinancialRecord.objects.filter(associated_bill=self, category__name="Trip Revenue").first()
+
+        if should_have_invoice:
+            inv_cat, _ = TransactionCategory.objects.get_or_create(
+                name="Trip Revenue",
+                defaults={'type': TransactionCategory.TYPE_INCOME, 'description': 'Revenue from trips'}
             )
 
-            description = f"GST for Bill {self.bill_number}"
-            amount = self.gst_amount
+            # Use different description for Draft vs Final
+            status_tag = f" ({self.status})" if self.status == self.STATUS_DRAFT else ""
 
-            if gst_record:
-                if gst_record.amount != amount or gst_record.party != self.party:
-                    gst_record.amount = amount
-                    gst_record.party = self.party
-                    gst_record.date = self.date
-                    gst_record.save()
-            else:
-                FinancialRecord.objects.create(
-                    associated_bill=self,
-                    party=self.party,
-                    date=self.date,
-                    category=gst_category,
-                    amount=amount,
-                    record_type=FinancialRecord.RECORD_TYPE_INVOICE,
-                    description=description,
-                    # No driver for GST
-                )
-        else:
-            # Delete if exists
-            if gst_record:
-                gst_record.delete()
-    
+            # Use Total Amount (including GST) for Final bills, otherwise just Subtotal
+            amount = self.total_amount if self.status == self.STATUS_FINAL else self.subtotal
+
+            gst_note = f" (Incl. GST ₹{self.gst_amount})" if self.status == self.STATUS_FINAL and self.gst_amount > 0 else ""
+            description = f"Invoice {self.bill_number or 'Draft'}{status_tag}{gst_note}"
+
+            FinancialRecord.objects.update_or_create(
+                associated_bill=self,
+                category=inv_cat,
+                defaults={
+                    'party': self.party,
+                    'date': self.date,
+                    'amount': amount,
+                    'record_type': FinancialRecord.RECORD_TYPE_INVOICE,
+                    'description': description
+                }
+            )
+        elif inv_record:
+            inv_record.delete()
+
+        # 2. Cleanup old "GST Output" records if they exist (since we are now consolidating)
+        FinancialRecord.objects.filter(associated_bill=self, category__name="GST Output").delete()
     @property
     def cgst_amount(self):
         if self.gst_rate > 0 and self.gst_type == self.GST_TYPE_INTRA:
