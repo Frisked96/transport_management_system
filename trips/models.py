@@ -316,7 +316,16 @@ class Trip(models.Model):
         """
         Override save to handle business logic
         """
-        # Status logic
+        is_new = self._state.adding
+        old_instance = None
+        if not is_new:
+            old_instance = Trip.objects.get(pk=self.pk)
+
+        # 1. Start Odometer Logic: Default to vehicle's current odometer on creation
+        if is_new and not self.start_odometer:
+            self.start_odometer = self.vehicle.current_odometer
+
+        # 2. Status logic: Handle completion datetime
         if self.status == self.STATUS_COMPLETED and not self.actual_completion_datetime:
             self.actual_completion_datetime = timezone.now()
         elif self.status != self.STATUS_COMPLETED:
@@ -326,8 +335,7 @@ class Trip(models.Model):
         reg_plate = self.vehicle.registration_plate
         
         # If trip exists, check if vehicle changed
-        if self.pk:
-            old_instance = Trip.objects.get(pk=self.pk)
+        if not is_new:
             if old_instance.vehicle != self.vehicle:
                 # Vehicle changed, clear trip_number to trigger regeneration
                 self.trip_number = ""
@@ -351,17 +359,54 @@ class Trip(models.Model):
         elif not self.trip_number.startswith(reg_plate):
             parts = self.trip_number.rsplit('-', 1)
             if len(parts) > 1:
-                # Handle cases where registration plate might contain dashes
-                # but our format is PLATE-COUNT/MONTH/YEAR
-                # We want to replace everything before the LAST dash if it doesn't match
-                # Actually, our pattern is PLATE-X/Y/Z. Let's find the last dash.
                 last_dash_idx = self.trip_number.rfind('-')
                 if last_dash_idx != -1:
                     suffix = self.trip_number[last_dash_idx+1:]
                     self.trip_number = f"{reg_plate}-{suffix}"
 
-        is_new = self._state.adding
+        # Perform the actual save
         super().save(*args, **kwargs)
+
+        # 3. Post-save logic: Update Vehicle Odometer and Tyre KM
+        if self.status == self.STATUS_COMPLETED and self.end_odometer:
+            # Update vehicle's current odometer if this is the most recent trip or has highest odo
+            if self.end_odometer > self.vehicle.current_odometer:
+                self.vehicle.current_odometer = self.end_odometer
+                self.vehicle.save(update_fields=['current_odometer'])
+
+            # Update Tyres total_km
+            if self.start_odometer and self.end_odometer > self.start_odometer:
+                distance = self.end_odometer - self.start_odometer
+                
+                # Check if we should update (avoid double counting if already completed)
+                should_update_tyres = False
+                if is_new:
+                    should_update_tyres = True
+                elif old_instance.status != self.STATUS_COMPLETED:
+                    should_update_tyres = True
+                elif old_instance.end_odometer != self.end_odometer or old_instance.start_odometer != self.start_odometer:
+                    # If odo changed, we need to adjust the difference
+                    old_distance = (old_instance.end_odometer or 0) - (old_instance.start_odometer or 0)
+                    distance_diff = distance - old_distance
+                    for tyre in self.vehicle.tyres.all():
+                        tyre.total_km += distance_diff
+                        tyre.save(update_fields=['total_km'])
+                
+                if should_update_tyres:
+                    for tyre in self.vehicle.tyres.all():
+                        tyre.total_km += distance
+                        tyre.save(update_fields=['total_km'])
+
+        # 4. Chain Update: If end_odometer changed, update the next trip's start_odometer
+        if not is_new and old_instance.end_odometer != self.end_odometer:
+            next_trip = Trip.objects.filter(
+                vehicle=self.vehicle,
+                date__gt=self.date
+            ).order_by('date').first()
+            
+            if next_trip:
+                next_trip.start_odometer = self.end_odometer
+                next_trip.save(update_fields=['start_odometer'])
 
         # Sync to Ledger
         self.sync_ledger_invoice()

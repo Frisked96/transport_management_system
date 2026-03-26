@@ -231,10 +231,121 @@ class Tyre(models.Model):
     current_position = models.CharField(max_length=50, blank=True, verbose_name='Position')
     
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_IN_STOCK)
+    total_km = models.PositiveIntegerField(default=0, verbose_name='Total KM')
     notes = models.TextField(blank=True)
 
     def __str__(self):
         return f"{self.brand} {self.size} ({self.serial_number})"
+
+    def save(self, *args, **kwargs):
+        is_new = self._state.adding
+        old_instance = None
+        if not is_new:
+            try:
+                old_instance = Tyre.objects.get(pk=self.pk)
+            except Tyre.DoesNotExist:
+                is_new = True
+
+        # Enforce status logic
+        if self.current_vehicle:
+            self.status = self.STATUS_MOUNTED
+        elif self.status == self.STATUS_MOUNTED:
+            # If no vehicle but status was mounted, set to in stock
+            self.status = self.STATUS_IN_STOCK
+
+        super().save(*args, **kwargs)
+
+        # Automatic Logging (skip if explicitly told to)
+        if getattr(self, '_skip_auto_log', False):
+            return
+
+        if is_new:
+            if self.current_vehicle:
+                TyreLog.objects.create(
+                    tyre=self,
+                    action=TyreLog.ACTION_MOUNT,
+                    vehicle=self.current_vehicle,
+                    position=self.current_position,
+                    tyre_odo=self.total_km,
+                    distance_covered=0,
+                    notes="Initial mount on creation"
+                )
+        else:
+            # Check for changes in vehicle or position
+            vehicle_changed = old_instance.current_vehicle != self.current_vehicle
+            position_changed = old_instance.current_position != self.current_position
+
+            if vehicle_changed:
+                # Dismount from old vehicle if it existed
+                if old_instance.current_vehicle:
+                    # Calculate distance covered since last mount/rotation on this specific vehicle
+                    last_assignment_log = self.logs.filter(
+                        vehicle=old_instance.current_vehicle
+                    ).order_by('-date', '-id').first()
+                    dist = self.total_km - (last_assignment_log.tyre_odo if last_assignment_log else 0)
+                    
+                    TyreLog.objects.create(
+                        tyre=self,
+                        action=TyreLog.ACTION_DISMOUNT,
+                        vehicle=old_instance.current_vehicle,
+                        position=old_instance.current_position,
+                        tyre_odo=self.total_km,
+                        distance_covered=max(0, dist),
+                        notes=f"Automatic dismount: vehicle changed to {self.current_vehicle}" if self.current_vehicle else "Automatic dismount"
+                    )
+                
+                # Mount to new vehicle if it exists
+                if self.current_vehicle:
+                    TyreLog.objects.create(
+                        tyre=self,
+                        action=TyreLog.ACTION_MOUNT,
+                        vehicle=self.current_vehicle,
+                        position=self.current_position,
+                        tyre_odo=self.total_km,
+                        distance_covered=0,
+                        notes=f"Automatic mount: vehicle changed from {old_instance.current_vehicle}" if old_instance.current_vehicle else "Automatic mount"
+                    )
+            elif position_changed and self.current_vehicle:
+                # Same vehicle, different position -> Rotation
+                last_assignment_log = self.logs.filter(
+                    vehicle=self.current_vehicle
+                ).order_by('-date', '-id').first()
+                dist = self.total_km - (last_assignment_log.tyre_odo if last_assignment_log else 0)
+                
+                TyreLog.objects.create(
+                    tyre=self,
+                    action=TyreLog.ACTION_ROTATION,
+                    vehicle=self.current_vehicle,
+                    position=self.current_position,
+                    tyre_odo=self.total_km,
+                    distance_covered=max(0, dist),
+                    notes=f"Position changed from {old_instance.current_position} to {self.current_position}"
+                )
+            
+            # Check for Status Changes (Repair/Scrap)
+            status_changed = old_instance.status != self.status
+            if status_changed and not vehicle_changed: # vehicle_changed already handled Mount/Dismount
+                if self.status == self.STATUS_REPAIR:
+                    TyreLog.objects.create(
+                        tyre=self,
+                        action=TyreLog.ACTION_REPAIR,
+                        tyre_odo=self.total_km,
+                        notes="Status changed to Under Repair"
+                    )
+                elif self.status == self.STATUS_SCRAP:
+                    TyreLog.objects.create(
+                        tyre=self,
+                        action=TyreLog.ACTION_SCRAP,
+                        tyre_odo=self.total_km,
+                        notes="Status changed to Scrap"
+                    )
+                elif self.status == self.STATUS_IN_STOCK and old_instance.status == self.STATUS_REPAIR:
+                    TyreLog.objects.create(
+                        tyre=self,
+                        action=TyreLog.ACTION_DISMOUNT, # Using Dismount as 'Back to Stock'
+                        tyre_odo=self.total_km,
+                        notes="Repair completed, moved back to stock"
+                    )
 
 
 class TyreLog(models.Model):
@@ -261,7 +372,8 @@ class TyreLog(models.Model):
     
     vehicle = models.ForeignKey(Vehicle, on_delete=models.SET_NULL, null=True, blank=True)
     position = models.CharField(max_length=50, blank=True)
-    odometer = models.PositiveIntegerField(null=True, blank=True)
+    tyre_odo = models.PositiveIntegerField(null=True, blank=True, verbose_name="Tyre Odo (Total KM)")
+    distance_covered = models.PositiveIntegerField(default=0, verbose_name="Distance Covered on Vehicle")
     notes = models.TextField(blank=True)
 
     class Meta:

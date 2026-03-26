@@ -74,37 +74,113 @@ class TyreLogCreateView(LoginRequiredMixin, CreateView):
     form_class = TyreLogForm
     template_name = 'fleet/tyre_log_form.html'
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        action = self.request.GET.get('action')
+        if action:
+            context['action_title'] = f"{action} Tyre"
+        else:
+            context['action_title'] = "Log Tyre Action"
+        return context
+
     def get_initial(self):
         initial = super().get_initial()
         tyre_id = self.request.GET.get('tyre')
+        action = self.request.GET.get('action')
         if tyre_id:
-            initial['tyre'] = get_object_or_404(Tyre, pk=tyre_id)
+            tyre = get_object_or_404(Tyre, pk=tyre_id)
+            initial['tyre'] = tyre
+            if action == 'Dismount' and tyre.current_vehicle:
+                initial['vehicle'] = tyre.current_vehicle
+                initial['position'] = tyre.current_position
+        if action:
+            initial['action'] = action
         return initial
 
     def form_valid(self, form):
-        # Automatically update Tyre status/vehicle based on action
-        tyre = form.instance.tyre
-        action = form.instance.action
+        tyre = form.cleaned_data['tyre']
+        action = form.cleaned_data['action']
         
+        # We'll just let Tyre.save handle the auto-logging for Mount/Dismount/Rotation
+        # unless we want to keep the specific notes from the form.
+        # Actually, let's keep the notes but avoid double logs.
+        
+        # Synchronize Tyre model status
         if action == TyreLog.ACTION_MOUNT:
-            tyre.status = Tyre.STATUS_MOUNTED
             tyre.current_vehicle = form.instance.vehicle
             tyre.current_position = form.instance.position
-        elif action in [TyreLog.ACTION_DISMOUNT, TyreLog.ACTION_REPAIR]:
-            tyre.status = Tyre.STATUS_IN_STOCK if action == TyreLog.ACTION_DISMOUNT else Tyre.STATUS_REPAIR
+            tyre.status = Tyre.STATUS_MOUNTED
+        elif action == TyreLog.ACTION_DISMOUNT:
             tyre.current_vehicle = None
             tyre.current_position = ''
+            tyre.status = Tyre.STATUS_IN_STOCK
+        elif action == TyreLog.ACTION_REPAIR:
+            tyre.current_vehicle = None
+            tyre.current_position = ''
+            tyre.status = Tyre.STATUS_REPAIR
         elif action == TyreLog.ACTION_SCRAP:
-            tyre.status = Tyre.STATUS_SCRAP
             tyre.current_vehicle = None
             tyre.current_position = ''
-            
+            tyre.status = Tyre.STATUS_SCRAP
+        elif action == TyreLog.ACTION_ROTATION:
+            tyre.current_position = form.instance.position
+
+        # Using _skip_auto_log to avoid double logs, 
+        # then manually saving the TyreLog from the form 
+        # which has user notes/date/etc.
+        
+        # Calculate ODO and Distance for the form's log
+        form.instance.tyre_odo = tyre.total_km
+        if action in [TyreLog.ACTION_DISMOUNT, TyreLog.ACTION_ROTATION]:
+            v = tyre.current_vehicle or form.instance.vehicle
+            last_mount = tyre.logs.filter(action=TyreLog.ACTION_MOUNT, vehicle=v).first()
+            if last_mount:
+                form.instance.distance_covered = tyre.total_km - last_mount.tyre_odo
+            else:
+                form.instance.distance_covered = 0
+        else:
+            form.instance.distance_covered = 0
+
+        tyre._skip_auto_log = True
         tyre.save()
-        messages.success(self.request, f'Tyre action {action} logged.')
+        
+        messages.success(self.request, f'Tyre action {action} processed.')
         return super().form_valid(form)
 
     def get_success_url(self):
         return reverse_lazy('tyre-detail', kwargs={'pk': self.object.tyre.pk})
+
+
+@login_required
+def tyre_quick_action(request, pk, action):
+    """
+    Handles simple status changes without a form.
+    """
+    tyre = get_object_or_404(Tyre, pk=pk)
+    
+    if action == 'Dismount':
+        tyre.current_vehicle = None
+        tyre.current_position = ''
+        tyre.status = Tyre.STATUS_IN_STOCK
+    elif action == 'Repair':
+        tyre.current_vehicle = None
+        tyre.current_position = ''
+        tyre.status = Tyre.STATUS_REPAIR
+    elif action == 'Scrap':
+        tyre.current_vehicle = None
+        tyre.current_position = ''
+        tyre.status = Tyre.STATUS_SCRAP
+    elif action == 'Stock':
+        tyre.status = Tyre.STATUS_IN_STOCK
+        
+    tyre.save()
+    messages.success(request, f'Tyre action {action} processed successfully.')
+    
+    # Try to redirect back to referer (e.g., Vehicle Detail) if available
+    referer = request.META.get('HTTP_REFERER')
+    if referer:
+        return redirect(referer)
+    return redirect('tyre-detail', pk=pk)
 
 
 class BaseFleetPermissionMixin:

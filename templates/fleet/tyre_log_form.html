@@ -1,12 +1,12 @@
 {% extends 'base.html' %}
 
-{% block title %}Log Tyre Action - Transport Management System{% endblock %}
+{% block title %}{{ action_title|default:"Log Tyre Action" }} - Transport Management System{% endblock %}
 
 {% block content %}
 <div class="max-w-2xl mx-auto">
     <!-- BEGIN: Page Header -->
     <header class="mb-8">
-        <h1 class="text-3xl font-bold text-slate-900">Log Tyre Action</h1>
+        <h1 class="text-3xl font-bold text-slate-900">{{ action_title|default:"Log Tyre Action" }}</h1>
         <p class="text-sm text-slate-600 mt-1">Record movements, repairs, or maintenance for a specific tyre.</p>
     </header>
     <!-- END: Page Header -->
@@ -15,7 +15,7 @@
         <div class="bg-slate-50 border-b border-slate-200 py-4 px-6">
             <h3 class="text-sm font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
                 <i class="fa-solid fa-history text-emerald-600"></i>
-                <span>Activity Details</span>
+                <span>Action Details</span>
             </h3>
         </div>
         
@@ -28,9 +28,31 @@
             </div>
             {% endif %}
 
+            <!-- Section 0: Tyre Info (Read-only context) -->
+            {% if form.instance.tyre or form.initial.tyre %}
+            <div class="p-4 bg-slate-50 border border-slate-200 rounded-md flex items-center justify-between">
+                <div>
+                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Tyre Information</span>
+                    <p class="text-sm font-bold text-slate-900">
+                        {% with t=form.instance.tyre|default:form.initial.tyre %}
+                            {{ t.brand }} {{ t.size }} (SN: {{ t.serial_number }})
+                        {% endwith %}
+                    </p>
+                </div>
+                <div class="text-right">
+                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Current Odo</span>
+                    <p class="text-sm font-bold text-emerald-600">
+                        {% with t=form.instance.tyre|default:form.initial.tyre %}
+                            {{ t.total_km }} KM
+                        {% endwith %}
+                    </p>
+                </div>
+            </div>
+            {% endif %}
+
             <!-- Section 1: Core Info -->
             <div class="space-y-6">
-                <div>
+                <div id="tyre-field-container">
                     <label for="{{ form.tyre.id_for_label }}" class="block text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider">
                         Select Tyre
                     </label>
@@ -53,7 +75,7 @@
                         </div>
                     </div>
 
-                    <div>
+                    <div {% if request.GET.action %}class="hidden"{% endif %}>
                         <label for="{{ form.action.id_for_label }}" class="block text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider">
                             Action Type
                         </label>
@@ -62,11 +84,10 @@
                 </div>
             </div>
 
-            <!-- Section 2: Vehicle Context -->
-            <div class="pt-8 border-t border-slate-100 space-y-6">
+            <!-- Section 2: Vehicle Context (Conditional) -->
+            <div id="vehicle-context-section" class="pt-8 border-t border-slate-100 space-y-6">
                 <div class="flex items-center gap-2">
                     <h4 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Vehicle Context</h4>
-                    <span class="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">Required for Mounting</span>
                 </div>
                 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -83,18 +104,6 @@
                         </label>
                         {{ form.position }}
                         <p class="text-[10px] text-slate-500 mt-1 italic">e.g. Front Left, Rear Right Outer</p>
-                    </div>
-
-                    <div class="md:col-span-2">
-                        <label for="{{ form.odometer.id_for_label }}" class="block text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider">
-                            Current Vehicle Odometer
-                        </label>
-                        <div class="relative">
-                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                                <i class="fa-solid fa-gauge-high text-sm"></i>
-                            </div>
-                            {{ form.odometer }}
-                        </div>
                     </div>
                 </div>
             </div>
@@ -113,12 +122,31 @@
                     Cancel
                 </a>
                 <button type="submit" class="px-6 py-2 bg-emerald-600 text-white rounded-md font-medium hover:bg-emerald-700 shadow-sm transition-colors">
-                    Log Activity
+                    Save Action
                 </button>
             </div>
         </form>
     </div>
 </div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const actionSelect = document.getElementById('{{ form.action.id_for_label }}');
+        const vehicleSection = document.getElementById('vehicle-context-section');
+        
+        function toggleVehicleSection() {
+            const action = actionSelect.value;
+            if (action === 'Mount' || action === 'Dismount' || action === 'Rotation') {
+                vehicleSection.classList.remove('hidden');
+            } else {
+                vehicleSection.classList.add('hidden');
+            }
+        }
+        
+        actionSelect.addEventListener('change', toggleVehicleSection);
+        toggleVehicleSection(); // Run on load
+    });
+</script>
 
 <style>
     /* Styling for Django-rendered inputs to match Tailwind */
@@ -140,6 +168,9 @@
     }
     .relative input {
         padding-left: 2.5rem;
+    }
+    .hidden {
+        display: none;
     }
 </style>
 {% endblock %}
