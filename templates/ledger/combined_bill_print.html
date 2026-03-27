@@ -434,7 +434,7 @@
             <div class="signature-box">
                 <div style="text-align: right; width: 100%; font-size: 11px; color: #555;">For {{ bill.invoice_company_name|upper }}:</div>
                 <div style="margin-top: 40px; border-top: 1px solid #ccc; width: 80%; text-align: center; color: #555;">
-                    Authorized Signatory
+                    {{ bill.invoice_company_authorized_signatory|default:"Authorized Signatory" }}
                 </div>
             </div>
         </div>

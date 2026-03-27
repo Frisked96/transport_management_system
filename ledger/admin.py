@@ -2,7 +2,7 @@
 Admin configuration for Ledger app
 """
 from django.contrib import admin
-from .models import FinancialRecord, Party, TransactionCategory, CompanyAccount, TripAllocation, Bill, CompanyProfile, BillTrip
+from .models import FinancialRecord, Party, TransactionCategory, CompanyAccount, TripAllocation, Bill, BillTrip
 
 
 @admin.register(TransactionCategory)
@@ -29,10 +29,6 @@ class PartyAdmin(admin.ModelAdmin):
 class TripAllocationAdmin(admin.ModelAdmin):
     list_display = ['financial_record', 'trip', 'amount', 'created_at']
     search_fields = ['trip__trip_number', 'financial_record__description']
-
-@admin.register(CompanyProfile)
-class CompanyProfileAdmin(admin.ModelAdmin):
-    list_display = ['company_name', 'invoice_template']
 
 class BillTripInline(admin.TabularInline):
     model = BillTrip

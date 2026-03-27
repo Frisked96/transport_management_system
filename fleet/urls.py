@@ -30,4 +30,5 @@ urlpatterns = [
     path('tyre/add/', views.TyreCreateView.as_view(), name='tyre-create'),
     path('tyre/<int:pk>/update/', views.TyreUpdateView.as_view(), name='tyre-update'),
     path('tyre/log/add/', views.TyreLogCreateView.as_view(), name='tyre-log-create'),
+    path('tyre/<int:pk>/action/<str:action>/', views.tyre_quick_action, name='tyre-action'),
 ]

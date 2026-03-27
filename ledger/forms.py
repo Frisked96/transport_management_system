@@ -2,7 +2,7 @@ from django import forms
 from django.contrib.auth.models import User
 from django.db import models
 import json
-from .models import FinancialRecord, Party, CompanyAccount, Bill, CompanyProfile
+from .models import FinancialRecord, Party, CompanyAccount, Bill
 from trips.models import Trip
 
 
@@ -148,6 +148,7 @@ class CompanyAccountForm(forms.ModelForm):
         fields = [
             'name', 'address', 'phone_number', 'gstin', 'pan',
             'bank_name', 'account_number', 'ifsc_code', 'account_holder_name',
+            'authorized_signatory', 'invoice_template',
             'opening_balance', 'description'
         ]
         
@@ -167,6 +168,7 @@ class BillForm(forms.ModelForm):
             'issuer',
             'party', 
             'date', 
+            'status',
             'gst_type', 
             'gst_rate', 
             'trips',
@@ -246,29 +248,7 @@ class BillForm(forms.ModelForm):
                     defaults={'lr_no': lr_no}
                 )
             
-            # Update GST record
-            instance.update_ledger_gst_record()
+            # Sync to Ledger (After trips are established)
+            instance.sync_to_ledger()
             
         return instance
-
-class CompanyProfileForm(forms.ModelForm):
-    class Meta:
-        model = CompanyProfile
-        fields = [
-            'company_name', 
-            'address', 
-            'phone_number', 
-            'gstin', 
-            'bank_details', 
-            'authorized_signatory', 
-            'invoice_template'
-        ]
-        widgets = {
-            'address': forms.Textarea(attrs={'rows': 3}),
-            'bank_details': forms.Textarea(attrs={'rows': 3}),
-        }
-    
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        for field in self.fields.values():
-            field.widget.attrs.update({'class': 'block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white'})

@@ -80,6 +80,11 @@ class TyreForm(forms.ModelForm):
         for field in self.fields.values():
             field.widget.attrs.update({'class': 'block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white'})
         
+        # Status is enforced in model.save(), so we can make it informative but read-only if editing
+        if self.instance.pk:
+            self.fields['status'].widget.attrs['disabled'] = True
+            self.fields['status'].required = False
+
         # Add data-autocomplete-field for JS to hook into
         self.fields['brand'].widget.attrs.update({'data-autocomplete': 'tyre_brand', 'list': 'tyre_brand_list'})
         self.fields['size'].widget.attrs.update({'data-autocomplete': 'tyre_size', 'list': 'tyre_size_list'})
@@ -95,6 +100,12 @@ class TyreForm(forms.ModelForm):
             'notes': forms.Textarea(attrs={'rows': 2}),
         }
 
+    def clean_status(self):
+        # Return current status if disabled
+        if self.instance.pk:
+            return self.instance.status
+        return self.cleaned_data.get('status')
+
 
 class TyreLogForm(forms.ModelForm):
     """
@@ -105,9 +116,24 @@ class TyreLogForm(forms.ModelForm):
         for field in self.fields.values():
             field.widget.attrs.update({'class': 'block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white'})
 
+        # Filter tyre if provided
+        tyre_val = self.initial.get('tyre') or self.data.get('tyre')
+        if tyre_val:
+            if isinstance(tyre_val, Tyre):
+                tyre = tyre_val
+            else:
+                try:
+                    tyre = Tyre.objects.get(pk=tyre_val)
+                except (Tyre.DoesNotExist, ValueError, TypeError):
+                    tyre = None
+            
+            if tyre:
+                self.fields['tyre'].initial = tyre
+                self.fields['tyre'].widget = forms.HiddenInput()
+
     class Meta:
         model = TyreLog
-        fields = ['tyre', 'date', 'action', 'vehicle', 'position', 'odometer', 'notes']
+        fields = ['tyre', 'date', 'action', 'vehicle', 'position', 'notes']
         widgets = {
             'date': forms.DateInput(attrs={'type': 'date'}),
             'notes': forms.Textarea(attrs={'rows': 2}),
