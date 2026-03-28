@@ -199,7 +199,7 @@
                             </td>
                             <td class="px-6 py-4 text-right">
                                 <div class="flex justify-end space-x-2">
-                                    <a href="{% url 'print-invoice' bill.pk %}" target="_blank" class="p-1.5 text-slate-400 hover:text-slate-600 transition-colors" title="Print">
+                                    <a href="{% url 'print-combined-bill' bill.pk %}" target="_blank" class="p-1.5 text-slate-400 hover:text-slate-600 transition-colors" title="Print">
                                         <i class="fa-solid fa-print"></i>
                                     </a>
                                     <a href="{% url 'bill-update' bill.pk %}" class="p-1.5 text-slate-400 hover:text-emerald-600 transition-colors" title="Edit">
