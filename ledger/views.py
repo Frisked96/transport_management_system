@@ -703,6 +703,13 @@ class BillDetailView(LoginRequiredMixin, BaseLedgerPermissionMixin, DetailView):
     template_name = 'ledger/bill_detail.html'
     context_object_name = 'bill'
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # Add the same summarized items used in the print view
+        context['invoice_items'] = group_trips_for_bill(self.object)
+        context['bill_trips'] = self.object.bill_trips.select_related('trip', 'trip__vehicle').order_by('trip__date')
+        return context
+
 def group_trips_for_bill(bill):
     """
     Groups bill_trips by (Pickup, Delivery, Rate) and returns a list of dictionaries.
