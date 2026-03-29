@@ -506,6 +506,14 @@ def manager_dashboard(request):
         date__month=current_month,
         date__year=current_year
     ).aggregate(total=models.Sum('amount'))['total'] or 0
+
+    # Calculate GST portion of income (from Final Bills)
+    from ledger.models import Bill
+    gst_this_month = sum(bill.gst_amount for bill in Bill.objects.filter(
+        status=Bill.STATUS_FINAL,
+        date__month=current_month,
+        date__year=current_year
+    ))
     
     # Recent trips
     recent_trips = Trip.objects.order_by('-created_at')[:10]
@@ -521,7 +529,8 @@ def manager_dashboard(request):
         'vehicles_due_maintenance': vehicles_due_maintenance,
         'income_this_month': income_this_month,
         'expenses_this_month': expenses_this_month,
-        'net_profit': income_this_month - expenses_this_month,
+        'net_profit_incl_gst': income_this_month - expenses_this_month,
+        'net_profit_excl_gst': (income_this_month - gst_this_month) - expenses_this_month,
         'recent_trips': recent_trips,
         'vehicles_in_maintenance': vehicles_in_maintenance,
     }

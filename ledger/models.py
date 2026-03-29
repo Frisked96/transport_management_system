@@ -43,6 +43,7 @@ class Party(models.Model):
     
     # Structured Bank Details
     bank_name = models.CharField(max_length=200, blank=True, verbose_name='Bank Name')
+    bank_branch = models.CharField(max_length=200, blank=True, verbose_name='Bank Branch')
     account_number = models.CharField(max_length=50, blank=True, verbose_name='Account Number')
     ifsc_code = models.CharField(max_length=20, blank=True, verbose_name='IFSC Code')
     account_holder_name = models.CharField(max_length=200, blank=True, verbose_name='Account Holder Name')
@@ -93,6 +94,7 @@ class CompanyAccount(models.Model):
     
     # Primary Bank Details for this Firm
     bank_name = models.CharField(max_length=200, blank=True, verbose_name='Bank Name')
+    bank_branch = models.CharField(max_length=200, blank=True, verbose_name='Bank Branch')
     account_number = models.CharField(max_length=50, blank=True, verbose_name='Account Number')
     ifsc_code = models.CharField(max_length=20, blank=True, verbose_name='IFSC Code')
     account_holder_name = models.CharField(max_length=200, blank=True, verbose_name='Account Holder Name')
@@ -342,6 +344,7 @@ class Bill(models.Model):
     
     # Bank Details Snapshot
     invoice_bank_name = models.CharField(max_length=200, blank=True, verbose_name="Bank Name (Snapshot)")
+    invoice_bank_branch = models.CharField(max_length=200, blank=True, verbose_name="Bank Branch (Snapshot)")
     invoice_bank_account = models.CharField(max_length=50, blank=True, verbose_name="Bank Account (Snapshot)")
     invoice_bank_ifsc = models.CharField(max_length=20, blank=True, verbose_name="Bank IFSC (Snapshot)")
     
@@ -357,6 +360,7 @@ class Bill(models.Model):
             self.invoice_company_gstin = self.issuer.gstin
             self.invoice_company_authorized_signatory = self.issuer.authorized_signatory
             self.invoice_bank_name = self.issuer.bank_name
+            self.invoice_bank_branch = self.issuer.bank_branch
             self.invoice_bank_account = self.issuer.account_number
             self.invoice_bank_ifsc = self.issuer.ifsc_code
         

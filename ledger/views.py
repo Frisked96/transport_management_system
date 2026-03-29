@@ -302,6 +302,18 @@ def financial_summary(request):
         category__type=TransactionCategory.TYPE_EXPENSE,
         date__year=current_year
     ).aggregate(total=Sum('amount'))['total'] or 0
+
+    # Calculate GST portion from Final Bills
+    from .models import Bill
+    monthly_gst = sum(bill.gst_amount for bill in Bill.objects.filter(
+        status=Bill.STATUS_FINAL,
+        date__month=current_month,
+        date__year=current_year
+    ))
+    yearly_gst = sum(bill.gst_amount for bill in Bill.objects.filter(
+        status=Bill.STATUS_FINAL,
+        date__year=current_year
+    ))
     
     # Category breakdown for current month
     category_breakdown = []
@@ -321,10 +333,12 @@ def financial_summary(request):
     context = {
         'monthly_income': monthly_income,
         'monthly_expenses': monthly_expenses,
-        'monthly_net': monthly_income - monthly_expenses,
+        'monthly_net_incl_gst': monthly_income - monthly_expenses,
+        'monthly_net_excl_gst': (monthly_income - monthly_gst) - monthly_expenses,
         'yearly_income': yearly_income,
         'yearly_expenses': yearly_expenses,
-        'yearly_net': yearly_income - yearly_expenses,
+        'yearly_net_incl_gst': yearly_income - yearly_expenses,
+        'yearly_net_excl_gst': (yearly_income - yearly_gst) - yearly_expenses,
         'category_breakdown': category_breakdown,
         'current_month': datetime(current_year, current_month, 1).strftime('%B %Y'),
     }

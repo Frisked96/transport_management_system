@@ -123,7 +123,7 @@ class PartyForm(forms.ModelForm):
         model = Party
         fields = [
             'name', 'phone_number', 'state', 'address', 'gstin',
-            'bank_name', 'account_number', 'ifsc_code', 'account_holder_name',
+            'bank_name', 'bank_branch', 'account_number', 'ifsc_code', 'account_holder_name',
             'bank_details'
         ]
         
@@ -147,7 +147,7 @@ class CompanyAccountForm(forms.ModelForm):
         model = CompanyAccount
         fields = [
             'name', 'address', 'phone_number', 'gstin', 'pan',
-            'bank_name', 'account_number', 'ifsc_code', 'account_holder_name',
+            'bank_name', 'bank_branch', 'account_number', 'ifsc_code', 'account_holder_name',
             'authorized_signatory', 'invoice_template',
             'opening_balance', 'description'
         ]

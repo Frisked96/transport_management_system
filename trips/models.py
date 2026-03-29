@@ -534,6 +534,21 @@ class Trip(models.Model):
         """Calculate total cost (from TripExpense)"""
         return self.custom_expenses.aggregate(total=models.Sum('amount'))['total'] or 0
 
+    @property
+    def net_profit_excl_gst(self):
+        """Calculate net profit for this trip (Revenue Excl. GST - Total Cost)"""
+        return self.revenue - self.total_cost
+
+    @property
+    def net_profit_incl_gst(self):
+        """Calculate net profit for this trip (Revenue Incl. GST - Total Cost)"""
+        return self.total_revenue - self.total_cost
+
+    @property
+    def net_profit(self):
+        """Alias for backward compatibility"""
+        return self.net_profit_excl_gst
+
 
 class TripExpense(models.Model):
     """

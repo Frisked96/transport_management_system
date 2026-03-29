@@ -20,17 +20,23 @@ class Driver(models.Model):
     employee_id = models.CharField(
         max_length=20,
         unique=True,
-        verbose_name='Employee ID'
+        verbose_name='Employee ID',
+        blank=True,
+        null=True
     )
 
     license_number = models.CharField(
         max_length=50,
-        verbose_name='License Number'
+        verbose_name='License Number',
+        blank=True,
+        null=True
     )
 
     phone_number = models.CharField(
         max_length=20,
-        verbose_name='Phone Number'
+        verbose_name='Phone Number',
+        blank=True,
+        null=True
     )
 
     address = models.TextField(
@@ -52,7 +58,10 @@ class Driver(models.Model):
         ]
 
     def __str__(self):
-        return f"{self.user.get_full_name()} ({self.employee_id})"
+        name = self.user.get_full_name() or self.user.username
+        if self.employee_id:
+            return f"{name} ({self.employee_id})"
+        return name
 
     @property
     def current_balance(self):

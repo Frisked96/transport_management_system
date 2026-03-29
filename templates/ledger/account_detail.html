@@ -127,6 +127,10 @@
                         <dd class="text-sm font-bold text-slate-800 text-right">{{ account.bank_name|default:"-" }}</dd>
                     </div>
                     <div class="flex justify-between">
+                        <dt class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Branch</dt>
+                        <dd class="text-sm font-medium text-slate-800 text-right">{{ account.bank_branch|default:"-" }}</dd>
+                    </div>
+                    <div class="flex justify-between">
                         <dt class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Account No</dt>
                         <dd class="text-sm font-medium text-slate-800 text-right">{{ account.account_number|default:"-" }}</dd>
                     </div>

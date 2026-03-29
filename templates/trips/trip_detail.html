@@ -199,15 +199,24 @@
                 </div>
 
                 <!-- Estimated Net Profit -->
-                <div class="px-6 py-6 bg-slate-900 text-white">
-                    <div class="flex justify-between items-center">
-                        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Est. Net Profit</span>
-                        {% with profit=trip.revenue|add:trip.total_cost|add:"-1" %}
-                        {# Note: Profit calculation usually excludes GST as it is a pass-through tax #}
-                        <span class="text-3xl font-black {% if trip.revenue < trip.total_cost %}text-red-400{% else %}text-emerald-400{% endif %}">
-                            ₹{{ trip.revenue|add:"-0"|add:trip.total_cost|floatformat:2 }}
+                <div class="px-6 py-6 bg-slate-900 text-white space-y-4">
+                    <div class="flex justify-between items-center border-b border-slate-800 pb-4">
+                        <div class="flex flex-col">
+                            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Profit (Excl. GST)</span>
+                            <span class="text-[9px] text-slate-500 italic">Net Operational Earnings</span>
+                        </div>
+                        <span class="text-2xl font-black {% if trip.net_profit_excl_gst < 0 %}text-red-400{% else %}text-emerald-400{% endif %}">
+                            ₹{{ trip.net_profit_excl_gst|floatformat:2 }}
                         </span>
-                        {% endwith %}
+                    </div>
+                    <div class="flex justify-between items-center pt-2">
+                        <div class="flex flex-col">
+                            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Profit (Incl. GST)</span>
+                            <span class="text-[9px] text-slate-500 italic">Total Final Settlement</span>
+                        </div>
+                        <span class="text-3xl font-black {% if trip.net_profit_incl_gst < 0 %}text-red-400{% else %}text-emerald-400{% endif %}">
+                            ₹{{ trip.net_profit_incl_gst|floatformat:2 }}
+                        </span>
                     </div>
                 </div>
             </div>
