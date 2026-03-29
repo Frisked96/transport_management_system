@@ -49,6 +49,11 @@ class Driver(models.Model):
         verbose_name='Joined Date'
     )
 
+    @property
+    def name(self):
+        """Returns the full name or username of the driver"""
+        return self.user.get_full_name() or self.user.username
+
     class Meta:
         verbose_name = 'Driver'
         verbose_name_plural = 'Drivers'

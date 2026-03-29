@@ -33,7 +33,20 @@ class Document(models.Model):
     )
 
     expiry_date = models.DateField(
-        verbose_name='Expiry Date'
+        verbose_name='Expiry Date',
+        null=True,
+        blank=True
+    )
+
+    never_expires = models.BooleanField(
+        default=False,
+        verbose_name='Never Expires'
+    )
+
+    notes = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name='Notes'
     )
 
     scanned_copy = models.FileField(
@@ -55,9 +68,13 @@ class Document(models.Model):
 
     @property
     def is_expired(self):
+        if self.never_expires or not self.expiry_date:
+            return False
         return self.expiry_date < timezone.now().date()
 
     @property
     def days_until_expiry(self):
+        if self.never_expires or not self.expiry_date:
+            return None
         delta = self.expiry_date - timezone.now().date()
         return delta.days

@@ -344,6 +344,27 @@ class Trip(models.Model):
                     description=f"Invoice for Trip {self.trip_number}"
                 )
 
+    def sync_fuel_log(self):
+        """Synchronize diesel fields to fleet.FuelLog"""
+        from fleet.models import FuelLog
+        
+        # Check if we have enough data to create a fuel log
+        if self.diesel_liters and self.diesel_total_cost and self.diesel_liters > 0:
+            FuelLog.objects.update_or_create(
+                trip=self,
+                defaults={
+                    'vehicle': self.vehicle,
+                    'date': self.date.date(),
+                    'liters': self.diesel_liters,
+                    'rate': self.diesel_rate or 0,
+                    'total_cost': self.diesel_total_cost,
+                    'odometer': self.start_odometer or self.vehicle.current_odometer or 0
+                }
+            )
+        else:
+            # If data is missing or zeroed out, remove any existing fuel log for this trip
+            FuelLog.objects.filter(trip=self).delete()
+
     def save(self, *args, **kwargs):
         """
         Override save to handle business logic
@@ -454,6 +475,11 @@ class Trip(models.Model):
 
         # Sync to Ledger
         self.sync_ledger_invoice()
+
+        # Sync Fuel Log
+        update_fields = kwargs.get('update_fields')
+        if update_fields is None or any(f in update_fields for f in ['diesel_liters', 'diesel_total_cost', 'diesel_rate', 'date', 'vehicle', 'start_odometer']):
+            self.sync_fuel_log()
 
         if is_new:
             # Create default TripExpense entries
@@ -679,4 +705,10 @@ class TripExpense(models.Model):
                 # We use save(update_fields) to trigger the Trip.save logic 
                 # but only for this field.
                 self.trip.save(update_fields=['diesel_total_cost'])
+
+@receiver(post_delete, sender=Trip)
+def delete_related_fuel_log(sender, instance, **kwargs):
+    """Ensure FuelLog is deleted when Trip is deleted"""
+    from fleet.models import FuelLog
+    FuelLog.objects.filter(trip=instance).delete()
 
