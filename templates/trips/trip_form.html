@@ -81,12 +81,32 @@
                     <div class="md:col-span-6">
                         <label for="{{ form.start_odometer.id_for_label }}" class="block text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider">Start Odometer</label>
                         {{ form.start_odometer }}
+                        {% if form.start_odometer.help_text %}<p class="text-xs text-slate-500 mt-1">{{ form.start_odometer.help_text }}</p>{% endif %}
                         {% if form.start_odometer.errors %}<div class="text-red-600 text-xs mt-1">{{ form.start_odometer.errors }}</div>{% endif %}
                     </div>
                     <div class="md:col-span-6">
                         <label for="{{ form.end_odometer.id_for_label }}" class="block text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider">End Odometer</label>
                         {{ form.end_odometer }}
+                        {% if form.end_odometer.help_text %}<p class="text-xs text-slate-500 mt-1">{{ form.end_odometer.help_text }}</p>{% endif %}
                         {% if form.end_odometer.errors %}<div class="text-red-600 text-xs mt-1">{{ form.end_odometer.errors }}</div>{% endif %}
+                    </div>
+
+                    <!-- Fuel Details -->
+                    <div class="md:col-span-4">
+                        <label for="{{ form.diesel_liters.id_for_label }}" class="block text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider">Diesel (Ltrs)</label>
+                        {{ form.diesel_liters }}
+                        {% if form.diesel_liters.help_text %}<p class="text-xs text-slate-500 mt-1">{{ form.diesel_liters.help_text }}</p>{% endif %}
+                        {% if form.diesel_liters.errors %}<div class="text-red-600 text-xs mt-1">{{ form.diesel_liters.errors }}</div>{% endif %}
+                    </div>
+                    <div class="md:col-span-4">
+                        <label for="{{ form.diesel_rate.id_for_label }}" class="block text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider">Rate (₹/Ltr)</label>
+                        {{ form.diesel_rate }}
+                        {% if form.diesel_rate.errors %}<div class="text-red-600 text-xs mt-1">{{ form.diesel_rate.errors }}</div>{% endif %}
+                    </div>
+                    <div class="md:col-span-4">
+                        <label for="{{ form.diesel_total_cost.id_for_label }}" class="block text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider">Total Fuel Cost</label>
+                        {{ form.diesel_total_cost }}
+                        {% if form.diesel_total_cost.errors %}<div class="text-red-600 text-xs mt-1">{{ form.diesel_total_cost.errors }}</div>{% endif %}
                     </div>
 
                     <!-- Notes -->
@@ -218,6 +238,31 @@ $(document).ready(function() {
 
     setupLocationSelect2('#id_pickup_location', 'pickup_location');
     setupLocationSelect2('#id_delivery_location', 'delivery_location');
+
+    // Fuel calculation logic
+    const $liters = $('#id_diesel_liters');
+    const $rate = $('#id_diesel_rate');
+    const $total = $('#id_diesel_total_cost');
+
+    function updateFromRate() {
+        const liters = parseFloat($liters.val()) || 0;
+        const rate = parseFloat($rate.val()) || 0;
+        if (liters > 0 && rate > 0) {
+            $total.val((liters * rate).toFixed(2));
+        }
+    }
+
+    function updateFromTotal() {
+        const liters = parseFloat($liters.val()) || 0;
+        const total = parseFloat($total.val()) || 0;
+        if (liters > 0 && total > 0) {
+            $rate.val((total / liters).toFixed(2));
+        }
+    }
+
+    $liters.on('input', updateFromRate);
+    $rate.on('input', updateFromRate);
+    $total.on('input', updateFromTotal);
 });
 </script>
 {% endblock %}

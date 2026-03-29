@@ -364,6 +364,10 @@ class TripExpenseUpdateView(LoginRequiredMixin, PermissionRequiredMixin, FormVie
             name='Diesel',
             defaults={'amount': diesel_amount}
         )
+        
+        # Explicitly update Trip fields as well
+        trip.diesel_total_cost = diesel_amount
+        trip.save(update_fields=['diesel_total_cost'])
 
         # Update or create Toll
         TripExpense.objects.update_or_create(
@@ -416,6 +420,25 @@ class TripCustomExpenseDeleteView(LoginRequiredMixin, PermissionRequiredMixin, D
         return reverse_lazy('trip-detail', kwargs={'pk': self.object.trip.pk})
 
 
+from .forms import TripFuelUpdateForm
+
+class TripFuelUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+    """
+    View to update fuel data for a trip
+    """
+    model = Trip
+    form_class = TripFuelUpdateForm
+    permission_required = 'trips.change_trip'
+    
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        messages.success(self.request, 'Fuel data updated successfully!')
+        return response
+    
+    def get_success_url(self):
+        return reverse_lazy('trip-detail', kwargs={'pk': self.object.pk})
+
+
 @login_required
 def update_trip_status(request, pk):
     """
@@ -442,23 +465,28 @@ def update_trip_status(request, pk):
         return redirect('trip-detail', pk=pk)
     
     if request.method == 'POST':
+        # Get the status from DB before the form binds and changes it
+        old_status = Trip.objects.get(pk=pk).status
         form = TripStatusForm(request.POST, instance=trip)
+        
         if form.is_valid():
-            old_status = trip.status
+            new_status = form.cleaned_data.get('status')
             form.save()
             
-            messages.success(
-                request, 
-                f'Trip status updated from "{old_status}" to "{trip.status}" successfully!'
-            )
+            if old_status != new_status:
+                messages.success(
+                    request,
+                    f'Trip status updated from "{old_status}" to "{new_status}" successfully!'
+                )
+
+            # Redirect to referer if available, else to detail page
+            next_url = request.META.get('HTTP_REFERER')
+            if next_url:
+                return redirect(next_url)
             return redirect('trip-detail', pk=pk)
-    else:
-        form = TripStatusForm(instance=trip)
     
-    return render(request, 'trips/trip_status_form.html', {
-        'form': form,
-        'trip': trip
-    })
+    # If someone tries to access GET /status/update, just take them to the detail page
+    return redirect('trip-detail', pk=pk)
 
 
 @login_required

@@ -141,6 +141,30 @@ class Trip(models.Model):
         verbose_name='End Odometer'
     )
 
+    diesel_liters = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name='Diesel Liters'
+    )
+
+    diesel_total_cost = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name='Diesel Total Cost'
+    )
+
+    diesel_rate = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name='Diesel Rate (Price/Ltr)'
+    )
+
     # Date of the trip (replaces date from TripLeg)
     date = models.DateTimeField(
         verbose_name='Trip Date',
@@ -242,7 +266,15 @@ class Trip(models.Model):
         """
         Validate trip logic
         """
-        pass
+        if self.start_odometer is not None and self.end_odometer is not None:
+            if self.end_odometer < self.start_odometer:
+                # Raising as a non-field error (string) to prevent ValueError 
+                # in forms that don't include both odometer fields.
+                raise ValidationError(
+                    f"End Odometer ({self.end_odometer}) cannot be less than Start Odometer ({self.start_odometer}). "
+                    "Did you enter the distance covered instead of the actual odometer reading? "
+                    "Please correct the odometer readings in the 'Edit Trip' page."
+                )
 
     def sync_ledger_invoice(self):
         """
@@ -331,6 +363,17 @@ class Trip(models.Model):
         elif self.status != self.STATUS_COMPLETED:
             self.actual_completion_datetime = None
 
+        # 3. Diesel Calculation Logic
+        if self.diesel_liters:
+            from decimal import Decimal
+            liters = Decimal(str(self.diesel_liters))
+            
+            if self.diesel_rate and not self.diesel_total_cost:
+                self.diesel_total_cost = liters * Decimal(str(self.diesel_rate))
+            elif self.diesel_total_cost and not self.diesel_rate:
+                if liters > 0:
+                    self.diesel_rate = Decimal(str(self.diesel_total_cost)) / liters
+
         # Handle Trip Number generation and regeneration
         reg_plate = self.vehicle.registration_plate
         
@@ -368,12 +411,13 @@ class Trip(models.Model):
         super().save(*args, **kwargs)
 
         # 3. Post-save logic: Update Vehicle Odometer and Tyre KM
-        if self.status == self.STATUS_COMPLETED and self.end_odometer:
+        if self.end_odometer:
             # Update vehicle's current odometer if this is the most recent trip or has highest odo
             if self.end_odometer > self.vehicle.current_odometer:
                 self.vehicle.current_odometer = self.end_odometer
                 self.vehicle.save(update_fields=['current_odometer'])
 
+        if self.status == self.STATUS_COMPLETED and self.end_odometer:
             # Update Tyres total_km
             if self.start_odometer and self.end_odometer > self.start_odometer:
                 distance = self.end_odometer - self.start_odometer
@@ -413,8 +457,17 @@ class Trip(models.Model):
 
         if is_new:
             # Create default TripExpense entries
-            TripExpense.objects.create(trip=self, name='Diesel', amount=0)
+            TripExpense.objects.create(trip=self, name='Diesel', amount=self.diesel_total_cost or 0)
             TripExpense.objects.create(trip=self, name='Toll', amount=0)
+        else:
+            # Update Diesel expense if total_cost changed
+            diesel_exp = TripExpense.objects.filter(trip=self, name='Diesel').first()
+            if diesel_exp:
+                if diesel_exp.amount != (self.diesel_total_cost or 0):
+                    diesel_exp.amount = self.diesel_total_cost or 0
+                    diesel_exp.save(update_fields=['amount'])
+            else:
+                TripExpense.objects.create(trip=self, name='Diesel', amount=self.diesel_total_cost or 0)
     
     @property
     def start_date(self):
@@ -549,6 +602,32 @@ class Trip(models.Model):
         """Alias for backward compatibility"""
         return self.net_profit_excl_gst
 
+    @property
+    def total_diesel_liters(self):
+        """Total liters used in trip"""
+        return self.diesel_liters or 0
+
+    @property
+    def total_fuel_cost(self):
+        """Total cost of fuel for this trip"""
+        return self.diesel_total_cost or 0
+
+    @property
+    def distance_covered(self):
+        """Distance covered in KM"""
+        if self.start_odometer is not None and self.end_odometer is not None:
+            return max(0, self.end_odometer - self.start_odometer)
+        return 0
+
+    @property
+    def diesel_average(self):
+        """Diesel average (mileage) in KM/L"""
+        liters = self.total_diesel_liters
+        distance = self.distance_covered
+        if liters > 0 and distance > 0:
+            return distance / liters
+        return 0
+
 
 class TripExpense(models.Model):
     """
@@ -589,4 +668,15 @@ class TripExpense(models.Model):
     
     def __str__(self):
         return f"{self.name} - {self.amount}"
+
+    def save(self, *args, **kwargs):
+        """Sync diesel expense back to Trip model fields if it matches 'Diesel'"""
+        super().save(*args, **kwargs)
+        if self.name == 'Diesel' and self.trip:
+            # Only update if the value has actually changed to avoid infinite recursion
+            if self.trip.diesel_total_cost != self.amount:
+                self.trip.diesel_total_cost = self.amount
+                # We use save(update_fields) to trigger the Trip.save logic 
+                # but only for this field.
+                self.trip.save(update_fields=['diesel_total_cost'])
 
