@@ -4,17 +4,17 @@
 
 {% block content %}
 <!-- BEGIN: Page Header -->
-<header class="flex flex-col md:flex-row md:items-center justify-between mb-8">
+<header class="flex flex-col md:flex-row md:items-center justify-between mb-8 space-y-4 md:space-y-0">
     <div>
-        <h1 class="text-3xl font-bold text-slate-900">Manager Dashboard</h1>
-        <p class="text-sm text-slate-600 mt-1">Real-time overview of operations and finance</p>
+        <h1 class="text-3xl font-bold text-slate-900">Dashboard</h1>
+        <p class="text-sm text-slate-600 mt-1">Real-time overview of operations</p>
     </div>
-    <div class="mt-4 md:mt-0 flex space-x-3">
-        <a href="{% url 'trip-list' %}" class="flex items-center space-x-2 px-4 py-2 bg-emerald-600 text-white rounded-md text-sm font-medium hover:bg-emerald-700 shadow-sm transition-colors">
+    <div class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
+        <a href="{% url 'trip-list' %}" class="flex items-center justify-center space-x-2 px-4 py-2 bg-emerald-600 text-white rounded-md text-sm font-medium hover:bg-emerald-700 shadow-sm transition-colors w-full sm:w-auto">
             <i class="fa-solid fa-truck"></i>
             <span>View All Trips</span>
         </a>
-        <a href="{% url 'financial-summary' %}" class="flex items-center space-x-2 px-4 py-2 border border-slate-300 rounded-md bg-white text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors">
+        <a href="{% url 'financial-summary' %}" class="flex items-center justify-center space-x-2 px-4 py-2 border border-slate-300 rounded-md bg-white text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors w-full sm:w-auto">
             <i class="fa-solid fa-chart-line"></i>
             <span>Financial Reports</span>
         </a>
@@ -28,41 +28,41 @@
         <div class="h-6 w-1 bg-blue-500 rounded-full"></div>
         <h2 class="text-sm font-bold text-slate-700 uppercase tracking-wider">Operational Status</h2>
     </div>
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div class="bg-white border border-slate-200 rounded-lg p-5 shadow-sm border-l-4 border-l-blue-500">
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+        <div class="bg-white border border-slate-200 rounded-lg p-4 md:p-5 shadow-sm border-l-4 border-l-blue-500">
             <div class="flex items-center justify-between mb-2">
-                <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Active Trips</h3>
-                <i class="fa-solid fa-truck-fast text-blue-500 opacity-20 text-xl"></i>
+                <h3 class="text-[10px] md:text-xs font-semibold text-slate-500 uppercase tracking-wider">Active</h3>
+                <i class="fa-solid fa-truck-fast text-blue-500 opacity-20 text-lg md:text-xl"></i>
             </div>
-            <div class="text-3xl font-bold text-blue-600">{{ active_trips }}</div>
-            <p class="text-[10px] text-slate-400 mt-1 font-medium uppercase italic">In Progress</p>
+            <div class="text-2xl md:text-3xl font-bold text-blue-600">{{ active_trips }}</div>
+            <p class="text-[9px] md:text-[10px] text-slate-400 mt-1 font-medium uppercase italic">In Progress</p>
         </div>
         
-        <div class="bg-white border border-slate-200 rounded-lg p-5 shadow-sm border-l-4 border-l-emerald-500">
+        <div class="bg-white border border-slate-200 rounded-lg p-4 md:p-5 shadow-sm border-l-4 border-l-emerald-500">
             <div class="flex items-center justify-between mb-2">
-                <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Completed (Month)</h3>
-                <i class="fa-solid fa-circle-check text-emerald-500 opacity-20 text-xl"></i>
+                <h3 class="text-[10px] md:text-xs font-semibold text-slate-500 uppercase tracking-wider">Completed</h3>
+                <i class="fa-solid fa-circle-check text-emerald-500 opacity-20 text-lg md:text-xl"></i>
             </div>
-            <div class="text-3xl font-bold text-emerald-600">{{ completed_this_month }}</div>
-            <p class="text-[10px] text-slate-400 mt-1 font-medium uppercase italic">Trips Finished</p>
+            <div class="text-2xl md:text-3xl font-bold text-emerald-600">{{ completed_this_month }}</div>
+            <p class="text-[9px] md:text-[10px] text-slate-400 mt-1 font-medium uppercase italic">This Month</p>
         </div>
         
-        <div class="bg-white border border-slate-200 rounded-lg p-5 shadow-sm border-l-4 border-l-amber-500">
+        <div class="bg-white border border-slate-200 rounded-lg p-4 md:p-5 shadow-sm border-l-4 border-l-amber-500">
             <div class="flex items-center justify-between mb-2">
-                <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Maintenance Due</h3>
-                <i class="fa-solid fa-screwdriver-wrench text-amber-500 opacity-20 text-xl"></i>
+                <h3 class="text-[10px] md:text-xs font-semibold text-slate-500 uppercase tracking-wider">Due</h3>
+                <i class="fa-solid fa-screwdriver-wrench text-amber-500 opacity-20 text-lg md:text-xl"></i>
             </div>
-            <div class="text-3xl font-bold text-amber-600">{{ vehicles_due_maintenance }}</div>
-            <p class="text-[10px] text-slate-400 mt-1 font-medium uppercase italic">Within 7 days</p>
+            <div class="text-2xl md:text-3xl font-bold text-amber-600">{{ vehicles_due_maintenance }}</div>
+            <p class="text-[9px] md:text-[10px] text-slate-400 mt-1 font-medium uppercase italic">Maintenance</p>
         </div>
         
-        <div class="bg-white border border-slate-200 rounded-lg p-5 shadow-sm border-l-4 border-l-red-500">
+        <div class="bg-white border border-slate-200 rounded-lg p-4 md:p-5 shadow-sm border-l-4 border-l-red-500">
             <div class="flex items-center justify-between mb-2">
-                <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wider">In Maintenance</h3>
-                <i class="fa-solid fa-ban text-red-500 opacity-20 text-xl"></i>
+                <h3 class="text-[10px] md:text-xs font-semibold text-slate-500 uppercase tracking-wider">Down</h3>
+                <i class="fa-solid fa-ban text-red-500 opacity-20 text-lg md:text-xl"></i>
             </div>
-            <div class="text-3xl font-bold text-red-600">{{ vehicles_in_maintenance }}</div>
-            <p class="text-[10px] text-slate-400 mt-1 font-medium uppercase italic">Unavailable</p>
+            <div class="text-2xl md:text-3xl font-bold text-red-600">{{ vehicles_in_maintenance }}</div>
+            <p class="text-[9px] md:text-[10px] text-slate-400 mt-1 font-medium uppercase italic">In Service</p>
         </div>
     </div>
 </section>
