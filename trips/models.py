@@ -266,6 +266,36 @@ class Trip(models.Model):
         """
         Validate trip logic
         """
+        # Check if we are adding a new trip or changing the vehicle of an existing trip
+        check_vehicle = False
+        if self._state.adding:
+            check_vehicle = True
+        else:
+            try:
+                old_instance = Trip.objects.get(pk=self.pk)
+                if old_instance.vehicle != self.vehicle:
+                    check_vehicle = True
+            except Trip.DoesNotExist:
+                check_vehicle = True
+                
+        if check_vehicle and self.vehicle:
+            # Check if there are any uncompleted trips for this vehicle
+            uncompleted_trips = Trip.objects.filter(
+                vehicle=self.vehicle
+            ).exclude(status=self.STATUS_COMPLETED)
+            
+            if not self._state.adding:
+                uncompleted_trips = uncompleted_trips.exclude(pk=self.pk)
+            
+            if uncompleted_trips.exists():
+                latest_uncompleted = uncompleted_trips.order_by('-date').first()
+                trip_num = latest_uncompleted.trip_number or "Unknown"
+                raise ValidationError(
+                    f"Cannot create or assign a trip to vehicle {self.vehicle.registration_plate} "
+                    f"because it has an uncompleted trip ({trip_num}). "
+                    "Please mark the old trip as completed first."
+                )
+
         if self.start_odometer is not None and self.end_odometer is not None:
             if self.end_odometer < self.start_odometer:
                 # Raising as a non-field error (string) to prevent ValueError 

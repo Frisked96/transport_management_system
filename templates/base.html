@@ -102,6 +102,59 @@
                 </div>
             </div>
             <div class="flex items-center">
+                <!-- Notifications Desktop -->
+                {% if user.is_authenticated and request.user.is_superuser or request.user.groups.all.0.name == 'manager' %}
+                <div class="hidden lg:flex relative dropdown-container mr-2">
+                    <button class="flex items-center justify-center w-8 h-8 rounded-full text-slate-300 hover:text-white hover:bg-slate-700 focus:outline-none dropdown-toggle relative">
+                        <i class="fa-solid fa-bell"></i>
+                        {% if total_alerts > 0 %}
+                        <span class="absolute top-0 right-0 inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-bold leading-none text-white bg-red-600 rounded-full" style="transform: translate(30%, -30%);">
+                            {{ total_alerts }}
+                        </span>
+                        {% endif %}
+                    </button>
+                    <div class="absolute right-0 mt-1 w-80 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5 hidden dropdown-menu z-50">
+                        <div class="px-4 py-2 font-semibold text-slate-700 border-b border-slate-100 flex justify-between items-center">
+                            <span>Alerts</span>
+                            {% if total_alerts > 0 %}
+                            <span class="bg-red-100 text-red-800 text-xs font-medium px-2 py-0.5 rounded-full">{{ total_alerts }} new</span>
+                            {% endif %}
+                        </div>
+                        <div class="max-h-64 overflow-y-auto">
+                            {% if total_alerts == 0 %}
+                            <div class="px-4 py-4 text-sm text-slate-500 text-center">No alerts at this time.</div>
+                            {% else %}
+                                {% for doc in expired_docs %}
+                                <a href="{% url 'document-list' %}" class="block px-4 py-3 hover:bg-slate-50 border-b border-slate-50 last:border-0">
+                                    <div class="flex items-start">
+                                        <div class="flex-shrink-0 pt-0.5"><i class="fa-solid fa-circle-exclamation text-red-500"></i></div>
+                                        <div class="ml-3 w-0 flex-1">
+                                            <p class="text-sm font-medium text-slate-900">{{ doc }}</p>
+                                            <p class="mt-1 text-xs text-red-600 font-medium">Expired on {{ doc.expiry_date }}</p>
+                                        </div>
+                                    </div>
+                                </a>
+                                {% endfor %}
+                                {% for doc in expiring_docs %}
+                                <a href="{% url 'document-list' %}" class="block px-4 py-3 hover:bg-slate-50 border-b border-slate-50 last:border-0">
+                                    <div class="flex items-start">
+                                        <div class="flex-shrink-0 pt-0.5"><i class="fa-solid fa-triangle-exclamation text-yellow-500"></i></div>
+                                        <div class="ml-3 w-0 flex-1">
+                                            <p class="text-sm font-medium text-slate-900">{{ doc }}</p>
+                                            <p class="mt-1 text-xs text-yellow-600 font-medium">Expires on {{ doc.expiry_date }}</p>
+                                        </div>
+                                    </div>
+                                </a>
+                                {% endfor %}
+                            {% endif %}
+                        </div>
+                        <a href="{% url 'document-list' %}" class="block px-4 py-2 text-xs text-center font-medium text-emerald-600 hover:text-emerald-500 hover:bg-slate-50 border-t border-slate-100">
+                            View all documents
+                        </a>
+                    </div>
+                </div>
+                {% endif %}
+
                 <!-- User Profile Desktop -->
                 <div class="hidden lg:ml-4 lg:flex lg:items-center">
                     {% if user.is_authenticated %}
@@ -125,10 +178,13 @@
                 
                 <!-- Mobile menu button -->
                 <div class="lg:hidden">
-                    <button type="button" id="mobile-menu-toggle" class="inline-flex items-center justify-center p-2 rounded-md text-slate-400 hover:text-white hover:bg-slate-700 focus:outline-none">
+                    <button type="button" id="mobile-menu-toggle" class="inline-flex items-center justify-center p-2 rounded-md text-slate-400 hover:text-white hover:bg-slate-700 focus:outline-none relative">
                         <span class="sr-only">Open main menu</span>
                         <i class="fa-solid fa-bars text-xl" id="menu-icon"></i>
                         <i class="fa-solid fa-xmark text-xl hidden" id="close-icon"></i>
+                        {% if user.is_authenticated and total_alerts > 0 and request.user.is_superuser or request.user.groups.all.0.name == 'manager' %}
+                        <span class="absolute top-0 right-0 block h-2.5 w-2.5 rounded-full bg-red-600 ring-2 ring-slate-800" style="margin-top: 0.5rem; margin-right: 0.5rem;"></span>
+                        {% endif %}
                     </button>
                 </div>
             </div>
@@ -138,6 +194,29 @@
     <!-- Mobile Menu -->
     <div class="lg:hidden hidden" id="mobile-menu">
         <div class="px-2 pt-2 pb-3 space-y-1 sm:px-3">
+            {% if user.is_authenticated and request.user.is_superuser or request.user.groups.all.0.name == 'manager' %}
+            {% if total_alerts > 0 %}
+            <div class="px-3 py-2 bg-red-900/20 rounded-md mb-2">
+                <p class="text-xs font-bold text-red-400 uppercase tracking-widest mb-1">Active Alerts ({{ total_alerts }})</p>
+                <div class="space-y-2 max-h-40 overflow-y-auto pr-1">
+                    {% for doc in expired_docs %}
+                    <div class="text-xs text-red-200 flex items-start">
+                        <i class="fa-solid fa-circle-exclamation mr-2 mt-0.5"></i>
+                        <span>{{ doc.document_type }} expired ({{ doc.expiry_date }})</span>
+                    </div>
+                    {% endfor %}
+                    {% for doc in expiring_docs %}
+                    <div class="text-xs text-yellow-200 flex items-start">
+                        <i class="fa-solid fa-triangle-exclamation mr-2 mt-0.5"></i>
+                        <span>{{ doc.document_type }} expires ({{ doc.expiry_date }})</span>
+                    </div>
+                    {% endfor %}
+                </div>
+                <a href="{% url 'document-list' %}" class="block mt-2 text-[10px] text-center font-bold text-emerald-400 uppercase">Manage Documents</a>
+            </div>
+            {% endif %}
+            {% endif %}
+
             <a class="block px-3 py-2 rounded-md text-base font-medium {% if request.resolver_match.url_name == 'trip-list' %}bg-slate-900 text-white{% else %}text-slate-300 hover:bg-slate-700 hover:text-white{% endif %}" href="{% url 'trip-list' %}">
                 <i class="fa-solid fa-truck mr-2 w-5"></i>Trips
             </a>
