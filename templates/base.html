@@ -69,6 +69,7 @@
                         <div class="absolute left-0 mt-1 w-48 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5 hidden dropdown-menu">
                             <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'vehicle-list' %}">Vehicles</a>
                             <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'document-list' %}">Documents</a>
+                            <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'maintenance-task-list' %}">Manage Tasks</a>
                             <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'maintenance-log-list' %}">Maintenance Logs</a>
                             <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'tyre-list' %}">Tyre Inventory</a>
                         </div>
@@ -124,6 +125,17 @@
                             {% if total_alerts == 0 %}
                             <div class="px-4 py-4 text-sm text-slate-500 text-center">No alerts at this time.</div>
                             {% else %}
+                                {% for task in due_maintenance %}
+                                <a href="{% url 'maintenance-log-list' %}" class="block px-4 py-3 hover:bg-slate-50 border-b border-slate-50 last:border-0">
+                                    <div class="flex items-start">
+                                        <div class="flex-shrink-0 pt-0.5"><i class="fa-solid fa-wrench text-blue-500"></i></div>
+                                        <div class="ml-3 w-0 flex-1">
+                                            <p class="text-sm font-medium text-slate-900">{{ task.vehicle }} - {{ task.name }}</p>
+                                            <p class="mt-1 text-xs text-blue-600 font-medium italic">Service Due</p>
+                                        </div>
+                                    </div>
+                                </a>
+                                {% endfor %}
                                 {% for doc in expired_docs %}
                                 <a href="{% url 'document-list' %}" class="block px-4 py-3 hover:bg-slate-50 border-b border-slate-50 last:border-0">
                                     <div class="flex items-start">
@@ -199,6 +211,12 @@
             <div class="px-3 py-2 bg-red-900/20 rounded-md mb-2">
                 <p class="text-xs font-bold text-red-400 uppercase tracking-widest mb-1">Active Alerts ({{ total_alerts }})</p>
                 <div class="space-y-2 max-h-40 overflow-y-auto pr-1">
+                    {% for task in due_maintenance %}
+                    <div class="text-xs text-blue-200 flex items-start">
+                        <i class="fa-solid fa-wrench mr-2 mt-0.5"></i>
+                        <span>{{ task.vehicle.registration_plate }}: {{ task.name }} Due</span>
+                    </div>
+                    {% endfor %}
                     {% for doc in expired_docs %}
                     <div class="text-xs text-red-200 flex items-start">
                         <i class="fa-solid fa-circle-exclamation mr-2 mt-0.5"></i>
@@ -212,7 +230,10 @@
                     </div>
                     {% endfor %}
                 </div>
-                <a href="{% url 'document-list' %}" class="block mt-2 text-[10px] text-center font-bold text-emerald-400 uppercase">Manage Documents</a>
+                <div class="flex justify-between mt-2">
+                    <a href="{% url 'document-list' %}" class="text-[10px] font-bold text-emerald-400 uppercase">Documents</a>
+                    <a href="{% url 'maintenance-log-list' %}" class="text-[10px] font-bold text-blue-400 uppercase">Maintenance</a>
+                </div>
             </div>
             {% endif %}
             {% endif %}

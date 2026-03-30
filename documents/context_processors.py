@@ -1,6 +1,7 @@
 from django.utils import timezone
 from datetime import timedelta
 from .models import Document
+from fleet.models import MaintenanceTask
 
 def document_alerts(request):
     if not request.user.is_authenticated:
@@ -24,10 +25,15 @@ def document_alerts(request):
         expiry_date__lt=today
     ).order_by('expiry_date')
 
-    total_alerts = expiring_docs.count() + expired_docs.count()
+    # Maintenance Alerts
+    all_active_tasks = MaintenanceTask.objects.filter(is_active=True).select_related('vehicle')
+    due_maintenance = [task for task in all_active_tasks if task.is_due]
+
+    total_alerts = expiring_docs.count() + expired_docs.count() + len(due_maintenance)
 
     return {
         'expiring_docs': expiring_docs,
         'expired_docs': expired_docs,
+        'due_maintenance': due_maintenance,
         'total_alerts': total_alerts
     }

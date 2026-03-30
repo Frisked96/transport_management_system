@@ -101,6 +101,7 @@ class MaintenanceLog(models.Model):
     TYPE_OIL_CHANGE = 'Oil Change'
     TYPE_TYRE_WORK = 'Tyre Work'
     TYPE_MAJOR_SERVICE = 'Major Service'
+    TYPE_CHECK = 'Check' # Added for simple checks (coolant, battery, etc.)
     
     TYPE_CHOICES = [
         (TYPE_ROUTINE, 'Routine Service'),
@@ -108,6 +109,7 @@ class MaintenanceLog(models.Model):
         (TYPE_TYRE_WORK, 'Tyre Work'),
         (TYPE_MAJOR_SERVICE, 'Major Service'),
         (TYPE_REPAIR, 'Repair'),
+        (TYPE_CHECK, 'Check'),
     ]
     
     # Vehicle (ForeignKey)
@@ -116,6 +118,16 @@ class MaintenanceLog(models.Model):
         on_delete=models.CASCADE,
         related_name='maintenance_logs',
         verbose_name='Vehicle'
+    )
+
+    # Optional Task (FK)
+    task = models.ForeignKey(
+        'MaintenanceTask',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='logs',
+        verbose_name='Maintenance Task'
     )
     
     # Date of maintenance
@@ -146,16 +158,20 @@ class MaintenanceLog(models.Model):
     cost = models.DecimalField(
         max_digits=10,
         decimal_places=2,
+        default=0, # Made default 0 for simple checks
         verbose_name='Cost'
     )
     
     # Service provider
     service_provider = models.CharField(
         max_length=200,
+        blank=True, # Made optional for simple checks
         verbose_name='Service Provider'
     )
     
     # Next service due (Date and/or Odometer)
+    # These are legacy now, but kept for compatibility. 
+    # MaintenanceTask will be the primary driver for "Next Due".
     next_service_due = models.DateField(
         null=True,
         blank=True,
@@ -186,6 +202,16 @@ class MaintenanceLog(models.Model):
     
     def __str__(self):
         return f"{self.vehicle.registration_plate} - {self.type} - {self.date}"
+
+    def save(self, *args, **kwargs):
+        # Update linked task's last performed stats
+        if self.task:
+            if not self.task.last_performed_date or self.date >= self.task.last_performed_date:
+                self.task.last_performed_date = self.date
+                if self.odometer_reading:
+                    self.task.last_performed_km = self.odometer_reading
+                self.task.save()
+        super().save(*args, **kwargs)
     
     @property
     def is_overdue(self):
@@ -196,6 +222,94 @@ class MaintenanceLog(models.Model):
         if self.next_service_odometer and self.vehicle.current_odometer >= self.next_service_odometer:
             return True
         return False
+
+
+class MaintenanceTask(models.Model):
+    """
+    Recurring maintenance task for a vehicle.
+    Decouples "Requirements" (Tasks) from "Events" (Logs).
+    """
+    vehicle = models.ForeignKey(
+        Vehicle,
+        on_delete=models.CASCADE,
+        related_name='maintenance_tasks',
+        verbose_name='Vehicle'
+    )
+    name = models.CharField(
+        max_length=100, 
+        verbose_name='Task Name',
+        help_text='e.g., Oil Change, Coolant Check, Battery Inspection'
+    )
+    interval_km = models.PositiveIntegerField(
+        null=True, 
+        blank=True, 
+        verbose_name='Interval (km)',
+        help_text='Leave blank if not distance-based.'
+    )
+    interval_days = models.PositiveIntegerField(
+        null=True, 
+        blank=True, 
+        verbose_name='Interval (days)',
+        help_text='Leave blank if not time-based.'
+    )
+    last_performed_km = models.PositiveIntegerField(
+        default=0, 
+        verbose_name='Last Performed Odometer (km)'
+    )
+    last_performed_date = models.DateField(
+        null=True, 
+        blank=True, 
+        verbose_name='Last Performed Date'
+    )
+    is_active = models.BooleanField(
+        default=True,
+        verbose_name='Active'
+    )
+
+    class Meta:
+        verbose_name = 'Maintenance Task'
+        verbose_name_plural = 'Maintenance Tasks'
+        unique_together = ['vehicle', 'name']
+
+    def __str__(self):
+        return f"{self.vehicle.registration_plate} - {self.name}"
+
+    @property
+    def is_due(self):
+        if not self.is_active:
+            return False
+            
+        today = timezone.now().date()
+        current_km = self.vehicle.current_odometer
+
+        # Check Distance-based (KM)
+        if self.interval_km:
+            if current_km >= (self.last_performed_km + self.interval_km):
+                return True
+
+        # Check Time-based (Days)
+        if self.interval_days:
+            # If never performed, it's due
+            if not self.last_performed_date:
+                return True
+            
+            due_date = self.last_performed_date + timezone.timedelta(days=self.interval_days)
+            if today >= due_date:
+                return True
+        
+        return False
+
+    @property
+    def next_due_km(self):
+        if self.interval_km:
+            return self.last_performed_km + self.interval_km
+        return None
+
+    @property
+    def next_due_date(self):
+        if self.interval_days and self.last_performed_date:
+            return self.last_performed_date + timezone.timedelta(days=self.interval_days)
+        return None
 
 
 class Tyre(models.Model):

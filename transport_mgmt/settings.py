@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     'ledger',
     'drivers',
     'documents',
+    'gdstorage',
 ]
 
 MIDDLEWARE = [
@@ -111,6 +112,33 @@ USE_TZ = True
 STATIC_URL = '/static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+# Google Drive Storage Configuration
+GOOGLE_DRIVE_STORAGE_JSON_KEY_FILE = None
+GOOGLE_DRIVE_STORAGE_CLIENT_ID = config('GOOGLE_DRIVE_STORAGE_CLIENT_ID', default=None)
+GOOGLE_DRIVE_STORAGE_CLIENT_SECRET = config('GOOGLE_DRIVE_STORAGE_CLIENT_SECRET', default=None)
+GOOGLE_DRIVE_STORAGE_REFRESH_TOKEN = config('GOOGLE_DRIVE_STORAGE_REFRESH_TOKEN', default=None)
+GOOGLE_DRIVE_STORAGE_MEDIA_ROOT = config('GOOGLE_DRIVE_STORAGE_MEDIA_ROOT', default='')
+
+# Use Google Drive for media storage if configured
+if GOOGLE_DRIVE_STORAGE_REFRESH_TOKEN:
+    STORAGES = {
+        "default": {
+            "BACKEND": "transport_mgmt.storage_bridge.GoogleDriveOAuth2Storage",
+        },
+        "staticfiles": {
+            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+        },
+    }
+else:
+    STORAGES = {
+        "default": {
+            "BACKEND": "django.core.files.storage.FileSystemStorage",
+        },
+        "staticfiles": {
+            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+        },
+    }
 
 # Media files (File uploads)
 MEDIA_URL = '/media/'
