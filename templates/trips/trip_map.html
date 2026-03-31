@@ -49,15 +49,48 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
+        // --- MAP SETUP ---
+        // Define India's Bounds to restrict panning (SouthWest, NorthEast)
+        var indiaBounds = L.latLngBounds(
+            L.latLng(6.462, 68.109), // Southern/Western Tip
+            L.latLng(35.513, 97.395) // Northern/Eastern Tip
+        );
+
         // Initialize Map (Centered on India)
-        var map = L.map('map').setView([20.5937, 78.9629], 5);
+        var map = L.map('map', {
+            maxBounds: indiaBounds,
+            maxBoundsViscosity: 1.0,
+            minZoom: 5
+        }).setView([20.5937, 78.9629], 5);
 
-        // Add OpenStreetMap Tile Layer
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        // Define Base Layers
+        var streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        }).addTo(map);
+        });
 
-        // Trip Data from Django View
+        var satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EBP, and the GIS User Community'
+        });
+
+        // Hybrid View: Satellite with OSM Labels
+        var labelLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            opacity: 0.4, // Keep it subtle
+            attribution: '&copy; OpenStreetMap'
+        });
+
+        var hybridLayer = L.layerGroup([satelliteLayer, labelLayer]);
+
+        // Add default layer
+        streetLayer.addTo(map);
+
+        // Add Layer Control (Toggle)
+        var baseMaps = {
+            "Street View": streetLayer,
+            "Satellite View": hybridLayer
+        };
+        L.control.layers(baseMaps, null, { collapsed: false, position: 'topright' }).addTo(map);
+
+        // --- DATA PROCESSING ---
         var trips = {{ trips_json|safe }};
         
         if (trips.length === 0) {
