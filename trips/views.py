@@ -523,16 +523,22 @@ def manager_dashboard(request):
     ).distinct().count()
     
     # Recent financial summary
+    # 1. Cash Income this month (Excluding Accruals/Invoices)
     income_this_month = FinancialRecord.objects.filter(
         category__type=TransactionCategory.TYPE_INCOME,
         date__month=current_month,
         date__year=current_year
+    ).exclude(
+        record_type=FinancialRecord.RECORD_TYPE_INVOICE
     ).aggregate(total=models.Sum('amount'))['total'] or 0
     
+    # 2. Expenses this month (Excluding Deductions which only reduce receivable)
     expenses_this_month = FinancialRecord.objects.filter(
         category__type=TransactionCategory.TYPE_EXPENSE,
         date__month=current_month,
         date__year=current_year
+    ).exclude(
+        category__name='Deductions'
     ).aggregate(total=models.Sum('amount'))['total'] or 0
 
     # Calculate GST portion of income (from Final Bills)

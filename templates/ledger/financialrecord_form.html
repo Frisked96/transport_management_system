@@ -127,6 +127,8 @@
         const associatedTripWrapper = document.getElementById('wrapper_id_associated_trip');
         const categorySelect = document.getElementById('id_category');
         
+        const associatedBillWrapper = document.getElementById('wrapper_id_associated_bill');
+        
         const multiTripArea = document.getElementById('multi-trip-area');
         const unpaidTripsList = document.getElementById('unpaid-trips-list');
         const selectedTripsBody = document.getElementById('selected-trips-body');
@@ -141,27 +143,53 @@
         function updateUIState() {
             const hasParty = partySelect && partySelect.value;
             
-            // Check if selected category is an Income type
-            let isIncome = false;
+            let categoryName = '';
             if (categorySelect && categorySelect.selectedIndex >= 0) {
-                const selectedText = categorySelect.options[categorySelect.selectedIndex].text;
-                isIncome = selectedText.includes('Income');
+                categoryName = categorySelect.options[categorySelect.selectedIndex].text;
             }
             
-            const isPayment = isIncome; 
+            const isTripPayment = categoryName.includes('Trip Payment');
+            const isInvoicePayment = categoryName.includes('Invoice Payment');
+            const isDeduction = categoryName.includes('Deductions');
             
-            if (hasParty && isPayment) {
+            // 1. Handle Multi-Trip Area (Only for Trip Payment with a Party)
+            if (hasParty && isTripPayment) {
                 multiTripArea.classList.remove('hidden');
-                if (associatedTripWrapper) associatedTripWrapper.classList.add('hidden'); // Hide single selector
-                if (driverFieldWrapper) driverFieldWrapper.classList.add('hidden');
             } else {
                 multiTripArea.classList.add('hidden');
-                if (associatedTripWrapper) associatedTripWrapper.classList.remove('hidden');
-                
-                if (driverFieldWrapper) {
-                    if (hasParty) driverFieldWrapper.classList.add('hidden');
-                    else driverFieldWrapper.classList.remove('hidden');
+                // Clear allocations if not in trip payment mode
+                if (distributionInput) distributionInput.value = '';
+            }
+
+            // 2. Handle Associated Trip (Show for Trip Payment, hide if multi-trip active or for others)
+            if (associatedTripWrapper) {
+                if (isTripPayment && hasParty) {
+                    associatedTripWrapper.classList.add('hidden'); // We use multi-trip area instead
+                } else if (isTripPayment || categoryName.includes('Income')) {
+                    // Only show for income types if NOT specifically invoice payment
+                    if (isInvoicePayment) {
+                        associatedTripWrapper.classList.add('hidden');
+                    } else {
+                        associatedTripWrapper.classList.remove('hidden');
+                    }
+                } else {
+                    associatedTripWrapper.classList.add('hidden');
                 }
+            }
+
+            // 3. Handle Associated Bill (Show for Invoice Payment or Deductions)
+            if (associatedBillWrapper) {
+                if (isInvoicePayment || isDeduction) {
+                    associatedBillWrapper.classList.remove('hidden');
+                } else {
+                    associatedBillWrapper.classList.add('hidden');
+                }
+            }
+
+            // 4. Handle Driver (Hide if Party selected)
+            if (driverFieldWrapper) {
+                if (hasParty) driverFieldWrapper.classList.add('hidden');
+                else driverFieldWrapper.classList.remove('hidden');
             }
         }
 
@@ -345,6 +373,24 @@
         
         if (categorySelect) {
             categorySelect.addEventListener('change', updateUIState);
+        }
+
+        // Auto-fill amount from Bill balance
+        const billSelect = document.getElementById('id_associated_bill');
+        if (billSelect) {
+            billSelect.addEventListener('change', function() {
+                if (this.value) {
+                    fetch(`{% url 'get-bill-balance' %}?bill_id=${this.value}`)
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.balance !== undefined && amountInput) {
+                                amountInput.value = data.balance.toFixed(2);
+                                // Trigger distribution refresh if multi-trip was somehow active
+                                renderSelectedTrips();
+                            }
+                        });
+                }
+            });
         }
 
     });

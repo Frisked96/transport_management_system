@@ -573,18 +573,29 @@ class Trip(models.Model):
 
     @property
     def amount_received(self):
-        """Calculate total received from both direct links and allocations"""
-        from ledger.models import FinancialRecord, TransactionCategory
-        # 1. Direct links (Records with type='Income')
+        """Calculate total received (Payments + Deductions) from direct links and allocations"""
+        from ledger.models import FinancialRecord, TransactionCategory, Bill
+        # 1. Direct links (Records with type='Income' OR category='Deductions')
         direct = self.financial_records.filter(
-            category__type=TransactionCategory.TYPE_INCOME
-        ).exclude(record_type=FinancialRecord.RECORD_TYPE_INVOICE).aggregate(total=models.Sum('amount'))['total'] or 0
+            record_type=FinancialRecord.RECORD_TYPE_TRANSACTION
+        ).filter(
+            models.Q(category__type=TransactionCategory.TYPE_INCOME) | models.Q(category__name='Deductions')
+        ).aggregate(total=models.Sum('amount'))['total'] or 0
         
-        # 2. M2M Allocations (Assumed to be income by nature)
+        # 2. M2M Allocations (Assumed to be income or deduction adjustments by nature)
         allocated = self.payment_allocations.aggregate(
             total=models.Sum('amount')
         )['total'] or 0
         
+        # 3. If part of a PAID bill, consider it fully received for the billed amount
+        billed_received = 0
+        bill = self.associated_bill
+        if bill and bill.payment_status == Bill.PAYMENT_STATUS_PAID:
+            # If the bill is paid, this trip's share is fully covered
+            billed_received = self.total_revenue
+            # But we must avoid double counting if it was also partially paid via allocations
+            return billed_received
+
         return direct + allocated
 
     def check_and_close_trip(self):
@@ -592,7 +603,7 @@ class Trip(models.Model):
         Check if trip should be automatically closed.
         Conditions:
         1. Total Revenue > 0
-        2. Fully Paid (Total Received >= Total Revenue)
+        2. Fully Paid (Total Received >= Total Revenue OR associated Bill is PAID)
         3. Trip Date has passed
         """
         if self.status == self.STATUS_COMPLETED:
@@ -609,8 +620,12 @@ class Trip(models.Model):
 
         # 3. Paid Amount
         received = self.amount_received
+        
+        from ledger.models import Bill
+        bill = self.associated_bill
+        is_bill_paid = bill and bill.payment_status == Bill.PAYMENT_STATUS_PAID
 
-        if received >= total_rev:
+        if received >= total_rev or is_bill_paid:
             self.status = self.STATUS_COMPLETED
             if not self.actual_completion_datetime:
                 self.actual_completion_datetime = timezone.now()

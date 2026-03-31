@@ -253,10 +253,16 @@
                                 {% endif %}
                             </td>
                             <td class="px-6 py-4 text-sm text-slate-600">
-                                {% if record.associated_bill %}
-                                <a href="{% url 'bill-detail' record.associated_bill.pk %}" class="text-emerald-600 hover:underline">{{ record.associated_bill.bill_number }}</a>
-                                {% elif record.associated_trip %}
-                                <a href="{% url 'trip-detail' record.associated_trip.pk %}" class="text-emerald-600 hover:underline">{{ record.associated_trip.trip_number }}</a>
+                                {% if record.linked_bill %}
+                                <a href="{% url 'bill-detail' record.linked_bill.pk %}" class="text-blue-600 hover:text-blue-700 font-medium flex items-center">
+                                    <i class="fa-solid fa-file-invoice mr-1.5 text-[10px]"></i>
+                                    {{ record.linked_bill.bill_number|default:"Draft Bill" }}
+                                </a>
+                                {% elif record.linked_trip %}
+                                <a href="{% url 'trip-detail' record.linked_trip.pk %}" class="text-emerald-600 hover:text-emerald-700 font-medium flex items-center">
+                                    <i class="fa-solid fa-truck-moving mr-1.5 text-[10px]"></i>
+                                    {{ record.linked_trip.trip_number }}
+                                </a>
                                 {% else %}
                                 <span class="text-slate-400">-</span>
                                 {% endif %}
@@ -266,9 +272,21 @@
                             </td>
                             <td class="px-6 py-4 text-sm text-slate-500 max-w-xs truncate">{{ record.description|default:"-" }}</td>
                             <td class="px-6 py-4 text-right">
-                                <a href="{% url 'financialrecord-detail' record.pk %}" class="p-1.5 text-slate-400 hover:text-slate-600 transition-colors">
-                                    <i class="fa-regular fa-eye"></i>
-                                </a>
+                                <div class="flex justify-end space-x-2">
+                                    <a href="{% url 'financialrecord-detail' record.pk %}" class="p-1.5 text-slate-400 hover:text-slate-600 transition-colors" title="View">
+                                        <i class="fa-regular fa-eye"></i>
+                                    </a>
+                                    {% if perms.ledger.change_financialrecord %}
+                                    <a href="{% url 'financialrecord-update' record.pk %}" class="p-1.5 text-slate-400 hover:text-amber-600 transition-colors" title="Edit">
+                                        <i class="fa-regular fa-pen-to-square"></i>
+                                    </a>
+                                    {% endif %}
+                                    {% if perms.ledger.delete_financialrecord %}
+                                    <a href="{% url 'financialrecord-delete' record.pk %}" class="p-1.5 text-slate-400 hover:text-red-600 transition-colors" title="Delete">
+                                        <i class="fa-regular fa-trash-can"></i>
+                                    </a>
+                                    {% endif %}
+                                </div>
                             </td>
                         </tr>
                         {% empty %}

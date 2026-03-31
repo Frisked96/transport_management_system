@@ -21,8 +21,9 @@ urlpatterns = [
     path('parties/<int:pk>/', views.PartyDetailView.as_view(), name='party-detail'),
     path('parties/<int:pk>/update/', views.PartyUpdateView.as_view(), name='party-update'),
     path('parties/<int:pk>/delete/', views.PartyDeleteView.as_view(), name='party-delete'),
-    path('api/party-unpaid-trips/', views.get_party_unpaid_trips, name='get-party-unpaid-trips'),
-    path('api/party-unbilled-trips/', views.get_party_unbilled_trips, name='get-party-unbilled-trips'),
+    path('ajax/get-party-unpaid-trips/', views.get_party_unpaid_trips, name='get-party-unpaid-trips'),
+    path('ajax/get-party-unbilled-trips/', views.get_party_unbilled_trips, name='get-party-unbilled-trips'),
+    path('ajax/get-bill-balance/', views.get_bill_balance, name='get-bill-balance'),
 
     # Account URLs
     path('accounts/', views.CompanyAccountListView.as_view(), name='account-list'),

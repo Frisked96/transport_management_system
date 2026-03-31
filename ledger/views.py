@@ -391,11 +391,13 @@ class PartyListView(LoginRequiredMixin, BaseLedgerPermissionMixin, ListView):
             total=Sum('amount')
         ).values('total')
 
-        # Total Received = Sum of Income Transactions (Payments)
+        # Total Received = Sum of Income Transactions (Payments) + Deductions
+        # We include Deductions here because they reduce the Party's outstanding balance
         received_subquery = FinancialRecord.objects.filter(
             party=OuterRef('pk'),
-            category__type=TransactionCategory.TYPE_INCOME,
             record_type=FinancialRecord.RECORD_TYPE_TRANSACTION
+        ).filter(
+            Q(category__type=TransactionCategory.TYPE_INCOME) | Q(category__name='Deductions')
         ).values('party').annotate(
             total=Sum('amount')
         ).values('total')
@@ -444,10 +446,11 @@ class PartyDetailView(LoginRequiredMixin, BaseLedgerPermissionMixin, DetailView)
             Q(associated_bill__isnull=False) | Q(associated_trip__bills__isnull=False)
         ).distinct().aggregate(total=Sum('amount'))['total'] or 0
 
-        # Calculate Total Received (Payments from Party - Transactions Only)
+        # Calculate Total Received (Payments from Party + Deductions)
         total_received = financial_records.filter(
-            category__type=TransactionCategory.TYPE_INCOME,
             record_type=FinancialRecord.RECORD_TYPE_TRANSACTION
+        ).filter(
+            Q(category__type=TransactionCategory.TYPE_INCOME) | Q(category__name='Deductions')
         ).aggregate(total=Sum('amount'))['total'] or 0
         
         context['total_billed'] = total_billed
@@ -598,6 +601,25 @@ def get_party_unpaid_trips(request):
         } for trip in trips]
         
         return JsonResponse({'trips': data})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+@login_required
+def get_bill_balance(request):
+    """
+    AJAX endpoint to get outstanding balance for a bill
+    """
+    bill_id = request.GET.get('bill_id')
+    if not bill_id:
+        return JsonResponse({'balance': 0})
+
+    try:
+        bill = get_object_or_404(Bill, pk=bill_id)
+        return JsonResponse({
+            'balance': float(bill.outstanding_balance),
+            'total': float(bill.total_amount if bill.status == Bill.STATUS_FINAL else bill.subtotal),
+            'received': float(bill.amount_received)
+        })
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
 

@@ -39,6 +39,7 @@ class FinancialRecordForm(forms.ModelForm):
                     pass
             if self.data.get('driver'):
                 try:
+                    from django.contrib.auth.models import User
                     driver_user = User.objects.get(pk=self.data.get('driver'))
                 except (ValueError, User.DoesNotExist):
                     pass
@@ -49,26 +50,35 @@ class FinancialRecordForm(forms.ModelForm):
                 del self.fields['driver']
             
             # Setup trips for party using dynamic payment info
-            self.fields['associated_trip'].queryset = Trip.objects.with_payment_info().filter(
-                party=party
+            # Only show trips that have been billed
+            self.fields['associated_trip'].queryset = Trip.objects.with_payment_info().with_billing_info().filter(
+                party=party,
+                annotated_is_billed=True
             ).exclude(
                 annotated_status=Trip.PAYMENT_STATUS_PAID
             ).order_by('-date')
+
+            # Filter bills for this party
+            self.fields['associated_bill'].queryset = Bill.objects.filter(party=party).order_by('-date')
         
-        # 2. If Driver context: Remove Party and Trip fields
+        # 2. If Driver context: Remove Party, Trip, and Bill fields
         elif driver_user:
             if 'party' in self.fields:
                 del self.fields['party']
             if 'associated_trip' in self.fields:
                 del self.fields['associated_trip']
+            if 'associated_bill' in self.fields:
+                del self.fields['associated_bill']
         
         # 3. General Ledger context
         else:
-            # Default empty queryset for trips if no party selected yet
+            # Default empty queryset for trips/bills if no party selected yet
             self.fields['associated_trip'].queryset = Trip.objects.none()
+            self.fields['associated_bill'].queryset = Bill.objects.none()
 
         # Filter drivers if field still exists
         if 'driver' in self.fields:
+            from django.contrib.auth.models import User
             self.fields['driver'].queryset = User.objects.filter(
                 groups__name='driver'
             ).order_by('username')
@@ -110,6 +120,7 @@ class FinancialRecordForm(forms.ModelForm):
 
 
 class PartyForm(forms.ModelForm):
+# ... (rest of form) ...
     """
     Form for creating and editing parties
     """
@@ -165,10 +176,13 @@ class BillForm(forms.ModelForm):
         model = Bill
         fields = [
             'bill_number', 
+            'bill_type',
             'issuer',
             'party', 
             'date', 
             'status',
+            'item_type',
+            'amount_override',
             'gst_type', 
             'gst_rate', 
             'trips',
