@@ -38,9 +38,11 @@ class TripQuerySet(models.QuerySet):
         return self.annotate(
             annotated_received = Coalesce(Subquery(direct_payments), Value(0), output_field=DecimalField()) + 
                                  Coalesce(Subquery(allocations), Value(0), output_field=DecimalField()),
-            # We can't easily calculate revenue in SQL here because it involves multiplication of fields,
-            # but we can do it:
-            annotated_revenue = F('weight') * F('rate_per_ton')
+            annotated_revenue = Case(
+                When(revenue_type='fixed', then=F('rate_per_ton')),
+                default=F('weight') * F('rate_per_ton'),
+                output_field=DecimalField()
+            )
         ).annotate(
             annotated_status = Case(
                 When(annotated_received__gte=F('annotated_revenue'), annotated_revenue__gt=0, then=Value('Paid')),
@@ -103,12 +105,29 @@ class Trip(models.Model):
         (PAYMENT_STATUS_PAID, 'Paid'),
     ]
 
+    # Revenue type choices
+    REVENUE_PER_TON = 'per_ton'
+    REVENUE_FIXED = 'fixed'
+    
+    REVENUE_TYPE_CHOICES = [
+        (REVENUE_PER_TON, 'Per Ton'),
+        (REVENUE_FIXED, 'Fixed'),
+    ]
+
     # Unique trip identifier
     trip_number = models.CharField(
         max_length=100,
         unique=True,
         verbose_name='Trip Number',
         blank=True
+    )
+    
+    # Revenue type
+    revenue_type = models.CharField(
+        max_length=10,
+        choices=REVENUE_TYPE_CHOICES,
+        default=REVENUE_PER_TON,
+        verbose_name='Revenue Type'
     )
     
     # Driver assignment (ForeignKey to Driver)
@@ -334,7 +353,7 @@ class Trip(models.Model):
             return
 
         # Otherwise, maintain individual record
-        amount = self.weight * self.rate_per_ton
+        amount = self.revenue
         cat, _ = TransactionCategory.objects.get_or_create(
             name="Trip Payment",
             defaults={'type': TransactionCategory.TYPE_INCOME, 'description': 'Auto-generated revenue from trips'}
@@ -530,6 +549,9 @@ class Trip(models.Model):
     @property
     def revenue(self):
         """Calculate revenue for this trip"""
+        if self.revenue_type == self.REVENUE_FIXED:
+            return self.rate_per_ton or 0
+        
         if self.weight and self.rate_per_ton:
             return self.weight * self.rate_per_ton
         return 0

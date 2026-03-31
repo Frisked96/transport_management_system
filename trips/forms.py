@@ -37,6 +37,7 @@ class TripForm(forms.ModelForm):
             'vehicle',
             'driver',
             'party',
+            'revenue_type',
             'pickup_location',
             'pickup_lat',
             'pickup_lng',
@@ -52,6 +53,10 @@ class TripForm(forms.ModelForm):
             'diesel_total_cost',
             'notes'
         ]
+        
+        labels = {
+            'rate_per_ton': 'Rate',
+        }
         
         widgets = {
             'notes': forms.Textarea(
