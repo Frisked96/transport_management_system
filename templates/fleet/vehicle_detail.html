@@ -278,7 +278,7 @@
                                 </td>
                                 <td class="px-6 py-4 text-right flex justify-end space-x-3">
                                     {% if doc.scanned_copy %}
-                                    <a class="text-slate-400 hover:text-emerald-600" href="{{ doc.scanned_copy.url }}" target="_blank"><i class="fa-regular fa-eye"></i></a>
+                                    <a class="text-slate-400 hover:text-emerald-600" href="{% url 'document-view' doc.pk %}" target="_blank"><i class="fa-regular fa-eye"></i></a>
                                     {% endif %}
                                     {% if perms.documents.change_document %}
                                     <a class="text-slate-400 hover:text-amber-600" href="{% url 'document-update' doc.pk %}"><i class="fa-regular fa-pen-to-square"></i></a>

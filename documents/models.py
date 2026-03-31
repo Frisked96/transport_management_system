@@ -1,6 +1,24 @@
 from django.db import models
 from django.utils import timezone
 
+def document_upload_path(instance, filename):
+    """
+    Determines the upload path for a document.
+    Format: documents/<identifier>/<filename>
+    """
+    import os
+    if instance.vehicle:
+        identifier = str(instance.vehicle.registration_plate).replace(' ', '_').replace('/', '-')
+    elif instance.driver:
+        # Prefer employee ID, fallback to name
+        id_part = instance.driver.employee_id or instance.driver.name
+        identifier = str(id_part).replace(' ', '_').replace('/', '-')
+    else:
+        identifier = 'miscellaneous'
+    
+    # We return the full path. The storage backend will handle folder creation.
+    return os.path.join('documents', identifier, filename)
+
 class Document(models.Model):
     """
     Document model for tracking expirations (Insurance, Permits, Licenses)
@@ -50,7 +68,7 @@ class Document(models.Model):
     )
 
     scanned_copy = models.FileField(
-        upload_to='documents/%Y/%m/',
+        upload_to=document_upload_path,
         null=True,
         blank=True,
         verbose_name='Scanned Copy'

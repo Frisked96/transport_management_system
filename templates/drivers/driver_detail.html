@@ -204,7 +204,7 @@
                                 </td>
                                 <td class="px-6 py-4 text-sm flex items-center space-x-3">
                                     {% if doc.scanned_copy %}
-                                    <a href="{{ doc.scanned_copy.url }}" target="_blank" class="text-slate-400 hover:text-emerald-600 transition-colors" title="View Document">
+                                    <a href="{% url 'document-view' doc.pk %}" target="_blank" class="text-slate-400 hover:text-emerald-600 transition-colors" title="View Document">
                                         <i class="fa-regular fa-eye"></i>
                                     </a>
                                     {% endif %}

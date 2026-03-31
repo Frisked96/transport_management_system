@@ -405,7 +405,7 @@ class Bill(models.Model):
     def sync_trips_to_ledger(self):
         """
         Trigger sync_ledger_invoice for all trips associated with this bill.
-        This ensures individual trip revenue records are removed if the trip is now billed.
+        This ensures individual Trip Payment records are removed if the trip is now billed.
         """
         for trip in self.trips.all():
             trip.sync_ledger_invoice()
@@ -418,11 +418,11 @@ class Bill(models.Model):
         # 1. Handle Consolidated Invoice Record (Total = Subtotal + GST if Final)
         # Create this for both Draft and Final bills to replace individual trip entries immediately.
         should_have_invoice = True
-        inv_record = FinancialRecord.objects.filter(associated_bill=self, category__name="Trip Revenue").first()
+        inv_record = FinancialRecord.objects.filter(associated_bill=self, category__name="Trip Payment").first()
 
         if should_have_invoice:
             inv_cat, _ = TransactionCategory.objects.get_or_create(
-                name="Trip Revenue",
+                name="Trip Payment",
                 defaults={'type': TransactionCategory.TYPE_INCOME, 'description': 'Revenue from trips'}
             )
 
@@ -448,9 +448,6 @@ class Bill(models.Model):
             )
         elif inv_record:
             inv_record.delete()
-
-        # 2. Cleanup old "GST Output" records if they exist (since we are now consolidating)
-        FinancialRecord.objects.filter(associated_bill=self, category__name="GST Output").delete()
     @property
     def cgst_amount(self):
         if self.gst_rate > 0 and self.gst_type == self.GST_TYPE_INTRA:

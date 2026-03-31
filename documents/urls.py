@@ -15,4 +15,7 @@ urlpatterns = [
     # Document Update/Delete
     path('<int:pk>/update/', views.DocumentUpdateView.as_view(), name='document-update'),
     path('<int:pk>/delete/', views.DocumentDeleteView.as_view(), name='document-delete'),
+    
+    # Proxy for viewing/downloading documents to avoid slow page loads
+    path('<int:pk>/view/', views.document_download_proxy, name='document-view'),
 ]

@@ -308,7 +308,7 @@ class Trip(models.Model):
 
     def sync_ledger_invoice(self):
         """
-        Synchronize Trip Revenue to FinancialRecord as an Invoice.
+        Synchronize Trip Payment to FinancialRecord as an Invoice.
         If the trip is part of a finalized Bill, the individual trip record is removed
         in favor of the consolidated Bill record.
         """
@@ -326,7 +326,7 @@ class Trip(models.Model):
             record_type=FinancialRecord.RECORD_TYPE_INVOICE
         )
 
-        # If it's part of a bill, we DON'T want an individual trip invoice 
+        # If it's part of a bill, we DON'T want an individual trip invoice
         # because the Bill (Invoice) will have its own record.
         if is_billed or not has_revenue:
             if invoice_qs.exists():
@@ -336,10 +336,9 @@ class Trip(models.Model):
         # Otherwise, maintain individual record
         amount = self.weight * self.rate_per_ton
         cat, _ = TransactionCategory.objects.get_or_create(
-            name="Trip Revenue",
+            name="Trip Payment",
             defaults={'type': TransactionCategory.TYPE_INCOME, 'description': 'Auto-generated revenue from trips'}
         )
-
         if invoice_qs.exists():
             # Update existing
             record = invoice_qs.first()

@@ -44,7 +44,7 @@ class UnifiedLedgerTest(TestCase):
         invoice = invoices.first()
         self.assertEqual(invoice.amount, 1000)
         self.assertEqual(invoice.party, self.party)
-        self.assertEqual(invoice.category.name, 'Trip Revenue')
+        self.assertEqual(invoice.category.name, 'Trip Payment')
 
         # Update Trip
         trip.weight = 20 # Revenue = 2000

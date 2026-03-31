@@ -373,7 +373,7 @@ class PartyListView(LoginRequiredMixin, BaseLedgerPermissionMixin, ListView):
             )
             
         # Correctly calculate totals using Subquery to avoid cross-join multiplication
-        # Total Revenue = Sum of all Invoices (Trip Revenue + Bill GST)
+        # Total Revenue = Sum of all Invoices (Trip Payment + Bill GST)
         revenue_subquery = FinancialRecord.objects.filter(
             party=OuterRef('pk'),
             record_type=FinancialRecord.RECORD_TYPE_INVOICE
@@ -432,7 +432,7 @@ class PartyDetailView(LoginRequiredMixin, BaseLedgerPermissionMixin, DetailView)
         financial_records = self.object.financial_records.all().select_related('category', 'associated_trip', 'associated_bill').order_by('-date')
         context['financial_records'] = financial_records
         
-        # Calculate Total Revenue (Sum of all Invoices: Trip Revenue + Bill GST)
+        # Calculate Total Revenue (Sum of all Invoices: Trip Payment + Bill GST)
         total_revenue = financial_records.filter(
             record_type=FinancialRecord.RECORD_TYPE_INVOICE
         ).aggregate(total=Sum('amount'))['total'] or 0

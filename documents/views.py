@@ -6,7 +6,9 @@ from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMix
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.contrib import messages
-from django.db.models import Q
+from django.db.models import Q, Count
+from django.utils import timezone
+from datetime import timedelta
 from .models import Document
 from fleet.models import Vehicle
 from drivers.models import Driver
@@ -40,36 +42,69 @@ class DocumentForm(forms.ModelForm):
         }
 
 class DocumentListView(LoginRequiredMixin, ListView):
-    model = Vehicle
     template_name = 'documents/document_list.html'
-    context_object_name = 'vehicles'
+    paginate_by = 10
 
     def get_queryset(self):
-        queryset = Vehicle.objects.prefetch_related('documents').all()
+        self.doc_type = self.request.GET.get('type', 'vehicles')
         search_term = self.request.GET.get('search')
-        if search_term:
-            queryset = queryset.filter(
-                Q(registration_plate__icontains=search_term) |
-                Q(make_model__icontains=search_term)
-            )
+        
+        today = timezone.now().date()
+        warning_date = today + timedelta(days=30)
+
+        if self.doc_type == 'drivers':
+            queryset = Driver.objects.select_related('user').prefetch_related('documents').annotate(
+                total_docs=Count('documents'),
+                expiring_count=Count(
+                    'documents', 
+                    filter=Q(documents__never_expires=False, documents__expiry_date__lte=warning_date, documents__expiry_date__gte=today)
+                ),
+                expired_count=Count(
+                    'documents', 
+                    filter=Q(documents__never_expires=False, documents__expiry_date__lt=today)
+                )
+            ).all().order_by('user__first_name')
+            if search_term:
+                queryset = queryset.filter(
+                    Q(user__first_name__icontains=search_term) |
+                    Q(user__last_name__icontains=search_term) |
+                    Q(user__username__icontains=search_term) |
+                    Q(employee_id__icontains=search_term) |
+                    Q(license_number__icontains=search_term)
+                )
+        else:
+            queryset = Vehicle.objects.prefetch_related('documents').annotate(
+                total_docs=Count('documents'),
+                expiring_count=Count(
+                    'documents', 
+                    filter=Q(documents__never_expires=False, documents__expiry_date__lte=warning_date, documents__expiry_date__gte=today)
+                ),
+                expired_count=Count(
+                    'documents', 
+                    filter=Q(documents__never_expires=False, documents__expiry_date__lt=today)
+                )
+            ).all().order_by('registration_plate')
+            if search_term:
+                queryset = queryset.filter(
+                    Q(registration_plate__icontains=search_term) |
+                    Q(make_model__icontains=search_term)
+                )
+        
         return queryset
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        search_term = self.request.GET.get('search')
+        context['doc_type'] = self.doc_type
+        context['search_term'] = self.request.GET.get('search')
         
-        drivers_queryset = Driver.objects.prefetch_related('documents').all()
-        if search_term:
-            drivers_queryset = drivers_queryset.filter(
-                Q(user__first_name__icontains=search_term) |
-                Q(user__last_name__icontains=search_term) |
-                Q(user__username__icontains=search_term) |
-                Q(employee_id__icontains=search_term) |
-                Q(license_number__icontains=search_term)
-            )
-        
-        context['drivers'] = drivers_queryset
-        context['search_term'] = search_term
+        # Mapping context name based on type
+        if self.doc_type == 'drivers':
+            context['drivers'] = context['page_obj']
+            context['vehicles'] = []
+        else:
+            context['vehicles'] = context['page_obj']
+            context['drivers'] = []
+            
         return context
 
 class DocumentCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
@@ -143,3 +178,42 @@ class DocumentDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView
         elif self.object.driver:
             return reverse_lazy('driver-detail', kwargs={'pk': self.object.driver.pk})
         return reverse_lazy('home')
+
+from django.contrib.auth.decorators import login_required
+from django.http import HttpResponseRedirect
+
+@login_required
+def document_download_proxy(request, pk):
+    """
+    Proxy view to handle document URL generation on demand.
+    This avoids slow page loads in the document list view where 
+    generating Google Drive URLs for many files takes a long time.
+    """
+    document = get_object_or_404(Document, pk=pk)
+    
+    # Check if field has a file assigned
+    if not document.scanned_copy or not document.scanned_copy.name:
+        messages.error(request, "No scanned copy available for this document.")
+        return redirect('document-list')
+    
+    try:
+        # Fetch the URL from storage (this is the slow network call)
+        url = document.scanned_copy.url
+        
+        # Debugging to terminal to see what GDrive returns
+        print(f"--- Document {pk} Proxy ---")
+        print(f"File Name: {document.scanned_copy.name}")
+        print(f"Generated URL Type: {type(url)}")
+        print(f"Generated URL Value: {url}")
+        
+        if url:
+            # Use HttpResponseRedirect directly to avoid resolve_url magic
+            return HttpResponseRedirect(str(url))
+        else:
+            messages.error(request, "Google Drive storage returned an empty URL.")
+    except Exception as e:
+        import traceback
+        traceback.print_exc() # Print full error to console
+        messages.error(request, f"Error accessing document storage: {str(e)}")
+    
+    return redirect('document-list')
