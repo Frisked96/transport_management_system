@@ -21,6 +21,7 @@ urlpatterns = [
     path('parties/<int:pk>/', views.PartyDetailView.as_view(), name='party-detail'),
     path('parties/<int:pk>/update/', views.PartyUpdateView.as_view(), name='party-update'),
     path('parties/<int:pk>/delete/', views.PartyDeleteView.as_view(), name='party-delete'),
+    path('parties/<int:pk>/statement/', views.party_statement_pdf, name='party-statement-pdf'),
     path('ajax/get-party-unpaid-trips/', views.get_party_unpaid_trips, name='get-party-unpaid-trips'),
     path('ajax/get-party-unbilled-trips/', views.get_party_unbilled_trips, name='get-party-unbilled-trips'),
     path('ajax/get-bill-balance/', views.get_bill_balance, name='get-bill-balance'),
@@ -31,6 +32,8 @@ urlpatterns = [
     path('accounts/<int:pk>/', views.CompanyAccountDetailView.as_view(), name='account-detail'),
     path('accounts/<int:pk>/update/', views.CompanyAccountUpdateView.as_view(), name='account-update'),
     path('accounts/<int:pk>/delete/', views.CompanyAccountDeleteView.as_view(), name='account-delete'),
+    path('accounts/<int:pk>/statement/', views.account_statement_pdf, name='account-statement-pdf'),
+    path('unified-ledger/statement/', views.unified_ledger_pdf, name='unified-ledger-pdf'),
 
     # Bill URLs
     path('bills/', views.BillListView.as_view(), name='bill-list'),

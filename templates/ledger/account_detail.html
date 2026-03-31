@@ -13,6 +13,9 @@
         <a href="{% url 'account-list' %}" class="px-4 py-2 border border-slate-300 rounded-md bg-white text-slate-700 text-sm font-medium hover:bg-slate-50 transition-colors">
             Back to List
         </a>
+        <a href="{% url 'account-statement-pdf' account.pk %}?start_date={{ request.GET.start_date }}&end_date={{ request.GET.end_date }}" target="_blank" class="px-4 py-2 border border-red-200 rounded-md bg-red-50 text-red-700 text-sm font-medium hover:bg-red-100 transition-colors shadow-sm">
+            <i class="fa-regular fa-file-pdf mr-2"></i>Statement
+        </a>
         {% if perms.ledger.change_financialrecord %}
         <a href="{% url 'account-update' account.pk %}" class="px-4 py-2 border border-slate-300 rounded-md bg-white text-slate-700 text-sm font-medium hover:bg-slate-50 transition-colors">
             <i class="fa-regular fa-pen-to-square mr-2"></i>Edit
@@ -30,6 +33,29 @@
 <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
     <!-- Left Column: Transaction History -->
     <div class="lg:col-span-8">
+        <!-- BEGIN: Filter Bar -->
+        <section class="bg-slate-50 p-4 rounded-lg border border-slate-200 mb-6">
+            <form method="get" class="flex flex-wrap items-end gap-4">
+                <div class="flex-1 min-w-[150px]">
+                    <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">From Date</label>
+                    <input type="date" name="start_date" value="{{ request.GET.start_date }}" class="w-full rounded-md border-slate-300 text-sm focus:ring-emerald-500 focus:border-emerald-500">
+                </div>
+                <div class="flex-1 min-w-[150px]">
+                    <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">To Date</label>
+                    <input type="date" name="end_date" value="{{ request.GET.end_date }}" class="w-full rounded-md border-slate-300 text-sm focus:ring-emerald-500 focus:border-emerald-500">
+                </div>
+                <div class="flex gap-2">
+                    <button type="submit" class="px-4 py-2 bg-slate-800 text-white rounded-md text-sm font-medium hover:bg-slate-900 transition-colors">
+                        Filter
+                    </button>
+                    <a href="{% url 'account-detail' account.pk %}" class="px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-md text-sm font-medium hover:bg-slate-50 transition-colors">
+                        Clear
+                    </a>
+                </div>
+            </form>
+        </section>
+        <!-- END: Filter Bar -->
+
         <div class="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-sm">
             <div class="p-5 border-b border-slate-200">
                 <h3 class="font-bold text-slate-900">Recent Transactions</h3>

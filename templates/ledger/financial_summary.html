@@ -9,7 +9,12 @@
         <h1 class="text-3xl font-bold text-slate-900">Financial Summary</h1>
         <p class="text-sm text-slate-600 mt-1">High-level financial performance overview</p>
     </div>
-    <div class="mt-4 md:mt-0 flex space-x-3">
+    <div class="mt-4 md:mt-0 flex space-x-3 text-right">
+        <a href="{% url 'unified-ledger-pdf' %}?start_date={{ request.GET.start_date }}&end_date={{ request.GET.end_date }}" target="_blank" class="flex items-center space-x-2 px-4 py-2 border border-red-200 rounded-md bg-red-50 text-red-700 text-sm font-medium hover:bg-red-100 transition-colors shadow-sm">
+
+            <i class="fa-solid fa-file-pdf"></i>
+            <span>Unified Ledger</span>
+        </a>
         <a href="{% url 'financialrecord-list' %}" class="flex items-center space-x-2 px-4 py-2 border border-slate-300 rounded-md bg-white text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors">
             <span>Back to Records</span>
         </a>

@@ -10,6 +10,10 @@
         <p class="text-sm text-slate-600 mt-1">Manage and track all financial transactions</p>
     </div>
     <div class="mt-4 md:mt-0 flex space-x-3">
+        <a href="{% url 'unified-ledger-pdf' %}?start_date={{ request.GET.start_date }}&end_date={{ request.GET.end_date }}" target="_blank" class="flex items-center space-x-2 px-4 py-2 border border-red-200 rounded-md bg-red-50 text-red-700 text-sm font-medium hover:bg-red-100 transition-colors shadow-sm">
+            <i class="fa-solid fa-file-pdf"></i>
+            <span>Unified Ledger</span>
+        </a>
         {% if perms.ledger.add_financialrecord %}
         <a href="{% url 'financialrecord-create' %}" class="flex items-center space-x-2 px-4 py-2 bg-emerald-600 text-white rounded-md text-sm font-medium hover:bg-emerald-700 shadow-sm transition-colors">
             <i class="fa-solid fa-plus"></i>

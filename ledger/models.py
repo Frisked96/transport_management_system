@@ -49,6 +49,12 @@ class Party(models.Model):
     account_holder_name = models.CharField(max_length=200, blank=True, verbose_name='Account Holder Name')
     
     bank_details = models.TextField(blank=True, verbose_name='Legacy Bank Details (Text)')
+    opening_balance = models.DecimalField(
+        max_digits=12, 
+        decimal_places=2, 
+        default=0, 
+        verbose_name='Opening Balance'
+    )
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='Created At')
 
     class Meta:
@@ -58,6 +64,27 @@ class Party(models.Model):
 
     def __str__(self):
         return self.name
+
+    @property
+    def current_balance(self):
+        """
+        Calculate current balance: 
+        Opening Balance + Total Revenue (Invoices) - Total Received (Income + Deductions)
+        """
+        # Revenue is recorded as 'Invoice' type records
+        revenue = self.financial_records.filter(
+            record_type=FinancialRecord.RECORD_TYPE_INVOICE
+        ).aggregate(total=models.Sum('amount'))['total'] or 0
+
+        # Payments received are 'Transaction' types with Income category or 'Deductions'
+        received = self.financial_records.filter(
+            record_type=FinancialRecord.RECORD_TYPE_TRANSACTION
+        ).filter(
+            models.Q(category__type=TransactionCategory.TYPE_INCOME) | 
+            models.Q(category__name='Deductions')
+        ).aggregate(total=models.Sum('amount'))['total'] or 0
+
+        return self.opening_balance + revenue - received
 
 class TransactionCategory(models.Model):
     """
@@ -130,12 +157,15 @@ class CompanyAccount(models.Model):
         income = self.financial_records.filter(
             category__type=TransactionCategory.TYPE_INCOME
         ).exclude(
-            models.Q(record_type='Invoice') | models.Q(category__name='Deductions')
+            models.Q(record_type=FinancialRecord.RECORD_TYPE_INVOICE) | 
+            models.Q(category__name='Deductions')
         ).aggregate(total=models.Sum('amount'))['total'] or 0
 
         expenses = self.financial_records.filter(
             category__type=TransactionCategory.TYPE_EXPENSE
-        ).exclude(record_type='Invoice').aggregate(total=models.Sum('amount'))['total'] or 0
+        ).exclude(
+            record_type=FinancialRecord.RECORD_TYPE_INVOICE
+        ).aggregate(total=models.Sum('amount'))['total'] or 0
 
         return self.opening_balance + income - expenses
 
@@ -176,9 +206,11 @@ class FinancialRecord(models.Model):
     # Record Type choices
     RECORD_TYPE_TRANSACTION = 'Transaction'
     RECORD_TYPE_INVOICE = 'Invoice'
+    RECORD_TYPE_GENERAL = 'General'
     RECORD_TYPE_CHOICES = [
         (RECORD_TYPE_TRANSACTION, 'Transaction'),
         (RECORD_TYPE_INVOICE, 'Invoice'),
+        (RECORD_TYPE_GENERAL, 'General/Miscellaneous'),
     ]
 
     date = models.DateField(verbose_name='Transaction Date')
@@ -261,6 +293,7 @@ class FinancialRecord(models.Model):
         related_name='recorded_financials',
         verbose_name='Recorded By'
     )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Created At')
 
     def save(self, *args, **kwargs):
         if not self.entry_number:

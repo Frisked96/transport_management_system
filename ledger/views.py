@@ -13,7 +13,9 @@ from django.utils import timezone
 from decimal import Decimal, InvalidOperation
 from datetime import datetime
 import json
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
+from django.template.loader import get_template
+from xhtml2pdf import pisa
 from itertools import groupby
 from operator import attrgetter
 
@@ -407,7 +409,7 @@ class PartyListView(LoginRequiredMixin, BaseLedgerPermissionMixin, ListView):
             total_billed=Coalesce(Subquery(billed_subquery, output_field=DecimalField()), Value(0, output_field=DecimalField())),
             total_received=Coalesce(Subquery(received_subquery, output_field=DecimalField()), Value(0, output_field=DecimalField()))
         ).annotate(
-            outstanding_balance=F('total_revenue') - F('total_received')
+            outstanding_balance=F('opening_balance') + F('total_revenue') - F('total_received')
         )
         return queryset.order_by('name')
 
@@ -435,9 +437,11 @@ class PartyDetailView(LoginRequiredMixin, BaseLedgerPermissionMixin, DetailView)
         context['financial_records'] = financial_records
         
         # Calculate Total Revenue (Sum of all Invoices: Trip Payment + Bill GST)
-        total_revenue = financial_records.filter(
+        invoiced_amount = financial_records.filter(
             record_type=FinancialRecord.RECORD_TYPE_INVOICE
         ).aggregate(total=Sum('amount'))['total'] or 0
+        
+        total_revenue = self.object.opening_balance + invoiced_amount
 
         # Calculate Total Billed (Sum of Formal Bills: Linked to a Bill or Billed Trip)
         total_billed = financial_records.filter(
@@ -453,6 +457,7 @@ class PartyDetailView(LoginRequiredMixin, BaseLedgerPermissionMixin, DetailView)
             Q(category__type=TransactionCategory.TYPE_INCOME) | Q(category__name='Deductions')
         ).aggregate(total=Sum('amount'))['total'] or 0
         
+        context['total_revenue'] = total_revenue
         context['total_billed'] = total_billed
         context['total_received'] = total_received
         context['balance'] = total_revenue - total_received # Total Outstanding
@@ -574,7 +579,19 @@ class CompanyAccountDetailView(LoginRequiredMixin, BaseLedgerPermissionMixin, De
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['financial_records'] = self.object.financial_records.all().order_by('-date')
+        
+        # Get date range from request
+        start_date = self.request.GET.get('start_date')
+        end_date = self.request.GET.get('end_date')
+        
+        records = self.object.financial_records.all().select_related('category', 'party')
+        
+        if start_date:
+            records = records.filter(date__gte=start_date)
+        if end_date:
+            records = records.filter(date__lte=end_date)
+            
+        context['financial_records'] = records.order_by('-date')
         return context
 
 
@@ -828,3 +845,353 @@ def print_combined_bill(request, pk):
         'bill_trips': bill_trips,
     }
     return render(request, 'ledger/combined_bill_print.html', context)
+
+
+@login_required
+def party_statement_pdf(request, pk):
+    """
+    Generates a PDF statement for a party within a date range.
+    """
+    party = get_object_or_404(Party, pk=pk)
+    
+    # Get date range from request
+    start_date_str = request.GET.get('start_date')
+    end_date_str = request.GET.get('end_date')
+    
+    # Defaults
+    if not start_date_str:
+        # Default to start of current month
+        start_date = timezone.now().replace(day=1).date()
+    else:
+        try:
+            start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+        except ValueError:
+            start_date = timezone.now().replace(day=1).date()
+            
+    if not end_date_str:
+        end_date = timezone.now().date()
+    else:
+        try:
+            end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+        except ValueError:
+            end_date = timezone.now().date()
+
+    # 1. Calculate Opening Balance (before start_date)
+    opening_bal = party.opening_balance
+    
+    # Add all transactions before start_date
+    pre_records = FinancialRecord.objects.filter(
+        party=party,
+        date__lt=start_date
+    ).select_related('category')
+    
+    for rec in pre_records:
+        if rec.is_income or rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE:
+            opening_bal += rec.amount
+        else:
+            opening_bal -= rec.amount
+
+    # 2. Get records in range
+    records = FinancialRecord.objects.filter(
+        party=party,
+        date__range=[start_date, end_date]
+    ).select_related('category', 'associated_trip', 'associated_bill').order_by('date', 'created_at')
+
+    # 3. Build statement rows with running balance
+    statement_rows = []
+    current_running_bal = opening_bal
+    
+    for rec in records:
+        debit = 0
+        credit = 0
+        
+        # In a typical ledger: 
+        # DEBIT = Increases Asset/Decreases Liability (For us: Revenue/Invoice increases what they owe us)
+        # CREDIT = Decreases Asset/Increases Liability (For us: Payment decreases what they owe us)
+        
+        if rec.is_income or rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE:
+            debit = rec.amount
+            current_running_bal += debit
+        else:
+            credit = rec.amount
+            current_running_bal -= credit
+            
+        # Get reference string
+        ref = "-"
+        if rec.associated_bill:
+            ref = f"INV: {rec.associated_bill.bill_number or 'Draft'}"
+        elif rec.associated_trip:
+            ref = f"TRP: {rec.associated_trip.trip_number}"
+        elif rec.linked_bill:
+            ref = f"INV: {rec.linked_bill.bill_number or 'Draft'}"
+        elif rec.linked_trip:
+            ref = f"TRP: {rec.linked_trip.trip_number}"
+
+        statement_rows.append({
+            'date': rec.date,
+            'description': rec.description or rec.category.name,
+            'reference': ref,
+            'debit': debit,
+            'credit': credit,
+            'balance': current_running_bal
+        })
+
+    # 4. Render to PDF
+    context = {
+        'party': party,
+        'recipient_name': party.name,
+        'recipient_address': party.address,
+        'recipient_gstin': party.gstin,
+        'recipient_phone': party.phone_number,
+        'title': f"Statement of Account - {party.name}",
+        'start_date': start_date,
+        'end_date': end_date,
+        'opening_balance': opening_bal,
+        'statement_rows': statement_rows,
+        'closing_balance': current_running_bal,
+        'generated_at': timezone.now(),
+        'company': CompanyAccount.objects.first(), # Header info
+    }
+    
+    template = get_template('ledger/statement_pdf.html')
+    html = template.render(context)
+    
+    response = HttpResponse(content_type='application/pdf')
+    # Use inline for testing, attachment for production
+    response['Content-Disposition'] = f'inline; filename="Statement_{party.name.replace(" ", "_")}_{start_date}.pdf"'
+    
+    # Create PDF
+    pisa_status = pisa.CreatePDF(html, dest=response)
+    
+    if pisa_status.err:
+        return HttpResponse('Error generating PDF', status=500)
+        
+    return response
+
+
+@login_required
+def account_statement_pdf(request, pk):
+    """
+    Generates a PDF statement for a Company Account within a date range.
+    """
+    account = get_object_or_404(CompanyAccount, pk=pk)
+    
+    # Get date range from request
+    start_date_str = request.GET.get('start_date')
+    end_date_str = request.GET.get('end_date')
+    
+    # Defaults
+    if not start_date_str:
+        start_date = timezone.now().replace(day=1).date()
+    else:
+        try:
+            start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+        except ValueError:
+            start_date = timezone.now().replace(day=1).date()
+            
+    if not end_date_str:
+        end_date = timezone.now().date()
+    else:
+        try:
+            end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+        except ValueError:
+            end_date = timezone.now().date()
+
+    # 1. Calculate Opening Balance (before start_date)
+    opening_bal = account.opening_balance
+    
+    pre_records = FinancialRecord.objects.filter(
+        account=account,
+        date__lt=start_date
+    ).select_related('category')
+    
+    for rec in pre_records:
+        if rec.is_income or rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE:
+            opening_bal += rec.amount
+        else:
+            opening_bal -= rec.amount
+
+    # 2. Get records in range
+    records = FinancialRecord.objects.filter(
+        account=account,
+        date__range=[start_date, end_date]
+    ).select_related('category', 'associated_trip', 'associated_bill', 'party').order_by('date', 'created_at')
+
+    # 3. Build statement rows
+    statement_rows = []
+    current_running_bal = opening_bal
+    
+    for rec in records:
+        debit = 0
+        credit = 0
+        
+        if rec.is_income or rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE:
+            debit = rec.amount
+            current_running_bal += debit
+        else:
+            credit = rec.amount
+            current_running_bal -= credit
+            
+        # Get reference string
+        ref = "-"
+        if rec.associated_bill:
+            ref = f"INV: {rec.associated_bill.bill_number or 'Draft'}"
+        elif rec.associated_trip:
+            ref = f"TRP: {rec.associated_trip.trip_number}"
+        
+        # Build description
+        desc = rec.description or rec.category.name
+        if rec.party:
+            desc = f"{desc} (Party: {rec.party.name})"
+
+        statement_rows.append({
+            'date': rec.date,
+            'description': desc,
+            'reference': ref,
+            'debit': debit,
+            'credit': credit,
+            'balance': current_running_bal
+        })
+
+    # 4. Render to PDF
+    context = {
+        'recipient_name': account.name,
+        'recipient_label': 'ACCOUNT',
+        'recipient_address': account.address,
+        'recipient_gstin': account.gstin,
+        'recipient_phone': account.phone_number,
+        'recipient_extra': f"Bank: {account.bank_name} - {account.account_number}",
+        'title': f"Account Statement - {account.name}",
+        'start_date': start_date,
+        'end_date': end_date,
+        'opening_balance': opening_bal,
+        'statement_rows': statement_rows,
+        'closing_balance': current_running_bal,
+        'generated_at': timezone.now(),
+        'company': account, # This account is the company
+    }
+    
+    template = get_template('ledger/statement_pdf.html')
+    html = template.render(context)
+    
+    response = HttpResponse(content_type='application/pdf')
+    response['Content-Disposition'] = f'inline; filename="Account_Statement_{account.name.replace(" ", "_")}.pdf"'
+    
+    pisa_status = pisa.CreatePDF(html, dest=response)
+    if pisa_status.err:
+        return HttpResponse('Error generating PDF', status=500)
+    return response
+
+
+@login_required
+def unified_ledger_pdf(request):
+    """
+    Generates a PDF statement for all Company Accounts combined.
+    """
+    # Get date range from request
+    start_date_str = request.GET.get('start_date')
+    end_date_str = request.GET.get('end_date')
+    
+    # Defaults
+    if not start_date_str:
+        start_date = timezone.now().replace(day=1).date()
+    else:
+        try:
+            start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+        except ValueError:
+            start_date = timezone.now().replace(day=1).date()
+            
+    if not end_date_str:
+        end_date = timezone.now().date()
+    else:
+        try:
+            end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+        except ValueError:
+            end_date = timezone.now().date()
+
+    # 1. Calculate Combined Opening Balance
+    opening_bal = CompanyAccount.objects.aggregate(total=Sum('opening_balance'))['total'] or Decimal('0')
+    
+    pre_records = FinancialRecord.objects.filter(
+        date__lt=start_date
+    ).select_related('category')
+    
+    for rec in pre_records:
+        if rec.is_income or rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE:
+            opening_bal += rec.amount
+        else:
+            opening_bal -= rec.amount
+
+    # 2. Get records in range
+    records = FinancialRecord.objects.filter(
+        date__range=[start_date, end_date]
+    ).select_related('category', 'associated_trip', 'associated_bill', 'party', 'account').order_by('date', 'created_at')
+
+    # 3. Build statement rows
+    statement_rows = []
+    current_running_bal = opening_bal
+    
+    for rec in records:
+        debit = 0
+        credit = 0
+        
+        if rec.is_income or rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE:
+            debit = rec.amount
+            current_running_bal += debit
+        else:
+            credit = rec.amount
+            current_running_bal -= credit
+            
+        # Get reference string
+        ref = "-"
+        if rec.associated_bill:
+            ref = f"INV: {rec.associated_bill.bill_number or 'Draft'}"
+        elif rec.associated_trip:
+            ref = f"TRP: {rec.associated_trip.trip_number}"
+        
+        # Build description
+        desc = rec.description or rec.category.name
+        extra_info = []
+        if rec.account:
+            extra_info.append(f"ACC: {rec.account.name}")
+        if rec.party:
+            extra_info.append(f"PRT: {rec.party.name}")
+            
+        if extra_info:
+            desc = f"{desc} ({', '.join(extra_info)})"
+
+        statement_rows.append({
+            'date': rec.date,
+            'description': desc,
+            'reference': ref,
+            'debit': debit,
+            'credit': credit,
+            'balance': current_running_bal
+        })
+
+    # 4. Render to PDF
+    company_main = CompanyAccount.objects.first()
+    context = {
+        'recipient_name': "All Company Accounts",
+        'recipient_label': 'CONSOLIDATED',
+        'recipient_address': "Multi-firm Consolidated Ledger",
+        'title': "Unified Ledger Statement",
+        'start_date': start_date,
+        'end_date': end_date,
+        'opening_balance': opening_bal,
+        'statement_rows': statement_rows,
+        'closing_balance': current_running_bal,
+        'generated_at': timezone.now(),
+        'company': company_main,
+    }
+    
+    template = get_template('ledger/statement_pdf.html')
+    html = template.render(context)
+    
+    response = HttpResponse(content_type='application/pdf')
+    response['Content-Disposition'] = f'inline; filename="Unified_Ledger_{start_date}.pdf"'
+    
+    pisa_status = pisa.CreatePDF(html, dest=response)
+    if pisa_status.err:
+        return HttpResponse('Error generating PDF', status=500)
+    return response

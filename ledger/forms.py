@@ -93,6 +93,7 @@ class FinancialRecordForm(forms.ModelForm):
         model = FinancialRecord
         fields = [
             'date',
+            'record_type',
             'account',
             'party',
             'driver',
@@ -135,7 +136,7 @@ class PartyForm(forms.ModelForm):
         fields = [
             'name', 'phone_number', 'state', 'address', 'gstin',
             'bank_name', 'bank_branch', 'account_number', 'ifsc_code', 'account_holder_name',
-            'bank_details'
+            'bank_details', 'opening_balance'
         ]
         
         widgets = {
