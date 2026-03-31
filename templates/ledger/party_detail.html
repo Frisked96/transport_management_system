@@ -176,6 +176,7 @@
                             <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Subtotal</th>
                             <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">GST</th>
                             <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Total</th>
+                            <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Pending</th>
                             <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider text-center">Status</th>
                             <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Actions</th>
                         </tr>
@@ -188,9 +189,12 @@
                             </td>
                             <td class="px-6 py-4 text-sm text-slate-600">{{ bill.date|date:"d/m/Y" }}</td>
                             <td class="px-6 py-4"><span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">{{ bill.trips.count }} Trips</span></td>
-                            <td class="px-6 py-4 text-sm text-slate-600 text-right">${{ bill.subtotal|floatformat:2 }}</td>
-                            <td class="px-6 py-4 text-sm text-slate-600 text-right">${{ bill.gst_amount|floatformat:2 }}</td>
-                            <td class="px-6 py-4 text-sm font-bold text-slate-900 text-right">${{ bill.total_amount|floatformat:2 }}</td>
+                            <td class="px-6 py-4 text-xs text-slate-500 text-right">${{ bill.subtotal|floatformat:2 }}</td>
+                            <td class="px-6 py-4 text-xs text-slate-500 text-right">${{ bill.gst_amount|floatformat:2 }}</td>
+                            <td class="px-6 py-4 text-sm font-medium text-slate-900 text-right">${{ bill.total_amount|floatformat:2 }}</td>
+                            <td class="px-6 py-4 text-sm font-bold text-right {% if bill.outstanding_balance > 0 %}text-red-600{% else %}text-emerald-600{% endif %}">
+                                ${{ bill.outstanding_balance|floatformat:2 }}
+                            </td>
                             <td class="px-6 py-4 text-center">
                                 <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium 
                                     {% if bill.status == 'Final' %}bg-emerald-100 text-emerald-800{% else %}bg-slate-100 text-slate-600{% endif %}">

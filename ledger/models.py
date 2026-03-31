@@ -139,6 +139,35 @@ class CompanyAccount(models.Model):
 
         return self.opening_balance + income - expenses
 
+def financial_record_upload_path(instance, filename):
+    """
+    Determines the upload path for a financial record document.
+    Format: financial_records/<type>/<identifier>/<filename>
+    """
+    import os
+    
+    # Priority-based identification
+    if instance.associated_trip:
+        folder = 'trips'
+        identifier = str(instance.associated_trip.trip_number)
+    elif instance.associated_bill:
+        folder = 'bills'
+        identifier = instance.associated_bill.bill_number or f"draft_{instance.associated_bill.pk}"
+    elif instance.party:
+        folder = 'parties'
+        identifier = instance.party.name
+    elif instance.driver:
+        folder = 'drivers'
+        identifier = instance.driver.employee_id or instance.driver.name
+    else:
+        folder = 'miscellaneous'
+        identifier = 'general'
+
+    # Sanitize identifier for path use
+    safe_identifier = str(identifier).replace(' ', '_').replace('/', '-').replace('\\', '-')
+    
+    return os.path.join('financial_records', folder, safe_identifier, filename)
+
 class FinancialRecord(models.Model):
     """
     Financial record for managing income and expenses
@@ -220,7 +249,7 @@ class FinancialRecord(models.Model):
     )
     description = models.TextField(verbose_name='Description', blank=True)
     document_ref = models.FileField(
-        upload_to='financial_docs/%Y/%m/',
+        upload_to=financial_record_upload_path,
         null=True,
         blank=True,
         verbose_name='Supporting Document'
