@@ -43,11 +43,18 @@ class Party(models.Model):
     
     # Structured Bank Details
     bank_name = models.CharField(max_length=200, blank=True, verbose_name='Bank Name')
+    bank_branch = models.CharField(max_length=200, blank=True, verbose_name='Bank Branch')
     account_number = models.CharField(max_length=50, blank=True, verbose_name='Account Number')
     ifsc_code = models.CharField(max_length=20, blank=True, verbose_name='IFSC Code')
     account_holder_name = models.CharField(max_length=200, blank=True, verbose_name='Account Holder Name')
     
     bank_details = models.TextField(blank=True, verbose_name='Legacy Bank Details (Text)')
+    opening_balance = models.DecimalField(
+        max_digits=12, 
+        decimal_places=2, 
+        default=0, 
+        verbose_name='Opening Balance'
+    )
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='Created At')
 
     class Meta:
@@ -57,6 +64,27 @@ class Party(models.Model):
 
     def __str__(self):
         return self.name
+
+    @property
+    def current_balance(self):
+        """
+        Calculate current balance: 
+        Opening Balance + Total Revenue (Invoices) - Total Received (Income + Deductions)
+        """
+        # Revenue is recorded as 'Invoice' type records
+        revenue = self.financial_records.filter(
+            record_type=FinancialRecord.RECORD_TYPE_INVOICE
+        ).aggregate(total=models.Sum('amount'))['total'] or 0
+
+        # Payments received are 'Transaction' types with Income category or 'Deductions'
+        received = self.financial_records.filter(
+            record_type=FinancialRecord.RECORD_TYPE_TRANSACTION
+        ).filter(
+            models.Q(category__type=TransactionCategory.TYPE_INCOME) | 
+            models.Q(category__name='Deductions')
+        ).aggregate(total=models.Sum('amount'))['total'] or 0
+
+        return self.opening_balance + revenue - received
 
 class TransactionCategory(models.Model):
     """
@@ -93,6 +121,7 @@ class CompanyAccount(models.Model):
     
     # Primary Bank Details for this Firm
     bank_name = models.CharField(max_length=200, blank=True, verbose_name='Bank Name')
+    bank_branch = models.CharField(max_length=200, blank=True, verbose_name='Bank Branch')
     account_number = models.CharField(max_length=50, blank=True, verbose_name='Account Number')
     ifsc_code = models.CharField(max_length=20, blank=True, verbose_name='IFSC Code')
     account_holder_name = models.CharField(max_length=200, blank=True, verbose_name='Account Holder Name')
@@ -123,16 +152,51 @@ class CompanyAccount(models.Model):
         """
         Calculate current balance: Opening Balance + Total Income - Total Expenses
         Excludes 'Invoice' type records as they are accruals, not cash flow.
+        Excludes 'Deductions' as they are non-cash revenue reductions.
         """
         income = self.financial_records.filter(
             category__type=TransactionCategory.TYPE_INCOME
-        ).exclude(record_type='Invoice').aggregate(total=models.Sum('amount'))['total'] or 0
+        ).exclude(
+            models.Q(record_type=FinancialRecord.RECORD_TYPE_INVOICE) | 
+            models.Q(category__name='Deductions')
+        ).aggregate(total=models.Sum('amount'))['total'] or 0
 
         expenses = self.financial_records.filter(
             category__type=TransactionCategory.TYPE_EXPENSE
-        ).exclude(record_type='Invoice').aggregate(total=models.Sum('amount'))['total'] or 0
+        ).exclude(
+            record_type=FinancialRecord.RECORD_TYPE_INVOICE
+        ).aggregate(total=models.Sum('amount'))['total'] or 0
 
         return self.opening_balance + income - expenses
+
+def financial_record_upload_path(instance, filename):
+    """
+    Determines the upload path for a financial record document.
+    Format: financial_records/<type>/<identifier>/<filename>
+    """
+    import os
+    
+    # Priority-based identification
+    if instance.associated_trip:
+        folder = 'trips'
+        identifier = str(instance.associated_trip.trip_number)
+    elif instance.associated_bill:
+        folder = 'bills'
+        identifier = instance.associated_bill.bill_number or f"draft_{instance.associated_bill.pk}"
+    elif instance.party:
+        folder = 'parties'
+        identifier = instance.party.name
+    elif instance.driver:
+        folder = 'drivers'
+        identifier = instance.driver.employee_id or instance.driver.name
+    else:
+        folder = 'miscellaneous'
+        identifier = 'general'
+
+    # Sanitize identifier for path use
+    safe_identifier = str(identifier).replace(' ', '_').replace('/', '-').replace('\\', '-')
+    
+    return os.path.join('financial_records', folder, safe_identifier, filename)
 
 class FinancialRecord(models.Model):
     """
@@ -142,9 +206,11 @@ class FinancialRecord(models.Model):
     # Record Type choices
     RECORD_TYPE_TRANSACTION = 'Transaction'
     RECORD_TYPE_INVOICE = 'Invoice'
+    RECORD_TYPE_GENERAL = 'General'
     RECORD_TYPE_CHOICES = [
         (RECORD_TYPE_TRANSACTION, 'Transaction'),
         (RECORD_TYPE_INVOICE, 'Invoice'),
+        (RECORD_TYPE_GENERAL, 'General/Miscellaneous'),
     ]
 
     date = models.DateField(verbose_name='Transaction Date')
@@ -215,7 +281,7 @@ class FinancialRecord(models.Model):
     )
     description = models.TextField(verbose_name='Description', blank=True)
     document_ref = models.FileField(
-        upload_to='financial_docs/%Y/%m/',
+        upload_to=financial_record_upload_path,
         null=True,
         blank=True,
         verbose_name='Supporting Document'
@@ -227,6 +293,7 @@ class FinancialRecord(models.Model):
         related_name='recorded_financials',
         verbose_name='Recorded By'
     )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Created At')
 
     def save(self, *args, **kwargs):
         if not self.entry_number:
@@ -234,8 +301,13 @@ class FinancialRecord(models.Model):
         super().save(*args, **kwargs)
 
         # Check trip closure if associated and this is a payment (Transaction)
-        if self.associated_trip and self.record_type == self.RECORD_TYPE_TRANSACTION:
-            self.associated_trip.check_and_close_trip()
+        if self.record_type == self.RECORD_TYPE_TRANSACTION:
+            if self.associated_trip:
+                self.associated_trip.check_and_close_trip()
+            elif self.associated_bill and self.associated_bill.bill_type == Bill.TYPE_TRIP:
+                # If a bill is paid (even partially), check its trips
+                for trip in self.associated_bill.trips.all():
+                    trip.check_and_close_trip()
 
     class Meta:
         verbose_name = 'Financial Record'
@@ -247,9 +319,42 @@ class FinancialRecord(models.Model):
         ]
 
     def __str__(self):
+        category_name = self.category.name if self.category else 'No Category'
         if self.associated_trip:
-            return f"{self.category.name if self.category else 'No Category'} - {self.associated_trip.trip_number} - {self.amount}"
-        return f"{self.category.name if self.category else 'No Category'} - {self.amount}"
+            return f"{category_name} - Trip: {self.associated_trip.trip_number} - {self.amount}"
+        if self.associated_bill:
+            bill_num = self.associated_bill.bill_number or "Draft Bill"
+            return f"{category_name} - Bill: {bill_num} - {self.amount}"
+        return f"{category_name} - {self.amount}"
+
+    @property
+    def linked_bill(self):
+        """Returns associated bill or bill from allocations"""
+        if self.associated_bill:
+            return self.associated_bill
+        
+        # If no direct bill, check if it's a trip payment with allocations
+        first_alloc = self.allocations.select_related('trip').first()
+        if first_alloc and first_alloc.trip.associated_bill:
+            return first_alloc.trip.associated_bill
+        
+        # Finally check if direct associated trip has a bill
+        if self.associated_trip and self.associated_trip.associated_bill:
+            return self.associated_trip.associated_bill
+            
+        return None
+
+    @property
+    def linked_trip(self):
+        """Returns associated trip or first trip from allocations"""
+        if self.associated_trip:
+            return self.associated_trip
+        
+        first_alloc = self.allocations.select_related('trip').first()
+        if first_alloc:
+            return first_alloc.trip
+            
+        return None
 
     @property
     def is_income(self):
@@ -299,13 +404,29 @@ class TripAllocation(models.Model):
 
 class Bill(models.Model):
     """
-    Bill/Invoice Document aggregating multiple trips.
+    Bill/Invoice Document aggregating multiple trips or standard items.
     """
     STATUS_DRAFT = 'Draft'
     STATUS_FINAL = 'Final'
     STATUS_CHOICES = [
         (STATUS_DRAFT, 'Draft'),
         (STATUS_FINAL, 'Final'),
+    ]
+
+    TYPE_TRIP = 'Trip'
+    TYPE_STANDARD = 'Standard'
+    TYPE_CHOICES = [
+        (TYPE_TRIP, 'Trip-based Invoice'),
+        (TYPE_STANDARD, 'Standard Invoice'),
+    ]
+
+    PAYMENT_STATUS_UNPAID = 'Unpaid'
+    PAYMENT_STATUS_PARTIAL = 'Partially Paid'
+    PAYMENT_STATUS_PAID = 'Paid'
+    PAYMENT_STATUS_CHOICES = [
+        (PAYMENT_STATUS_UNPAID, 'Unpaid'),
+        (PAYMENT_STATUS_PARTIAL, 'Partially Paid'),
+        (PAYMENT_STATUS_PAID, 'Paid'),
     ]
 
     GST_RATE_0 = 0
@@ -325,10 +446,18 @@ class Bill(models.Model):
     ]
 
     bill_number = models.CharField(max_length=50, unique=True, blank=True, null=True, verbose_name="Invoice Number")
+    bill_type = models.CharField(max_length=10, choices=TYPE_CHOICES, default=TYPE_TRIP, verbose_name="Bill Type")
     issuer = models.ForeignKey(CompanyAccount, on_delete=models.PROTECT, related_name='bills', verbose_name="Issued From", null=True)
     party = models.ForeignKey(Party, on_delete=models.PROTECT, related_name='bills', verbose_name="Bill To")
     date = models.DateField(verbose_name="Invoice Date")
-    trips = models.ManyToManyField(Trip, through='BillTrip', related_name='bills', verbose_name="Included Trips")
+    
+    # Trip-based bills
+    trips = models.ManyToManyField(Trip, through='BillTrip', related_name='bills', verbose_name="Included Trips", blank=True)
+    
+    # Standard bills
+    item_type = models.CharField(max_length=200, blank=True, null=True, verbose_name="Item Type/Description")
+    amount_override = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, verbose_name="Subtotal Amount (Manual)")
+    
     gst_rate = models.PositiveIntegerField(choices=GST_CHOICES, default=GST_RATE_0, verbose_name="GST Rate (%)")
     gst_type = models.CharField(max_length=10, choices=GST_TYPE_CHOICES, default=GST_TYPE_INTRA, verbose_name="GST Type")
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=STATUS_DRAFT)
@@ -342,6 +471,7 @@ class Bill(models.Model):
     
     # Bank Details Snapshot
     invoice_bank_name = models.CharField(max_length=200, blank=True, verbose_name="Bank Name (Snapshot)")
+    invoice_bank_branch = models.CharField(max_length=200, blank=True, verbose_name="Bank Branch (Snapshot)")
     invoice_bank_account = models.CharField(max_length=50, blank=True, verbose_name="Bank Account (Snapshot)")
     invoice_bank_ifsc = models.CharField(max_length=20, blank=True, verbose_name="Bank IFSC (Snapshot)")
     
@@ -357,6 +487,7 @@ class Bill(models.Model):
             self.invoice_company_gstin = self.issuer.gstin
             self.invoice_company_authorized_signatory = self.issuer.authorized_signatory
             self.invoice_bank_name = self.issuer.bank_name
+            self.invoice_bank_branch = self.issuer.bank_branch
             self.invoice_bank_account = self.issuer.account_number
             self.invoice_bank_ifsc = self.issuer.ifsc_code
         
@@ -396,12 +527,13 @@ class Bill(models.Model):
         Must be called AFTER ManyToMany relationships are established.
         """
         self.update_ledger_records()
-        self.sync_trips_to_ledger()
+        if self.bill_type == self.TYPE_TRIP:
+            self.sync_trips_to_ledger()
 
     def sync_trips_to_ledger(self):
         """
         Trigger sync_ledger_invoice for all trips associated with this bill.
-        This ensures individual trip revenue records are removed if the trip is now billed.
+        This ensures individual Trip Payment records are removed if the trip is now billed.
         """
         for trip in self.trips.all():
             trip.sync_ledger_invoice()
@@ -414,11 +546,11 @@ class Bill(models.Model):
         # 1. Handle Consolidated Invoice Record (Total = Subtotal + GST if Final)
         # Create this for both Draft and Final bills to replace individual trip entries immediately.
         should_have_invoice = True
-        inv_record = FinancialRecord.objects.filter(associated_bill=self, category__name="Trip Revenue").first()
+        inv_record = FinancialRecord.objects.filter(associated_bill=self, record_type=FinancialRecord.RECORD_TYPE_INVOICE).first()
 
         if should_have_invoice:
             inv_cat, _ = TransactionCategory.objects.get_or_create(
-                name="Trip Revenue",
+                name="Trip Payment",
                 defaults={'type': TransactionCategory.TYPE_INCOME, 'description': 'Revenue from trips'}
             )
 
@@ -429,24 +561,83 @@ class Bill(models.Model):
             amount = self.total_amount if self.status == self.STATUS_FINAL else self.subtotal
 
             gst_note = f" (Incl. GST ₹{self.gst_amount})" if self.status == self.STATUS_FINAL and self.gst_amount > 0 else ""
-            description = f"Invoice {self.bill_number or 'Draft'}{status_tag}{gst_note}"
+            
+            bill_desc = self.item_type if self.bill_type == self.TYPE_STANDARD else f"Trip-based Invoice"
+            description = f"Invoice {self.bill_number or 'Draft'}: {bill_desc}{status_tag}{gst_note}"
 
             FinancialRecord.objects.update_or_create(
                 associated_bill=self,
-                category=inv_cat,
+                record_type=FinancialRecord.RECORD_TYPE_INVOICE,
                 defaults={
+                    'category': inv_cat,
                     'party': self.party,
                     'date': self.date,
                     'amount': amount,
-                    'record_type': FinancialRecord.RECORD_TYPE_INVOICE,
                     'description': description
                 }
             )
         elif inv_record:
             inv_record.delete()
 
-        # 2. Cleanup old "GST Output" records if they exist (since we are now consolidating)
-        FinancialRecord.objects.filter(associated_bill=self, category__name="GST Output").delete()
+    @property
+    def amount_received(self):
+        """
+        Calculate total received for this bill.
+        Includes:
+        1. Direct payments to this bill (Invoice Payment)
+        2. Deductions (recorded as expenses against this bill)
+        3. For Trip-based bills: Payments allocated to individual trips
+        """
+        # 1. Direct payments & deductions linked to this bill
+        direct_income = self.financial_records.filter(
+            category__type=TransactionCategory.TYPE_INCOME,
+            record_type=FinancialRecord.RECORD_TYPE_TRANSACTION
+        ).aggregate(total=Sum('amount'))['total'] or 0
+        
+        deductions = self.financial_records.filter(
+            category__name="Deductions",
+            record_type=FinancialRecord.RECORD_TYPE_TRANSACTION
+        ).aggregate(total=Sum('amount'))['total'] or 0
+
+        # 2. Trip-based allocations
+        trip_payments = 0
+        if self.bill_type == self.TYPE_TRIP:
+            # We need to find all TripAllocations for trips in this bill
+            trip_payments = TripAllocation.objects.filter(
+                trip__in=self.trips.all()
+            ).aggregate(total=Sum('amount'))['total'] or 0
+            
+            # Also consider direct trip payments not through allocations (if any exist)
+            direct_trip_payments = FinancialRecord.objects.filter(
+                associated_trip__in=self.trips.all(),
+                category__type=TransactionCategory.TYPE_INCOME,
+                record_type=FinancialRecord.RECORD_TYPE_TRANSACTION
+            ).aggregate(total=Sum('amount'))['total'] or 0
+            
+            trip_payments += direct_trip_payments
+
+        return direct_income + deductions + trip_payments
+
+    @property
+    def outstanding_balance(self):
+        total = self.total_amount if self.status == self.STATUS_FINAL else self.subtotal
+        return total - self.amount_received
+
+    @property
+    def payment_status(self):
+        total = self.total_amount if self.status == self.STATUS_FINAL else self.subtotal
+        received = self.amount_received
+        
+        if total <= 0:
+            return self.PAYMENT_STATUS_UNPAID
+        
+        if received >= total:
+            return self.PAYMENT_STATUS_PAID
+        elif received > 0:
+            return self.PAYMENT_STATUS_PARTIAL
+        else:
+            return self.PAYMENT_STATUS_UNPAID
+
     @property
     def cgst_amount(self):
         if self.gst_rate > 0 and self.gst_type == self.GST_TYPE_INTRA:
@@ -494,6 +685,8 @@ class Bill(models.Model):
 
     @property
     def subtotal(self):
+        if self.bill_type == self.TYPE_STANDARD:
+            return self.amount_override or 0
         # revenue = weight * rate_per_ton
         return self.trips.aggregate(
             total=models.Sum(models.F('weight') * models.F('rate_per_ton'))

@@ -38,9 +38,11 @@ class TripQuerySet(models.QuerySet):
         return self.annotate(
             annotated_received = Coalesce(Subquery(direct_payments), Value(0), output_field=DecimalField()) + 
                                  Coalesce(Subquery(allocations), Value(0), output_field=DecimalField()),
-            # We can't easily calculate revenue in SQL here because it involves multiplication of fields,
-            # but we can do it:
-            annotated_revenue = F('weight') * F('rate_per_ton')
+            annotated_revenue = Case(
+                When(revenue_type='fixed', then=F('rate_per_ton')),
+                default=F('weight') * F('rate_per_ton'),
+                output_field=DecimalField()
+            )
         ).annotate(
             annotated_status = Case(
                 When(annotated_received__gte=F('annotated_revenue'), annotated_revenue__gt=0, then=Value('Paid')),
@@ -103,12 +105,29 @@ class Trip(models.Model):
         (PAYMENT_STATUS_PAID, 'Paid'),
     ]
 
+    # Revenue type choices
+    REVENUE_PER_TON = 'per_ton'
+    REVENUE_FIXED = 'fixed'
+    
+    REVENUE_TYPE_CHOICES = [
+        (REVENUE_PER_TON, 'Per Ton'),
+        (REVENUE_FIXED, 'Fixed'),
+    ]
+
     # Unique trip identifier
     trip_number = models.CharField(
         max_length=100,
         unique=True,
         verbose_name='Trip Number',
         blank=True
+    )
+    
+    # Revenue type
+    revenue_type = models.CharField(
+        max_length=10,
+        choices=REVENUE_TYPE_CHOICES,
+        default=REVENUE_PER_TON,
+        verbose_name='Revenue Type'
     )
     
     # Driver assignment (ForeignKey to Driver)
@@ -139,6 +158,30 @@ class Trip(models.Model):
         null=True,
         blank=True,
         verbose_name='End Odometer'
+    )
+
+    diesel_liters = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name='Diesel Liters'
+    )
+
+    diesel_total_cost = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name='Diesel Total Cost'
+    )
+
+    diesel_rate = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name='Diesel Rate (Price/Ltr)'
     )
 
     # Date of the trip (replaces date from TripLeg)
@@ -242,11 +285,49 @@ class Trip(models.Model):
         """
         Validate trip logic
         """
-        pass
+        # Check if we are adding a new trip or changing the vehicle of an existing trip
+        check_vehicle = False
+        if self._state.adding:
+            check_vehicle = True
+        else:
+            try:
+                old_instance = Trip.objects.get(pk=self.pk)
+                if old_instance.vehicle != self.vehicle:
+                    check_vehicle = True
+            except Trip.DoesNotExist:
+                check_vehicle = True
+                
+        if check_vehicle and self.vehicle:
+            # Check if there are any uncompleted trips for this vehicle
+            uncompleted_trips = Trip.objects.filter(
+                vehicle=self.vehicle
+            ).exclude(status=self.STATUS_COMPLETED)
+            
+            if not self._state.adding:
+                uncompleted_trips = uncompleted_trips.exclude(pk=self.pk)
+            
+            if uncompleted_trips.exists():
+                latest_uncompleted = uncompleted_trips.order_by('-date').first()
+                trip_num = latest_uncompleted.trip_number or "Unknown"
+                raise ValidationError(
+                    f"Cannot create or assign a trip to vehicle {self.vehicle.registration_plate} "
+                    f"because it has an uncompleted trip ({trip_num}). "
+                    "Please mark the old trip as completed first."
+                )
+
+        if self.start_odometer is not None and self.end_odometer is not None:
+            if self.end_odometer < self.start_odometer:
+                # Raising as a non-field error (string) to prevent ValueError 
+                # in forms that don't include both odometer fields.
+                raise ValidationError(
+                    f"End Odometer ({self.end_odometer}) cannot be less than Start Odometer ({self.start_odometer}). "
+                    "Did you enter the distance covered instead of the actual odometer reading? "
+                    "Please correct the odometer readings in the 'Edit Trip' page."
+                )
 
     def sync_ledger_invoice(self):
         """
-        Synchronize Trip Revenue to FinancialRecord as an Invoice.
+        Synchronize Trip Payment to FinancialRecord as an Invoice.
         If the trip is part of a finalized Bill, the individual trip record is removed
         in favor of the consolidated Bill record.
         """
@@ -264,7 +345,7 @@ class Trip(models.Model):
             record_type=FinancialRecord.RECORD_TYPE_INVOICE
         )
 
-        # If it's part of a bill, we DON'T want an individual trip invoice 
+        # If it's part of a bill, we DON'T want an individual trip invoice
         # because the Bill (Invoice) will have its own record.
         if is_billed or not has_revenue:
             if invoice_qs.exists():
@@ -272,12 +353,11 @@ class Trip(models.Model):
             return
 
         # Otherwise, maintain individual record
-        amount = self.weight * self.rate_per_ton
+        amount = self.revenue
         cat, _ = TransactionCategory.objects.get_or_create(
-            name="Trip Revenue",
+            name="Trip Payment",
             defaults={'type': TransactionCategory.TYPE_INCOME, 'description': 'Auto-generated revenue from trips'}
         )
-
         if invoice_qs.exists():
             # Update existing
             record = invoice_qs.first()
@@ -312,6 +392,27 @@ class Trip(models.Model):
                     description=f"Invoice for Trip {self.trip_number}"
                 )
 
+    def sync_fuel_log(self):
+        """Synchronize diesel fields to fleet.FuelLog"""
+        from fleet.models import FuelLog
+        
+        # Check if we have enough data to create a fuel log
+        if self.diesel_liters and self.diesel_total_cost and self.diesel_liters > 0:
+            FuelLog.objects.update_or_create(
+                trip=self,
+                defaults={
+                    'vehicle': self.vehicle,
+                    'date': self.date.date(),
+                    'liters': self.diesel_liters,
+                    'rate': self.diesel_rate or 0,
+                    'total_cost': self.diesel_total_cost,
+                    'odometer': self.start_odometer or self.vehicle.current_odometer or 0
+                }
+            )
+        else:
+            # If data is missing or zeroed out, remove any existing fuel log for this trip
+            FuelLog.objects.filter(trip=self).delete()
+
     def save(self, *args, **kwargs):
         """
         Override save to handle business logic
@@ -330,6 +431,17 @@ class Trip(models.Model):
             self.actual_completion_datetime = timezone.now()
         elif self.status != self.STATUS_COMPLETED:
             self.actual_completion_datetime = None
+
+        # 3. Diesel Calculation Logic
+        if self.diesel_liters:
+            from decimal import Decimal
+            liters = Decimal(str(self.diesel_liters))
+            
+            if self.diesel_rate and not self.diesel_total_cost:
+                self.diesel_total_cost = liters * Decimal(str(self.diesel_rate))
+            elif self.diesel_total_cost and not self.diesel_rate:
+                if liters > 0:
+                    self.diesel_rate = Decimal(str(self.diesel_total_cost)) / liters
 
         # Handle Trip Number generation and regeneration
         reg_plate = self.vehicle.registration_plate
@@ -368,12 +480,13 @@ class Trip(models.Model):
         super().save(*args, **kwargs)
 
         # 3. Post-save logic: Update Vehicle Odometer and Tyre KM
-        if self.status == self.STATUS_COMPLETED and self.end_odometer:
+        if self.end_odometer:
             # Update vehicle's current odometer if this is the most recent trip or has highest odo
             if self.end_odometer > self.vehicle.current_odometer:
                 self.vehicle.current_odometer = self.end_odometer
                 self.vehicle.save(update_fields=['current_odometer'])
 
+        if self.status == self.STATUS_COMPLETED and self.end_odometer:
             # Update Tyres total_km
             if self.start_odometer and self.end_odometer > self.start_odometer:
                 distance = self.end_odometer - self.start_odometer
@@ -411,10 +524,22 @@ class Trip(models.Model):
         # Sync to Ledger
         self.sync_ledger_invoice()
 
+        # Sync Fuel Log
+        update_fields = kwargs.get('update_fields')
+        if update_fields is None or any(f in update_fields for f in ['diesel_liters', 'diesel_total_cost', 'diesel_rate', 'date', 'vehicle', 'start_odometer']):
+            self.sync_fuel_log()
+
         if is_new:
-            # Create default TripExpense entries
-            TripExpense.objects.create(trip=self, name='Diesel', amount=0)
-            TripExpense.objects.create(trip=self, name='Toll', amount=0)
+            # Create default TripExpense entries using update_or_create to avoid duplicates 
+            # if multiple saves happen in a transaction (like in unified views)
+            TripExpense.objects.update_or_create(trip=self, name='Diesel', defaults={'amount': self.diesel_total_cost or 0})
+            TripExpense.objects.update_or_create(trip=self, name='Toll', defaults={'amount': 0})
+        else:
+            # Update Diesel expense if total_cost changed
+            TripExpense.objects.update_or_create(
+                trip=self, name='Diesel', 
+                defaults={'amount': self.diesel_total_cost or 0}
+            )
     
     @property
     def start_date(self):
@@ -424,6 +549,9 @@ class Trip(models.Model):
     @property
     def revenue(self):
         """Calculate revenue for this trip"""
+        if self.revenue_type == self.REVENUE_FIXED:
+            return self.rate_per_ton or 0
+        
         if self.weight and self.rate_per_ton:
             return self.weight * self.rate_per_ton
         return 0
@@ -465,18 +593,29 @@ class Trip(models.Model):
 
     @property
     def amount_received(self):
-        """Calculate total received from both direct links and allocations"""
-        from ledger.models import FinancialRecord, TransactionCategory
-        # 1. Direct links (Records with type='Income')
+        """Calculate total received (Payments + Deductions) from direct links and allocations"""
+        from ledger.models import FinancialRecord, TransactionCategory, Bill
+        # 1. Direct links (Records with type='Income' OR category='Deductions')
         direct = self.financial_records.filter(
-            category__type=TransactionCategory.TYPE_INCOME
-        ).exclude(record_type=FinancialRecord.RECORD_TYPE_INVOICE).aggregate(total=models.Sum('amount'))['total'] or 0
+            record_type=FinancialRecord.RECORD_TYPE_TRANSACTION
+        ).filter(
+            models.Q(category__type=TransactionCategory.TYPE_INCOME) | models.Q(category__name='Deductions')
+        ).aggregate(total=models.Sum('amount'))['total'] or 0
         
-        # 2. M2M Allocations (Assumed to be income by nature)
+        # 2. M2M Allocations (Assumed to be income or deduction adjustments by nature)
         allocated = self.payment_allocations.aggregate(
             total=models.Sum('amount')
         )['total'] or 0
         
+        # 3. If part of a PAID bill, consider it fully received for the billed amount
+        billed_received = 0
+        bill = self.associated_bill
+        if bill and bill.payment_status == Bill.PAYMENT_STATUS_PAID:
+            # If the bill is paid, this trip's share is fully covered
+            billed_received = self.total_revenue
+            # But we must avoid double counting if it was also partially paid via allocations
+            return billed_received
+
         return direct + allocated
 
     def check_and_close_trip(self):
@@ -484,7 +623,7 @@ class Trip(models.Model):
         Check if trip should be automatically closed.
         Conditions:
         1. Total Revenue > 0
-        2. Fully Paid (Total Received >= Total Revenue)
+        2. Fully Paid (Total Received >= Total Revenue OR associated Bill is PAID)
         3. Trip Date has passed
         """
         if self.status == self.STATUS_COMPLETED:
@@ -501,8 +640,12 @@ class Trip(models.Model):
 
         # 3. Paid Amount
         received = self.amount_received
+        
+        from ledger.models import Bill
+        bill = self.associated_bill
+        is_bill_paid = bill and bill.payment_status == Bill.PAYMENT_STATUS_PAID
 
-        if received >= total_rev:
+        if received >= total_rev or is_bill_paid:
             self.status = self.STATUS_COMPLETED
             if not self.actual_completion_datetime:
                 self.actual_completion_datetime = timezone.now()
@@ -533,6 +676,47 @@ class Trip(models.Model):
     def total_cost(self):
         """Calculate total cost (from TripExpense)"""
         return self.custom_expenses.aggregate(total=models.Sum('amount'))['total'] or 0
+
+    @property
+    def net_profit_excl_gst(self):
+        """Calculate net profit for this trip (Revenue Excl. GST - Total Cost)"""
+        return self.revenue - self.total_cost
+
+    @property
+    def net_profit_incl_gst(self):
+        """Calculate net profit for this trip (Revenue Incl. GST - Total Cost)"""
+        return self.total_revenue - self.total_cost
+
+    @property
+    def net_profit(self):
+        """Alias for backward compatibility"""
+        return self.net_profit_excl_gst
+
+    @property
+    def total_diesel_liters(self):
+        """Total liters used in trip"""
+        return self.diesel_liters or 0
+
+    @property
+    def total_fuel_cost(self):
+        """Total cost of fuel for this trip"""
+        return self.diesel_total_cost or 0
+
+    @property
+    def distance_covered(self):
+        """Distance covered in KM"""
+        if self.start_odometer is not None and self.end_odometer is not None:
+            return max(0, self.end_odometer - self.start_odometer)
+        return 0
+
+    @property
+    def diesel_average(self):
+        """Diesel average (mileage) in KM/L"""
+        liters = self.total_diesel_liters
+        distance = self.distance_covered
+        if liters > 0 and distance > 0:
+            return distance / liters
+        return 0
 
 
 class TripExpense(models.Model):
@@ -571,7 +755,25 @@ class TripExpense(models.Model):
         verbose_name = 'Trip Expense'
         verbose_name_plural = 'Trip Expenses'
         ordering = ['created_at']
+        unique_together = ('trip', 'name')
     
     def __str__(self):
         return f"{self.name} - {self.amount}"
+
+    def save(self, *args, **kwargs):
+        """Sync diesel expense back to Trip model fields if it matches 'Diesel'"""
+        super().save(*args, **kwargs)
+        if self.name == 'Diesel' and self.trip:
+            # Only update if the value has actually changed to avoid infinite recursion
+            if self.trip.diesel_total_cost != self.amount:
+                self.trip.diesel_total_cost = self.amount
+                # We use save(update_fields) to trigger the Trip.save logic 
+                # but only for this field.
+                self.trip.save(update_fields=['diesel_total_cost'])
+
+@receiver(post_delete, sender=Trip)
+def delete_related_fuel_log(sender, instance, **kwargs):
+    """Ensure FuelLog is deleted when Trip is deleted"""
+    from fleet.models import FuelLog
+    FuelLog.objects.filter(trip=instance).delete()
 

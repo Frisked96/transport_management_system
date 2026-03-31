@@ -3,7 +3,6 @@ URL configuration for Fleet app
 """
 from django.urls import path
 from . import views
-from . import views_fuel
 
 urlpatterns = [
     # Vehicle URLs
@@ -19,10 +18,11 @@ urlpatterns = [
     path('maintenance/create/', views.MaintenanceLogCreateView.as_view(), name='maintenance-log-create'),
     path('maintenance/<int:pk>/update/', views.MaintenanceLogUpdateView.as_view(), name='maintenance-log-update'),
 
-    # Fuel Log URLs
-    path('vehicle/<int:vehicle_pk>/fuel/add/', views_fuel.FuelLogCreateView.as_view(), name='fuel-log-create'),
-    path('fuel/<int:pk>/update/', views_fuel.FuelLogUpdateView.as_view(), name='fuel-log-update'),
-    path('fuel/<int:pk>/delete/', views_fuel.FuelLogDeleteView.as_view(), name='fuel-log-delete'),
+    # Maintenance Task URLs
+    path('tasks/', views.MaintenanceTaskListView.as_view(), name='maintenance-task-list'),
+    path('tasks/create/', views.MaintenanceTaskCreateView.as_view(), name='maintenance-task-create'),
+    path('tasks/<int:pk>/update/', views.MaintenanceTaskUpdateView.as_view(), name='maintenance-task-update'),
+    path('tasks/<int:pk>/delete/', views.MaintenanceTaskDeleteView.as_view(), name='maintenance-task-delete'),
 
     # Tyre URLs
     path('tyres/', views.TyreListView.as_view(), name='tyre-list'),

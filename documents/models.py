@@ -1,6 +1,24 @@
 from django.db import models
 from django.utils import timezone
 
+def document_upload_path(instance, filename):
+    """
+    Determines the upload path for a document.
+    Format: documents/<identifier>/<filename>
+    """
+    import os
+    if instance.vehicle:
+        identifier = str(instance.vehicle.registration_plate).replace(' ', '_').replace('/', '-')
+    elif instance.driver:
+        # Prefer employee ID, fallback to name
+        id_part = instance.driver.employee_id or instance.driver.name
+        identifier = str(id_part).replace(' ', '_').replace('/', '-')
+    else:
+        identifier = 'miscellaneous'
+    
+    # We return the full path. The storage backend will handle folder creation.
+    return os.path.join('documents', identifier, filename)
+
 class Document(models.Model):
     """
     Document model for tracking expirations (Insurance, Permits, Licenses)
@@ -33,11 +51,24 @@ class Document(models.Model):
     )
 
     expiry_date = models.DateField(
-        verbose_name='Expiry Date'
+        verbose_name='Expiry Date',
+        null=True,
+        blank=True
+    )
+
+    never_expires = models.BooleanField(
+        default=False,
+        verbose_name='Never Expires'
+    )
+
+    notes = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name='Notes'
     )
 
     scanned_copy = models.FileField(
-        upload_to='documents/%Y/%m/',
+        upload_to=document_upload_path,
         null=True,
         blank=True,
         verbose_name='Scanned Copy'
@@ -55,9 +86,13 @@ class Document(models.Model):
 
     @property
     def is_expired(self):
+        if self.never_expires or not self.expiry_date:
+            return False
         return self.expiry_date < timezone.now().date()
 
     @property
     def days_until_expiry(self):
+        if self.never_expires or not self.expiry_date:
+            return None
         delta = self.expiry_date - timezone.now().date()
         return delta.days

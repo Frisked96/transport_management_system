@@ -29,6 +29,21 @@
 
                 {{ form.trips_data }}
 
+                <!-- BEGIN: Bill Type Section -->
+                <div class="bg-white p-6 rounded-lg border border-slate-200 mb-10 flex flex-wrap items-center gap-8">
+                    <div class="flex items-center gap-4">
+                        <label class="text-sm font-bold text-slate-700 uppercase tracking-wider">Invoice Type:</label>
+                        <div class="min-w-[200px]">
+                            {{ form.bill_type }}
+                        </div>
+                    </div>
+                    <p class="text-[10px] text-slate-500 italic max-w-sm">
+                        <i class="fa-solid fa-circle-info mr-1"></i>
+                        Choose "Trip-based" to select completed trips, or "Standard" to enter a manual item and amount.
+                    </p>
+                </div>
+                <!-- END: Bill Type Section -->
+
                 <!-- BEGIN: Header Section -->
                 <div class="grid grid-cols-1 lg:grid-cols-12 gap-12 mb-10">
                     <!-- Billing Entities -->
@@ -47,7 +62,7 @@
                             <div class="max-w-md">
                                 <label class="block text-sm font-semibold text-slate-700 mb-2">Select Party</label>
                                 {{ form.party }}
-                                <p class="mt-2 text-[10px] text-emerald-600 italic"><i class="fa-solid fa-circle-info mr-1"></i>Trip list will update automatically when a party is selected.</p>
+                                <p class="mt-2 text-[10px] text-emerald-600 italic" id="partyTripNote"><i class="fa-solid fa-circle-info mr-1"></i>Trip list will update automatically when a party is selected.</p>
                             </div>
                         </div>
                     </div>
@@ -81,8 +96,30 @@
                 </div>
                 <!-- END: Header Section -->
 
+                <!-- BEGIN: Standard Invoice Fields -->
+                <div id="standardInvoiceFields" class="hidden mb-10 bg-white border-2 border-slate-200 rounded-lg overflow-hidden shadow-sm">
+                    <div class="bg-slate-100 px-6 py-4 border-b border-slate-200">
+                        <h3 class="text-sm font-bold text-slate-700 uppercase tracking-wider flex items-center">
+                            <i class="fa-solid fa-file-invoice mr-2"></i>Standard Invoice Details
+                        </h3>
+                    </div>
+                    <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-8 bg-slate-50/30">
+                        <div class="space-y-2">
+                            <label class="block text-xs font-bold text-slate-500 uppercase">Item Description / Type</label>
+                            {{ form.item_type }}
+                            <p class="text-[10px] text-slate-400">e.g., Detention Charges, Loading/Unloading, etc.</p>
+                        </div>
+                        <div class="space-y-2">
+                            <label class="block text-xs font-bold text-slate-500 uppercase">Subtotal Amount (Excl. GST)</label>
+                            {{ form.amount_override }}
+                            <p class="text-[10px] text-slate-400">Enter the base amount. GST will be added automatically based on the rate above.</p>
+                        </div>
+                    </div>
+                </div>
+                <!-- END: Standard Invoice Fields -->
+
                 <!-- BEGIN: Trips Selection -->
-                <div class="mb-10">
+                <div id="tripsSelectionArea" class="mb-10">
                     <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 pb-2 border-b border-slate-100">Included Trips</h3>
                     
                     <div id="tripsContainer" class="{% if not form.trips.field.queryset.exists %}hidden{% endif %}">
@@ -169,6 +206,23 @@
         } catch (e) {
             console.error("Error parsing trips data", e);
         }
+
+        // Bill Type Toggle Logic
+        function updateBillTypeUI() {
+            const billType = $('#id_bill_type').val();
+            if (billType === 'Standard') {
+                $('#standardInvoiceFields').removeClass('hidden');
+                $('#tripsSelectionArea').addClass('hidden');
+                $('#partyTripNote').addClass('hidden');
+            } else {
+                $('#standardInvoiceFields').addClass('hidden');
+                $('#tripsSelectionArea').removeClass('hidden');
+                $('#partyTripNote').removeClass('hidden');
+            }
+        }
+
+        $('#id_bill_type').on('change', updateBillTypeUI);
+        updateBillTypeUI(); // Initial run
 
         // Logic for Save as Draft vs Save & Finalize
         $('#saveDraftBtn').on('click', function(e) {

@@ -60,6 +60,9 @@
             <div class="absolute right-0 pt-2 w-48 z-20 dropdown-menu hidden">
                 <div class="bg-white rounded-md shadow-lg py-1 border border-slate-100">
                     <a href="{% url 'account-detail' account.pk %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"><i class="fa-regular fa-eye mr-2"></i>View Details</a>
+                    <a href="{% url 'account-statement-pdf' account.pk %}" target="_blank" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">
+                        <i class="fa-regular fa-file-pdf mr-2 text-red-500"></i>View Statement
+                    </a>
                     {% if perms.ledger.change_financialrecord %}
                     <a href="{% url 'account-update' account.pk %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"><i class="fa-regular fa-pen-to-square mr-2"></i>Edit Account</a>
                     {% endif %}

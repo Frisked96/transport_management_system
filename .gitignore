@@ -59,6 +59,7 @@ htmlcov/
 .mypy_cache/
 .dmypy.json
 dmypy.json
+tms-storage-491804-bb8c3c501b26.json
 
 # Django migrations
 #!**/migrations/*.py

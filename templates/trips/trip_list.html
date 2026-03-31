@@ -95,65 +95,106 @@
 <div class="space-y-4">
     {% for trip in trips %}
     <!-- Trip Card -->
-    <div class="bg-white border border-slate-200 rounded-lg p-5 flex flex-col md:flex-row items-start md:items-center gap-4 hover:shadow-sm transition-shadow">
-        <div class="flex-1 min-w-[200px]">
-            <h3 class="font-bold text-lg text-slate-900 leading-tight">
-                <a href="{% url 'trip-detail' trip.pk %}" class="hover:text-emerald-600 transition-colors">{{ trip.trip_number }}</a>
-            </h3>
-            <p class="text-sm text-slate-600">{{ trip.vehicle.registration_plate }} • {% if trip.party %}{{ trip.party.name }}{% else %}-{% endif %}</p>
-            <p class="text-xs text-slate-500 mt-1">{{ trip.date|date:"M d, Y, H:i" }}</p>
+    <div class="bg-white border border-slate-200 rounded-lg p-4 md:p-5 flex flex-col md:flex-row items-start md:items-center gap-4 hover:shadow-sm transition-shadow relative">
+        <div class="flex-1 min-w-0 w-full md:w-auto">
+            <div class="flex justify-between items-start">
+                <h3 class="font-bold text-lg text-slate-900 leading-tight">
+                    <a href="{% url 'trip-detail' trip.pk %}" class="hover:text-emerald-600 transition-colors">{{ trip.trip_number }}</a>
+                </h3>
+                <div class="md:hidden">
+                    {% if perms.trips.can_update_trip_status or user == trip.driver %}
+                    <form action="{% url 'trip-status-update' trip.pk %}" method="post">
+                        {% csrf_token %}
+                        <select name="status" onchange="this.form.submit()" class="text-[10px] font-bold uppercase tracking-wider rounded border border-slate-200 px-1 py-0.5 cursor-pointer
+                            {% if trip.status == 'Completed' %}bg-green-50 text-green-800 border-green-200
+                            {% elif trip.status == 'Cancelled' %}bg-red-50 text-red-800 border-red-200
+                            {% else %}bg-orange-50 text-orange-800 border-orange-200{% endif %}">
+                            {% for status_val, status_label in trip.STATUS_CHOICES %}
+                                <option value="{{ status_val }}" {% if trip.status == status_val %}selected{% endif %}>
+                                    {{ status_label }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </form>
+                    {% else %}
+                   <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider
+                        {% if trip.status == 'Completed' %}bg-green-100 text-green-800
+                        {% elif trip.status == 'Cancelled' %}bg-red-100 text-red-800
+                        {% else %}bg-orange-100 text-orange-800{% endif %}">
+                        {{ trip.status }}
+                    </span>
+                    {% endif %}
+                </div>
+            </div>
+            <p class="text-sm text-slate-600 truncate">{{ trip.vehicle.registration_plate }} • {% if trip.party %}{{ trip.party.name }}{% else %}-{% endif %}</p>
+            <p class="text-xs text-slate-500 mt-1">{{ trip.date|date:"M d, Y" }} <span class="md:hidden">• {{ trip.date|date:"H:i" }}</span></p>
         </div>
         
-        <div class="flex-1 min-w-[200px]">
-            <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">Route</span>
+        <div class="flex-1 min-w-0 w-full md:w-auto">
+            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Route</span>
             <p class="text-sm text-slate-800 flex items-center">
-                <span class="truncate max-w-[120px]" title="{{ trip.pickup_location }}">{{ trip.pickup_location|default:"-" }}</span>
-                <i class="fa-solid fa-arrow-right text-slate-400 mx-2 text-xs"></i>
-                <span class="truncate max-w-[120px]" title="{{ trip.delivery_location }}">{{ trip.delivery_location|default:"-" }}</span>
+                <span class="truncate max-w-[100px] sm:max-w-[150px]" title="{{ trip.pickup_location }}">{{ trip.pickup_location|default:"-" }}</span>
+                <i class="fa-solid fa-arrow-right text-slate-400 mx-2 text-[10px]"></i>
+                <span class="truncate max-w-[100px] sm:max-w-[150px]" title="{{ trip.delivery_location }}">{{ trip.delivery_location|default:"-" }}</span>
             </p>
         </div>
         
-        <div class="w-24 hidden lg:block">
-            <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">Date</span>
+        <div class="hidden lg:block w-24">
+            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Date</span>
             <p class="text-sm text-slate-800 leading-tight">
                 {{ trip.date|date:"M d, Y," }}<br/>
                 <span class="text-slate-500 text-xs">{{ trip.date|date:"H:i" }}</span>
             </p>
         </div>
         
-        <div class="w-32">
-            <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">Status</span>
+        <div class="hidden md:block w-40">
+            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Status</span>
+            {% if perms.trips.can_update_trip_status or user == trip.driver %}
+            <form action="{% url 'trip-status-update' trip.pk %}" method="post">
+                {% csrf_token %}
+                <select name="status" onchange="this.form.submit()" class="text-[11px] font-bold uppercase tracking-wider rounded border border-slate-200 px-2 py-1 cursor-pointer focus:ring-2 focus:ring-emerald-500
+                    {% if trip.status == 'Completed' %}bg-green-50 text-green-800 border-green-200
+                    {% elif trip.status == 'Cancelled' %}bg-red-50 text-red-800 border-red-200
+                    {% else %}bg-orange-50 text-orange-800 border-orange-200{% endif %}">
+                    {% for status_val, status_label in trip.STATUS_CHOICES %}
+                        <option value="{{ status_val }}" {% if trip.status == status_val %}selected{% endif %}>
+                            {{ status_label }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </form>
+            {% else %}
             <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium 
                 {% if trip.status == 'Completed' %}bg-green-100 text-green-800
                 {% elif trip.status == 'Cancelled' %}bg-red-100 text-red-800
                 {% else %}bg-orange-100 text-orange-800{% endif %}">
-                {% if trip.status == 'In Progress' %}<i class="fa-regular fa-clock mr-1"></i>{% endif %}
-                {% if trip.status == 'Completed' %}<i class="fa-regular fa-check-circle mr-1"></i>{% endif %}
-                {% if trip.status == 'Cancelled' %}<i class="fa-regular fa-times-circle mr-1"></i>{% endif %}
                 {{ trip.status }}
             </span>
+            {% endif %}
         </div>
         
-        <div class="w-20 text-right">
-            <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">Weight</span>
-            <p class="text-sm font-medium text-slate-800">{{ trip.weight|default:"0.00" }}</p>
+        <div class="grid grid-cols-3 md:flex md:flex-row gap-4 w-full md:w-auto border-t md:border-t-0 pt-3 md:pt-0 mt-1 md:mt-0">
+            <div class="md:w-20 md:text-right">
+                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Weight</span>
+                <p class="text-sm font-medium text-slate-800">{{ trip.weight|default:"0.00" }}</p>
+            </div>
+            
+            <div class="md:w-20 md:text-right">
+                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Rate</span>
+                <p class="text-sm text-slate-800">{{ trip.rate_per_ton|default:"0.00" }}</p>
+            </div>
+            
+            <div class="md:w-24 md:text-right">
+                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Revenue</span>
+                <p class="text-sm font-bold text-slate-900">₹{{ trip.revenue|floatformat:2|default:"0.00" }}</p>
+            </div>
         </div>
         
-        <div class="w-20 text-right">
-            <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">Rate</span>
-            <p class="text-sm text-slate-800">{{ trip.rate_per_ton|default:"0.00" }}</p>
-        </div>
-        
-        <div class="w-24 text-right">
-            <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">Revenue</span>
-            <p class="text-sm font-bold text-slate-900">{{ trip.revenue|floatformat:2|default:"0.00" }}</p>
-        </div>
-        
-        <div class="ml-4 relative dropdown-container">
+        <div class="absolute top-4 right-4 md:relative md:top-0 md:right-0 ml-0 md:ml-4 dropdown-container">
             <button class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 transition-colors dropdown-toggle">
                 <i class="fa-solid fa-ellipsis"></i>
             </button>
-            <div class="absolute right-0 pt-2 w-48 z-20 dropdown-menu hidden">
+            <div class="absolute right-0 mt-2 w-48 z-20 dropdown-menu hidden">
                 <div class="bg-white rounded-md shadow-lg py-1 border border-slate-200">
                     <a href="{% url 'trip-detail' trip.pk %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"><i class="fa-regular fa-eye mr-2"></i>View Details</a>
                     {% if perms.trips.change_trip %}
@@ -171,10 +212,9 @@
 </div>
 
 <!-- BEGIN: Summary Footer -->
-<div class="mt-6 bg-slate-100 border border-slate-200 rounded-lg p-4 flex flex-col md:flex-row justify-between items-center px-6 relative">
-    <span class="text-sm font-semibold text-slate-800 uppercase tracking-wider">Filtered Total (All Results)</span>
-    <span class="font-bold text-xl text-slate-900 md:absolute md:left-1/2 md:transform md:-translate-x-1/2 mt-2 md:mt-0">{{ total_weight|floatformat:2 }}</span>
-    <div class="hidden md:block w-[120px]"></div> <!-- Spacer to align text -->
+<div class="mt-6 bg-slate-100 border border-slate-200 rounded-lg p-4 flex justify-between items-center px-6">
+    <span class="text-xs font-bold text-slate-500 uppercase tracking-widest">Total Weight</span>
+    <span class="font-bold text-xl text-slate-900">{{ total_weight|floatformat:2 }}</span>
 </div>
 <!-- END: Summary Footer -->
 

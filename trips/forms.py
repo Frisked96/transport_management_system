@@ -25,13 +25,19 @@ class TripForm(forms.ModelForm):
         for field_name, field in self.fields.items():
             if isinstance(field.widget, (forms.TextInput, forms.Select, forms.Textarea, forms.DateTimeInput, forms.DateInput, forms.NumberInput)):
                 field.widget.attrs.update({'class': tailwind_classes})
-    
+        
+        # Add helper texts for clarity
+        self.fields['start_odometer'].help_text = "Current vehicle odometer reading at start."
+        self.fields['end_odometer'].help_text = "Current vehicle odometer reading at end (must be greater than start)."
+        self.fields['diesel_liters'].help_text = "Total liters consumed during the trip."
+
     class Meta:
         model = Trip
         fields = [
             'vehicle',
             'driver',
             'party',
+            'revenue_type',
             'pickup_location',
             'pickup_lat',
             'pickup_lng',
@@ -42,8 +48,15 @@ class TripForm(forms.ModelForm):
             'rate_per_ton',
             'start_odometer',
             'end_odometer',
+            'diesel_liters',
+            'diesel_rate',
+            'diesel_total_cost',
             'notes'
         ]
+        
+        labels = {
+            'rate_per_ton': 'Rate',
+        }
         
         widgets = {
             'notes': forms.Textarea(
@@ -64,6 +77,21 @@ class TripForm(forms.ModelForm):
             if not cleaned_data.get(field):
                 cleaned_data[field] = None
         return cleaned_data
+
+
+class TripFuelUpdateForm(forms.ModelForm):
+    """
+    Form to update only fuel-related data for a trip
+    """
+    class Meta:
+        model = Trip
+        fields = ['diesel_liters', 'diesel_rate', 'diesel_total_cost']
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        tailwind_classes = "block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white"
+        for field_name, field in self.fields.items():
+            field.widget.attrs.update({'class': tailwind_classes, 'step': '0.01', 'id': f'id_{field_name}'})
 
 
 class TripStatusForm(forms.ModelForm):

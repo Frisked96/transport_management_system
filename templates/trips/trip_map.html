@@ -49,15 +49,48 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
+        // --- MAP SETUP ---
+        // Define India's Bounds to restrict panning (SouthWest, NorthEast)
+        var indiaBounds = L.latLngBounds(
+            L.latLng(6.462, 68.109), // Southern/Western Tip
+            L.latLng(35.513, 97.395) // Northern/Eastern Tip
+        );
+
         // Initialize Map (Centered on India)
-        var map = L.map('map').setView([20.5937, 78.9629], 5);
+        var map = L.map('map', {
+            maxBounds: indiaBounds,
+            maxBoundsViscosity: 1.0,
+            minZoom: 5
+        }).setView([20.5937, 78.9629], 5);
 
-        // Add OpenStreetMap Tile Layer
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        // Define Base Layers
+        var streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        }).addTo(map);
+        });
 
-        // Trip Data from Django View
+        var satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EBP, and the GIS User Community'
+        });
+
+        // Hybrid View: Satellite with OSM Labels
+        var labelLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            opacity: 0.4, // Keep it subtle
+            attribution: '&copy; OpenStreetMap'
+        });
+
+        var hybridLayer = L.layerGroup([satelliteLayer, labelLayer]);
+
+        // Add default layer
+        streetLayer.addTo(map);
+
+        // Add Layer Control (Toggle)
+        var baseMaps = {
+            "Street View": streetLayer,
+            "Satellite View": hybridLayer
+        };
+        L.control.layers(baseMaps, null, { collapsed: false, position: 'topright' }).addTo(map);
+
+        // --- DATA PROCESSING ---
         var trips = {{ trips_json|safe }};
         
         if (trips.length === 0) {
@@ -72,7 +105,8 @@
                 color: '#059669',
                 fillColor: '#10b981',
                 fillOpacity: 1,
-                radius: 6
+                radius: 6,
+                zIndexOffset: 1000
             }).addTo(map).bindPopup(`
                 <div class="p-1">
                     <b class="text-emerald-700">Pickup:</b> ${trip.pickup_name}<br>
@@ -86,7 +120,8 @@
                 color: '#dc2626',
                 fillColor: '#ef4444',
                 fillOpacity: 1,
-                radius: 6
+                radius: 6,
+                zIndexOffset: 1000
             }).addTo(map).bindPopup(`
                 <div class="p-1">
                     <b class="text-red-700">Delivery:</b> ${trip.delivery_name}<br>
@@ -95,22 +130,51 @@
                 </div>
             `);
 
-            // Draw Route Line (Slate)
-            var routeLine = L.polyline([trip.start, trip.end], {
-                color: '#64748b',
-                weight: 2,
-                opacity: 0.6,
-                dashArray: '5, 10'
-            }).addTo(map);
+            // --- ROUTING LOGIC (Shortest Path via OSRM) ---
+            // OSRM expects coordinates as lon,lat
+            var osrmUrl = `https://router.project-osrm.org/route/v1/driving/${trip.start[1]},${trip.start[0]};${trip.end[1]},${trip.end[0]}?overview=full&geometries=geojson`;
 
-            // Add info to line
-            routeLine.bindPopup(`
-                <div class="p-1">
-                    <b>${trip.trip_number}</b><br>
-                    ${trip.pickup_name} <span class="text-slate-400 mx-1">➜</span> ${trip.delivery_name}<br>
-                    <span class="text-xs text-slate-500">${trip.vehicle}</span>
-                </div>
-            `);
+            fetch(osrmUrl)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.code === 'Ok' && data.routes.length > 0) {
+                        // Success: Draw actual road route
+                        var routeCoordinates = data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
+                        var routeLine = L.polyline(routeCoordinates, {
+                            color: '#3b82f6', // Bright Blue for actual routes
+                            weight: 4,
+                            opacity: 0.8,
+                            lineJoin: 'round'
+                        }).addTo(map);
+
+                        routeLine.bindPopup(`
+                            <div class="p-1">
+                                <b>${trip.trip_number}</b><br>
+                                <span class="text-xs text-slate-500">Distance: ${(data.routes[0].distance / 1000).toFixed(1)} km</span><br>
+                                ${trip.pickup_name} <span class="text-slate-400 mx-1">➜</span> ${trip.delivery_name}
+                            </div>
+                        `);
+                    } else {
+                        throw new Error('No route found');
+                    }
+                })
+                .catch(error => {
+                    // Fallback: Draw Straight Line if routing fails
+                    console.warn(`Routing failed for ${trip.trip_number}:`, error);
+                    var fallbackLine = L.polyline([trip.start, trip.end], {
+                        color: '#64748b',
+                        weight: 2,
+                        opacity: 0.5,
+                        dashArray: '5, 10'
+                    }).addTo(map);
+                    
+                    fallbackLine.bindPopup(`
+                        <div class="p-1 text-xs">
+                            <b>${trip.trip_number} (Direct Path)</b><br>
+                            Route mapping unavailable for this location.
+                        </div>
+                    `);
+                });
 
             bounds.extend(trip.start);
             bounds.extend(trip.end);

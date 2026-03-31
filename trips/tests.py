@@ -99,5 +99,23 @@ class TripExpenseTest(TestCase):
         url = reverse('trip-custom-expense-delete', args=[expense.pk])
         response = self.client.post(url)
         self.assertEqual(response.status_code, 302)
-        
+
         self.assertFalse(TripExpense.objects.filter(pk=expense.pk).exists())
+
+    def test_revenue_types(self):
+        """Test calculation logic for Per Ton vs Fixed revenue types"""
+        # 1. Default: Per Ton (weight=10, rate=100)
+        self.assertEqual(self.trip.revenue_type, Trip.REVENUE_PER_TON)
+        self.assertEqual(self.trip.revenue, 1000)
+
+        # 2. Change to Fixed
+        self.trip.revenue_type = Trip.REVENUE_FIXED
+        self.trip.rate_per_ton = 1500
+        self.trip.save()
+        self.assertEqual(self.trip.revenue, 1500)
+
+        # 3. Change back to Per Ton
+        self.trip.revenue_type = Trip.REVENUE_PER_TON
+        self.trip.rate_per_ton = 100
+        self.trip.save()
+        self.assertEqual(self.trip.revenue, 1000)

@@ -12,438 +12,484 @@
             -webkit-print-color-adjust: exact;
         }
         
-        /* Print styles */
         @page {
             size: A4;
-            margin: 1cm;
+            margin: 0;
         }
+        
         body {
             font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
             margin: 0;
             padding: 0;
             color: #333;
-            font-size: 13px;
-            background-color: #fff;
+            font-size: 12px;
+            background-color: #f5f5f5;
         }
-        .invoice-container {
-            width: 100%;
-            margin: 0 auto;
+
+        .page {
+            width: 210mm;
+            min-height: 297mm;
+            padding: 15mm;
+            margin: 10mm auto;
+            background: white;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            position: relative;
+        }
+
+        @media print {
+            body {
+                background: none;
+            }
+            .page {
+                margin: 0;
+                box-shadow: none;
+                page-break-after: always;
+            }
+            .page:last-child {
+                page-break-after: auto;
+            }
+        }
+
+        .page-border {
             border: 1px solid #000;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
         }
+
         .header-title {
             text-align: center;
-            font-size: 24px;
+            font-size: 20px;
             font-weight: bold;
-            margin-bottom: 10px;
-            color: #2c3e50;
+            padding: 10px 0;
+            border-bottom: 1px solid #000;
+            background-color: #f8f9fa;
+            text-transform: uppercase;
+            letter-spacing: 2px;
         }
-        
+
         /* Company Section */
         .company-section {
             display: flex;
             border-bottom: 1px solid #000;
-            padding: 15px;
         }
-        .company-logo {
-            width: 100px;
-            height: 100px;
+        .company-logo-container {
+            width: 80px;
+            padding: 15px;
+            border-right: 1px solid #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .company-logo-box {
+            width: 60px;
+            height: 60px;
             background-color: #000;
             color: #fff;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 32px;
+            font-size: 24px;
             font-weight: bold;
-            margin-right: 20px;
         }
         .company-info {
             flex: 1;
+            padding: 15px;
         }
         .company-name {
-            font-size: 20px;
+            font-size: 18px;
             font-weight: bold;
             margin: 0 0 5px 0;
-            color: #2c3e50;
         }
         .company-address {
-            margin: 0 0 5px 0;
+            font-size: 11px;
             line-height: 1.4;
+            margin-bottom: 8px;
         }
         .company-contact {
             display: flex;
-            justify-content: space-between;
-            margin-top: 10px;
+            font-size: 11px;
+            gap: 20px;
         }
-        .company-contact p {
-            margin: 0;
-        }
-        
-        /* Parties Section */
-        .parties-section {
+
+        /* Details Section */
+        .details-section {
             display: flex;
             border-bottom: 1px solid #000;
         }
         .bill-to {
-            flex: 1;
+            flex: 1.2;
             border-right: 1px solid #000;
-            padding: 0;
         }
-        .invoice-details {
-            flex: 1;
-            padding: 0;
+        .invoice-meta {
+            flex: 0.8;
         }
         .section-header {
             background-color: #f8f9fa;
             border-bottom: 1px solid #000;
-            padding: 5px 10px;
+            padding: 4px 10px;
             font-weight: bold;
+            font-size: 10px;
+            text-transform: uppercase;
+            color: #666;
         }
         .section-content {
             padding: 10px;
-            line-height: 1.4;
+            line-height: 1.5;
         }
-        
-        /* Items Table */
+
+        /* Table Styles */
         table {
             width: 100%;
             border-collapse: collapse;
         }
-        .items-table th, .items-table td {
+        table th, table td {
             border: 1px solid #000;
-            padding: 8px 5px;
-            text-align: center;
+            padding: 6px 8px;
         }
-        .items-table th {
+        table th {
             background-color: #f8f9fa;
-            font-weight: bold;
+            font-size: 10px;
+            text-transform: uppercase;
         }
-        .items-table td.text-left {
-            text-align: left;
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
+        .font-bold { font-weight: bold; }
+
+        .items-table {
+            border: none;
+            flex-grow: 1;
         }
-        .items-table td.text-right {
-            text-align: right;
+        .items-table th, .items-table td {
+            border-top: none;
         }
-        
+        .items-table th:first-child, .items-table td:first-child { border-left: none; }
+        .items-table th:last-child, .items-table td:last-child { border-right: none; }
+
         /* Summary Section */
-        .summary-section {
+        .summary-row {
             display: flex;
+            border-top: 1px solid #000;
             border-bottom: 1px solid #000;
         }
         .tax-summary {
-            flex: 1.5;
+            flex: 1.4;
             border-right: 1px solid #000;
         }
-        .tax-summary table th, .tax-summary table td {
-            border: 1px solid #000;
-            padding: 5px;
-            text-align: right;
-        }
-
-        .tax-summary th {
-            background-color: #f8f9fa;
-            text-align: center;
-        }
-        
         .totals-summary {
             flex: 1;
         }
-        .totals-table td {
-            border: 1px solid #000;
-            padding: 5px 10px;
-        }
-        /* Handle outer borders of totals-table to avoid double lines with container */
-        .totals-table {
+        
+        /* Explicit borders for summary tables to ensure they connect */
+        .tax-summary table, .totals-summary table {
             border: none;
         }
-        .totals-table tr td:first-child { border-left: none; }
-        .totals-table tr td:last-child { border-right: none; }
-        .totals-table tr:first-child td { border-top: none; }
-        .totals-table tr:last-child td { border-bottom: none; }
+        .tax-summary table td, .tax-summary table th {
+            border-top: none;
+            border-left: none;
+        }
+        .tax-summary table tr:last-child td { border-bottom: none; }
+        .tax-summary table tr td:last-child, .tax-summary table tr th:last-child { border-right: none; }
 
-        .totals-table td.amount {
-            text-align: right;
-            font-weight: bold;
+        .totals-table td {
+            border-top: none;
+            border-left: none;
+            border-right: none;
         }
-        .totals-table tr.grand-total {
-            font-weight: bold;
-            font-size: 14px;
+        .totals-table tr:last-child td { border-bottom: none; }
+        .grand-total-row {
             background-color: #f8f9fa;
+            font-size: 14px;
         }
-        
-        /* Words Amount */
-        .amount-words-container {
-            padding: 10px;
-            border-top: 1px solid #000;
-            font-size: 12px;
-        }
-        
-        /* Footer Details */
-        .footer-details {
+
+        /* Footer */
+        .footer-row {
             display: flex;
+            border-bottom: 1px solid #000;
         }
         .bank-details {
             flex: 1;
             border-right: 1px solid #000;
         }
-        .bank-details .section-header {
-            border-bottom: 1px solid #000;
-        }
-        .bank-details-content {
-            padding: 10px;
-            line-height: 1.4;
-        }
-        .signature-box {
+        .signature-section {
             flex: 1;
             padding: 10px;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
-            align-items: center;
+            text-align: right;
             min-height: 100px;
         }
-        .terms-conditions {
-            padding: 5px 10px;
-            border-top: 1px solid #000;
+        .terms-bar {
+            padding: 8px 10px;
+            font-size: 10px;
+            color: #666;
+            font-style: italic;
+        }
+
+        /* Annexure Specific */
+        .annexure-title {
+            background-color: #f8f9fa;
+            border-bottom: 1px solid #000;
+            padding: 10px;
+            text-align: center;
+            font-weight: bold;
+            font-size: 16px;
+        }
+        .annexure-meta {
+            padding: 10px;
+            border-bottom: 1px solid #000;
+            display: flex;
+            justify-content: space-between;
             font-size: 11px;
         }
-        
+
         .rupee-symbol {
-            font-family: "Arial", sans-serif;
+            font-family: DejaVu Sans, Arial, sans-serif;
         }
     </style>
 </head>
 <body>
-    <div class="header-title">Tax Invoice</div>
-    
-    <div class="invoice-container bordered-box">
-        
-        <!-- Company Section -->
-        <div class="company-section">
-            <div class="company-logo">
-                {{ bill.invoice_company_name|make_list|first }}
-            </div>
-            <div class="company-info">
-                <h2 class="company-name">{{ bill.invoice_company_name }}</h2>
-                <div class="company-address">{{ bill.invoice_company_address|linebreaksbr }}</div>
-                <div class="company-contact">
-                    <p>Phone: <strong>{{ bill.invoice_company_mobile }}</strong></p>
-                    <p>GSTIN: <strong>{{ bill.invoice_company_gstin }}</strong></p>
+
+    <!-- PAGE 1: TAX INVOICE -->
+    <div class="page">
+        <div class="page-border">
+            <div class="header-title">Tax Invoice</div>
+            
+            <div class="company-section">
+                <div class="company-logo-container">
+                    <div class="company-logo-box">{{ bill.invoice_company_name|make_list|first }}</div>
+                </div>
+                <div class="company-info">
+                    <h1 class="company-name">{{ bill.invoice_company_name }}</h1>
+                    <div class="company-address">{{ bill.invoice_company_address|linebreaksbr }}</div>
+                    <div class="company-contact">
+                        <span>GSTIN: <strong>{{ bill.invoice_company_gstin }}</strong></span>
+                        <span>Mobile: <strong>{{ bill.invoice_company_mobile }}</strong></span>
+                    </div>
                 </div>
             </div>
-        </div>
-        
-        <!-- Parties Section -->
-        <div class="parties-section">
-            <div class="bill-to">
-                <div class="section-header">Bill To:</div>
-                <div class="section-content">
-                    <strong>{{ bill.party.name }}</strong><br>
-                    {{ bill.party.address|linebreaksbr }}<br>
-                    State: <strong>{{ bill.party.state }} {{ bill.party.pincode }}</strong><br>
-                    GSTIN Number: <strong>{{ bill.party.gstin }}</strong>
+
+            <div class="details-section">
+                <div class="bill-to">
+                    <div class="section-header">Details of Receiver (Billed To)</div>
+                    <div class="section-content">
+                        <strong>{{ bill.party.name }}</strong><br>
+                        {{ bill.party.address|linebreaksbr }}<br>
+                        State: <strong>{{ bill.party.state }}</strong>, GSTIN: <strong>{{ bill.party.gstin }}</strong>
+                    </div>
+                </div>
+                <div class="invoice-meta">
+                    <div class="section-header">Invoice Details</div>
+                    <div class="section-content">
+                        Invoice No: <strong>{{ bill.bill_number }}</strong><br>
+                        Invoice Date: <strong>{{ bill.date|date:"d-m-Y" }}</strong><br>
+                        Place of Supply: <strong>{{ bill.party.state }}</strong>
+                    </div>
                 </div>
             </div>
-            <div class="invoice-details">
-                <div class="section-header">Invoice Details:</div>
-                <div class="section-content">
-                    No: <strong>{{ bill.bill_number }}</strong><br>
-                    Date: <strong>{{ bill.date|date:"d-m-Y" }}</strong><br>
-                    Place of Supply: <strong>{{ bill.party.state|default:"" }}</strong>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Items Table -->
-        <table class="items-table">
-            <thead>
-                <tr>
-                    <th width="3%">#</th>
-                    <th width="30%">Item name</th>
-                    <th width="8%">HSN/SAC</th>
-                    <th width="10%">DATE</th>
-                    <th width="8%">LR. N</th>
-                    <th width="8%">Quantity</th>
-                    <th width="12%">Price/ Unit (<span class="rupee-symbol">₹</span>)</th>
-                    <th width="21%">Amount(<span class="rupee-symbol">₹</span>)</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for bt in bill.bill_trips.all %}
-                <tr>
-                    <td>{{ forloop.counter }}</td>
-                    <td class="text-left">
-                        {{ bt.trip.pickup_location|default:"" }} TO {{ bt.trip.delivery_location|default:"" }}<br>
-                        <span style="color: #555; font-size: 11px;">TRUCK NO: {{ bt.trip.vehicle.registration_plate }}</span>
-                    </td>
-                    <td>{{ bill.hsn_code }}</td>
-                    <td>{{ bt.trip.date|date:"d/m/Y" }}</td>
-                    <td>{{ bt.lr_no|default:"-" }}</td>
-                    <td class="text-right">{{ bt.trip.weight|floatformat:2 }}</td>
-                    <td class="text-right"><span class="rupee-symbol">₹</span> {{ bt.trip.rate_per_ton|floatformat:2 }}</td>
-                    <td class="text-right"><span class="rupee-symbol">₹</span> {{ bt.trip.revenue|floatformat:2 }}</td>
-                </tr>
-                {% endfor %}
-                <tr style="font-weight: bold; background-color: #f8f9fa;">
-                    <td colspan="5" class="text-left">Total</td>
-                    <td class="text-right">{{ bill.total_weight|floatformat:2 }}</td>
-                    <td></td>
-                    <td class="text-right"><span class="rupee-symbol">₹</span> {{ bill.subtotal|floatformat:2 }}</td>
-                </tr>
-            </tbody>
-        </table>
-        
-        <!-- Summary Section -->
-        <div class="summary-section">
-            <div class="tax-summary">
-                <div class="section-header">Tax Summary:</div>
-                <table style="width: 100%; border: none;">
-                    {% if bill.gst_rate > 0 %}
+
+            <div class="items-table-container" style="flex-grow: 1; display: flex;">
+                <table class="items-table">
                     <thead>
                         <tr>
-                            <th rowspan="2">HSN/ SAC</th>
-                            <th rowspan="2">Taxable amount (<span class="rupee-symbol">₹</span>)</th>
-                            {% if bill.gst_type == 'INTRA' %}
-                            <th colspan="2">CGST</th>
-                            <th colspan="2">SGST</th>
-                            {% else %}
-                            <th colspan="2">IGST</th>
-                            {% endif %}
-                            <th rowspan="2">Total Tax(<span class="rupee-symbol">₹</span>)</th>
-                        </tr>
-                        <tr>
-                            {% if bill.gst_type == 'INTRA' %}
-                            <th>Rate(%)</th>
-                            <th>Amt (<span class="rupee-symbol">₹</span>)</th>
-                            <th>Rate(%)</th>
-                            <th>Amt (<span class="rupee-symbol">₹</span>)</th>
-                            {% else %}
-                            <th>Rate(%)</th>
-                            <th>Amt (<span class="rupee-symbol">₹</span>)</th>
-                            {% endif %}
+                            <th width="5%">S.N.</th>
+                            <th width="55%">Description of Services</th>
+                            <th width="10%">HSN/SAC</th>
+                            <th width="10%">Qty (MT)</th>
+                            <th width="10%">Rate</th>
+                            <th width="10%">Amount</th>
                         </tr>
                     </thead>
                     <tbody>
+                        {% for item in invoice_items %}
                         <tr>
+                            <td class="text-center">{{ forloop.counter }}</td>
+                            <td>
+                                <strong>{{ item.description }}</strong><br>
+                                <span style="font-size: 10px; color: #666;">Consolidated charges for {{ item.count }} trip(s)</span>
+                            </td>
                             <td class="text-center">{{ bill.hsn_code }}</td>
-                            <td>{{ bill.subtotal|floatformat:2 }}</td>
-                            {% if bill.gst_type == 'INTRA' %}
-                            <td class="text-center">{% widthratio bill.gst_rate 2 1 %}</td>
-                            <td>{{ bill.cgst_amount|floatformat:2 }}</td>
-                            <td class="text-center">{% widthratio bill.gst_rate 2 1 %}</td>
-                            <td>{{ bill.sgst_amount|floatformat:2 }}</td>
-                            {% else %}
-                            <td class="text-center">{{ bill.gst_rate }}</td>
-                            <td>{{ bill.igst_amount|floatformat:2 }}</td>
-                            {% endif %}
-                            <td>{{ bill.cgst_amount|add:bill.sgst_amount|add:bill.igst_amount|floatformat:2 }}</td>
+                            <td class="text-right">{{ item.weight|floatformat:2 }}</td>
+                            <td class="text-right">{{ item.rate|floatformat:2 }}</td>
+                            <td class="text-right font-bold">{{ item.amount|floatformat:2 }}</td>
                         </tr>
-                        <tr style="font-weight: bold;">
-                            <td class="text-center">TOTAL</td>
-                            <td>{{ bill.subtotal|floatformat:2 }}</td>
-                            {% if bill.gst_type == 'INTRA' %}
-                            <td></td>
-                            <td>{{ bill.cgst_amount|floatformat:2 }}</td>
-                            <td></td>
-                            <td>{{ bill.sgst_amount|floatformat:2 }}</td>
-                            {% else %}
-                            <td></td>
-                            <td>{{ bill.igst_amount|floatformat:2 }}</td>
-                            {% endif %}
-                            <td>{{ bill.cgst_amount|add:bill.sgst_amount|add:bill.igst_amount|floatformat:2 }}</td>
+                        {% endfor %}
+                        
+                        <!-- Empty rows to fill space and maintain lines -->
+                        {% with ""|center:5 as range %}
+                        {% for _ in range %}
+                        <tr>
+                            <td style="border-bottom: none;">&nbsp;</td>
+                            <td style="border-bottom: none;">&nbsp;</td>
+                            <td style="border-bottom: none;">&nbsp;</td>
+                            <td style="border-bottom: none;">&nbsp;</td>
+                            <td style="border-bottom: none;">&nbsp;</td>
+                            <td style="border-bottom: none;">&nbsp;</td>
                         </tr>
+                        {% endfor %}
+                        {% endwith %}
                     </tbody>
-                    {% else %}
-                    <tr>
-                        <td style="border: none; padding: 20px; text-align: center; color: #777;">No GST Applicable</td>
-                    </tr>
-                    {% endif %}
+                    <tfoot>
+                        <tr class="font-bold" style="background-color: #f8f9fa;">
+                            <td colspan="3" class="text-right">Total</td>
+                            <td class="text-right">{{ bill.total_weight|floatformat:2 }}</td>
+                            <td></td>
+                            <td class="text-right"><span class="rupee-symbol">₹</span> {{ bill.subtotal|floatformat:2 }}</td>
+                        </tr>
+                    </tfoot>
                 </table>
             </div>
-            
-            <div class="totals-summary">
-                <table class="totals-table" style="width: 100%;">
-                    <tr>
-                        <td>Sub Total</td>
-                        <td>:</td>
-                        <td class="amount"><span class="rupee-symbol">₹</span> {{ bill.subtotal|floatformat:2 }}</td>
-                    </tr>
-                    {% if bill.gst_rate > 0 %}
+
+            <div class="summary-row">
+                <div class="tax-summary">
+                    <div class="section-header">Tax Breakdown</div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>HSN</th>
+                                <th>Taxable</th>
+                                {% if bill.gst_type == 'INTRA' %}
+                                <th>CGST</th>
+                                <th>SGST</th>
+                                {% else %}
+                                <th>IGST</th>
+                                {% endif %}
+                                <th>Total Tax</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td class="text-center">{{ bill.hsn_code }}</td>
+                                <td class="text-right">{{ bill.subtotal|floatformat:2 }}</td>
+                                {% if bill.gst_type == 'INTRA' %}
+                                <td class="text-right">{{ bill.cgst_amount|floatformat:2 }}<br><small>({% widthratio bill.gst_rate 2 1 %}%)</small></td>
+                                <td class="text-right">{{ bill.sgst_amount|floatformat:2 }}<br><small>({% widthratio bill.gst_rate 2 1 %}%)</small></td>
+                                {% else %}
+                                <td class="text-right">{{ bill.igst_amount|floatformat:2 }}<br><small>({{ bill.gst_rate }}%)</small></td>
+                                {% endif %}
+                                <td class="text-right font-bold">{{ bill.gst_amount|floatformat:2 }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div style="padding: 10px; border-top: 1px solid #000;">
+                        <span style="font-size: 9px; color: #666; text-transform: uppercase; display: block;">Total Amount in Words:</span>
+                        <strong style="font-size: 11px;">{{ bill.rounded_total|num2words|title }} Rupees Only</strong>
+                    </div>
+                </div>
+                <div class="totals-summary">
+                    <table class="totals-table">
+                        <tr>
+                            <td>Taxable Amount</td>
+                            <td class="text-right">₹ {{ bill.subtotal|floatformat:2 }}</td>
+                        </tr>
                         {% if bill.gst_type == 'INTRA' %}
                         <tr>
-                            <td>CGST @ {% widthratio bill.gst_rate 2 1 %}%</td>
-                            <td>:</td>
-                            <td class="amount"><span class="rupee-symbol">₹</span> {{ bill.cgst_amount|floatformat:2 }}</td>
+                            <td>Add: CGST</td>
+                            <td class="text-right">₹ {{ bill.cgst_amount|floatformat:2 }}</td>
                         </tr>
                         <tr>
-                            <td>SGST @ {% widthratio bill.gst_rate 2 1 %}%</td>
-                            <td>:</td>
-                            <td class="amount"><span class="rupee-symbol">₹</span> {{ bill.sgst_amount|floatformat:2 }}</td>
+                            <td>Add: SGST</td>
+                            <td class="text-right">₹ {{ bill.sgst_amount|floatformat:2 }}</td>
                         </tr>
                         {% else %}
                         <tr>
-                            <td>IGST @ {{ bill.gst_rate }}%</td>
-                            <td>:</td>
-                            <td class="amount"><span class="rupee-symbol">₹</span> {{ bill.igst_amount|floatformat:2 }}</td>
+                            <td>Add: IGST</td>
+                            <td class="text-right">₹ {{ bill.igst_amount|floatformat:2 }}</td>
                         </tr>
                         {% endif %}
-                    {% endif %}
-                    <tr>
-                        <td>Round off</td>
-                        <td>:</td>
-                        <td class="amount"><span class="rupee-symbol">₹</span> {{ bill.roundoff|floatformat:2 }}</td>
-                    </tr>
-                    <tr class="grand-total">
-                        <td>Total</td>
-                        <td>:</td>
-                        <td class="amount"><span class="rupee-symbol">₹</span> {{ bill.rounded_total|floatformat:2 }}</td>
-                    </tr>
-                    <tr>
-                        <td>Received</td>
-                        <td>:</td>
-                        <td class="amount"><span class="rupee-symbol">₹</span> 0.00</td>
-                    </tr>
-                    <tr>
-                        <td>Balance</td>
-                        <td>:</td>
-                        <td class="amount"><span class="rupee-symbol">₹</span> {{ bill.rounded_total|floatformat:2 }}</td>
-                    </tr>
+                        <tr>
+                            <td>Round Off</td>
+                            <td class="text-right">₹ {{ bill.roundoff|floatformat:2 }}</td>
+                        </tr>
+                        <tr class="grand-total-row font-bold">
+                            <td>Total Amount</td>
+                            <td class="text-right">₹ {{ bill.rounded_total|floatformat:2 }}</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+
+            <div class="footer-row">
+                <div class="bank-details">
+                    <div class="section-header">Bank Account Details</div>
+                    <div class="section-content" style="font-size: 11px;">
+                        Account Name: <strong>{{ bill.invoice_company_name }}</strong><br>
+                        Bank Name: <strong>{{ bill.invoice_bank_name }}</strong><br>
+                        Branch: <strong>{{ bill.invoice_bank_branch }}</strong><br>
+                        Account No: <strong>{{ bill.invoice_bank_account }}</strong><br>
+                        IFSC Code: <strong>{{ bill.invoice_bank_ifsc }}</strong>
+                    </div>
+                </div>
+                <div class="signature-section">
+                    <div style="font-size: 10px; font-weight: bold;">For {{ bill.invoice_company_name|upper }}</div>
+                    <div style="font-size: 10px;">
+                        <br><br>
+                        Authorized Signatory
+                    </div>
+                </div>
+            </div>
+            <div class="terms-bar">
+                * This is a computer generated invoice and does not require a physical signature.
+            </div>
+        </div>
+    </div>
+
+    <!-- PAGE 2: ANNEXURE (DETAILS) -->
+    <div class="page">
+        <div class="page-border">
+            <div class="annexure-title">Annexure to Invoice #{{ bill.bill_number }}</div>
+            
+            <div class="annexure-meta">
+                <span>Party: <strong>{{ bill.party.name }}</strong></span>
+                <span>Date: <strong>{{ bill.date|date:"d-m-Y" }}</strong></span>
+            </div>
+
+            <div style="flex-grow: 1;">
+                <table style="border: none;">
+                    <thead>
+                        <tr>
+                            <th width="5%">S.N.</th>
+                            <th width="12%">Date</th>
+                            <th width="15%">Vehicle No</th>
+                            <th width="15%">LR No</th>
+                            <th width="28%">From - To</th>
+                            <th width="10%">Weight</th>
+                            <th width="15%">Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for bt in bill_trips %}
+                        <tr>
+                            <td class="text-center">{{ forloop.counter }}</td>
+                            <td class="text-center">{{ bt.trip.date|date:"d/m/y" }}</td>
+                            <td class="text-center">{{ bt.trip.vehicle.registration_plate }}</td>
+                            <td class="text-center">{{ bt.lr_no|default:"-" }}</td>
+                            <td>{{ bt.trip.pickup_location }} - {{ bt.trip.delivery_location }}</td>
+                            <td class="text-right">{{ bt.trip.weight|floatformat:2 }}</td>
+                            <td class="text-right font-bold">{{ bt.trip.revenue|floatformat:2 }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot>
+                        <tr class="font-bold" style="background-color: #f8f9fa;">
+                            <td colspan="5" class="text-right">Total for Annexure</td>
+                            <td class="text-right">{{ bill.total_weight|floatformat:2 }}</td>
+                            <td class="text-right">₹ {{ bill.subtotal|floatformat:2 }}</td>
+                        </tr>
+                    </tfoot>
                 </table>
-                <div style="padding: 10px; font-size: 12px; border-top: 1px solid #000;">
-                    <div style="color: #777; margin-bottom: 2px;">Invoice Amount In Words:</div>
-                    <strong>{{ bill.rounded_total|num2words|title }} Rupees only</strong>
-                </div>
+            </div>
+
+            <div class="terms-bar" style="border-top: 1px solid #000; text-align: center;">
+                -- End of Annexure --
             </div>
         </div>
-        
-        <!-- Footer Details -->
-        <div class="footer-details">
-            <div class="bank-details">
-                <div class="section-header">Bank Details:</div>
-                <div class="bank-details-content">
-                    Bank: <strong>{{ bill.invoice_bank_name }}</strong><br>
-                    Account No: <strong>{{ bill.invoice_bank_account }}</strong><br>
-                    IFSC Code: <strong>{{ bill.invoice_bank_ifsc }}</strong>
-                </div>
-            </div>
-            <div class="signature-box">
-                <div style="text-align: right; width: 100%; font-size: 11px; color: #555;">For {{ bill.invoice_company_name|upper }}:</div>
-                <div style="margin-top: 40px; border-top: 1px solid #ccc; width: 80%; text-align: center; color: #555;">
-                    {{ bill.invoice_company_authorized_signatory|default:"Authorized Signatory" }}
-                </div>
-            </div>
-        </div>
-        
-        <div class="terms-conditions">
-            <strong>Terms And Conditions:</strong><br>
-            Thanks for doing business with us!
-        </div>
-        
     </div>
 
     <script>
         window.onload = function() {
             window.print();
-            // Optional: Close the window after printing (most browsers will wait for the dialog to close)
             window.onafterprint = function() {
                 window.close();
             };

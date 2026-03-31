@@ -1,0 +1,168 @@
+{% load ledger_extras %}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Statement of Account - {{ party.name }}</title>
+    <style>
+        @page {
+            size: a4 portrait;
+            @frame header_frame {
+                -pdf-frame-content: header_content;
+                left: 40pt; width: 512pt; top: 30pt; height: 100pt;
+            }
+            @frame content_frame {
+                left: 40pt; width: 512pt; top: 130pt; height: 650pt;
+            }
+            @frame footer_frame {
+                -pdf-frame-content: footer_content;
+                left: 40pt; width: 512pt; top: 790pt; height: 20pt;
+            }
+        }
+        body {
+            font-family: Helvetica, Arial, sans-serif;
+            font-size: 9pt;
+            color: #333;
+        }
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
+        .font-bold { font-weight: bold; }
+        
+        .header-table { width: 100%; border-bottom: 2pt solid #444; padding-bottom: 5pt; }
+        .company-name { font-size: 18pt; font-weight: bold; color: #1e40af; }
+        
+        .statement-title { font-size: 14pt; font-weight: bold; margin: 15pt 0; background-color: #f1f5f9; padding: 5pt; text-align: center; border: 1pt solid #cbd5e1; }
+        
+        .info-table { width: 100%; margin-bottom: 20pt; }
+        .info-label { width: 80pt; color: #64748b; font-weight: bold; }
+        
+        .ledger-table { width: 100%; border-collapse: collapse; }
+        .ledger-table th { background-color: #334155; color: white; padding: 6pt; font-weight: bold; border: 0.5pt solid #334155; }
+        .ledger-table td { padding: 5pt; border: 0.5pt solid #cbd5e1; vertical-align: top; }
+        .ledger-table tr.opening-row { background-color: #f8fafc; font-weight: bold; }
+        .ledger-table tr.summary-row { background-color: #f1f5f9; font-weight: bold; }
+        
+        .footer { font-size: 8pt; color: #94a3b8; border-top: 0.5pt solid #cbd5e1; padding-top: 3pt; }
+        
+        .debit { color: #000; }
+        .credit { color: #000; }
+        .balance-dr { color: #b91c1c; } /* Red if they owe us */
+        .balance-cr { color: #15803d; } /* Green if we owe them */
+    </style>
+</head>
+<body>
+    <div id="header_content">
+        <table class="header-table">
+            <tr>
+                <td>
+                    <div class="company-name">{{ company.name|default:"TRANSPORT MANAGEMENT SYSTEM" }}</div>
+                    <div>{{ company.address|linebreaksbr|default:"Transport Hub, Logistics Park" }}</div>
+                    <div>GSTIN: {{ company.gstin|default:"-" }} | Phone: {{ company.phone_number|default:"-" }}</div>
+                </td>
+                <td class="text-right">
+                    <div style="font-size: 16pt; font-weight: bold; color: #64748b;">STATEMENT</div>
+                    <div>Date: {{ generated_at|date:"d/m/Y" }}</div>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    <div id="footer_content" class="footer">
+        <table width="100%">
+            <tr>
+                <td>Generated on {{ generated_at|date:"M d, Y H:i" }}</td>
+                <td class="text-right">Page <pdf:pagenumber> of <pdf:pagecount></td>
+            </tr>
+        </table>
+    </div>
+
+    <div>
+        <div class="statement-title">STATEMENT OF ACCOUNT</div>
+        
+        <table class="info-table">
+            <tr>
+                <td width="60%">
+                    <div class="font-bold" style="font-size: 11pt; margin-bottom: 3pt;">TO,</div>
+                    <div class="font-bold" style="font-size: 12pt;">{{ party.name }}</div>
+                    <div>{{ party.address|linebreaksbr }}</div>
+                    {% if party.gstin %}<div>GSTIN: {{ party.gstin }}</div>{% endif %}
+                    {% if party.phone_number %}<div>Ph: {{ party.phone_number }}</div>{% endif %}
+                </td>
+                <td width="40%" class="text-right" style="vertical-align: bottom;">
+                    <table align="right">
+                        <tr><td class="info-label">Period:</td><td class="text-right">{{ start_date|date:"d/m/Y" }} to {{ end_date|date:"d/m/Y" }}</td></tr>
+                        <tr><td class="info-label">Closing Bal:</td><td class="text-right font-bold" style="font-size: 11pt;">${{ closing_balance|floatformat:2 }}</td></tr>
+                    </table>
+                </td>
+            </tr>
+        </table>
+
+        <table class="ledger-table">
+            <thead>
+                <tr>
+                    <th width="12%">Date</th>
+                    <th width="35%">Description / Particulars</th>
+                    <th width="13%">Ref</th>
+                    <th width="13%" class="text-right">Debit (+)</th>
+                    <th width="13%" class="text-right">Credit (-)</th>
+                    <th width="14%" class="text-right">Balance</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr class="opening-row">
+                    <td>{{ start_date|date:"d/m/Y" }}</td>
+                    <td colspan="2">OPENING BALANCE</td>
+                    <td class="text-right">{% if opening_balance > 0 %}{{ opening_balance|abs_val|floatformat:2 }}{% else %}-{% endif %}</td>
+                    <td class="text-right">{% if opening_balance < 0 %}{{ opening_balance|abs_val|floatformat:2 }}{% else %}-{% endif %}</td>
+                    <td class="text-right">{{ opening_balance|floatformat:2 }}</td>
+                </tr>
+                
+                {% for row in statement_rows %}
+                <tr>
+                    <td>{{ row.date|date:"d/m/Y" }}</td>
+                    <td>{{ row.description }}</td>
+                    <td class="text-center">{{ row.reference }}</td>
+                    <td class="text-right debit">{% if row.debit > 0 %}{{ row.debit|floatformat:2 }}{% else %}-{% endif %}</td>
+                    <td class="text-right credit">{% if row.credit > 0 %}{{ row.credit|floatformat:2 }}{% else %}-{% endif %}</td>
+                    <td class="text-right font-bold">{{ row.balance|floatformat:2 }}</td>
+                </tr>
+                {% endfor %}
+                
+                <tr class="summary-row">
+                    <td colspan="3" class="text-right text-xs">TOTALS / CLOSING</td>
+                    <td class="text-right">
+                        {% with total_debit=statement_rows|sum_list:"debit" %}
+                            {{ total_debit|floatformat:2 }}
+                        {% endwith %}
+                    </td>
+                    <td class="text-right">
+                        {% with total_credit=statement_rows|sum_list:"credit" %}
+                            {{ total_credit|floatformat:2 }}
+                        {% endwith %}
+                    </td>
+                    <td class="text-right" style="background-color: #e2e8f0; font-size: 11pt;">{{ closing_balance|floatformat:2 }}</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div style="margin-top: 40pt;">
+            <table width="100%">
+                <tr>
+                    <td width="60%">
+                        <div class="font-bold" style="text-decoration: underline; margin-bottom: 5pt;">Notes:</div>
+                        <div style="font-size: 8pt; color: #64748b;">
+                            1. This is a computer generated statement.<br>
+                            2. Please report any discrepancies within 7 days.
+                        </div>
+                    </td>
+                    <td width="40%" class="text-center">
+                        <div style="margin-top: 20pt; border-top: 0.5pt solid #333; padding-top: 5pt; font-weight: bold;">
+                            For {{ company.name|default:"Transport Management System" }}
+                        </div>
+                    </td>
+                </tr>
+            </table>
+        </div>
+    </div>
+</body>
+</html>

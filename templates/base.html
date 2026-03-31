@@ -4,6 +4,7 @@
 <head>
     <meta charset="utf-8"/>
     <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <meta name="referrer" content="no-referrer-when-downgrade">
     <title>{% block title %}Transport Management System{% endblock %}</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
@@ -50,77 +51,248 @@
 </head>
 <body class="text-slate-800 flex flex-col min-h-screen">
 <!-- BEGIN: Top Navigation -->
-<nav class="bg-slate-800 text-white px-6 py-3 flex items-center justify-between">
-    <div class="flex items-center space-x-8">
-        <a class="text-xl font-bold tracking-wider" href="{% url 'trip-list' %}">TMS</a>
-        <div class="hidden md:flex space-x-6 text-sm font-medium">
-            <a class="flex items-center space-x-2 {% if request.resolver_match.url_name == 'trip-list' %}text-white{% else %}text-slate-300 hover:text-white{% endif %}" href="{% url 'trip-list' %}">
-                <i class="fa-solid fa-truck"></i><span>Trips</span>
+<nav class="bg-slate-800 text-white shadow-md relative z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex items-center justify-between h-16">
+            <div class="flex items-center">
+                <a class="text-xl font-bold tracking-wider text-emerald-400" href="{% url 'trip-list' %}">TMS</a>
+                <!-- Desktop Menu -->
+                <div class="hidden lg:ml-10 lg:flex lg:items-center lg:space-x-4 text-sm font-medium">
+                    <a class="px-3 py-2 rounded-md {% if request.resolver_match.url_name == 'trip-list' %}bg-slate-900 text-white{% else %}text-slate-300 hover:bg-slate-700 hover:text-white{% endif %}" href="{% url 'trip-list' %}">
+                        <i class="fa-solid fa-truck mr-2"></i>Trips
+                    </a>
+                    
+                    {% if user.is_authenticated %}
+                    <div class="relative dropdown-container">
+                        <button class="flex items-center space-x-2 px-3 py-2 rounded-md text-slate-300 hover:bg-slate-700 hover:text-white focus:outline-none dropdown-toggle">
+                            <i class="fa-solid fa-truck-fast"></i><span>Fleet</span><i class="fa-solid fa-chevron-down text-xs ml-1"></i>
+                        </button>
+                        <div class="absolute left-0 mt-1 w-48 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5 hidden dropdown-menu">
+                            <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'vehicle-list' %}">Vehicles</a>
+                            <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'document-list' %}">Documents</a>
+                            <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'maintenance-task-list' %}">Manage Tasks</a>
+                            <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'maintenance-log-list' %}">Maintenance Logs</a>
+                            <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'tyre-list' %}">Tyre Inventory</a>
+                        </div>
+                    </div>
+                    
+                    {% if user.is_superuser or user.groups.all.0.name == 'manager' %}
+                    <a class="px-3 py-2 rounded-md {% if request.resolver_match.url_name == 'manager-dashboard' %}bg-slate-900 text-white{% else %}text-slate-300 hover:bg-slate-700 hover:text-white{% endif %}" href="{% url 'manager-dashboard' %}">
+                        <i class="fa-solid fa-gauge mr-2"></i>Dashboard
+                    </a>
+                    <a class="px-3 py-2 rounded-md {% if request.resolver_match.url_name == 'driver-list' %}bg-slate-900 text-white{% else %}text-slate-300 hover:bg-slate-700 hover:text-white{% endif %}" href="{% url 'driver-list' %}">
+                        <i class="fa-solid fa-users mr-2"></i>Drivers
+                    </a>
+                    {% endif %}
+
+                    {% if user.is_superuser or user.groups.all.0.name == 'manager' or user.groups.all.0.name == 'supervisor' %}
+                    <div class="relative dropdown-container">
+                        <button class="flex items-center space-x-2 px-3 py-2 rounded-md text-slate-300 hover:bg-slate-700 hover:text-white focus:outline-none dropdown-toggle">
+                            <i class="fa-solid fa-wallet"></i><span>Finance</span><i class="fa-solid fa-chevron-down text-xs ml-1"></i>
+                        </button>
+                        <div class="absolute left-0 mt-1 w-48 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5 hidden dropdown-menu">
+                            <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'bill-list' %}">Invoices</a>
+                            <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'financialrecord-list' %}">Ledger</a>
+                            <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'party-list' %}">Parties</a>
+                            <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'account-list' %}">Company Accounts</a>
+                            <hr class="my-1 border-slate-200"/>
+                            <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'financial-summary' %}">Reports</a>
+                        </div>
+                    </div>
+                    {% endif %}
+                    {% endif %}
+                </div>
+            </div>
+            <div class="flex items-center">
+                <!-- Notifications Desktop -->
+                {% if user.is_authenticated and request.user.is_superuser or request.user.groups.all.0.name == 'manager' %}
+                <div class="hidden lg:flex relative dropdown-container mr-2">
+                    <button class="flex items-center justify-center w-8 h-8 rounded-full text-slate-300 hover:text-white hover:bg-slate-700 focus:outline-none dropdown-toggle relative">
+                        <i class="fa-solid fa-bell"></i>
+                        {% if total_alerts > 0 %}
+                        <span class="absolute top-0 right-0 inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-bold leading-none text-white bg-red-600 rounded-full" style="transform: translate(30%, -30%);">
+                            {{ total_alerts }}
+                        </span>
+                        {% endif %}
+                    </button>
+                    <div class="absolute right-0 mt-1 w-80 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5 hidden dropdown-menu z-50">
+                        <div class="px-4 py-2 font-semibold text-slate-700 border-b border-slate-100 flex justify-between items-center">
+                            <span>Alerts</span>
+                            {% if total_alerts > 0 %}
+                            <span class="bg-red-100 text-red-800 text-xs font-medium px-2 py-0.5 rounded-full">{{ total_alerts }} new</span>
+                            {% endif %}
+                        </div>
+                        <div class="max-h-64 overflow-y-auto">
+                            {% if total_alerts == 0 %}
+                            <div class="px-4 py-4 text-sm text-slate-500 text-center">No alerts at this time.</div>
+                            {% else %}
+                                {% for task in due_maintenance %}
+                                <a href="{% url 'maintenance-log-list' %}" class="block px-4 py-3 hover:bg-slate-50 border-b border-slate-50 last:border-0">
+                                    <div class="flex items-start">
+                                        <div class="flex-shrink-0 pt-0.5"><i class="fa-solid fa-wrench text-blue-500"></i></div>
+                                        <div class="ml-3 w-0 flex-1">
+                                            <p class="text-sm font-medium text-slate-900">{{ task.vehicle }} - {{ task.name }}</p>
+                                            <p class="mt-1 text-xs text-blue-600 font-medium italic">Service Due</p>
+                                        </div>
+                                    </div>
+                                </a>
+                                {% endfor %}
+                                {% for doc in expired_docs %}
+                                <a href="{% url 'document-list' %}" class="block px-4 py-3 hover:bg-slate-50 border-b border-slate-50 last:border-0">
+                                    <div class="flex items-start">
+                                        <div class="flex-shrink-0 pt-0.5"><i class="fa-solid fa-circle-exclamation text-red-500"></i></div>
+                                        <div class="ml-3 w-0 flex-1">
+                                            <p class="text-sm font-medium text-slate-900">{{ doc }}</p>
+                                            <p class="mt-1 text-xs text-red-600 font-medium">Expired on {{ doc.expiry_date }}</p>
+                                        </div>
+                                    </div>
+                                </a>
+                                {% endfor %}
+                                {% for doc in expiring_docs %}
+                                <a href="{% url 'document-list' %}" class="block px-4 py-3 hover:bg-slate-50 border-b border-slate-50 last:border-0">
+                                    <div class="flex items-start">
+                                        <div class="flex-shrink-0 pt-0.5"><i class="fa-solid fa-triangle-exclamation text-yellow-500"></i></div>
+                                        <div class="ml-3 w-0 flex-1">
+                                            <p class="text-sm font-medium text-slate-900">{{ doc }}</p>
+                                            <p class="mt-1 text-xs text-yellow-600 font-medium">Expires on {{ doc.expiry_date }}</p>
+                                        </div>
+                                    </div>
+                                </a>
+                                {% endfor %}
+                            {% endif %}
+                        </div>
+                        <a href="{% url 'document-list' %}" class="block px-4 py-2 text-xs text-center font-medium text-emerald-600 hover:text-emerald-500 hover:bg-slate-50 border-t border-slate-100">
+                            View all documents
+                        </a>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- User Profile Desktop -->
+                <div class="hidden lg:ml-4 lg:flex lg:items-center">
+                    {% if user.is_authenticated %}
+                    <div class="ml-3 relative dropdown-container">
+                        <button class="flex items-center space-x-2 text-sm font-medium focus:outline-none dropdown-toggle px-3 py-2 rounded-md hover:bg-slate-700">
+                            <i class="fa-solid fa-user-circle text-lg"></i>
+                            <span>{{ user.username }}</span>
+                            <i class="fa-solid fa-caret-down text-xs ml-1"></i>
+                        </button>
+                        <div class="absolute right-0 mt-1 w-48 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5 hidden dropdown-menu">
+                            {% if user.is_superuser %}
+                            <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="/admin/">Django Admin</a>
+                            {% endif %}
+                            <a class="block px-4 py-2 text-sm text-red-600 hover:bg-slate-100" href="{% url 'logout' %}">Logout</a>
+                        </div>
+                    </div>
+                    {% else %}
+                    <a href="{% url 'login' %}" class="text-sm font-medium hover:text-slate-300">Login</a>
+                    {% endif %}
+                </div>
+                
+                <!-- Mobile menu button -->
+                <div class="lg:hidden">
+                    <button type="button" id="mobile-menu-toggle" class="inline-flex items-center justify-center p-2 rounded-md text-slate-400 hover:text-white hover:bg-slate-700 focus:outline-none relative">
+                        <span class="sr-only">Open main menu</span>
+                        <i class="fa-solid fa-bars text-xl" id="menu-icon"></i>
+                        <i class="fa-solid fa-xmark text-xl hidden" id="close-icon"></i>
+                        {% if user.is_authenticated and total_alerts > 0 and request.user.is_superuser or request.user.groups.all.0.name == 'manager' %}
+                        <span class="absolute top-0 right-0 block h-2.5 w-2.5 rounded-full bg-red-600 ring-2 ring-slate-800" style="margin-top: 0.5rem; margin-right: 0.5rem;"></span>
+                        {% endif %}
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mobile Menu -->
+    <div class="lg:hidden hidden" id="mobile-menu">
+        <div class="px-2 pt-2 pb-3 space-y-1 sm:px-3">
+            {% if user.is_authenticated and request.user.is_superuser or request.user.groups.all.0.name == 'manager' %}
+            {% if total_alerts > 0 %}
+            <div class="px-3 py-2 bg-red-900/20 rounded-md mb-2">
+                <p class="text-xs font-bold text-red-400 uppercase tracking-widest mb-1">Active Alerts ({{ total_alerts }})</p>
+                <div class="space-y-2 max-h-40 overflow-y-auto pr-1">
+                    {% for task in due_maintenance %}
+                    <div class="text-xs text-blue-200 flex items-start">
+                        <i class="fa-solid fa-wrench mr-2 mt-0.5"></i>
+                        <span>{{ task.vehicle.registration_plate }}: {{ task.name }} Due</span>
+                    </div>
+                    {% endfor %}
+                    {% for doc in expired_docs %}
+                    <div class="text-xs text-red-200 flex items-start">
+                        <i class="fa-solid fa-circle-exclamation mr-2 mt-0.5"></i>
+                        <span>{{ doc.document_type }} expired ({{ doc.expiry_date }})</span>
+                    </div>
+                    {% endfor %}
+                    {% for doc in expiring_docs %}
+                    <div class="text-xs text-yellow-200 flex items-start">
+                        <i class="fa-solid fa-triangle-exclamation mr-2 mt-0.5"></i>
+                        <span>{{ doc.document_type }} expires ({{ doc.expiry_date }})</span>
+                    </div>
+                    {% endfor %}
+                </div>
+                <div class="flex justify-between mt-2">
+                    <a href="{% url 'document-list' %}" class="text-[10px] font-bold text-emerald-400 uppercase">Documents</a>
+                    <a href="{% url 'maintenance-log-list' %}" class="text-[10px] font-bold text-blue-400 uppercase">Maintenance</a>
+                </div>
+            </div>
+            {% endif %}
+            {% endif %}
+
+            <a class="block px-3 py-2 rounded-md text-base font-medium {% if request.resolver_match.url_name == 'trip-list' %}bg-slate-900 text-white{% else %}text-slate-300 hover:bg-slate-700 hover:text-white{% endif %}" href="{% url 'trip-list' %}">
+                <i class="fa-solid fa-truck mr-2 w-5"></i>Trips
             </a>
             
             {% if user.is_authenticated %}
-            <div class="relative dropdown-container">
-                <button class="flex items-center space-x-2 text-slate-300 hover:text-white focus:outline-none dropdown-toggle">
-                    <i class="fa-solid fa-truck-fast"></i><span>Fleet</span><i class="fa-solid fa-chevron-down text-xs ml-1"></i>
-                </button>
-                <div class="absolute left-0 pt-2 w-48 z-50 hidden dropdown-menu">
-                    <div class="bg-white rounded-md shadow-lg py-1 border border-slate-200">
-                        <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'vehicle-list' %}">Vehicles</a>
-                        <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'maintenance-log-list' %}">Maintenance Logs</a>
-                        <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'tyre-list' %}">Tyre Inventory</a>
-                    </div>
-                </div>
+            <!-- Fleet Mobile -->
+            <div class="space-y-1 pl-4 border-l border-slate-700">
+                <p class="px-3 py-1 text-xs font-bold text-slate-500 uppercase tracking-widest">Fleet</p>
+                <a class="block px-3 py-2 rounded-md text-base font-medium text-slate-300 hover:bg-slate-700 hover:text-white" href="{% url 'vehicle-list' %}">Vehicles</a>
+                <a class="block px-3 py-2 rounded-md text-base font-medium text-slate-300 hover:bg-slate-700 hover:text-white" href="{% url 'maintenance-log-list' %}">Maintenance Logs</a>
+                <a class="block px-3 py-2 rounded-md text-base font-medium text-slate-300 hover:bg-slate-700 hover:text-white" href="{% url 'tyre-list' %}">Tyre Inventory</a>
             </div>
             
             {% if user.is_superuser or user.groups.all.0.name == 'manager' %}
-            <a class="flex items-center space-x-2 {% if request.resolver_match.url_name == 'manager-dashboard' %}text-white{% else %}text-slate-300 hover:text-white{% endif %}" href="{% url 'manager-dashboard' %}">
-                <i class="fa-solid fa-gauge"></i><span>Dashboard</span>
+            <a class="block px-3 py-2 rounded-md text-base font-medium {% if request.resolver_match.url_name == 'manager-dashboard' %}bg-slate-900 text-white{% else %}text-slate-300 hover:bg-slate-700 hover:text-white{% endif %}" href="{% url 'manager-dashboard' %}">
+                <i class="fa-solid fa-gauge mr-2 w-5"></i>Dashboard
             </a>
-            <a class="flex items-center space-x-2 {% if request.resolver_match.url_name == 'driver-list' %}text-white{% else %}text-slate-300 hover:text-white{% endif %}" href="{% url 'driver-list' %}">
-                <i class="fa-solid fa-users"></i><span>Drivers</span>
+            <a class="block px-3 py-2 rounded-md text-base font-medium {% if request.resolver_match.url_name == 'driver-list' %}bg-slate-900 text-white{% else %}text-slate-300 hover:bg-slate-700 hover:text-white{% endif %}" href="{% url 'driver-list' %}">
+                <i class="fa-solid fa-users mr-2 w-5"></i>Drivers
             </a>
             {% endif %}
 
             {% if user.is_superuser or user.groups.all.0.name == 'manager' or user.groups.all.0.name == 'supervisor' %}
-            <div class="relative dropdown-container">
-                <button class="flex items-center space-x-2 text-slate-300 hover:text-white focus:outline-none dropdown-toggle">
-                    <i class="fa-solid fa-wallet"></i><span>Finance</span><i class="fa-solid fa-chevron-down text-xs ml-1"></i>
-                </button>
-                <div class="absolute left-0 pt-2 w-48 z-50 hidden dropdown-menu">
-                    <div class="bg-white rounded-md shadow-lg py-1 border border-slate-200">
-                        <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'bill-list' %}">Invoices</a>
-                        <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'financialrecord-list' %}">Ledger</a>
-                        <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'party-list' %}">Parties</a>
-                        <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'account-list' %}">Company Accounts</a>
-                        <hr class="my-1 border-slate-200"/>
-                        <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'financial-summary' %}">Reports</a>
+            <!-- Finance Mobile -->
+            <div class="space-y-1 pl-4 border-l border-slate-700 mt-2">
+                <p class="px-3 py-1 text-xs font-bold text-slate-500 uppercase tracking-widest">Finance</p>
+                <a class="block px-3 py-2 rounded-md text-base font-medium text-slate-300 hover:bg-slate-700 hover:text-white" href="{% url 'bill-list' %}">Invoices</a>
+                <a class="block px-3 py-2 rounded-md text-base font-medium text-slate-300 hover:bg-slate-700 hover:text-white" href="{% url 'financialrecord-list' %}">Ledger</a>
+                <a class="block px-3 py-2 rounded-md text-base font-medium text-slate-300 hover:bg-slate-700 hover:text-white" href="{% url 'party-list' %}">Parties</a>
+                <a class="block px-3 py-2 rounded-md text-base font-medium text-slate-300 hover:bg-slate-700 hover:text-white" href="{% url 'account-list' %}">Accounts</a>
+                <a class="block px-3 py-2 rounded-md text-base font-medium text-slate-300 hover:bg-slate-700 hover:text-white" href="{% url 'financial-summary' %}">Reports</a>
+            </div>
+            {% endif %}
+            
+            <div class="pt-4 pb-3 border-t border-slate-700 mt-2">
+                <div class="flex items-center px-5">
+                    <div class="flex-shrink-0">
+                        <i class="fa-solid fa-user-circle text-3xl text-slate-400"></i>
+                    </div>
+                    <div class="ml-3">
+                        <div class="text-base font-medium text-white">{{ user.username }}</div>
                     </div>
                 </div>
-            </div>
-            {% endif %}
-            {% endif %}
-        </div>
-    </div>
-    <div class="flex items-center space-x-4">
-        {% if user.is_authenticated %}
-        <div class="relative dropdown-container">
-            <button class="flex items-center space-x-2 text-sm font-medium focus:outline-none dropdown-toggle">
-                <i class="fa-solid fa-user-circle text-lg"></i>
-                <span>{{ user.username }}</span>
-                <i class="fa-solid fa-caret-down text-xs"></i>
-            </button>
-            <div class="absolute right-0 pt-2 w-48 z-50 hidden dropdown-menu">
-                <div class="bg-white rounded-md shadow-lg py-1 border border-slate-200">
+                <div class="mt-3 px-2 space-y-1">
                     {% if user.is_superuser %}
-                    <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="/admin/">Django Admin</a>
+                    <a href="/admin/" class="block px-3 py-2 rounded-md text-base font-medium text-slate-400 hover:text-white hover:bg-slate-700">Django Admin</a>
                     {% endif %}
-                    <a class="block px-4 py-2 text-sm text-red-600 hover:bg-slate-100" href="{% url 'logout' %}">Logout</a>
+                    <a href="{% url 'logout' %}" class="block px-3 py-2 rounded-md text-base font-medium text-rose-400 hover:text-white hover:bg-slate-700">Logout</a>
                 </div>
             </div>
+            {% else %}
+            <a href="{% url 'login' %}" class="block px-3 py-2 rounded-md text-base font-medium text-slate-300 hover:bg-slate-700 hover:text-white">Login</a>
+            {% endif %}
         </div>
-        {% else %}
-        <a href="{% url 'login' %}" class="text-sm font-medium hover:text-slate-300">Login</a>
-        {% endif %}
     </div>
 </nav>
 <!-- END: Top Navigation -->
@@ -150,10 +322,19 @@
 <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
-        $(document).ready(function() {
-            // Toggle dropdown on click
-            $(document).on('click', '.dropdown-toggle', function(e) {
-                e.preventDefault();
+    $(document).ready(function() {
+        // Mobile menu toggle
+        $('#mobile-menu-toggle').on('click', function() {
+            const $menu = $('#mobile-menu');
+            const isHidden = $menu.hasClass('hidden');
+
+            $menu.toggleClass('hidden');
+            $('#menu-icon').toggleClass('hidden', !isHidden);
+            $('#close-icon').toggleClass('hidden', isHidden);
+        });
+
+        // Toggle dropdown on click
+        $(document).on('click', '.dropdown-toggle', function(e) {                e.preventDefault();
                 e.stopPropagation();
                 
                 const $container = $(this).closest('.dropdown-container');

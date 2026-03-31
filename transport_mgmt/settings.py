@@ -19,7 +19,7 @@ SECRET_KEY = config('SECRET_KEY', default='django-insecure-transport-mgmt-system
 DEBUG = config('DEBUG', default=True, cast=bool)
 
 # For closed network testing - restrict in production
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,0.0.0.0,192.168.0.103,192.168.0.105', cast=lambda v: [s.strip() for s in v.split(',')])
+ALLOWED_HOSTS = ['*']
 
 # Application definition
 INSTALLED_APPS = [
@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     'ledger',
     'drivers',
     'documents',
+    'gdstorage',
 ]
 
 MIDDLEWARE = [
@@ -64,6 +65,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'documents.context_processors.document_alerts',
             ],
         },
     },
@@ -110,6 +112,33 @@ USE_TZ = True
 STATIC_URL = '/static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+# Google Drive Storage Configuration
+GOOGLE_DRIVE_STORAGE_JSON_KEY_FILE = None
+GOOGLE_DRIVE_STORAGE_CLIENT_ID = config('GOOGLE_DRIVE_STORAGE_CLIENT_ID', default=None)
+GOOGLE_DRIVE_STORAGE_CLIENT_SECRET = config('GOOGLE_DRIVE_STORAGE_CLIENT_SECRET', default=None)
+GOOGLE_DRIVE_STORAGE_REFRESH_TOKEN = config('GOOGLE_DRIVE_STORAGE_REFRESH_TOKEN', default=None)
+GOOGLE_DRIVE_STORAGE_MEDIA_ROOT = config('GOOGLE_DRIVE_STORAGE_MEDIA_ROOT', default='')
+
+# Use Google Drive for media storage if configured
+if GOOGLE_DRIVE_STORAGE_REFRESH_TOKEN:
+    STORAGES = {
+        "default": {
+            "BACKEND": "transport_mgmt.storage_bridge.GoogleDriveOAuth2Storage",
+        },
+        "staticfiles": {
+            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+        },
+    }
+else:
+    STORAGES = {
+        "default": {
+            "BACKEND": "django.core.files.storage.FileSystemStorage",
+        },
+        "staticfiles": {
+            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+        },
+    }
 
 # Media files (File uploads)
 MEDIA_URL = '/media/'

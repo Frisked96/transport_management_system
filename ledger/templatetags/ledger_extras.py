@@ -119,3 +119,32 @@ def get_route_description(bill):
         return bill.description or "Transportation Service"
         
     return ", ".join(sorted(list(routes)))
+
+@register.filter
+def sum_list(data_list, key):
+    """
+    Sum a key across a list of dictionaries.
+    Usage: {{ statement_rows|sum_list:"debit" }}
+    """
+    if not data_list:
+        return Decimal('0')
+    total = Decimal('0')
+    for item in data_list:
+        try:
+            val = item.get(key, 0)
+            if val:
+                total += Decimal(str(val))
+        except (ValueError, TypeError, InvalidOperation):
+            continue
+    return total
+
+@register.filter
+def abs_val(value):
+    """
+    Returns absolute value of a number.
+    Usage: {{ value|abs_val }}
+    """
+    try:
+        return abs(Decimal(str(value)))
+    except (ValueError, TypeError, InvalidOperation):
+        return 0

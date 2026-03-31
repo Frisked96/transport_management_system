@@ -92,8 +92,22 @@
             <div class="bg-slate-50 border-b border-slate-200 px-6 py-4">
                 <h3 class="font-bold text-slate-800">Linked Operations</h3>
             </div>
-            <div class="p-6">
+            <div class="p-6 space-y-6">
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
+                    <span class="text-sm font-semibold text-slate-500 uppercase tracking-wider">Associated Bill</span>
+                    <div class="md:col-span-2">
+                        {% if record.associated_bill %}
+                            <a href="{% url 'bill-detail' record.associated_bill.pk %}" class="inline-flex items-center space-x-2 text-blue-600 hover:text-blue-700 font-bold">
+                                <i class="fa-solid fa-file-invoice"></i>
+                                <span>{{ record.associated_bill.bill_number|default:"Draft Bill" }}</span>
+                            </a>
+                        {% else %}
+                            <span class="text-sm text-slate-400">Not linked to a specific bill</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-center pt-4 border-t border-slate-100">
                     <span class="text-sm font-semibold text-slate-500 uppercase tracking-wider">Associated Trip</span>
                     <div class="md:col-span-2">
                         {% if record.associated_trip %}

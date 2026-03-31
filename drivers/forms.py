@@ -15,7 +15,7 @@ class DriverForm(forms.ModelForm):
     """
     username = forms.CharField(max_length=150)
     first_name = forms.CharField(max_length=30)
-    last_name = forms.CharField(max_length=30)
+    last_name = forms.CharField(max_length=30, required=False)
     email = forms.EmailField(required=False)
 
     class Meta:
@@ -41,15 +41,20 @@ class DriverForm(forms.ModelForm):
 
     def save(self, commit=True):
         driver = super().save(commit=False)
+        
+        username = self.cleaned_data['username']
+        first_name = self.cleaned_data['first_name']
+        last_name = self.cleaned_data.get('last_name', '')
+        email = self.cleaned_data.get('email', '')
 
         # Handle User creation/update
         if not driver.pk and not hasattr(driver, 'user'): # New driver
             user = User.objects.create_user(
-                username=self.cleaned_data['username'],
+                username=username,
                 password=None, # Unusable password
-                first_name=self.cleaned_data['first_name'],
-                last_name=self.cleaned_data['last_name'],
-                email=self.cleaned_data['email']
+                first_name=first_name,
+                last_name=last_name,
+                email=email
             )
             user.set_unusable_password()
             user.save()
@@ -60,10 +65,10 @@ class DriverForm(forms.ModelForm):
             driver.user = user
         else:
             user = driver.user
-            user.username = self.cleaned_data['username']
-            user.first_name = self.cleaned_data['first_name']
-            user.last_name = self.cleaned_data['last_name']
-            user.email = self.cleaned_data['email']
+            user.username = username
+            user.first_name = first_name
+            user.last_name = last_name
+            user.email = email
             user.save()
 
         if commit:

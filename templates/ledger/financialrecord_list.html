@@ -10,6 +10,10 @@
         <p class="text-sm text-slate-600 mt-1">Manage and track all financial transactions</p>
     </div>
     <div class="mt-4 md:mt-0 flex space-x-3">
+        <a href="{% url 'unified-ledger-pdf' %}?start_date={{ request.GET.start_date }}&end_date={{ request.GET.end_date }}" target="_blank" class="flex items-center space-x-2 px-4 py-2 border border-red-200 rounded-md bg-red-50 text-red-700 text-sm font-medium hover:bg-red-100 transition-colors shadow-sm">
+            <i class="fa-solid fa-file-pdf"></i>
+            <span>Unified Ledger</span>
+        </a>
         {% if perms.ledger.add_financialrecord %}
         <a href="{% url 'financialrecord-create' %}" class="flex items-center space-x-2 px-4 py-2 bg-emerald-600 text-white rounded-md text-sm font-medium hover:bg-emerald-700 shadow-sm transition-colors">
             <i class="fa-solid fa-plus"></i>
@@ -122,10 +126,16 @@
         </div>
 
         <div class="w-32">
-            <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">Associated Trip</span>
-            {% if record.associated_trip %}
-                <a href="{% url 'trip-detail' record.associated_trip.pk %}" class="text-sm text-emerald-600 hover:text-emerald-700 font-medium">
-                    {{ record.associated_trip.trip_number }}
+            <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">Reference</span>
+            {% if record.linked_bill %}
+                <a href="{% url 'bill-detail' record.linked_bill.pk %}" class="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center">
+                    <i class="fa-solid fa-file-invoice mr-1 text-[10px]"></i>
+                    {{ record.linked_bill.bill_number|default:"Draft Bill" }}
+                </a>
+            {% elif record.linked_trip %}
+                <a href="{% url 'trip-detail' record.linked_trip.pk %}" class="text-sm text-emerald-600 hover:text-emerald-700 font-medium flex items-center">
+                    <i class="fa-solid fa-truck-moving mr-1 text-[10px]"></i>
+                    {{ record.linked_trip.trip_number }}
                 </a>
             {% else %}
                 <span class="text-sm text-slate-400">-</span>

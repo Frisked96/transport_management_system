@@ -9,8 +9,107 @@ from django.urls import reverse_lazy
 from django.contrib import messages
 from django.db.models import Q, Count, Sum
 
-from .models import Vehicle, MaintenanceLog, Tyre, TyreLog
-from .forms import VehicleForm, MaintenanceLogForm, TyreForm, TyreLogForm
+from .models import Vehicle, MaintenanceLog, MaintenanceTask, Tyre, TyreLog
+from .forms import VehicleForm, MaintenanceLogForm, MaintenanceTaskForm, TyreForm, TyreLogForm
+
+
+class BaseFleetPermissionMixin:
+    """Base mixin for fleet permissions"""
+    
+    def has_manager_permission(self):
+        """Check if user is in manager group"""
+        return self.request.user.groups.filter(name='manager').exists()
+    
+    def has_supervisor_permission(self):
+        """Check if user is in supervisor group"""
+        return self.request.user.groups.filter(name='supervisor').exists()
+    
+    def has_driver_permission(self):
+        """Check if user is in driver group"""
+        return self.request.user.groups.filter(name='driver').exists()
+
+
+class MaintenanceTaskListView(LoginRequiredMixin, BaseFleetPermissionMixin, ListView):
+    """
+    List view for maintenance tasks
+    """
+    model = MaintenanceTask
+    template_name = 'fleet/maintenance_task_list.html'
+    context_object_name = 'tasks'
+    paginate_by = 20
+    
+    def get_queryset(self):
+        queryset = MaintenanceTask.objects.all().select_related('vehicle')
+        
+        # Vehicle filter
+        vehicle_id = self.request.GET.get('vehicle')
+        if vehicle_id:
+            queryset = queryset.filter(vehicle_id=vehicle_id)
+        
+        # Search functionality
+        search = self.request.GET.get('search')
+        if search:
+            queryset = queryset.filter(
+                Q(name__icontains=search) |
+                Q(vehicle__registration_plate__icontains=search)
+            )
+        
+        return queryset.order_by('vehicle__registration_plate', 'name')
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # For grouped display like documents
+        context['vehicles'] = Vehicle.objects.all().prefetch_related('maintenance_tasks')
+        context['search_term'] = self.request.GET.get('search', '')
+        return context
+
+
+class MaintenanceTaskCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+    """
+    Create view for maintenance tasks
+    """
+    model = MaintenanceTask
+    form_class = MaintenanceTaskForm
+    template_name = 'fleet/maintenance_task_form.html'
+    permission_required = 'fleet.add_maintenancetask'
+    
+    def form_valid(self, form):
+        messages.success(self.request, 'Maintenance task created successfully!')
+        return super().form_valid(form)
+    
+    def get_success_url(self):
+        return reverse_lazy('maintenance-task-list')
+
+
+class MaintenanceTaskUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+    """
+    Update view for maintenance tasks
+    """
+    model = MaintenanceTask
+    form_class = MaintenanceTaskForm
+    template_name = 'fleet/maintenance_task_form.html'
+    permission_required = 'fleet.change_maintenancetask'
+    
+    def form_valid(self, form):
+        messages.success(self.request, 'Maintenance task updated successfully!')
+        return super().form_valid(form)
+    
+    def get_success_url(self):
+        return reverse_lazy('maintenance-task-list')
+
+
+class MaintenanceTaskDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
+    """
+    Delete view for maintenance tasks
+    """
+    model = MaintenanceTask
+    template_name = 'fleet/maintenance_task_confirm_delete.html'
+    permission_required = 'fleet.delete_maintenancetask'
+    success_url = reverse_lazy('maintenance-task-list')
+    
+    def delete(self, request, *args, **kwargs):
+        messages.success(self.request, 'Maintenance task deleted successfully!')
+        return super().delete(request, *args, **kwargs)
 
 
 class TyreListView(LoginRequiredMixin, ListView):
@@ -183,22 +282,6 @@ def tyre_quick_action(request, pk, action):
     return redirect('tyre-detail', pk=pk)
 
 
-class BaseFleetPermissionMixin:
-    """Base mixin for fleet permissions"""
-    
-    def has_manager_permission(self):
-        """Check if user is in manager group"""
-        return self.request.user.groups.filter(name='manager').exists()
-    
-    def has_supervisor_permission(self):
-        """Check if user is in supervisor group"""
-        return self.request.user.groups.filter(name='supervisor').exists()
-    
-    def has_driver_permission(self):
-        """Check if user is in driver group"""
-        return self.request.user.groups.filter(name='driver').exists()
-
-
 class VehicleListView(LoginRequiredMixin, BaseFleetPermissionMixin, ListView):
     """
     List view for vehicles with permission-based filtering
@@ -363,6 +446,16 @@ class MaintenanceLogCreateView(LoginRequiredMixin, PermissionRequiredMixin, Crea
     form_class = MaintenanceLogForm
     template_name = 'fleet/maintenance_log_form.html'
     permission_required = 'fleet.create_maintenance_log'
+
+    def get_initial(self):
+        initial = super().get_initial()
+        vehicle_id = self.request.GET.get('vehicle')
+        task_id = self.request.GET.get('task')
+        if vehicle_id:
+            initial['vehicle'] = vehicle_id
+        if task_id:
+            initial['task'] = task_id
+        return initial
     
     def form_valid(self, form):
         form.instance.logged_by = self.request.user
