@@ -511,18 +511,16 @@ class Trip(models.Model):
             self.sync_fuel_log()
 
         if is_new:
-            # Create default TripExpense entries
-            TripExpense.objects.create(trip=self, name='Diesel', amount=self.diesel_total_cost or 0)
-            TripExpense.objects.create(trip=self, name='Toll', amount=0)
+            # Create default TripExpense entries using update_or_create to avoid duplicates 
+            # if multiple saves happen in a transaction (like in unified views)
+            TripExpense.objects.update_or_create(trip=self, name='Diesel', defaults={'amount': self.diesel_total_cost or 0})
+            TripExpense.objects.update_or_create(trip=self, name='Toll', defaults={'amount': 0})
         else:
             # Update Diesel expense if total_cost changed
-            diesel_exp = TripExpense.objects.filter(trip=self, name='Diesel').first()
-            if diesel_exp:
-                if diesel_exp.amount != (self.diesel_total_cost or 0):
-                    diesel_exp.amount = self.diesel_total_cost or 0
-                    diesel_exp.save(update_fields=['amount'])
-            else:
-                TripExpense.objects.create(trip=self, name='Diesel', amount=self.diesel_total_cost or 0)
+            TripExpense.objects.update_or_create(
+                trip=self, name='Diesel', 
+                defaults={'amount': self.diesel_total_cost or 0}
+            )
     
     @property
     def start_date(self):
@@ -735,6 +733,7 @@ class TripExpense(models.Model):
         verbose_name = 'Trip Expense'
         verbose_name_plural = 'Trip Expenses'
         ordering = ['created_at']
+        unique_together = ('trip', 'name')
     
     def __str__(self):
         return f"{self.name} - {self.amount}"

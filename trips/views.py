@@ -219,62 +219,118 @@ class TripMapView(LoginRequiredMixin, BaseTripPermissionMixin, ListView):
 
 class TripCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
     """
-    Create view for new trips.
-    Inherits date from the context (GET param).
+    Create view for new trips with integrated expense management.
     """
     model = Trip
     form_class = TripForm
     template_name = 'trips/trip_form.html'
     permission_required = 'trips.add_trip'
     
-    def get_initial(self):
-        initial = super().get_initial()
-        # You could prepopulate date here if the form had a date field, 
-        # but we are handling it in form_valid
-        return initial
-
-    def form_invalid(self, form):
-        print("Trip Create Form Invalid!")
-        print(form.errors)
-        return super().form_invalid(form)
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        if self.request.POST:
+            context['expense_formset'] = TripExpenseFormSet(self.request.POST, prefix='custom_expenses')
+        else:
+            context['expense_formset'] = TripExpenseFormSet(prefix='custom_expenses')
+        return context
 
     def form_valid(self, form):
-        """Set created_by and date fields"""
-        form.instance.created_by = self.request.user
+        context = self.get_context_data()
+        expense_formset = context['expense_formset']
         
-        # Set date from GET param if available, else today
-        date_str = self.request.GET.get('date')
-        if date_str:
-            try:
-                trip_date = datetime.strptime(date_str, '%Y-%m-%d').date()
-                # Set time to current time for ordering, but date is fixed
-                current_time = timezone.now().time()
-                form.instance.date = datetime.combine(trip_date, current_time)
-            except ValueError:
-                form.instance.date = timezone.now()
-        else:
-            form.instance.date = timezone.now()
+        if expense_formset.is_valid():
+            with transaction.atomic():
+                # Set created_by and date fields
+                form.instance.created_by = self.request.user
+                
+                # Set date from GET param if available, else today
+                date_str = self.request.GET.get('date')
+                if date_str:
+                    try:
+                        trip_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+                        current_time = timezone.now().time()
+                        form.instance.date = datetime.combine(trip_date, current_time)
+                    except ValueError:
+                        form.instance.date = timezone.now()
+                else:
+                    form.instance.date = timezone.now()
 
-        messages.success(self.request, 'Trip created successfully!')
-        return super().form_valid(form)
+                self.object = form.save()
+                
+                # Manually save the formset to handle potential duplicates created by Trip.save()
+                instances = expense_formset.save(commit=False)
+                for instance in instances:
+                    instance.trip = self.object
+                    # Use update_or_create to handle records like 'Toll' or 'Diesel'
+                    # which might have been created in Trip.save()
+                    TripExpense.objects.update_or_create(
+                        trip=instance.trip,
+                        name=instance.name,
+                        defaults={
+                            'amount': instance.amount,
+                            'notes': instance.notes
+                        }
+                    )
+                
+                # Handle deletions
+                for obj in expense_formset.deleted_objects:
+                    obj.delete()
+                
+            messages.success(self.request, 'Trip and expenses created successfully!')
+            return redirect(self.get_success_url())
+        else:
+            return self.render_to_response(self.get_context_data(form=form))
     
     def get_success_url(self):
-        # Redirect back to the trip list
         return reverse_lazy('trip-list')
 
 
 class TripUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
     """
-    Update view for existing trips
+    Update view for existing trips with integrated expense management.
     """
     model = Trip
     form_class = TripForm
     template_name = 'trips/trip_form.html'
     permission_required = 'trips.change_trip'
     
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        if self.request.POST:
+            context['expense_formset'] = TripExpenseFormSet(self.request.POST, instance=self.object, prefix='custom_expenses')
+        else:
+            context['expense_formset'] = TripExpenseFormSet(instance=self.object, prefix='custom_expenses')
+        return context
+
     def form_valid(self, form):
-        messages.success(self.request, 'Trip updated successfully!')
-        return super().form_valid(form)
+        context = self.get_context_data()
+        expense_formset = context['expense_formset']
+        
+        if expense_formset.is_valid():
+            with transaction.atomic():
+                self.object = form.save()
+                
+                # Manually save the formset with update_or_create logic
+                instances = expense_formset.save(commit=False)
+                for instance in instances:
+                    instance.trip = self.object
+                    TripExpense.objects.update_or_create(
+                        trip=instance.trip,
+                        name=instance.name,
+                        defaults={
+                            'amount': instance.amount,
+                            'notes': instance.notes
+                        }
+                    )
+                
+                # Handle deletions
+                for obj in expense_formset.deleted_objects:
+                    obj.delete()
+                    
+            messages.success(self.request, 'Trip and expenses updated successfully!')
+            return redirect(self.get_success_url())
+        else:
+            return self.render_to_response(self.get_context_data(form=form))
     
     def get_success_url(self):
         return reverse_lazy('trip-detail', kwargs={'pk': self.object.pk})
