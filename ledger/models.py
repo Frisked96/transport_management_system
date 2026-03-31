@@ -128,7 +128,10 @@ class CompanyAccount(models.Model):
     
     # Bill Generation Details
     authorized_signatory = models.CharField(max_length=200, blank=True, verbose_name="Authorized Signatory")
-    invoice_template = models.CharField(max_length=100, default="INV/{YYYY}/{SEQ}", help_text="Use {YYYY} for Year, {SEQ} for Sequence Number")
+    invoice_prefix = models.CharField(max_length=50, default="INV/{YYYY}/", help_text="Prefix for invoice numbers. Use {YYYY} for year.")
+    invoice_suffix = models.CharField(max_length=50, blank=True, help_text="Optional suffix for invoice numbers.")
+    invoice_padding = models.PositiveIntegerField(default=4, help_text="Number of digits for the sequence (e.g. 4 for 0001)")
+    invoice_sequence_start = models.PositiveIntegerField(default=1, help_text="Start the sequence from this number")
 
     opening_balance = models.DecimalField(
         max_digits=12, 
@@ -493,19 +496,24 @@ class Bill(models.Model):
         
         # 2. Generate Bill Number if missing
         if not self.bill_number and self.issuer:
-            # Use template from issuer or default
-            template = self.issuer.invoice_template or "INV/{YYYY}/{SEQ}"
-            
             import datetime
             now = datetime.datetime.now()
             
             # Get Sequence per Issuer
             seq_key = f"bill_sequence_{self.issuer.pk}"
+            
+            # Check if sequence exists; if not, initialize with sequence_start - 1
+            if not Sequence.objects.filter(key=seq_key).exists():
+                Sequence.objects.create(key=seq_key, value=self.issuer.invoice_sequence_start - 1)
+                
             seq_val = Sequence.next_value(seq_key)
             
-            # Format
-            num = template.replace("{YYYY}", str(now.year)).replace("{SEQ}", f"{seq_val:04d}")
-            self.bill_number = num
+            # Format using new granular fields
+            prefix = self.issuer.invoice_prefix.replace("{YYYY}", str(now.year))
+            padding = self.issuer.invoice_padding
+            suffix = self.issuer.invoice_suffix
+            
+            self.bill_number = f"{prefix}{seq_val:0{padding}d}{suffix}"
             
         super().save(*args, **kwargs)
 

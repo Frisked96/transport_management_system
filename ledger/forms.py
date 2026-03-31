@@ -160,7 +160,7 @@ class CompanyAccountForm(forms.ModelForm):
         fields = [
             'name', 'address', 'phone_number', 'gstin', 'pan',
             'bank_name', 'bank_branch', 'account_number', 'ifsc_code', 'account_holder_name',
-            'authorized_signatory', 'invoice_template',
+            'authorized_signatory', 'invoice_prefix', 'invoice_suffix', 'invoice_padding', 'invoice_sequence_start',
             'opening_balance', 'description'
         ]
         
