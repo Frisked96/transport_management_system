@@ -346,6 +346,7 @@ class Tyre(models.Model):
     
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_IN_STOCK)
     total_km = models.PositiveIntegerField(default=0, verbose_name='Total KM')
+    photo = models.ImageField(upload_to='tyres/', null=True, blank=True, verbose_name='Tyre Photo')
     notes = models.TextField(blank=True)
 
     def __str__(self):
@@ -470,6 +471,7 @@ class TyreLog(models.Model):
     ACTION_DISMOUNT = 'Dismount'
     ACTION_ROTATION = 'Rotation'
     ACTION_REPAIR = 'Repair'
+    ACTION_REMOLD = 'Remold'
     ACTION_SCRAP = 'Scrap'
 
     ACTION_CHOICES = [
@@ -477,6 +479,7 @@ class TyreLog(models.Model):
         (ACTION_DISMOUNT, 'Dismount'),
         (ACTION_ROTATION, 'Rotation'),
         (ACTION_REPAIR, 'Repair'),
+        (ACTION_REMOLD, 'Remold'),
         (ACTION_SCRAP, 'Scrap'),
     ]
 

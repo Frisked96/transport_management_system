@@ -64,3 +64,5 @@ tms-storage-491804-bb8c3c501b26.json
 # Django migrations
 #!**/migrations/*.py
 !**/migrations/__init__.py
+.djcache
+/.djcache

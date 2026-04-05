@@ -207,7 +207,12 @@
                             {% if user.is_superuser %}
                             <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="/admin/">Django Admin</a>
                             {% endif %}
-                            <a class="block px-4 py-2 text-sm text-red-600 hover:bg-slate-100" href="{% url 'logout' %}">Logout</a>
+                            <form method="post" action="{% url 'logout' %}" class="block">
+                                {% csrf_token %}
+                                <button type="submit" class="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-slate-100 focus:outline-none transition-colors">
+                                    Logout
+                                </button>
+                            </form>
                         </div>
                     </div>
                     {% else %}
@@ -312,7 +317,12 @@
                     {% if user.is_superuser %}
                     <a href="/admin/" class="block px-3 py-2 rounded-md text-base font-medium text-slate-400 hover:text-white hover:bg-slate-700">Django Admin</a>
                     {% endif %}
-                    <a href="{% url 'logout' %}" class="block px-3 py-2 rounded-md text-base font-medium text-rose-400 hover:text-white hover:bg-slate-700">Logout</a>
+                    <form method="post" action="{% url 'logout' %}" class="block">
+                        {% csrf_token %}
+                        <button type="submit" class="w-full text-left px-3 py-2 rounded-md text-base font-medium text-rose-400 hover:text-white hover:bg-slate-700 focus:outline-none transition-colors">
+                            Logout
+                        </button>
+                    </form>
                 </div>
             </div>
             {% else %}

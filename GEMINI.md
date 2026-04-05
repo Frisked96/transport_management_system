@@ -15,6 +15,27 @@ This project is a comprehensive Transport Management System built with Django. I
 *   **`static/`**: Static assets such as CSS stylesheets, JavaScript files, and images used across the application.
 *   **`manage.py`**: Django's command-line utility for administrative tasks like running the server, making migrations, and creating superusers.
 
+## High-Level Models Overview
+To assist in understanding the application architecture:
+*   **`trips`**: 
+    *   `Trip`: Uses a single-leg structure to track end-to-end transport operations. Supports `fixed` and `per_ton` revenue models.
+    *   `TripExpense`: Dynamically tracks custom expenses (e.g., Diesel, Toll) associated with a specific trip.
+*   **`fleet`**: 
+    *   `Vehicle`: Central entity for fleet assets.
+    *   `MaintenanceTask` & `MaintenanceLog`: Decouples maintenance into recurring requirements (Tasks) and historical events (Logs).
+    *   `Tyre` & `TyreLog`: Manages tyre inventory, including statuses (Mounted, Scrap, etc.), automatic movement tracking, and KM usage calculations based on completed trips.
+    *   `FuelLog`: Tracks fueling events, synchronized with trip diesel entries.
+*   **`drivers`**:
+    *   `Driver`: Core driver profile extending the default User.
+    *   `DriverTransaction`: Manages a driver's "Pocket/Wallet" balance (e.g., Salary, Allowance, Loan, Repayment).
+*   **`ledger`**:
+    *   `CompanyAccount`: Represents the firm(s) operating the system (issued from).
+    *   `Party`: Represents clients/customers (billed to).
+    *   `FinancialRecord`: The core of the double-entry system mapping Income/Expense transactions.
+    *   `Bill`: Represents an Invoice, either aggregated from multiple `Trip`s or as a standalone Standard item.
+*   **`documents`**:
+    *   `Document`: A unified model for tracking expirations and storing scanned copies linked to Vehicles or Drivers.
+
 ## Core Financial Logic (Ledger & Billing)
 
 *   **Accrual-Based Revenue**: Revenue is recorded as an "Invoice" type entry in the ledger as soon as a Trip is created or a Bill is generated. This represents earned income before cash is received.

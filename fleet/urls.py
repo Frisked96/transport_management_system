@@ -31,4 +31,5 @@ urlpatterns = [
     path('tyre/<int:pk>/update/', views.TyreUpdateView.as_view(), name='tyre-update'),
     path('tyre/log/add/', views.TyreLogCreateView.as_view(), name='tyre-log-create'),
     path('tyre/<int:pk>/action/<str:action>/', views.tyre_quick_action, name='tyre-action'),
+    path('tyre/<int:pk>/photo/', views.tyre_photo_serve, name='tyre-photo-serve'),
 ]

@@ -2,115 +2,94 @@
 
 {% block title %}Login - Transport Management System{% endblock %}
 
+{% block extra_css %}
+<style>
+    body {
+        background-color: #f1f5f9;
+        background-image: radial-gradient(#cbd5e1 0.5px, transparent 0.5px);
+        background-size: 24px 24px;
+    }
+    .login-card {
+        backdrop-filter: blur(8px);
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="flex flex-col items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-    <div class="max-w-md w-full space-y-8">
-        <!-- Login Card -->
-        <div class="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
-            <div class="bg-slate-800 py-6 px-4 text-center">
-                <h2 class="text-2xl font-bold text-white tracking-tight flex items-center justify-center gap-3">
-                    <i class="fa-solid fa-shield-halved"></i>
-                    <span>System Login</span>
-                </h2>
-                <p class="mt-2 text-slate-400 text-sm">Access your TMS account</p>
+<div class="min-h-[80vh] flex flex-col items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+    <div class="max-w-md w-full space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+        <!-- Logo/Brand Section -->
+        <div class="text-center">
+            <div class="inline-flex items-center justify-center w-20 h-20 bg-emerald-600 rounded-2xl shadow-xl shadow-emerald-200 mb-6 transform -rotate-6 hover:rotate-0 transition-transform duration-300">
+                <i class="fa-solid fa-truck-fast text-4xl text-white"></i>
             </div>
-            
-            <div class="p-8">
+            <h1 class="text-4xl font-black text-slate-900 tracking-tight mb-2">TMS</h1>
+            <p class="text-slate-500 font-medium">Transport Management System</p>
+        </div>
+
+        <!-- Login Card -->
+        <div class="bg-white/80 login-card border border-white rounded-3xl shadow-2xl shadow-slate-200/50 overflow-hidden">
+            <div class="p-8 sm:p-10">
+                <div class="mb-8">
+                    <h2 class="text-2xl font-bold text-slate-900 tracking-tight">Welcome back</h2>
+                    <p class="text-slate-500 text-sm mt-1">Please enter your details to sign in.</p>
+                </div>
+
                 {% if form.errors %}
-                <div class="mb-6 p-4 bg-red-50 border border-red-100 rounded-md flex items-start gap-3 text-red-700 text-sm">
-                    <i class="fa-solid fa-circle-exclamation mt-0.5"></i>
-                    <p>Invalid username or password. Please try again.</p>
+                <div class="mb-6 p-4 bg-rose-50 border border-rose-100 rounded-2xl flex items-start gap-3 text-rose-700 text-sm animate-in shake duration-500">
+                    <i class="fa-solid fa-circle-exclamation mt-0.5 text-rose-500"></i>
+                    <p class="font-medium">Invalid username or password. Please try again.</p>
                 </div>
                 {% endif %}
 
                 {% if next %}
-                <div class="mb-6 p-4 bg-blue-50 border border-blue-100 rounded-md flex items-start gap-3 text-blue-700 text-sm">
-                    <i class="fa-solid fa-circle-info mt-0.5"></i>
-                    <p>Please login to access the requested page.</p>
+                <div class="mb-6 p-4 bg-amber-50 border border-amber-100 rounded-2xl flex items-start gap-3 text-amber-700 text-sm">
+                    <i class="fa-solid fa-circle-info mt-0.5 text-amber-500"></i>
+                    <p class="font-medium">Session expired. Please login again to continue.</p>
                 </div>
                 {% endif %}
 
-                <form method="post" action="{% url 'login' %}" class="space-y-6">
+                <form method="post" action="{% url 'login' %}" class="space-y-5">
                     {% csrf_token %}
                     
-                    <div>
-                        <label for="{{ form.username.id_for_label }}" class="block text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider">
+                    <div class="space-y-2">
+                        <label for="{{ form.username.id_for_label }}" class="block text-xs font-bold text-slate-500 uppercase tracking-widest ml-1">
                             Username
                         </label>
-                        <div class="relative">
-                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <div class="relative group">
+                            <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none transition-colors group-focus-within:text-emerald-500">
                                 <i class="fa-solid fa-user text-slate-400 text-sm"></i>
                             </div>
                             <input type="text" name="username" id="{{ form.username.id_for_label }}" required
-                                class="block w-full pl-10 pr-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white"
+                                class="block w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm transition-all focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 focus:bg-white placeholder:text-slate-400"
                                 placeholder="Enter username">
                         </div>
                     </div>
                     
-                    <div>
-                        <label for="{{ form.password.id_for_label }}" class="block text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider">
-                            Password
-                        </label>
-                        <div class="relative">
-                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <div class="space-y-2">
+                        <div class="flex justify-between items-center ml-1">
+                            <label for="{{ form.password.id_for_label }}" class="block text-xs font-bold text-slate-500 uppercase tracking-widest">
+                                Password
+                            </label>
+                        </div>
+                        <div class="relative group">
+                            <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none transition-colors group-focus-within:text-emerald-500">
                                 <i class="fa-solid fa-lock text-slate-400 text-sm"></i>
                             </div>
                             <input type="password" name="password" id="{{ form.password.id_for_label }}" required
-                                class="block w-full pl-10 pr-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white"
+                                class="block w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm transition-all focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 focus:bg-white placeholder:text-slate-400"
                                 placeholder="••••••••">
                         </div>
                     </div>
                     
-                    <div>
-                        <button type="submit" class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 transition-colors">
+                    <div class="pt-2">
+                        <button type="submit" class="w-full flex justify-center py-4 px-4 border border-transparent rounded-2xl shadow-xl shadow-emerald-200 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-4 focus:ring-emerald-500/20 active:scale-[0.98] transition-all duration-200">
                             Sign In
+                            <i class="fa-solid fa-arrow-right ml-2"></i>
                         </button>
                     </div>
                     <input type="hidden" name="next" value="{{ next }}" />
                 </form>
-            </div>
-        </div>
-
-        <!-- Demo Credentials Card -->
-        <div class="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
-            <div class="bg-slate-50 border-b border-slate-200 py-3 px-4">
-                <h3 class="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                    <i class="fa-solid fa-circle-info"></i>
-                    <span>Demo Credentials</span>
-                </h3>
-            </div>
-            <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-slate-200">
-                    <thead class="bg-slate-50">
-                        <tr>
-                            <th scope="col" class="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Role</th>
-                            <th scope="col" class="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Username</th>
-                            <th scope="col" class="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Password</th>
-                        </tr>
-                    </thead>
-                    <tbody class="bg-white divide-y divide-slate-200">
-                        <tr>
-                            <td class="px-4 py-3 text-xs text-slate-700 font-medium">Admin</td>
-                            <td class="px-4 py-3 text-xs text-slate-600 font-mono">admin</td>
-                            <td class="px-4 py-3 text-xs text-slate-600 font-mono">admin123</td>
-                        </tr>
-                        <tr>
-                            <td class="px-4 py-3 text-xs text-slate-700 font-medium">Manager</td>
-                            <td class="px-4 py-3 text-xs text-slate-600 font-mono">manager</td>
-                            <td class="px-4 py-3 text-xs text-slate-600 font-mono">manager123</td>
-                        </tr>
-                        <tr>
-                            <td class="px-4 py-3 text-xs text-slate-700 font-medium">Supervisor</td>
-                            <td class="px-4 py-3 text-xs text-slate-600 font-mono">supervisor</td>
-                            <td class="px-4 py-3 text-xs text-slate-600 font-mono">supervisor123</td>
-                        </tr>
-                        <tr>
-                            <td class="px-4 py-3 text-xs text-slate-700 font-medium">Driver</td>
-                            <td class="px-4 py-3 text-xs text-slate-600 font-mono">driver</td>
-                            <td class="px-4 py-3 text-xs text-slate-600 font-mono">driver123</td>
-                        </tr>
-                    </tbody>
-                </table>
             </div>
         </div>
     </div>

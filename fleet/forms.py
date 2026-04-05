@@ -132,7 +132,7 @@ class TyreForm(forms.ModelForm):
         model = Tyre
         fields = [
             'serial_number', 'brand', 'size', 'purchase_date', 
-            'purchase_cost', 'current_vehicle', 'current_position', 'status', 'notes'
+            'purchase_cost', 'current_vehicle', 'current_position', 'status', 'photo', 'notes'
         ]
         widgets = {
             'purchase_date': forms.DateInput(attrs={'type': 'date'}),
