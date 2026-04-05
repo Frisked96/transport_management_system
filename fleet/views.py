@@ -8,6 +8,7 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.contrib import messages
 from django.db.models import Q, Count, Sum
+from django.http import JsonResponse, HttpResponse
 
 from .models import Vehicle, MaintenanceLog, MaintenanceTask, Tyre, TyreLog
 from .forms import VehicleForm, MaintenanceLogForm, MaintenanceTaskForm, TyreForm, TyreLogForm
@@ -213,7 +214,7 @@ class TyreLogCreateView(LoginRequiredMixin, CreateView):
             tyre.current_vehicle = None
             tyre.current_position = ''
             tyre.status = Tyre.STATUS_IN_STOCK
-        elif action == TyreLog.ACTION_REPAIR:
+        elif action == TyreLog.ACTION_REPAIR or action == TyreLog.ACTION_REMOLD:
             tyre.current_vehicle = None
             tyre.current_position = ''
             tyre.status = Tyre.STATUS_REPAIR
@@ -491,3 +492,36 @@ class MaintenanceLogDetailView(LoginRequiredMixin, DetailView):
     model = MaintenanceLog
     template_name = 'fleet/maintenance_log_detail.html'
     context_object_name = 'log'
+
+
+@login_required
+def tyre_photo_serve(request, pk):
+    """
+    Serves the tyre photo directly from storage with browser caching.
+    Ensures fast loading for repeated views on the same device.
+    """
+    tyre = get_object_or_404(Tyre, pk=pk)
+    if not tyre.photo:
+        return HttpResponse(status=404)
+
+    try:
+        # Fetch from Google Drive (the slow network part)
+        with tyre.photo.open('rb') as f:
+            photo_data = f.read()
+    except Exception as e:
+        return HttpResponse(f"Error accessing storage: {str(e)}", status=500)
+
+    # Determine content type (simple detection)
+    content_type = "image/jpeg"
+    # Basic extension check based on file name if available
+    if tyre.photo.name.lower().endswith('.png'):
+        content_type = "image/png"
+    elif tyre.photo.name.lower().endswith('.gif'):
+        content_type = "image/gif"
+
+    response = HttpResponse(photo_data, content_type=content_type)
+
+    # Browser caching (1 day) - This is the "User Mobile Cache"
+    # The phone will remember the image and won't ask the server again for 24h.
+    response['Cache-Control'] = 'public, max-age=86400'
+    return response

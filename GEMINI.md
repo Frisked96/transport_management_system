@@ -11,6 +11,9 @@ This project is a comprehensive Transport Management System built with Django. I
 *   **`drivers/`**: Contains driver profiles, license information, and personal financial ledgers (salary, allowances).
 *   **`ledger/`**: The financial engine of the application, handling double-entry accounting, invoicing, payment tracking, and financial reporting.
 *   **`documents/`**: A centralized module for uploading and managing documents (e.g., permits, licenses) with expiry tracking features.
+*   **`templates/`**: Global HTML templates that define the layout and structure of the application's frontend.
+*   **`static/`**: Static assets such as CSS stylesheets, JavaScript files, and images used across the application.
+*   **`manage.py`**: Django's command-line utility for administrative tasks like running the server, making migrations, and creating superusers.
 
 ## High-Level Models Overview
 To assist in understanding the application architecture:
@@ -32,9 +35,6 @@ To assist in understanding the application architecture:
     *   `Bill`: Represents an Invoice, either aggregated from multiple `Trip`s or as a standalone Standard item.
 *   **`documents`**:
     *   `Document`: A unified model for tracking expirations and storing scanned copies linked to Vehicles or Drivers.
-*   **`templates/`**: Global HTML templates that define the layout and structure of the application's frontend.
-*   **`static/`**: Static assets such as CSS stylesheets, JavaScript files, and images used across the application.
-*   **`manage.py`**: Django's command-line utility for administrative tasks like running the server, making migrations, and creating superusers.
 
 ## Core Financial Logic (Ledger & Billing)
 

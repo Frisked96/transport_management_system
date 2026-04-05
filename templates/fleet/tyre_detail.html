@@ -41,6 +41,10 @@
                 <i class="fa-solid fa-screwdriver-wrench"></i>
                 <span>Repair</span>
             </a>
+            <a href="{% url 'tyre-log-create' %}?tyre={{ tyre.pk }}&action=Remold" class="flex items-center space-x-1 px-3 py-1.5 bg-purple-600 text-white rounded text-xs font-bold hover:bg-purple-700 transition-colors shadow-sm">
+                <i class="fa-solid fa-retweet"></i>
+                <span>Remold</span>
+            </a>
             {% else %}
             <a href="{% url 'tyre-action' tyre.pk 'Stock' %}" class="flex items-center space-x-1 px-3 py-1.5 bg-emerald-600 text-white rounded text-xs font-bold hover:bg-emerald-700 transition-colors shadow-sm">
                 <i class="fa-solid fa-check"></i>
@@ -66,6 +70,30 @@
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
     <!-- Left Column: Status & Basic Info -->
     <div class="lg:col-span-1 space-y-6">
+        <!-- Photo Card (Async Loading) -->
+        {% if tyre.photo %}
+        <div class="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden" id="photo-card">
+            <div class="bg-slate-50 border-b border-slate-200 py-3 px-5 flex justify-between items-center">
+                <h3 class="text-xs font-bold text-slate-700 uppercase tracking-wider">Tyre Photo</h3>
+                <a href="#" id="full-size-link" target="_blank" class="text-[10px] text-emerald-600 font-bold hover:underline hidden">View Full Size</a>
+            </div>
+            <div id="photo-container" class="w-full h-64 bg-slate-100 flex flex-col items-center justify-center relative">
+                <!-- Loading State -->
+                <div id="photo-loading" class="text-center">
+                    <i class="fa-solid fa-circle-notch fa-spin text-emerald-500 text-3xl mb-2"></i>
+                    <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Fetching from Drive...</p>
+                </div>
+                <!-- Error State -->
+                <div id="photo-error" class="hidden text-center p-4">
+                    <i class="fa-solid fa-circle-exclamation text-red-400 text-2xl mb-2"></i>
+                    <p class="text-xs text-slate-500">Failed to load photo</p>
+                </div>
+                <!-- Actual Image -->
+                <img id="tyre-photo" src="" alt="Tyre SN: {{ tyre.serial_number }}" class="hidden w-full h-full object-cover">
+            </div>
+        </div>
+        {% endif %}
+
         <!-- Status Card -->
         <div class="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
             <div class="bg-slate-50 border-b border-slate-200 py-4 px-5">
@@ -194,4 +222,36 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const photoContainer = document.getElementById('photo-container');
+    if (!photoContainer) return;
+
+    const loadingEl = document.getElementById('photo-loading');
+    const errorEl = document.getElementById('photo-error');
+    const imgEl = document.getElementById('tyre-photo');
+    const linkEl = document.getElementById('full-size-link');
+    
+    // Stable URL that serves the image directly
+    const photoUrl = '{% url "tyre-photo-serve" tyre.pk %}';
+
+    // Start loading the image in background
+    imgEl.src = photoUrl;
+    
+    imgEl.onload = function() {
+        loadingEl.classList.add('hidden');
+        imgEl.classList.remove('hidden');
+        linkEl.href = photoUrl;
+        linkEl.classList.remove('hidden');
+    };
+    
+    imgEl.onerror = function() {
+        loadingEl.classList.add('hidden');
+        errorEl.classList.remove('hidden');
+    };
+});
+</script>
 {% endblock %}
