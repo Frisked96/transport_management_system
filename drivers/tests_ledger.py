@@ -36,7 +36,7 @@ class DriverLedgerTest(TestCase):
         
     def test_financial_record_appears_in_ledger(self):
         # Create category
-        category = TransactionCategory.objects.create(
+        category, _ = TransactionCategory.objects.get_or_create(
             name='Driver Payment',
             type=TransactionCategory.TYPE_EXPENSE
         )

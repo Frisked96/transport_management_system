@@ -6,7 +6,7 @@ from django.contrib.auth.models import User
 
 from trips.models import Trip
 from fleet.models import Vehicle
-from ledger.models import Party, FinancialRecord, TransactionCategory, Account
+from ledger.models import Party, FinancialRecord, TransactionCategory, CompanyAccount as Account
 from drivers.models import Driver
 
 class UnifiedLedgerTest(TestCase):
@@ -24,7 +24,7 @@ class UnifiedLedgerTest(TestCase):
         self.account = Account.objects.create(name='Cash')
 
         # Ensure categories exist
-        self.cat_income = TransactionCategory.objects.create(name='General Income', type=TransactionCategory.TYPE_INCOME)
+        self.cat_income, _ = TransactionCategory.objects.get_or_create(name='General Income', type=TransactionCategory.TYPE_INCOME)
 
     def test_trip_sync_invoice(self):
         """Test that creating a trip creates a FinancialRecord Invoice"""
