@@ -2,7 +2,7 @@ from django.test import TestCase, Client
 from django.contrib.auth.models import User, Permission
 from django.urls import reverse
 from django.utils import timezone
-from .models import Account, FinancialRecord, Party, TransactionCategory
+from .models import CompanyAccount as Account, FinancialRecord, Party, TransactionCategory
 
 class AccountTest(TestCase):
     def setUp(self):
@@ -25,8 +25,8 @@ class AccountTest(TestCase):
         self.party = Party.objects.create(name='Test Party')
         
         # Create categories
-        self.income_cat = TransactionCategory.objects.create(name='Freight Income', type=TransactionCategory.TYPE_INCOME)
-        self.expense_cat = TransactionCategory.objects.create(name='Fuel Expense', type=TransactionCategory.TYPE_EXPENSE)
+        self.income_cat, _ = TransactionCategory.objects.get_or_create(name='Freight Income', type=TransactionCategory.TYPE_INCOME)
+        self.expense_cat, _ = TransactionCategory.objects.get_or_create(name='Fuel Expense', type=TransactionCategory.TYPE_EXPENSE)
         
         self.client = Client()
         self.client.login(username='manager', password='password')
@@ -43,9 +43,14 @@ class AccountTest(TestCase):
         data = {
             'name': 'Cash Box',
             'opening_balance': 0,
-            'description': 'Petty Cash'
+            'description': 'Petty Cash',
+            'invoice_prefix': 'INV/',
+            'invoice_padding': 4,
+            'invoice_sequence_start': 1
         }
         response = self.client.post(url, data)
+        if response.status_code != 302:
+            print(f"Response status: {response.status_code}, Form errors: {response.context.get('form').errors if response.context and 'form' in response.context else 'No form context'}")
         self.assertEqual(response.status_code, 302)
         self.assertTrue(Account.objects.filter(name='Cash Box').exists())
 

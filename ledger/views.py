@@ -886,9 +886,9 @@ def party_statement_pdf(request, pk):
     ).select_related('category')
     
     for rec in pre_records:
-        if rec.is_income or rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE:
+        if rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE:
             opening_bal += rec.amount
-        else:
+        elif rec.is_income or (rec.category and rec.category.name == 'Deductions'):
             opening_bal -= rec.amount
 
     # 2. Get records in range
@@ -909,11 +909,12 @@ def party_statement_pdf(request, pk):
         # DEBIT = Increases Asset/Decreases Liability (For us: Revenue/Invoice increases what they owe us)
         # CREDIT = Decreases Asset/Increases Liability (For us: Payment decreases what they owe us)
         
-        if rec.is_income or rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE:
+        if rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE:
             debit = rec.amount
             current_running_bal += debit
-        else:
+        elif rec.is_income or (rec.category and rec.category.name == 'Deductions'):
             credit = rec.amount
+            current_running_bal -= credit
             current_running_bal -= credit
             
         # Get reference string
@@ -1006,9 +1007,11 @@ def account_statement_pdf(request, pk):
     ).select_related('category')
     
     for rec in pre_records:
-        if rec.is_income or rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE:
+        if rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE or (rec.category and rec.category.name == 'Deductions'):
+            pass # Invoices and deductions don't affect cash balance
+        elif rec.is_income:
             opening_bal += rec.amount
-        else:
+        elif rec.is_expense:
             opening_bal -= rec.amount
 
     # 2. Get records in range
@@ -1025,11 +1028,14 @@ def account_statement_pdf(request, pk):
         debit = 0
         credit = 0
         
-        if rec.is_income or rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE:
+        if rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE or (rec.category and rec.category.name == 'Deductions'):
+            pass # Display them but they don't affect running balance
+        elif rec.is_income:
             debit = rec.amount
             current_running_bal += debit
-        else:
+        elif rec.is_expense:
             credit = rec.amount
+            current_running_bal -= credit
             current_running_bal -= credit
             
         # Get reference string
@@ -1117,9 +1123,11 @@ def unified_ledger_pdf(request):
     ).select_related('category')
     
     for rec in pre_records:
-        if rec.is_income or rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE:
+        if rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE or (rec.category and rec.category.name == 'Deductions'):
+            pass # Invoices and deductions don't affect cash balance
+        elif rec.is_income:
             opening_bal += rec.amount
-        else:
+        elif rec.is_expense:
             opening_bal -= rec.amount
 
     # 2. Get records in range
@@ -1135,11 +1143,14 @@ def unified_ledger_pdf(request):
         debit = 0
         credit = 0
         
-        if rec.is_income or rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE:
+        if rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE or (rec.category and rec.category.name == 'Deductions'):
+            pass # Display them but they don't affect running balance
+        elif rec.is_income:
             debit = rec.amount
             current_running_bal += debit
-        else:
+        elif rec.is_expense:
             credit = rec.amount
+            current_running_bal -= credit
             current_running_bal -= credit
             
         # Get reference string

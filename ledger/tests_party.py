@@ -51,10 +51,21 @@ class PartyViewTest(TestCase):
             created_by=self.user
         )
         
+        # We need to make sure the trip is billed so it shows up in associated_trip queryset
+        from ledger.models import Bill, BillTrip
+        self.bill = Bill.objects.create(
+            party=self.party,
+            date=timezone.now(),
+            status=Bill.STATUS_FINAL,
+            bill_type=Bill.TYPE_TRIP
+        )
+        BillTrip.objects.create(bill=self.bill, trip=self.trip)
+        self.bill.sync_to_ledger()
+
         # Create categories
-        self.income_cat = TransactionCategory.objects.create(name='Freight Income', type=TransactionCategory.TYPE_INCOME)
-        self.payment_cat = TransactionCategory.objects.create(name='Party Payment', type=TransactionCategory.TYPE_INCOME)
-        self.expense_cat = TransactionCategory.objects.create(name='Fuel Expense', type=TransactionCategory.TYPE_EXPENSE)
+        self.income_cat, _ = TransactionCategory.objects.get_or_create(name='Freight Income', type=TransactionCategory.TYPE_INCOME)
+        self.payment_cat, _ = TransactionCategory.objects.get_or_create(name='Party Payment', type=TransactionCategory.TYPE_INCOME)
+        self.expense_cat, _ = TransactionCategory.objects.get_or_create(name='Fuel Expense', type=TransactionCategory.TYPE_EXPENSE)
         
         self.client = Client()
         self.client.login(username='manager', password='password')
@@ -71,10 +82,13 @@ class PartyViewTest(TestCase):
             'name': 'New Party',
             'phone_number': '0987654321',
             'state': 'New State',
-            'address': 'New Address'
+            'address': 'New Address',
+            'opening_balance': 0
         }
         response = self.client.post(url, data)
         # Should redirect to detail view
+        if response.status_code != 302:
+            print(f"Response status: {response.status_code}, Form errors: {response.context.get('form').errors if response.context and 'form' in response.context else 'No form context'}")
         self.assertEqual(response.status_code, 302)
         
         self.assertTrue(Party.objects.filter(name='New Party').exists())
@@ -91,9 +105,12 @@ class PartyViewTest(TestCase):
             'name': 'Updated Party Name',
             'phone_number': '1111111111',
             'state': 'Updated State',
-            'address': 'Updated Address'
+            'address': 'Updated Address',
+            'opening_balance': 0
         }
         response = self.client.post(url, data)
+        if response.status_code != 302:
+            print(f"Response status: {response.status_code}, Form errors: {response.context.get('form').errors if response.context and 'form' in response.context else 'No form context'}")
         self.assertEqual(response.status_code, 302)
         
         self.party.refresh_from_db()
@@ -107,9 +124,12 @@ class PartyViewTest(TestCase):
             'category': self.income_cat.id,
             'amount': 1000,
             'description': 'Test Income',
-            'associated_trip': self.trip.pk
+            'associated_trip': self.trip.pk,
+            'record_type': FinancialRecord.RECORD_TYPE_TRANSACTION
         }
         response = self.client.post(url, data)
+        if response.status_code != 302:
+            print(f"Response status: {response.status_code}, Form errors: {response.context.get('form').errors if response.context and 'form' in response.context else 'No form context'}")
         self.assertEqual(response.status_code, 302)
         
         record = FinancialRecord.objects.filter(description='Test Income').first()
@@ -124,7 +144,7 @@ class PartyViewTest(TestCase):
         # Initial state: Trip created with 1000 revenue. No payments.
         url = reverse('party-detail', args=[self.party.pk])
         response = self.client.get(url)
-        self.assertEqual(response.context['total_billed'], 1000)
+        self.assertEqual(response.context['total_revenue'], 1000)
         self.assertEqual(response.context['total_received'], 0)
         self.assertEqual(response.context['balance'], 1000) # Party owes 1000
 
@@ -138,7 +158,7 @@ class PartyViewTest(TestCase):
         )
 
         response = self.client.get(url)
-        self.assertEqual(response.context['total_billed'], 1000)
+        self.assertEqual(response.context['total_revenue'], 1000)
         self.assertEqual(response.context['total_received'], 500)
         self.assertEqual(response.context['balance'], 500) # Party owes 500
 
