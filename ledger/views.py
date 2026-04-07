@@ -399,7 +399,7 @@ class PartyListView(LoginRequiredMixin, BaseLedgerPermissionMixin, ListView):
             party=OuterRef('pk'),
             record_type=FinancialRecord.RECORD_TYPE_TRANSACTION
         ).filter(
-            Q(category__type=TransactionCategory.TYPE_INCOME) | Q(category__name='Deductions')
+            Q(category__type=TransactionCategory.TYPE_INCOME) | Q(category__name__in=['Deductions', 'TDS', 'Shortage', 'Credit Note', 'Debit Note'])
         ).values('party').annotate(
             total=Sum('amount')
         ).values('total')
@@ -454,7 +454,7 @@ class PartyDetailView(LoginRequiredMixin, BaseLedgerPermissionMixin, DetailView)
         total_received = financial_records.filter(
             record_type=FinancialRecord.RECORD_TYPE_TRANSACTION
         ).filter(
-            Q(category__type=TransactionCategory.TYPE_INCOME) | Q(category__name='Deductions')
+            Q(category__type=TransactionCategory.TYPE_INCOME) | Q(category__name__in=['Deductions', 'TDS', 'Shortage', 'Credit Note', 'Debit Note'])
         ).aggregate(total=Sum('amount'))['total'] or 0
         
         context['total_revenue'] = total_revenue
@@ -888,7 +888,7 @@ def party_statement_pdf(request, pk):
     for rec in pre_records:
         if rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE:
             opening_bal += rec.amount
-        elif rec.is_income or (rec.category and rec.category.name == 'Deductions'):
+        elif rec.is_income or (rec.category and rec.category.name in ['Deductions', 'TDS', 'Shortage', 'Credit Note', 'Debit Note']):
             opening_bal -= rec.amount
 
     # 2. Get records in range
@@ -912,9 +912,8 @@ def party_statement_pdf(request, pk):
         if rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE:
             debit = rec.amount
             current_running_bal += debit
-        elif rec.is_income or (rec.category and rec.category.name == 'Deductions'):
+        elif rec.is_income or (rec.category and rec.category.name in ['Deductions', 'TDS', 'Shortage', 'Credit Note', 'Debit Note']):
             credit = rec.amount
-            current_running_bal -= credit
             current_running_bal -= credit
             
         # Get reference string
@@ -1007,7 +1006,7 @@ def account_statement_pdf(request, pk):
     ).select_related('category')
     
     for rec in pre_records:
-        if rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE or (rec.category and rec.category.name == 'Deductions'):
+        if rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE or (rec.category and rec.category.name in ['Deductions', 'TDS', 'Shortage', 'Credit Note', 'Debit Note']):
             pass # Invoices and deductions don't affect cash balance
         elif rec.is_income:
             opening_bal += rec.amount
@@ -1028,14 +1027,13 @@ def account_statement_pdf(request, pk):
         debit = 0
         credit = 0
         
-        if rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE or (rec.category and rec.category.name == 'Deductions'):
+        if rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE or (rec.category and rec.category.name in ['Deductions', 'TDS', 'Shortage', 'Credit Note', 'Debit Note']):
             pass # Display them but they don't affect running balance
         elif rec.is_income:
             debit = rec.amount
             current_running_bal += debit
         elif rec.is_expense:
             credit = rec.amount
-            current_running_bal -= credit
             current_running_bal -= credit
             
         # Get reference string
@@ -1123,7 +1121,7 @@ def unified_ledger_pdf(request):
     ).select_related('category')
     
     for rec in pre_records:
-        if rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE or (rec.category and rec.category.name == 'Deductions'):
+        if rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE or (rec.category and rec.category.name in ['Deductions', 'TDS', 'Shortage', 'Credit Note', 'Debit Note']):
             pass # Invoices and deductions don't affect cash balance
         elif rec.is_income:
             opening_bal += rec.amount
@@ -1143,14 +1141,13 @@ def unified_ledger_pdf(request):
         debit = 0
         credit = 0
         
-        if rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE or (rec.category and rec.category.name == 'Deductions'):
+        if rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE or (rec.category and rec.category.name in ['Deductions', 'TDS', 'Shortage', 'Credit Note', 'Debit Note']):
             pass # Display them but they don't affect running balance
         elif rec.is_income:
             debit = rec.amount
             current_running_bal += debit
         elif rec.is_expense:
             credit = rec.amount
-            current_running_bal -= credit
             current_running_bal -= credit
             
         # Get reference string

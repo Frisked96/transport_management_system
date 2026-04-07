@@ -81,7 +81,7 @@ class Party(models.Model):
             record_type=FinancialRecord.RECORD_TYPE_TRANSACTION
         ).filter(
             models.Q(category__type=TransactionCategory.TYPE_INCOME) | 
-            models.Q(category__name='Deductions')
+            models.Q(category__name__in=['Deductions', 'TDS', 'Shortage', 'Credit Note', 'Debit Note'])
         ).aggregate(total=models.Sum('amount'))['total'] or 0
 
         return self.opening_balance + revenue - received
@@ -161,13 +161,14 @@ class CompanyAccount(models.Model):
             category__type=TransactionCategory.TYPE_INCOME
         ).exclude(
             models.Q(record_type=FinancialRecord.RECORD_TYPE_INVOICE) | 
-            models.Q(category__name='Deductions')
+            models.Q(category__name__in=['Deductions', 'TDS', 'Shortage', 'Credit Note', 'Debit Note'])
         ).aggregate(total=models.Sum('amount'))['total'] or 0
 
         expenses = self.financial_records.filter(
             category__type=TransactionCategory.TYPE_EXPENSE
         ).exclude(
-            record_type=FinancialRecord.RECORD_TYPE_INVOICE
+            models.Q(record_type=FinancialRecord.RECORD_TYPE_INVOICE) |
+            models.Q(category__name__in=['Deductions', 'TDS', 'Shortage', 'Credit Note', 'Debit Note'])
         ).aggregate(total=models.Sum('amount'))['total'] or 0
 
         return self.opening_balance + income - expenses
@@ -603,7 +604,7 @@ class Bill(models.Model):
         ).aggregate(total=Sum('amount'))['total'] or 0
         
         deductions = self.financial_records.filter(
-            category__name="Deductions",
+            category__name__in=['Deductions', 'TDS', 'Shortage', 'Credit Note', 'Debit Note'],
             record_type=FinancialRecord.RECORD_TYPE_TRANSACTION
         ).aggregate(total=Sum('amount'))['total'] or 0
 
