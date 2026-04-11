@@ -118,7 +118,8 @@
                     <tr>
                         <th class="px-6 py-4">Trip Number</th>
                         <th class="px-6 py-4">Driver & Vehicle</th>
-                        <th class="px-6 py-4">Start Date</th>
+                        <th class="px-6 py-4">Date</th>
+                        <th class="px-6 py-4 text-right">Revenue</th>
                         <th class="px-6 py-4">Status</th>
                         <th class="px-6 py-4 text-right">Actions</th>
                     </tr>
@@ -142,8 +143,11 @@
                                 <div class="text-[10px] text-slate-500 uppercase font-semibold">{{ trip.vehicle.registration_plate }}</div>
                             </td>
                             <td class="px-6 py-4 text-slate-600">
-                                {{ trip.start_date|date:"M d, Y" }}
-                                <div class="text-[10px] text-slate-400">{{ trip.start_date|date:"H:i" }}</div>
+                                {{ trip.date|date:"M d, Y" }}
+                                <div class="text-[10px] text-slate-400">{{ trip.date|date:"H:i" }}</div>
+                            </td>
+                            <td class="px-6 py-4 text-right font-bold text-slate-900">
+                                ₹{{ trip.revenue|floatformat:2 }}
                             </td>
                             <td class="px-6 py-4">
                                 <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider

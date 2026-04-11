@@ -89,7 +89,7 @@
     {% for trip in trips %}
     <!-- Trip Card -->
     <div class="bg-white border border-slate-200 rounded-lg p-4 md:p-5 flex flex-col md:flex-row items-start md:items-center gap-4 hover:shadow-sm transition-shadow relative">
-        <div class="flex-1 min-w-0 w-full md:w-auto">
+        <div class="w-full md:w-48">
             <div class="flex items-center gap-2 mb-1">
                 <h3 class="font-bold text-lg text-slate-900 leading-tight">
                     <a href="{% url 'trip-detail' trip.pk %}" class="hover:text-emerald-600 transition-colors">{{ trip.trip_number }}</a>
@@ -101,24 +101,23 @@
                     {{ trip.annotated_status }}
                 </span>
             </div>
-            <p class="text-sm text-slate-600 truncate">{{ trip.vehicle.registration_plate }} • {% if trip.party %}{{ trip.party.name }}{% else %}-{% endif %}</p>
-        </div>
-            <p class="text-xs text-slate-500 mt-1">{{ trip.date|date:"M d, Y" }} <span class="md:hidden">• {{ trip.date|date:"H:i" }}</span></p>
+            <p class="text-sm text-slate-600 truncate">{{ trip.vehicle.registration_plate }}</p>
+            <p class="text-xs text-slate-400 mt-1 font-medium">{% if trip.party %}{{ trip.party.name }}{% else %}-{% endif %}</p>
         </div>
         
         <div class="flex-1 min-w-0 w-full md:w-auto">
             <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Route</span>
             <p class="text-sm text-slate-800 flex items-center">
-                <span class="truncate max-w-[100px] sm:max-w-[150px]" title="{{ trip.pickup_location }}">{{ trip.pickup_location|default:"-" }}</span>
+                <span class="truncate max-w-[120px] sm:max-w-[150px] font-medium" title="{{ trip.pickup_location }}">{{ trip.pickup_location|default:"-" }}</span>
                 <i class="fa-solid fa-arrow-right text-slate-400 mx-2 text-[10px]"></i>
-                <span class="truncate max-w-[100px] sm:max-w-[150px]" title="{{ trip.delivery_location }}">{{ trip.delivery_location|default:"-" }}</span>
+                <span class="truncate max-w-[120px] sm:max-w-[150px] font-medium" title="{{ trip.delivery_location }}">{{ trip.delivery_location|default:"-" }}</span>
             </p>
         </div>
 
-        <div class="hidden lg:block w-24">
+        <div class="w-32 hidden lg:block">
             <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Date</span>
             <p class="text-sm text-slate-800 leading-tight">
-                {{ trip.date|date:"M d, Y," }}<br/>
+                {{ trip.date|date:"M d, Y" }}<br/>
                 <span class="text-slate-500 text-xs">{{ trip.date|date:"H:i" }}</span>
             </p>
         </div>
@@ -126,17 +125,17 @@
         <div class="grid grid-cols-3 md:flex md:flex-row gap-4 w-full md:w-auto border-t md:border-t-0 pt-3 md:pt-0 mt-1 md:mt-0">
             <div class="md:w-20 md:text-right">
                 <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Weight</span>
-                <p class="text-sm font-medium text-slate-800">{{ trip.weight|default:"0.00" }}</p>
-            </div>
-            
-            <div class="md:w-20 md:text-right">
-                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Rate</span>
-                <p class="text-sm text-slate-800">{{ trip.rate_per_ton|default:"0.00" }}</p>
+                <p class="text-sm font-medium text-slate-800">{{ trip.weight|default:"0.00" }} <span class="text-[10px] text-slate-400 font-normal">MT</span></p>
             </div>
             
             <div class="md:w-24 md:text-right">
+                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Rate</span>
+                <p class="text-sm text-slate-800 font-medium">₹{{ trip.rate_per_ton|default:"0.00" }}</p>
+            </div>
+            
+            <div class="md:w-32 md:text-right">
                 <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Revenue</span>
-                <p class="text-sm font-bold text-slate-900">₹{{ trip.revenue|floatformat:2|default:"0.00" }}</p>
+                <p class="text-base font-bold text-emerald-600">₹{{ trip.revenue|floatformat:2|default:"0.00" }}</p>
             </div>
         </div>
         
