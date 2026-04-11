@@ -1,0 +1,77 @@
+{% extends 'base.html' %}
+
+{% block title %}Complete Maintenance - Transport Management System{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+    <!-- BEGIN: Header -->
+    <header class="mb-6">
+        <div class="flex items-center space-x-2 text-sm text-slate-500 mb-2">
+            <a href="{% url 'maintenance-list' %}" class="hover:text-emerald-600 transition-colors">Maintenance</a>
+            <i class="fa-solid fa-chevron-right text-[10px]"></i>
+            <span>Mark as Completed</span>
+        </div>
+        <h1 class="text-3xl font-bold text-slate-900">Complete Maintenance</h1>
+        <p class="text-sm text-slate-600 mt-1">Record the details for <strong>{{ record.name }}</strong> on {{ record.vehicle.registration_plate }}</p>
+    </header>
+    <!-- END: Header -->
+
+    <div class="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6 flex items-start gap-3">
+        <i class="fa-solid fa-circle-info text-amber-500 mt-1"></i>
+        <div class="text-sm text-amber-800">
+            <p class="font-bold mb-1">Marking as Completed</p>
+            <p>This will move the record to history. If intervals are set, a new pending record will be automatically created for the next due date/KM.</p>
+            {% if record.interval_days or record.interval_km %}
+                <ul class="list-disc ml-4 mt-2 space-y-1">
+                    {% if record.interval_days %}<li>Next due in {{ record.interval_days }} days</li>{% endif %}
+                    {% if record.interval_km %}<li>Next due in {{ record.interval_km }} km</li>{% endif %}
+                </ul>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- BEGIN: Form -->
+    <form method="post" class="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
+        {% csrf_token %}
+        
+        <div class="p-6 space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label for="{{ form.completion_date.id_for_label }}" class="block text-sm font-medium text-slate-700 mb-1">{{ form.completion_date.label }}</label>
+                    {{ form.completion_date }}
+                    {% if form.completion_date.errors %}<p class="mt-1 text-sm text-rose-600">{{ form.completion_date.errors.0 }}</p>{% endif %}
+                </div>
+                <div>
+                    <label for="{{ form.completion_km.id_for_label }}" class="block text-sm font-medium text-slate-700 mb-1">{{ form.completion_km.label }}</label>
+                    {{ form.completion_km }}
+                    {% if form.completion_km.errors %}<p class="mt-1 text-sm text-rose-600">{{ form.completion_km.errors.0 }}</p>{% endif %}
+                </div>
+                <div>
+                    <label for="{{ form.cost.id_for_label }}" class="block text-sm font-medium text-slate-700 mb-1">{{ form.cost.label }}</label>
+                    {{ form.cost }}
+                    {% if form.cost.errors %}<p class="mt-1 text-sm text-rose-600">{{ form.cost.errors.0 }}</p>{% endif %}
+                </div>
+                <div>
+                    <label for="{{ form.service_provider.id_for_label }}" class="block text-sm font-medium text-slate-700 mb-1">{{ form.service_provider.label }}</label>
+                    {{ form.service_provider }}
+                    {% if form.service_provider.errors %}<p class="mt-1 text-sm text-rose-600">{{ form.service_provider.errors.0 }}</p>{% endif %}
+                </div>
+            </div>
+
+            <div>
+                <label for="{{ form.notes.id_for_label }}" class="block text-sm font-medium text-slate-700 mb-1">{{ form.notes.label }}</label>
+                {{ form.notes }}
+                {% if form.notes.errors %}<p class="mt-1 text-sm text-rose-600">{{ form.notes.errors.0 }}</p>{% endif %}
+            </div>
+        </div>
+
+        <div class="px-6 py-4 bg-slate-50 border-t border-slate-200 flex justify-between items-center">
+            <a href="{% url 'maintenance-list' %}" class="text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">Cancel</a>
+            <button type="submit" class="px-6 py-2 bg-emerald-600 text-white rounded-md text-sm font-bold hover:bg-emerald-700 shadow-sm transition-colors">
+                <i class="fa-solid fa-check mr-2"></i>Complete Maintenance
+            </button>
+        </div>
+    </form>
+    <!-- END: Form -->
+</div>
+{% endblock %}

@@ -2,7 +2,7 @@ from django.utils import timezone
 from datetime import timedelta
 from django.db.models import Q, F, ExpressionWrapper, DateField
 from .models import Document
-from fleet.models import MaintenanceTask
+from fleet.models import MaintenanceRecord
 
 def document_alerts(request):
     if not request.user.is_authenticated:
@@ -32,20 +32,15 @@ def document_alerts(request):
         expiry_date__lt=today
     ).select_related('vehicle', 'driver', 'driver__user').order_by('expiry_date')
 
-    # Maintenance Alerts
-    all_active_tasks = MaintenanceTask.objects.filter(is_active=True).select_related('vehicle').only(
-        'id', 'interval_km', 'interval_days', 'last_performed_km', 'last_performed_date', 
-        'vehicle__current_odometer', 'vehicle__registration_plate'
-    )
+    # Maintenance Alerts (Pending records that are overdue)
+    pending_records = MaintenanceRecord.objects.filter(is_completed=False).select_related('vehicle')
     
-    due_maintenance_ids = []
-    for task in all_active_tasks:
-        if task.is_due:
-            due_maintenance_ids.append(task.id)
-    
-    due_maintenance = MaintenanceTask.objects.filter(id__in=due_maintenance_ids).select_related('vehicle')
+    due_maintenance = []
+    for record in pending_records:
+        if record.is_overdue:
+            due_maintenance.append(record)
 
-    total_alerts = expiring_docs.count() + expired_docs.count() + len(due_maintenance_ids)
+    total_alerts = expiring_docs.count() + expired_docs.count() + len(due_maintenance)
 
     return {
         'expiring_docs': expiring_docs,

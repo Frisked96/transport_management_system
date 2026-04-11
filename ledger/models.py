@@ -68,23 +68,36 @@ class Party(models.Model):
     @property
     def current_balance(self):
         """
-        Calculate current balance: 
-        Opening Balance + Total Revenue (Invoices) - Total Received (Income + Deductions)
+        Calculate current balance dynamically without accrual records: 
+        Opening Balance + Total Revenue (Trips + GST + Standard Bills) - Total Received
         """
-        # Revenue is recorded as 'Invoice' type records
-        revenue = self.financial_records.filter(
-            record_type=FinancialRecord.RECORD_TYPE_INVOICE
-        ).aggregate(total=models.Sum('amount'))['total'] or 0
+        # 1. Base Revenue from all Trips
+        from trips.models import Trip
+        trip_revenue = Trip.objects.filter(party=self).aggregate(
+            total=models.Sum(models.F('weight') * models.F('rate_per_ton'), output_field=models.DecimalField())
+        )['total'] or Decimal('0')
 
-        # Payments received are 'Transaction' types with Income category or 'Deductions'
+        # 2. GST from Final Bills
+        total_gst = Decimal('0')
+        for bill in self.bills.filter(status=Bill.STATUS_FINAL):
+            total_gst += bill.gst_amount
+
+        # 3. Standard Bill Overrides (Revenue not covered by trips)
+        standard_revenue = self.bills.filter(bill_type=Bill.TYPE_STANDARD).aggregate(
+            total=models.Sum('amount_override')
+        )['total'] or Decimal('0')
+
+        total_revenue = trip_revenue + total_gst + standard_revenue
+
+        # 4. Total Received (Income Transactions + Deductions)
         received = self.financial_records.filter(
             record_type=FinancialRecord.RECORD_TYPE_TRANSACTION
         ).filter(
             models.Q(category__type=TransactionCategory.TYPE_INCOME) | 
             models.Q(category__name='Deductions')
-        ).aggregate(total=models.Sum('amount'))['total'] or 0
+        ).aggregate(total=models.Sum('amount'))['total'] or Decimal('0')
 
-        return self.opening_balance + revenue - received
+        return self.opening_balance + total_revenue - received
 
 class TransactionCategory(models.Model):
     """
@@ -519,72 +532,25 @@ class Bill(models.Model):
 
     def delete(self, *args, **kwargs):
         """
-        Custom delete to ensure associated trips are updated in the ledger.
+        Custom delete for Bill.
         """
-        # Get list of trips before deleting
-        trips = list(self.trips.all())
         super().delete(*args, **kwargs)
-        
-        # After bill is deleted, trips should have their individual revenue records restored
-        for trip in trips:
-            trip.sync_ledger_invoice()
 
     def sync_to_ledger(self):
         """
-        Main entry point to synchronize this invoice and its trips to the ledger.
-        Must be called AFTER ManyToMany relationships are established.
+        Main entry point to synchronize this invoice to the ledger.
         """
         self.update_ledger_records()
-        if self.bill_type == self.TYPE_TRIP:
-            self.sync_trips_to_ledger()
-
-    def sync_trips_to_ledger(self):
-        """
-        Trigger sync_ledger_invoice for all trips associated with this bill.
-        This ensures individual Trip Payment records are removed if the trip is now billed.
-        """
-        for trip in self.trips.all():
-            trip.sync_ledger_invoice()
 
     def update_ledger_records(self):
         """
-        Synchronize the full Invoice record to the ledger.
-        For Final bills, the amount includes GST.
+        Stop creating Consolidated Invoice records in the ledger.
+        If any existing invoice records exist for this bill, delete them.
         """
-        # 1. Handle Consolidated Invoice Record (Total = Subtotal + GST if Final)
-        # Create this for both Draft and Final bills to replace individual trip entries immediately.
-        should_have_invoice = True
+        # Find existing invoice record
         inv_record = FinancialRecord.objects.filter(associated_bill=self, record_type=FinancialRecord.RECORD_TYPE_INVOICE).first()
 
-        if should_have_invoice:
-            inv_cat, _ = TransactionCategory.objects.get_or_create(
-                name="Trip Payment",
-                defaults={'type': TransactionCategory.TYPE_INCOME, 'description': 'Revenue from trips'}
-            )
-
-            # Use different description for Draft vs Final
-            status_tag = f" ({self.status})" if self.status == self.STATUS_DRAFT else ""
-
-            # Use Total Amount (including GST) for Final bills, otherwise just Subtotal
-            amount = self.total_amount if self.status == self.STATUS_FINAL else self.subtotal
-
-            gst_note = f" (Incl. GST ₹{self.gst_amount})" if self.status == self.STATUS_FINAL and self.gst_amount > 0 else ""
-            
-            bill_desc = self.item_type if self.bill_type == self.TYPE_STANDARD else f"Trip-based Invoice"
-            description = f"Invoice {self.bill_number or 'Draft'}: {bill_desc}{status_tag}{gst_note}"
-
-            FinancialRecord.objects.update_or_create(
-                associated_bill=self,
-                record_type=FinancialRecord.RECORD_TYPE_INVOICE,
-                defaults={
-                    'category': inv_cat,
-                    'party': self.party,
-                    'date': self.date,
-                    'amount': amount,
-                    'description': description
-                }
-            )
-        elif inv_record:
+        if inv_record:
             inv_record.delete()
 
     @property

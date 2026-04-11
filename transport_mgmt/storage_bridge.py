@@ -4,6 +4,7 @@ import mimetypes
 from django.conf import settings
 from gdstorage.storage import GoogleDriveStorage
 from google.oauth2.credentials import Credentials
+from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
 
@@ -18,7 +19,7 @@ class GoogleDriveOAuth2Storage(GoogleDriveStorage):
             from gdstorage.storage import _ANYONE_CAN_READ_PERMISSION_
             self._permissions = (_ANYONE_CAN_READ_PERMISSION_,)
 
-        credentials = Credentials(
+        self.credentials = Credentials(
             token=None,
             refresh_token=settings.GOOGLE_DRIVE_STORAGE_REFRESH_TOKEN,
             token_uri="https://oauth2.googleapis.com/token",
@@ -26,15 +27,29 @@ class GoogleDriveOAuth2Storage(GoogleDriveStorage):
             client_secret=settings.GOOGLE_DRIVE_STORAGE_CLIENT_SECRET,
             scopes=['https://www.googleapis.com/auth/drive']
         )
+        
+        # Initial refresh to populate the access token
+        try:
+            self.credentials.refresh(Request())
+        except Exception as e:
+            print(f"Error refreshing GDrive credentials: {str(e)}")
 
-        # We use a static build to avoid overhead
-        self._drive_service = build('drive', 'v3', credentials=credentials)
+        self._drive_service = build('drive', 'v3', credentials=self.credentials)
+
+    def _ensure_service(self):
+        """Helper to ensure credentials are valid before any call"""
+        if not self.credentials.valid:
+            try:
+                self.credentials.refresh(Request())
+            except Exception as e:
+                print(f"Failed to refresh GDrive token: {str(e)}")
 
     def url(self, name):
         """
         Custom URL generator that finds the file by traversing the folder structure
         and returns the webContentLink.
         """
+        self._ensure_service()
         try:
             # Split path: e.g. documents/ABC_123/license.pdf
             parts = name.split(os.sep if os.sep in name else '/')

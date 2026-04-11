@@ -13,7 +13,7 @@ from django.utils import timezone
 from datetime import datetime, timedelta
 
 from .models import Trip, TripExpense
-from .forms import TripForm, TripStatusForm, TripExpenseUpdateForm, TripCustomExpenseForm, TripExpenseFormSet
+from .forms import TripForm
 from fleet.models import Vehicle
 from ledger.models import FinancialRecord, TransactionCategory
 
@@ -152,7 +152,7 @@ class TripDetailView(LoginRequiredMixin, BaseTripPermissionMixin, DetailView):
 
 
 from django.db import models, transaction
-from .forms import TripForm, TripStatusForm, TripExpenseUpdateForm, TripCustomExpenseForm, TripExpenseFormSet
+from .forms import TripForm
 
 # ... (Previous imports remain same)
 
@@ -219,67 +219,32 @@ class TripMapView(LoginRequiredMixin, BaseTripPermissionMixin, ListView):
 
 class TripCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
     """
-    Create view for new trips with integrated expense management.
+    Create view for new trips.
     """
     model = Trip
     form_class = TripForm
     template_name = 'trips/trip_form.html'
     permission_required = 'trips.add_trip'
     
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        if self.request.POST:
-            context['expense_formset'] = TripExpenseFormSet(self.request.POST, prefix='custom_expenses')
-        else:
-            context['expense_formset'] = TripExpenseFormSet(prefix='custom_expenses')
-        return context
-
     def form_valid(self, form):
-        context = self.get_context_data()
-        expense_formset = context['expense_formset']
+        # Set created_by and date fields
+        form.instance.created_by = self.request.user
         
-        if expense_formset.is_valid():
-            with transaction.atomic():
-                # Set created_by and date fields
-                form.instance.created_by = self.request.user
-                
-                # Set date from GET param if available, else today
-                date_str = self.request.GET.get('date')
-                if date_str:
-                    try:
-                        trip_date = datetime.strptime(date_str, '%Y-%m-%d').date()
-                        current_time = timezone.now().time()
-                        form.instance.date = datetime.combine(trip_date, current_time)
-                    except ValueError:
-                        form.instance.date = timezone.now()
-                else:
-                    form.instance.date = timezone.now()
-
-                self.object = form.save()
-                
-                # Manually save the formset to handle potential duplicates created by Trip.save()
-                instances = expense_formset.save(commit=False)
-                for instance in instances:
-                    instance.trip = self.object
-                    # Use update_or_create to handle records like 'Toll' or 'Diesel'
-                    # which might have been created in Trip.save()
-                    TripExpense.objects.update_or_create(
-                        trip=instance.trip,
-                        name=instance.name,
-                        defaults={
-                            'amount': instance.amount,
-                            'notes': instance.notes
-                        }
-                    )
-                
-                # Handle deletions
-                for obj in expense_formset.deleted_objects:
-                    obj.delete()
-                
-            messages.success(self.request, 'Trip and expenses created successfully!')
-            return redirect(self.get_success_url())
+        # Set date from GET param if available, else today
+        date_str = self.request.GET.get('date')
+        if date_str:
+            try:
+                trip_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+                current_time = timezone.now().time()
+                form.instance.date = datetime.combine(trip_date, current_time)
+            except ValueError:
+                form.instance.date = timezone.now()
         else:
-            return self.render_to_response(self.get_context_data(form=form))
+            form.instance.date = timezone.now()
+
+        response = super().form_valid(form)
+        messages.success(self.request, 'Trip created successfully!')
+        return response
     
     def get_success_url(self):
         return reverse_lazy('trip-list')
@@ -287,84 +252,18 @@ class TripCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
 
 class TripUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
     """
-    Update view for existing trips with integrated expense management.
+    Update view for existing trips.
     """
     model = Trip
     form_class = TripForm
     template_name = 'trips/trip_form.html'
     permission_required = 'trips.change_trip'
-    
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        if self.request.POST:
-            context['expense_formset'] = TripExpenseFormSet(self.request.POST, instance=self.object, prefix='custom_expenses')
-        else:
-            context['expense_formset'] = TripExpenseFormSet(instance=self.object, prefix='custom_expenses')
-        return context
 
     def form_valid(self, form):
-        context = self.get_context_data()
-        expense_formset = context['expense_formset']
-        
-        if expense_formset.is_valid():
-            with transaction.atomic():
-                self.object = form.save()
-                
-                # Manually save the formset with update_or_create logic
-                instances = expense_formset.save(commit=False)
-                for instance in instances:
-                    instance.trip = self.object
-                    TripExpense.objects.update_or_create(
-                        trip=instance.trip,
-                        name=instance.name,
-                        defaults={
-                            'amount': instance.amount,
-                            'notes': instance.notes
-                        }
-                    )
-                
-                # Handle deletions
-                for obj in expense_formset.deleted_objects:
-                    obj.delete()
-                    
-            messages.success(self.request, 'Trip and expenses updated successfully!')
-            return redirect(self.get_success_url())
-        else:
-            return self.render_to_response(self.get_context_data(form=form))
+        response = super().form_valid(form)
+        messages.success(self.request, 'Trip updated successfully!')
+        return response
     
-    def get_success_url(self):
-        return reverse_lazy('trip-detail', kwargs={'pk': self.object.pk})
-
-
-class TripExpenseManageView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
-    """
-    View to manage ALL expenses for a trip (Fixed + Custom) using FormSets
-    """
-    model = Trip
-    fields = [] # We only use the formset
-    template_name = 'trips/trip_expense_manage.html'
-    permission_required = 'trips.change_trip'
-    
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        if self.request.POST:
-            context['expense_formset'] = TripExpenseFormSet(self.request.POST, instance=self.object, prefix='custom_expenses')
-        else:
-            context['expense_formset'] = TripExpenseFormSet(instance=self.object, prefix='custom_expenses')
-        return context
-    
-    def form_valid(self, form):
-        context = self.get_context_data()
-        expense_formset = context['expense_formset']
-        
-        if expense_formset.is_valid():
-            with transaction.atomic():
-                expense_formset.save()
-            messages.success(self.request, 'Trip expenses updated successfully!')
-            return redirect(self.get_success_url())
-        else:
-            return self.render_to_response(self.get_context_data(form=form))
-
     def get_success_url(self):
         return reverse_lazy('trip-detail', kwargs={'pk': self.object.pk})
 
@@ -383,166 +282,6 @@ class TripDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
     def delete(self, request, *args, **kwargs):
         messages.success(self.request, 'Trip deleted successfully!')
         return super().delete(request, *args, **kwargs)
-
-
-class TripExpenseUpdateView(LoginRequiredMixin, PermissionRequiredMixin, FormView):
-    """
-    View to update fixed trip expenses (diesel, toll)
-    """
-    template_name = 'trips/trip_expense_form.html'
-    form_class = TripExpenseUpdateForm
-    permission_required = 'trips.change_trip'
-    
-    def get_initial(self):
-        trip = get_object_or_404(Trip, pk=self.kwargs['pk'])
-        initial = {}
-        diesel = TripExpense.objects.filter(trip=trip, name='Diesel').first()
-        if diesel:
-            initial['diesel_expense'] = diesel.amount
-        toll = TripExpense.objects.filter(trip=trip, name='Toll').first()
-        if toll:
-            initial['toll_expense'] = toll.amount
-        return initial
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['trip'] = get_object_or_404(Trip, pk=self.kwargs['pk'])
-        return context
-
-    def form_valid(self, form):
-        trip = get_object_or_404(Trip, pk=self.kwargs['pk'])
-        diesel_amount = form.cleaned_data.get('diesel_expense') or 0
-        toll_amount = form.cleaned_data.get('toll_expense') or 0
-
-        # Update or create Diesel
-        TripExpense.objects.update_or_create(
-            trip=trip,
-            name='Diesel',
-            defaults={'amount': diesel_amount}
-        )
-        
-        # Explicitly update Trip fields as well
-        trip.diesel_total_cost = diesel_amount
-        trip.save(update_fields=['diesel_total_cost'])
-
-        # Update or create Toll
-        TripExpense.objects.update_or_create(
-            trip=trip,
-            name='Toll',
-            defaults={'amount': toll_amount}
-        )
-
-        messages.success(self.request, 'Trip expenses updated successfully!')
-        return redirect('trip-detail', pk=trip.pk)
-
-
-class TripCustomExpenseCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
-    """
-    View to add a custom expense to a trip
-    """
-    model = TripExpense
-    form_class = TripCustomExpenseForm
-    template_name = 'trips/trip_custom_expense_form.html'
-    permission_required = 'trips.change_trip'
-    
-    def dispatch(self, request, *args, **kwargs):
-        self.trip = get_object_or_404(Trip, pk=kwargs['trip_pk'])
-        return super().dispatch(request, *args, **kwargs)
-    
-    def form_valid(self, form):
-        form.instance.trip = self.trip
-        messages.success(self.request, 'Expense added successfully!')
-        return super().form_valid(form)
-    
-    def get_success_url(self):
-        return reverse_lazy('trip-detail', kwargs={'pk': self.trip.pk})
-        
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['trip'] = self.trip
-        return context
-
-
-class TripCustomExpenseDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
-    """
-    Delete view for custom trip expenses
-    """
-    model = TripExpense
-    template_name = 'trips/trip_custom_expense_confirm_delete.html'
-    permission_required = 'trips.change_trip'
-    
-    def get_success_url(self):
-        messages.success(self.request, 'Expense deleted successfully!')
-        return reverse_lazy('trip-detail', kwargs={'pk': self.object.trip.pk})
-
-
-from .forms import TripFuelUpdateForm
-
-class TripFuelUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
-    """
-    View to update fuel data for a trip
-    """
-    model = Trip
-    form_class = TripFuelUpdateForm
-    permission_required = 'trips.change_trip'
-    
-    def form_valid(self, form):
-        response = super().form_valid(form)
-        messages.success(self.request, 'Fuel data updated successfully!')
-        return response
-    
-    def get_success_url(self):
-        return reverse_lazy('trip-detail', kwargs={'pk': self.object.pk})
-
-
-@login_required
-def update_trip_status(request, pk):
-    """
-    Dedicated view for updating trip status
-    """
-    trip = get_object_or_404(Trip, pk=pk)
-    
-    # Permission checks
-    is_driver = request.user.groups.filter(name='driver').exists()
-    is_supervisor = request.user.groups.filter(name='supervisor').exists()
-    is_manager = request.user.groups.filter(name='manager').exists()
-    is_admin = request.user.is_superuser
-    
-    # Check if user can update this trip's status
-    can_update = False
-    
-    if is_admin or is_manager or is_supervisor:
-        can_update = True
-    elif is_driver and trip.driver == request.user:
-        can_update = True
-    
-    if not can_update:
-        messages.error(request, 'You do not have permission to update this trip status.')
-        return redirect('trip-detail', pk=pk)
-    
-    if request.method == 'POST':
-        # Get the status from DB before the form binds and changes it
-        old_status = Trip.objects.get(pk=pk).status
-        form = TripStatusForm(request.POST, instance=trip)
-        
-        if form.is_valid():
-            new_status = form.cleaned_data.get('status')
-            form.save()
-            
-            if old_status != new_status:
-                messages.success(
-                    request,
-                    f'Trip status updated from "{old_status}" to "{new_status}" successfully!'
-                )
-
-            # Redirect to referer if available, else to detail page
-            next_url = request.META.get('HTTP_REFERER')
-            if next_url:
-                return redirect(next_url)
-            return redirect('trip-detail', pk=pk)
-    
-    # If someone tries to access GET /status/update, just take them to the detail page
-    return redirect('trip-detail', pk=pk)
 
 
 @login_required

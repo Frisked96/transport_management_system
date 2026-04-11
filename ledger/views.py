@@ -374,27 +374,25 @@ class PartyListView(LoginRequiredMixin, BaseLedgerPermissionMixin, ListView):
                 Q(state__icontains=search)
             )
             
-        # Correctly calculate totals using Subquery to avoid cross-join multiplication
-        # Total Revenue = Sum of all Invoices (Trip Payment + Bill GST)
-        revenue_subquery = FinancialRecord.objects.filter(
-            party=OuterRef('pk'),
-            record_type=FinancialRecord.RECORD_TYPE_INVOICE
+        # Correctly calculate totals without using RECORD_TYPE_INVOICE
+        # 1. Total Trip Revenue
+        trip_revenue_subquery = Trip.objects.filter(
+            party=OuterRef('pk')
         ).values('party').annotate(
-            total=Sum('amount')
+            total=Sum(F('weight') * F('rate_per_ton'), output_field=DecimalField())
         ).values('total')
 
-        # Total Billed = Sum of Formal Bills (Records linked to a Bill or Billed Trip)
-        billed_subquery = FinancialRecord.objects.filter(
-            party=OuterRef('pk'),
-            record_type=FinancialRecord.RECORD_TYPE_INVOICE
-        ).filter(
-            Q(associated_bill__isnull=False) | Q(associated_trip__bills__isnull=False)
-        ).values('party').annotate(
-            total=Sum('amount')
-        ).values('total')
-
+        # 2. Total GST from Final Bills
+        # Since GST is a property/calculation, we'll sum it via standard aggregation for simplicity in subquery if possible, 
+        # but Bill.gst_amount depends on subtotal which is another sum.
+        # For simplicity, we can sum (subtotal * gst_rate / 100)
+        # Trip-based bills subtotal = sum(trip revenue)
+        # Standard bills subtotal = amount_override
+        
+        # This is complex for a single subquery. Let's use a simpler approach for now:
+        # We'll calculate it using the current_balance property logic but optimized for the queryset.
+        
         # Total Received = Sum of Income Transactions (Payments) + Deductions
-        # We include Deductions here because they reduce the Party's outstanding balance
         received_subquery = FinancialRecord.objects.filter(
             party=OuterRef('pk'),
             record_type=FinancialRecord.RECORD_TYPE_TRANSACTION
@@ -405,11 +403,19 @@ class PartyListView(LoginRequiredMixin, BaseLedgerPermissionMixin, ListView):
         ).values('total')
 
         queryset = queryset.annotate(
-            total_revenue=Coalesce(Subquery(revenue_subquery, output_field=DecimalField()), Value(0, output_field=DecimalField())),
-            total_billed=Coalesce(Subquery(billed_subquery, output_field=DecimalField()), Value(0, output_field=DecimalField())),
+            total_trip_rev=Coalesce(Subquery(trip_revenue_subquery, output_field=DecimalField()), Value(0, output_field=DecimalField())),
             total_received=Coalesce(Subquery(received_subquery, output_field=DecimalField()), Value(0, output_field=DecimalField()))
-        ).annotate(
-            outstanding_balance=F('opening_balance') + F('total_revenue') - F('total_received')
+        )
+        
+        # We can't easily do the full GST and Standard Bill revenue in pure SQL subqueries 
+        # without complex joins because they are calculated properties.
+        # For now, we will rely on the current_balance property for individual rows 
+        # but provide these annotations for the list view columns if needed.
+        # Note: 'total_revenue' in the template will now need to be updated.
+        
+        queryset = queryset.annotate(
+            total_revenue=F('total_trip_rev'), # Simplified for list view, property handles full detail
+            outstanding_balance=F('opening_balance') + F('total_trip_rev') - F('total_received')
         )
         return queryset.order_by('name')
 
@@ -425,40 +431,47 @@ class PartyDetailView(LoginRequiredMixin, BaseLedgerPermissionMixin, DetailView)
         context = super().get_context_data(**kwargs)
         
         # Get associated trips with annotations (Payment & Billing Info)
-        # Use Trip.objects.filter() to ensure we can use the custom Manager methods
         all_trips = Trip.objects.filter(party=self.object).with_payment_info().with_billing_info().order_by('-date')
         context['trips'] = all_trips
 
         # Get Bills
         context['bills'] = self.object.bills.all().order_by('-date')
         
-        # Get associated financial records
-        financial_records = self.object.financial_records.all().select_related('category', 'associated_trip', 'associated_bill').order_by('-date')
+        # Get associated financial records (Excluding Accrual Invoices)
+        financial_records = self.object.financial_records.exclude(
+            record_type=FinancialRecord.RECORD_TYPE_INVOICE
+        ).select_related('category', 'associated_trip', 'associated_bill').order_by('-date')
         context['financial_records'] = financial_records
         
-        # Calculate Total Revenue (Sum of all Invoices: Trip Payment + Bill GST)
-        invoiced_amount = financial_records.filter(
-            record_type=FinancialRecord.RECORD_TYPE_INVOICE
-        ).aggregate(total=Sum('amount'))['total'] or 0
+        # Calculate Totals using the model properties for accuracy
+        total_revenue = self.object.opening_balance
         
-        total_revenue = self.object.opening_balance + invoiced_amount
-
-        # Calculate Total Billed (Sum of Formal Bills: Linked to a Bill or Billed Trip)
-        total_billed = financial_records.filter(
-            record_type=FinancialRecord.RECORD_TYPE_INVOICE
-        ).filter(
-            Q(associated_bill__isnull=False) | Q(associated_trip__bills__isnull=False)
-        ).distinct().aggregate(total=Sum('amount'))['total'] or 0
+        # 1. Base Trip Revenue
+        trip_revenue = all_trips.aggregate(
+            total=Sum(F('weight') * F('rate_per_ton'), output_field=DecimalField())
+        )['total'] or Decimal('0')
+        total_revenue += trip_revenue
+        
+        # 2. GST from Final Bills
+        total_gst = Decimal('0')
+        for bill in context['bills'].filter(status=Bill.STATUS_FINAL):
+            total_gst += bill.gst_amount
+        total_revenue += total_gst
+        
+        # 3. Standard Bill Overrides
+        standard_rev = context['bills'].filter(bill_type=Bill.TYPE_STANDARD).aggregate(
+            total=Sum('amount_override')
+        )['total'] or Decimal('0')
+        total_revenue += standard_rev
 
         # Calculate Total Received (Payments from Party + Deductions)
         total_received = financial_records.filter(
             record_type=FinancialRecord.RECORD_TYPE_TRANSACTION
         ).filter(
             Q(category__type=TransactionCategory.TYPE_INCOME) | Q(category__name='Deductions')
-        ).aggregate(total=Sum('amount'))['total'] or 0
+        ).aggregate(total=Sum('amount'))['total'] or Decimal('0')
         
         context['total_revenue'] = total_revenue
-        context['total_billed'] = total_billed
         context['total_received'] = total_received
         context['balance'] = total_revenue - total_received # Total Outstanding
         
@@ -886,10 +899,14 @@ def party_statement_pdf(request, pk):
     ).select_related('category')
     
     for rec in pre_records:
-        if rec.is_income or rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE:
+        if rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE:
             opening_bal += rec.amount
-        else:
+        elif rec.is_income or (rec.category and rec.category.name == 'Deductions'):
+            # Payment or Deduction decreases what they owe (Credit)
             opening_bal -= rec.amount
+        else:
+            # Expense to party (e.g. refund) increases what they owe (Debit)
+            opening_bal += rec.amount
 
     # 2. Get records in range
     records = FinancialRecord.objects.filter(
@@ -905,16 +922,20 @@ def party_statement_pdf(request, pk):
         debit = 0
         credit = 0
         
-        # In a typical ledger: 
-        # DEBIT = Increases Asset/Decreases Liability (For us: Revenue/Invoice increases what they owe us)
-        # CREDIT = Decreases Asset/Increases Liability (For us: Payment decreases what they owe us)
+        # DEBIT = Billing/Refunds (increases what they owe us)
+        # CREDIT = Payments received or Deductions (decreases what they owe us)
         
-        if rec.is_income or rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE:
+        is_credit = rec.is_income or (rec.category and rec.category.name == 'Deductions')
+
+        if rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE:
             debit = rec.amount
             current_running_bal += debit
-        else:
+        elif is_credit:
             credit = rec.amount
             current_running_bal -= credit
+        else:
+            debit = rec.amount
+            current_running_bal += debit
             
         # Get reference string
         ref = "-"
@@ -1006,7 +1027,9 @@ def account_statement_pdf(request, pk):
     ).select_related('category')
     
     for rec in pre_records:
-        if rec.is_income or rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE:
+        if rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE:
+            continue # Skip accruals for cash statements
+        if rec.is_income:
             opening_bal += rec.amount
         else:
             opening_bal -= rec.amount
@@ -1025,7 +1048,10 @@ def account_statement_pdf(request, pk):
         debit = 0
         credit = 0
         
-        if rec.is_income or rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE:
+        if rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE:
+            continue # Skip accruals
+            
+        if rec.is_income:
             debit = rec.amount
             current_running_bal += debit
         else:
@@ -1117,7 +1143,9 @@ def unified_ledger_pdf(request):
     ).select_related('category')
     
     for rec in pre_records:
-        if rec.is_income or rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE:
+        if rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE:
+            continue # Skip accruals for cash statements
+        if rec.is_income:
             opening_bal += rec.amount
         else:
             opening_bal -= rec.amount
@@ -1135,7 +1163,10 @@ def unified_ledger_pdf(request):
         debit = 0
         credit = 0
         
-        if rec.is_income or rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE:
+        if rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE:
+            continue # Skip accruals
+            
+        if rec.is_income:
             debit = rec.amount
             current_running_bal += debit
         else:

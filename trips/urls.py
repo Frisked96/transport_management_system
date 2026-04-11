@@ -13,16 +13,6 @@ urlpatterns = [
     path('trip/<int:pk>/update/', views.TripUpdateView.as_view(), name='trip-update'),
     path('trip/<int:pk>/delete/', views.TripDeleteView.as_view(), name='trip-delete'),
     
-    # Status update URL
-    path('trip/<int:pk>/status/', views.update_trip_status, name='trip-status-update'),
-
-    # Trip Expense URLs
-    path('trip/<int:pk>/expenses/manage/', views.TripExpenseManageView.as_view(), name='trip-expenses-manage'),
-    path('trip/<int:pk>/expenses/update/', views.TripExpenseUpdateView.as_view(), name='trip-expense-update'),
-    path('trip/<int:trip_pk>/expense/create/', views.TripCustomExpenseCreateView.as_view(), name='trip-custom-expense-create'),
-    path('trip/<int:pk>/fuel/update/', views.TripFuelUpdateView.as_view(), name='trip-fuel-update'),
-    path('trip/expense/<int:pk>/delete/', views.TripCustomExpenseDeleteView.as_view(), name='trip-custom-expense-delete'),
-    
     # Autocomplete
     path('autocomplete/', views.get_autocomplete_suggestions, name='autocomplete-suggestions'),
 ]

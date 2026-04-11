@@ -1,0 +1,191 @@
+{% extends 'base.html' %}
+
+{% block title %}Maintenance - Transport Management System{% endblock %}
+
+{% block content %}
+<!-- BEGIN: Page Header -->
+<header class="flex flex-col md:flex-row md:items-center justify-between mb-6">
+    <div>
+        <h1 class="text-3xl font-bold text-slate-900">Maintenance</h1>
+        <p class="text-sm text-slate-600 mt-1">Manage scheduled services and repair history</p>
+    </div>
+    <div class="mt-4 md:mt-0 flex space-x-3">
+        {% if perms.fleet.add_maintenancerecord %}
+        <a href="{% url 'maintenance-create' %}" class="flex items-center space-x-2 px-4 py-2 bg-emerald-600 text-white rounded-md text-sm font-medium hover:bg-emerald-700 shadow-sm transition-colors">
+            <i class="fa-solid fa-plus"></i>
+            <span>Add Record</span>
+        </a>
+        {% endif %}
+    </div>
+</header>
+<!-- END: Page Header -->
+
+<!-- BEGIN: Filter Bar -->
+<section class="bg-slate-100 p-5 rounded-lg border border-slate-200 mb-6">
+    <form method="get">
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
+            <!-- Search -->
+            <div class="md:col-span-3 flex flex-col">
+                <label for="search" class="text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">Search:</label>
+                <input type="text" id="search" name="search" value="{{ search_term }}" placeholder="Task name..." class="block w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white">
+            </div>
+
+            <!-- Vehicle Filter -->
+            <div class="md:col-span-3 flex flex-col">
+                <label for="vehicle" class="text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">Vehicle:</label>
+                <select id="vehicle" name="vehicle" class="block w-full pl-3 pr-10 py-2 border border-slate-300 rounded-md text-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white">
+                    <option value="">All Vehicles</option>
+                    {% for vehicle in vehicles %}
+                        <option value="{{ vehicle.pk }}" {% if selected_vehicle == vehicle.pk|stringformat:"s" %}selected{% endif %}>
+                            {{ vehicle.registration_plate }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <!-- Status Filter -->
+            <div class="md:col-span-3 flex flex-col">
+                <label for="status" class="text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">Status:</label>
+                <select id="status" name="status" class="block w-full pl-3 pr-10 py-2 border border-slate-300 rounded-md text-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white">
+                    <option value="">All Statuses</option>
+                    <option value="pending" {% if current_status == 'pending' %}selected{% endif %}>Pending / Due</option>
+                    <option value="completed" {% if current_status == 'completed' %}selected{% endif %}>Completed / History</option>
+                </select>
+            </div>
+            
+            <!-- Actions -->
+            <div class="md:col-span-3 flex items-end space-x-2">
+                <button type="submit" class="flex-grow bg-emerald-600 text-white px-4 py-2 rounded-md hover:bg-emerald-700 transition-colors text-sm font-medium">
+                    Filter
+                </button>
+                <a href="{% url 'maintenance-list' %}" class="px-4 py-2 border border-slate-300 rounded-md text-slate-700 bg-white hover:bg-slate-50 text-sm font-medium transition-colors">
+                    Clear
+                </a>
+            </div>
+        </div>
+    </form>
+</section>
+<!-- END: Filter Bar -->
+
+<!-- BEGIN: Maintenance Record List -->
+{% if maintenance_records %}
+<div class="space-y-4">
+    {% for record in maintenance_records %}
+    <!-- Record Card -->
+    <div class="bg-white border border-slate-200 rounded-lg p-5 flex flex-col md:flex-row items-start md:items-center gap-4 hover:shadow-sm transition-shadow {% if not record.is_completed and record.is_overdue %}border-rose-300 bg-rose-50/30{% endif %}">
+        <div class="flex-1 min-w-[150px]">
+            <div class="flex items-center gap-2">
+                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider {% if record.is_completed %}bg-green-100 text-green-800{% else %}bg-amber-100 text-amber-800{% endif %}">
+                    {{ record.is_completed|yesno:"Completed,Pending" }}
+                </span>
+                <h3 class="font-bold text-lg text-slate-900 leading-tight">
+                    <a href="{% url 'maintenance-detail' record.pk %}" class="hover:text-emerald-600 transition-colors">{{ record.name }}</a>
+                </h3>
+            </div>
+            <p class="text-sm font-medium text-slate-600 mt-1">{{ record.vehicle.registration_plate }} • {{ record.vehicle.make_model }}</p>
+        </div>
+        
+        <div class="w-32">
+            {% if record.is_completed %}
+                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Completed On</span>
+                <p class="text-sm text-slate-800">{{ record.completion_date|date:"M d, Y" }}</p>
+            {% else %}
+                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Due Date</span>
+                <p class="text-sm {% if record.is_overdue %}text-rose-600 font-bold{% else %}text-slate-800{% endif %}">
+                    {{ record.expiry_date|date:"M d, Y"|default:"-" }}
+                </p>
+            {% endif %}
+        </div>
+
+        <div class="w-24">
+            {% if record.is_completed %}
+                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Cost</span>
+                <p class="text-sm font-bold text-slate-900">₹{{ record.cost|floatformat:2 }}</p>
+            {% else %}
+                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Due At KM</span>
+                <p class="text-sm {% if record.is_overdue and record.expiry_km %}text-rose-600 font-bold{% else %}text-slate-800{% endif %}">
+                    {{ record.expiry_km|default:"-" }}
+                </p>
+            {% endif %}
+        </div>
+        
+        <div class="flex items-center gap-2">
+            {% if not record.is_completed %}
+                {% if perms.fleet.change_maintenancerecord %}
+                <a href="{% url 'maintenance-complete' record.pk %}" class="px-3 py-1.5 bg-emerald-600 text-white rounded text-xs font-bold uppercase tracking-wider hover:bg-emerald-700 transition-colors">
+                    Mark Done
+                </a>
+                {% endif %}
+            {% else %}
+                <span class="text-xs text-slate-400 italic">Historical</span>
+            {% endif %}
+            
+            <div class="relative dropdown-container">
+                <button class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 transition-colors dropdown-toggle">
+                    <i class="fa-solid fa-ellipsis"></i>
+                </button>
+                <div class="absolute right-0 pt-2 w-48 z-20 dropdown-menu hidden">
+                    <div class="bg-white rounded-md shadow-lg py-1 border border-slate-100">
+                        <a href="{% url 'maintenance-detail' record.pk %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"><i class="fa-regular fa-eye mr-2"></i>View Details</a>
+                        {% if perms.fleet.change_maintenancerecord %}
+                        <a href="{% url 'maintenance-update' record.pk %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"><i class="fa-regular fa-pen-to-square mr-2"></i>Edit</a>
+                        {% endif %}
+                        {% if perms.fleet.delete_maintenancerecord %}
+                        <hr class="my-1 border-slate-100">
+                        <a href="{% url 'maintenance-delete' record.pk %}" class="block px-4 py-2 text-sm text-rose-600 hover:bg-rose-50"><i class="fa-regular fa-trash-can mr-2"></i>Delete</a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- BEGIN: Pagination -->
+{% if is_paginated %}
+<nav class="mt-8 flex justify-center">
+    <div class="flex space-x-1">
+        {% if page_obj.has_previous %}
+        <a href="?page=1{% if selected_vehicle %}&vehicle={{ selected_vehicle }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}{% if search_term %}&search={{ search_term }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
+            <i class="fa-solid fa-angles-left"></i>
+        </a>
+        <a href="?page={{ page_obj.previous_page_number }}{% if selected_vehicle %}&vehicle={{ selected_vehicle }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}{% if search_term %}&search={{ search_term }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
+            <i class="fa-solid fa-angle-left"></i>
+        </a>
+        {% endif %}
+
+        <span class="px-4 py-2 bg-emerald-600 text-white border border-emerald-600 rounded-md text-sm font-medium">
+            Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+        </span>
+
+        {% if page_obj.has_next %}
+        <a href="?page={{ page_obj.next_page_number }}{% if selected_vehicle %}&vehicle={{ selected_vehicle }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}{% if search_term %}&search={{ search_term }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
+            <i class="fa-solid fa-angle-right"></i>
+        </a>
+        <a href="?page={{ page_obj.paginator.num_pages }}{% if selected_vehicle %}&vehicle={{ selected_vehicle }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}{% if search_term %}&search={{ search_term }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
+            <i class="fa-solid fa-angles-right"></i>
+        </a>
+        {% endif %}
+    </div>
+</nav>
+{% endif %}
+<!-- END: Pagination -->
+
+{% else %}
+<div class="text-center py-16 bg-white rounded-lg border border-slate-200 shadow-sm">
+    <div class="inline-flex items-center justify-center w-20 h-20 bg-slate-50 rounded-full mb-4">
+        <i class="fa-solid fa-wrench text-4xl text-slate-300"></i>
+    </div>
+    <h2 class="text-xl font-bold text-slate-900 mb-2">No maintenance records found</h2>
+    <p class="text-slate-600 mb-6 max-w-xs mx-auto">Manage your fleet's health by tracking scheduled services and repair history.</p>
+    {% if perms.fleet.add_maintenancerecord %}
+    <a href="{% url 'maintenance-create' %}" class="inline-flex items-center space-x-2 px-6 py-3 bg-emerald-600 text-white rounded-md font-medium hover:bg-emerald-700 shadow-sm transition-colors">
+        <i class="fa-solid fa-plus"></i>
+        <span>Add Your First Record</span>
+    </a>
+    {% endif %}
+</div>
+{% endif %}
+<!-- END: Maintenance Record List -->
+{% endblock %}

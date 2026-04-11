@@ -50,10 +50,9 @@ class FinancialRecordForm(forms.ModelForm):
                 del self.fields['driver']
             
             # Setup trips for party using dynamic payment info
-            # Only show trips that have been billed
+            # Allow all trips that are not fully paid
             self.fields['associated_trip'].queryset = Trip.objects.with_payment_info().with_billing_info().filter(
-                party=party,
-                annotated_is_billed=True
+                party=party
             ).exclude(
                 annotated_status=Trip.PAYMENT_STATUS_PAID
             ).order_by('-date')

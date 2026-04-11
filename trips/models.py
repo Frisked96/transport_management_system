@@ -327,70 +327,19 @@ class Trip(models.Model):
 
     def sync_ledger_invoice(self):
         """
-        Synchronize Trip Payment to FinancialRecord as an Invoice.
-        If the trip is part of a finalized Bill, the individual trip record is removed
-        in favor of the consolidated Bill record.
+        Stop creating Trip Payment Invoices in the ledger.
+        If any existing invoice records exist for this trip, delete them.
         """
-        from ledger.models import FinancialRecord, TransactionCategory
+        from ledger.models import FinancialRecord
 
-        # 1. Check if we have Revenue info
-        has_revenue = self.weight is not None and self.rate_per_ton is not None
-
-        # 2. Check if already part of a bill (any status)
-        is_billed = self.bills.exists()
-
-        # 3. Find existing invoice record
+        # Find existing invoice record
         invoice_qs = FinancialRecord.objects.filter(
             associated_trip=self,
             record_type=FinancialRecord.RECORD_TYPE_INVOICE
         )
 
-        # If it's part of a bill, we DON'T want an individual trip invoice
-        # because the Bill (Invoice) will have its own record.
-        if is_billed or not has_revenue:
-            if invoice_qs.exists():
-                invoice_qs.delete()
-            return
-
-        # Otherwise, maintain individual record
-        amount = self.revenue
-        cat, _ = TransactionCategory.objects.get_or_create(
-            name="Trip Payment",
-            defaults={'type': TransactionCategory.TYPE_INCOME, 'description': 'Auto-generated revenue from trips'}
-        )
         if invoice_qs.exists():
-            # Update existing
-            record = invoice_qs.first()
-            # Update fields if changed
-            should_save = False
-            if record.amount != amount:
-                record.amount = amount
-                should_save = True
-            if record.party != self.party:
-                record.party = self.party
-                should_save = True
-            if record.driver != self.driver:
-                record.driver = self.driver
-                should_save = True
-            if record.date != self.date.date():
-                record.date = self.date.date()
-                should_save = True
-
-            if should_save:
-                record.save()
-        else:
-            # Create new
-            if amount >= 0:
-                FinancialRecord.objects.create(
-                    associated_trip=self,
-                    party=self.party,
-                    driver=self.driver,
-                    date=self.date.date(),
-                    category=cat,
-                    amount=amount,
-                    record_type=FinancialRecord.RECORD_TYPE_INVOICE,
-                    description=f"Invoice for Trip {self.trip_number}"
-                )
+            invoice_qs.delete()
 
     def sync_fuel_log(self):
         """Synchronize diesel fields to fleet.FuelLog"""
@@ -528,18 +477,6 @@ class Trip(models.Model):
         update_fields = kwargs.get('update_fields')
         if update_fields is None or any(f in update_fields for f in ['diesel_liters', 'diesel_total_cost', 'diesel_rate', 'date', 'vehicle', 'start_odometer']):
             self.sync_fuel_log()
-
-        if is_new:
-            # Create default TripExpense entries using update_or_create to avoid duplicates 
-            # if multiple saves happen in a transaction (like in unified views)
-            TripExpense.objects.update_or_create(trip=self, name='Diesel', defaults={'amount': self.diesel_total_cost or 0})
-            TripExpense.objects.update_or_create(trip=self, name='Toll', defaults={'amount': 0})
-        else:
-            # Update Diesel expense if total_cost changed
-            TripExpense.objects.update_or_create(
-                trip=self, name='Diesel', 
-                defaults={'amount': self.diesel_total_cost or 0}
-            )
     
     @property
     def start_date(self):
