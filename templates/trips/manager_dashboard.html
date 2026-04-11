@@ -147,12 +147,13 @@
                             </td>
                             <td class="px-6 py-4">
                                 <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider
-                                    {% if trip.status == 'Completed' %}bg-emerald-100 text-emerald-800
-                                    {% elif trip.status == 'Cancelled' %}bg-slate-100 text-slate-800
-                                    {% else %}bg-blue-100 text-blue-800{% endif %}">
-                                    {{ trip.status }}
+                                    {% if trip.annotated_status == 'Paid' %}bg-emerald-100 text-emerald-800
+                                    {% elif trip.annotated_status == 'Partially Paid' %}bg-amber-100 text-amber-800
+                                    {% else %}bg-slate-100 text-slate-600{% endif %}">
+                                    {{ trip.annotated_status }}
                                 </span>
                             </td>
+
                             <td class="px-6 py-4 text-right">
                                 <a href="{% url 'trip-detail' trip.pk %}" class="inline-flex items-center space-x-1 px-3 py-1 border border-slate-200 rounded bg-white text-xs font-bold text-slate-600 hover:bg-slate-50 hover:text-emerald-600 transition-colors">
                                     <i class="fa-regular fa-eye"></i>

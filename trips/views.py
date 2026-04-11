@@ -1,21 +1,21 @@
 """
 Views for Trips application with permission checks
 """
-from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView, FormView
+from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.contrib.auth.decorators import login_required
-from django.shortcuts import render, get_object_or_404, redirect
+from django.shortcuts import render, redirect
 from django.urls import reverse_lazy
 from django.contrib import messages
-from django.db import models, transaction
-from django.db.models import Q, Min, Sum
+from django.db.models import Q, Sum, F
 from django.utils import timezone
+from django.http import JsonResponse
 from datetime import datetime, timedelta
 
-from .models import Trip, TripExpense
+from .models import Trip
 from .forms import TripForm
-from fleet.models import Vehicle
-from ledger.models import FinancialRecord, TransactionCategory
+from fleet.models import Vehicle, MaintenanceRecord, Tyre
+from ledger.models import FinancialRecord, TransactionCategory, Bill
 
 
 class BaseTripPermissionMixin:
@@ -64,7 +64,7 @@ class TripListView(LoginRequiredMixin, BaseTripPermissionMixin, ListView):
     
     def get_queryset(self):
         """Filter and sort trips based on user input and permissions"""
-        queryset = self.get_queryset_for_user().select_related('vehicle', 'party', 'driver')
+        queryset = self.get_queryset_for_user().with_payment_info().select_related('vehicle', 'party', 'driver')
         
         # Search functionality
         search = self.request.GET.get('search')
@@ -77,10 +77,10 @@ class TripListView(LoginRequiredMixin, BaseTripPermissionMixin, ListView):
                 Q(vehicle__registration_plate__icontains=search)
             ).distinct()
         
-        # Status filter
+        # Status filter (payment-based)
         status = self.request.GET.get('status')
         if status:
-            queryset = queryset.filter(status=status)
+            queryset = queryset.filter(annotated_status=status)
             
         # Date range filtering
         start_date = self.request.GET.get('start_date')
@@ -98,7 +98,6 @@ class TripListView(LoginRequiredMixin, BaseTripPermissionMixin, ListView):
 
         # Sorting
         sort = self.request.GET.get('sort', '-date')
-        # Map of sort keys to actual model fields
         sort_mapping = {
             'date': 'date',
             '-date': '-date',
@@ -106,14 +105,10 @@ class TripListView(LoginRequiredMixin, BaseTripPermissionMixin, ListView):
             '-trip_number': '-trip_number',
             'weight': 'weight',
             '-weight': '-weight',
-            'revenue': 'revenue_calculated', # We'll need annotation for this if we want to sort by it
+            'revenue': 'annotated_revenue',
+            '-revenue': '-annotated_revenue',
         }
         
-        if sort == 'revenue' or sort == '-revenue':
-            queryset = queryset.annotate(
-                revenue_calculated=F('weight') * F('rate_per_ton')
-            )
-            
         if sort in sort_mapping:
             queryset = queryset.order_by(sort_mapping[sort], '-created_at')
         else:
@@ -123,14 +118,14 @@ class TripListView(LoginRequiredMixin, BaseTripPermissionMixin, ListView):
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['status_choices'] = Trip.STATUS_CHOICES
+        context['status_choices'] = Trip.PAYMENT_STATUS_CHOICES
         context['current_status'] = self.request.GET.get('status', '')
         context['search_term'] = self.request.GET.get('search', '')
         context['start_date'] = self.request.GET.get('start_date', '')
         context['end_date'] = self.request.GET.get('end_date', '')
         context['current_sort'] = self.request.GET.get('sort', '-date')
         
-        # Summary for the filtered queryset (all pages)
+        # Summary for the filtered queryset
         queryset = self.get_queryset()
         context['total_weight'] = queryset.aggregate(Sum('weight'))['weight__sum'] or 0
         context['total_count'] = queryset.count()
@@ -148,73 +143,7 @@ class TripDetailView(LoginRequiredMixin, BaseTripPermissionMixin, DetailView):
     
     def get_queryset(self):
         """Ensure user has permission to view this trip"""
-        return self.get_queryset_for_user()
-
-
-from django.db import models, transaction
-from .forms import TripForm
-
-# ... (Previous imports remain same)
-
-class TripMapView(LoginRequiredMixin, BaseTripPermissionMixin, ListView):
-    """
-    View to display trips on a map for a selected date range.
-    """
-    model = Trip
-    template_name = 'trips/trip_map.html'
-    context_object_name = 'trips'
-    
-    def get_queryset(self):
-        """Filter trips based on date range and valid coordinates"""
-        queryset = self.get_queryset_for_user()
-        
-        # Date filtering
-        start_date_str = self.request.GET.get('start_date')
-        end_date_str = self.request.GET.get('end_date')
-        
-        today = timezone.now().date()
-        
-        if start_date_str:
-            self.start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
-        else:
-            self.start_date = today - timedelta(days=30) # Default last 30 days
-            
-        if end_date_str:
-            self.end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
-        else:
-            self.end_date = today
-
-        queryset = queryset.filter(
-            date__date__range=[self.start_date, self.end_date],
-            pickup_lat__isnull=False,
-            pickup_lng__isnull=False,
-            delivery_lat__isnull=False,
-            delivery_lng__isnull=False
-        )
-            
-        return queryset
-    
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['start_date'] = self.start_date
-        context['end_date'] = self.end_date
-        
-        # Serialize trip data for JS
-        trips_data = []
-        for trip in context['trips']:
-            trips_data.append({
-                'trip_number': trip.trip_number,
-                'vehicle': trip.vehicle.registration_plate,
-                'driver': str(trip.driver) if trip.driver else 'Unassigned',
-                'date': trip.date.strftime('%Y-%m-%d'),
-                'start': [float(trip.pickup_lat), float(trip.pickup_lng)],
-                'end': [float(trip.delivery_lat), float(trip.delivery_lng)],
-                'pickup_name': trip.pickup_location,
-                'delivery_name': trip.delivery_location,
-                'url': str(reverse_lazy('trip-detail', kwargs={'pk': trip.pk}))
-            })
-        context['trips_json'] = trips_data
-        return context
+        return self.get_queryset_for_user().with_payment_info()
 
 
 class TripCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
@@ -227,10 +156,9 @@ class TripCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
     permission_required = 'trips.add_trip'
     
     def form_valid(self, form):
-        # Set created_by and date fields
         form.instance.created_by = self.request.user
         
-        # Set date from GET param if available, else today
+        # Set date from GET param if available
         date_str = self.request.GET.get('date')
         if date_str:
             try:
@@ -289,68 +217,57 @@ def manager_dashboard(request):
     """
     Manager dashboard - shows system overview
     """
-    # Check if user is manager or admin
     if not (request.user.is_superuser or 
             request.user.groups.filter(name='manager').exists()):
         messages.error(request, 'Access denied. Manager dashboard is only for managers.')
         return redirect('trip-list')
     
-    # Active trips
-    active_trips = Trip.objects.filter(
-        status=Trip.STATUS_IN_PROGRESS
+    # Trips info (Payment-based status)
+    all_trips = Trip.objects.with_payment_info()
+    active_trips = all_trips.filter(
+        Q(annotated_status='Unpaid') | Q(annotated_status='Partially Paid')
     ).count()
     
-    # Completed trips this month
     current_month = timezone.now().month
     current_year = timezone.now().year
     
-    completed_this_month = Trip.objects.filter(
-        status=Trip.STATUS_COMPLETED,
-        actual_completion_datetime__month=current_month,
-        actual_completion_datetime__year=current_year
+    completed_this_month = all_trips.filter(
+        annotated_status='Paid',
+        date__month=current_month,
+        date__year=current_year
     ).count()
     
-    # Vehicles due for maintenance (next service due within 7 days)
-    seven_days_later = timezone.now().date() + timedelta(days=7)
+    # Maintenance info
+    vehicles_due_maintenance = MaintenanceRecord.objects.filter(
+        is_completed=False,
+        expiry_date__lte=timezone.now().date() + timedelta(days=7)
+    ).values('vehicle').distinct().count()
     
-    vehicles_due_maintenance = Vehicle.objects.filter(
-        maintenance_logs__next_service_due__lte=seven_days_later
-    ).distinct().count()
-    
-    # Recent financial summary
-    # 1. Cash Income this month (Excluding Accruals/Invoices)
+    # Financial summary
     income_this_month = FinancialRecord.objects.filter(
         category__type=TransactionCategory.TYPE_INCOME,
         date__month=current_month,
         date__year=current_year
     ).exclude(
         record_type=FinancialRecord.RECORD_TYPE_INVOICE
-    ).aggregate(total=models.Sum('amount'))['total'] or 0
+    ).aggregate(total=Sum('amount'))['total'] or 0
     
-    # 2. Expenses this month (Excluding Deductions which only reduce receivable)
     expenses_this_month = FinancialRecord.objects.filter(
         category__type=TransactionCategory.TYPE_EXPENSE,
         date__month=current_month,
         date__year=current_year
     ).exclude(
         category__name='Deductions'
-    ).aggregate(total=models.Sum('amount'))['total'] or 0
+    ).aggregate(total=Sum('amount'))['total'] or 0
 
-    # Calculate GST portion of income (from Final Bills)
-    from ledger.models import Bill
     gst_this_month = sum(bill.gst_amount for bill in Bill.objects.filter(
         status=Bill.STATUS_FINAL,
         date__month=current_month,
         date__year=current_year
     ))
     
-    # Recent trips
-    recent_trips = Trip.objects.order_by('-created_at')[:10]
-    
-    # Vehicles in maintenance
-    vehicles_in_maintenance = Vehicle.objects.filter(
-        status=Vehicle.STATUS_MAINTENANCE
-    ).count()
+    recent_trips = all_trips.order_by('-created_at')[:10]
+    vehicles_in_maintenance = Vehicle.objects.filter(status=Vehicle.STATUS_MAINTENANCE).count()
     
     context = {
         'active_trips': active_trips,
@@ -367,30 +284,18 @@ def manager_dashboard(request):
     return render(request, 'trips/manager_dashboard.html', context)
 
 
-
-from django.http import JsonResponse
-
-from fleet.models import Vehicle, Tyre
-
-
 @login_required
 def get_autocomplete_suggestions(request):
     """
     Returns suggestions for Select2.
-    Now optimized to return ONLY Local History (Fast).
-    External Map results are handled client-side.
     """
-    field = request.GET.get('field') # 'pickup_location' or 'delivery_location'
-    term = request.GET.get('term', '') # Select2 uses 'term' for the search query
+    field = request.GET.get('field')
+    term = request.GET.get('term', '')
     
     results = []
     
-    # 1. Handle Location Fields (Pickup/Delivery)
     if field in ['pickup_location', 'delivery_location']:
         seen_names = set()
-        
-        # Local History (Fast)
-        # Search distinct locations from previous trips
         query_filter = {f"{field}__icontains": term} if term else {}
         local_qs = Trip.objects.filter(**query_filter).values_list(field, flat=True).distinct().order_by(field)[:10]
         
@@ -398,15 +303,11 @@ def get_autocomplete_suggestions(request):
             if name and name not in seen_names:
                 results.append({
                     'id': name,
-                    'text': f"🕒 {name}", # Icon to indicate history
+                    'text': f"🕒 {name}",
                     'source': 'history'
                 })
                 seen_names.add(name)
 
-    # 2. Handle Other Fields (Legacy support)
-    elif field == 'expense_name':
-        qs = TripExpense.objects.filter(name__icontains=term).values_list('name', flat=True).distinct()[:10]
-        results = [{'id': x, 'text': x} for x in qs]
     elif field == 'tyre_brand':
         qs = Tyre.objects.filter(brand__icontains=term).values_list('brand', flat=True).distinct()[:10]
         results = [{'id': x, 'text': x} for x in qs]

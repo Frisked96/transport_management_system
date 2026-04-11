@@ -56,10 +56,7 @@ class Vehicle(models.Model):
     class Meta:
         verbose_name = 'Vehicle'
         verbose_name_plural = 'Vehicles'
-        ordering = ['registration_plate']
-        permissions = [
-            ('can_view_all_vehicles', 'Can view all vehicles'),
-        ]
+        ordering = ['-registration_plate'] # Or -id/created_at if you want newest added. Registration plate descending might put newer ones on top if they follow a pattern. Let's use -id.
     
     def __str__(self):
         return f"{self.registration_plate} - {self.make_model}"
@@ -188,7 +185,7 @@ class MaintenanceRecord(models.Model):
     class Meta:
         verbose_name = 'Maintenance Record'
         verbose_name_plural = 'Maintenance Records'
-        ordering = ['is_completed', 'expiry_date', '-completion_date']
+        ordering = ['is_completed', 'expiry_date', '-completion_date', '-created_at']
     
     def __str__(self):
         status = "Completed" if self.is_completed else "Pending"
@@ -247,7 +244,8 @@ class MaintenanceRecord(models.Model):
 
 class Tyre(models.Model):
     """
-    Inventory management for individual tyres
+    Inventory management for individual tyres.
+    Simplified: No odometer tracking for tyres.
     """
     STATUS_IN_STOCK = 'In Stock'
     STATUS_MOUNTED = 'Mounted'
@@ -278,7 +276,6 @@ class Tyre(models.Model):
     current_position = models.CharField(max_length=50, blank=True, verbose_name='Position')
     
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_IN_STOCK)
-    total_km = models.PositiveIntegerField(default=0, verbose_name='Total KM')
     photo = models.ImageField(upload_to='tyres/', null=True, blank=True, verbose_name='Tyre Photo')
     notes = models.TextField(blank=True)
 
@@ -314,8 +311,6 @@ class Tyre(models.Model):
                     action=TyreLog.ACTION_MOUNT,
                     vehicle=self.current_vehicle,
                     position=self.current_position,
-                    tyre_odo=self.total_km,
-                    distance_covered=0,
                     notes="Initial mount on creation"
                 )
         else:
@@ -326,19 +321,11 @@ class Tyre(models.Model):
             if vehicle_changed:
                 # Dismount from old vehicle if it existed
                 if old_instance.current_vehicle:
-                    # Calculate distance covered since last mount/rotation on this specific vehicle
-                    last_assignment_log = self.logs.filter(
-                        vehicle=old_instance.current_vehicle
-                    ).order_by('-date', '-id').first()
-                    dist = self.total_km - (last_assignment_log.tyre_odo if last_assignment_log else 0)
-                    
                     TyreLog.objects.create(
                         tyre=self,
                         action=TyreLog.ACTION_DISMOUNT,
                         vehicle=old_instance.current_vehicle,
                         position=old_instance.current_position,
-                        tyre_odo=self.total_km,
-                        distance_covered=max(0, dist),
                         notes=f"Automatic dismount: vehicle changed to {self.current_vehicle}" if self.current_vehicle else "Automatic dismount"
                     )
                 
@@ -349,24 +336,15 @@ class Tyre(models.Model):
                         action=TyreLog.ACTION_MOUNT,
                         vehicle=self.current_vehicle,
                         position=self.current_position,
-                        tyre_odo=self.total_km,
-                        distance_covered=0,
                         notes=f"Automatic mount: vehicle changed from {old_instance.current_vehicle}" if old_instance.current_vehicle else "Automatic mount"
                     )
             elif position_changed and self.current_vehicle:
                 # Same vehicle, different position -> Rotation
-                last_assignment_log = self.logs.filter(
-                    vehicle=self.current_vehicle
-                ).order_by('-date', '-id').first()
-                dist = self.total_km - (last_assignment_log.tyre_odo if last_assignment_log else 0)
-                
                 TyreLog.objects.create(
                     tyre=self,
                     action=TyreLog.ACTION_ROTATION,
                     vehicle=self.current_vehicle,
                     position=self.current_position,
-                    tyre_odo=self.total_km,
-                    distance_covered=max(0, dist),
                     notes=f"Position changed from {old_instance.current_position} to {self.current_position}"
                 )
             
@@ -377,28 +355,26 @@ class Tyre(models.Model):
                     TyreLog.objects.create(
                         tyre=self,
                         action=TyreLog.ACTION_REPAIR,
-                        tyre_odo=self.total_km,
                         notes="Status changed to Under Repair"
                     )
                 elif self.status == self.STATUS_SCRAP:
                     TyreLog.objects.create(
                         tyre=self,
                         action=TyreLog.ACTION_SCRAP,
-                        tyre_odo=self.total_km,
                         notes="Status changed to Scrap"
                     )
                 elif self.status == self.STATUS_IN_STOCK and old_instance.status == self.STATUS_REPAIR:
                     TyreLog.objects.create(
                         tyre=self,
                         action=TyreLog.ACTION_DISMOUNT, # Using Dismount as 'Back to Stock'
-                        tyre_odo=self.total_km,
                         notes="Repair completed, moved back to stock"
                     )
 
 
 class TyreLog(models.Model):
     """
-    History of tyre movements and repairs
+    History of tyre movements and repairs.
+    Simplified: No odometer tracking for tyres.
     """
     ACTION_MOUNT = 'Mount'
     ACTION_DISMOUNT = 'Dismount'
@@ -422,8 +398,6 @@ class TyreLog(models.Model):
     
     vehicle = models.ForeignKey(Vehicle, on_delete=models.SET_NULL, null=True, blank=True)
     position = models.CharField(max_length=50, blank=True)
-    tyre_odo = models.PositiveIntegerField(null=True, blank=True, verbose_name="Tyre Odo (Total KM)")
-    distance_covered = models.PositiveIntegerField(default=0, verbose_name="Distance Covered on Vehicle")
     notes = models.TextField(blank=True)
 
     class Meta:
@@ -431,38 +405,3 @@ class TyreLog(models.Model):
 
     def __str__(self):
         return f"{self.tyre} - {self.action} on {self.date}"
-
-
-class FuelLog(models.Model):
-    """
-    Fuel Log to track fueling events
-    """
-    vehicle = models.ForeignKey(
-        Vehicle,
-        on_delete=models.CASCADE,
-        related_name='fuel_logs',
-        verbose_name='Vehicle'
-    )
-    trip = models.ForeignKey(
-        'trips.Trip',
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='fuel_logs',
-        verbose_name='Related Trip'
-    )
-    date = models.DateField(default=timezone.now, verbose_name='Date')
-    liters = models.DecimalField(max_digits=10, decimal_places=2, verbose_name='Liters')
-    rate = models.DecimalField(max_digits=10, decimal_places=2, verbose_name='Rate per Liter')
-    total_cost = models.DecimalField(max_digits=12, decimal_places=2, verbose_name='Total Cost')
-    odometer = models.PositiveIntegerField(verbose_name='Odometer Reading')
-
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        verbose_name = 'Fuel Log'
-        verbose_name_plural = 'Fuel Logs'
-        ordering = ['-date', '-odometer']
-
-    def __str__(self):
-        return f"{self.vehicle} - {self.liters}L - {self.date}"

@@ -60,44 +60,54 @@ class Party(models.Model):
     class Meta:
         verbose_name = 'Party'
         verbose_name_plural = 'Parties'
-        ordering = ['name']
+        ordering = ['-created_at']
 
     def __str__(self):
         return self.name
 
     @property
-    def current_balance(self):
+    def total_billed(self):
         """
-        Calculate current balance dynamically without accrual records: 
-        Opening Balance + Total Revenue (Trips + GST + Standard Bills) - Total Received
+        Calculate total amount billed to this party:
+        Opening Balance + formal Invoices (associated with Bills) + Manual Debits (Expenses to Party)
         """
-        # 1. Base Revenue from all Trips
-        from trips.models import Trip
-        trip_revenue = Trip.objects.filter(party=self).aggregate(
-            total=models.Sum(models.F('weight') * models.F('rate_per_ton'), output_field=models.DecimalField())
-        )['total'] or Decimal('0')
+        # 1. Formal Invoice records (linked to Bills)
+        invoices = self.financial_records.filter(
+            record_type=FinancialRecord.RECORD_TYPE_INVOICE,
+            associated_bill__isnull=False
+        ).aggregate(total=models.Sum('amount'))['total'] or Decimal('0')
 
-        # 2. GST from Final Bills
-        total_gst = Decimal('0')
-        for bill in self.bills.filter(status=Bill.STATUS_FINAL):
-            total_gst += bill.gst_amount
-
-        # 3. Standard Bill Overrides (Revenue not covered by trips)
-        standard_revenue = self.bills.filter(bill_type=Bill.TYPE_STANDARD).aggregate(
-            total=models.Sum('amount_override')
-        )['total'] or Decimal('0')
-
-        total_revenue = trip_revenue + total_gst + standard_revenue
-
-        # 4. Total Received (Income Transactions + Deductions)
-        received = self.financial_records.filter(
-            record_type=FinancialRecord.RECORD_TYPE_TRANSACTION
-        ).filter(
-            models.Q(category__type=TransactionCategory.TYPE_INCOME) | 
+        # 2. Manual Debits (Expense type records to party, e.g. Refunds)
+        # Exclude Invoice type and 'Deductions' as they are already accounted for or are credits
+        manual_debits = self.financial_records.filter(
+            category__type=TransactionCategory.TYPE_EXPENSE
+        ).exclude(
+            models.Q(record_type=FinancialRecord.RECORD_TYPE_INVOICE) | 
             models.Q(category__name='Deductions')
         ).aggregate(total=models.Sum('amount'))['total'] or Decimal('0')
 
-        return self.opening_balance + total_revenue - received
+        return self.opening_balance + invoices + manual_debits
+
+    @property
+    def total_received(self):
+        """
+        Calculate total amount received from this party:
+        Income Transactions + Deductions (regardless of category type)
+        """
+        return self.financial_records.filter(
+            models.Q(category__type=TransactionCategory.TYPE_INCOME) | 
+            models.Q(category__name='Deductions')
+        ).exclude(
+            record_type=FinancialRecord.RECORD_TYPE_INVOICE
+        ).aggregate(total=models.Sum('amount'))['total'] or Decimal('0')
+
+    @property
+    def current_balance(self):
+        """
+        Calculate current balance dynamically without accrual records: 
+        Total Billed - Total Received
+        """
+        return self.total_billed - self.total_received
 
 class TransactionCategory(models.Model):
     """
@@ -112,11 +122,12 @@ class TransactionCategory(models.Model):
     name = models.CharField(max_length=100, unique=True)
     type = models.CharField(max_length=10, choices=TYPE_CHOICES, default=TYPE_INCOME)
     description = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
 
     class Meta:
         verbose_name = 'Transaction Category'
         verbose_name_plural = 'Transaction Categories'
-        ordering = ['name']
+        ordering = ['-created_at']
 
     def __str__(self):
         return f"{self.name} ({self.type})"
@@ -158,7 +169,7 @@ class CompanyAccount(models.Model):
     class Meta:
         verbose_name = 'Company Account'
         verbose_name_plural = 'Company Accounts'
-        ordering = ['name']
+        ordering = ['-created_at']
 
     def __str__(self):
         return self.name
@@ -315,15 +326,6 @@ class FinancialRecord(models.Model):
         if not self.entry_number:
             self.entry_number = Sequence.next_value('financial_record_entry_number')
         super().save(*args, **kwargs)
-
-        # Check trip closure if associated and this is a payment (Transaction)
-        if self.record_type == self.RECORD_TYPE_TRANSACTION:
-            if self.associated_trip:
-                self.associated_trip.check_and_close_trip()
-            elif self.associated_bill and self.associated_bill.bill_type == Bill.TYPE_TRIP:
-                # If a bill is paid (even partially), check its trips
-                for trip in self.associated_bill.trips.all():
-                    trip.check_and_close_trip()
 
     class Meta:
         verbose_name = 'Financial Record'
@@ -544,33 +546,56 @@ class Bill(models.Model):
 
     def update_ledger_records(self):
         """
-        Stop creating Consolidated Invoice records in the ledger.
-        If any existing invoice records exist for this bill, delete them.
+        Create/Update a single consolidated 'Invoice' type record in the ledger 
+        representing the entire bill.
+        Final bills include GST. Draft bills show subtotal only.
         """
-        # Find existing invoice record
-        inv_record = FinancialRecord.objects.filter(associated_bill=self, record_type=FinancialRecord.RECORD_TYPE_INVOICE).first()
+        # Ensure category 'Trip Payment' exists
+        category, _ = TransactionCategory.objects.get_or_create(
+            name='Trip Payment',
+            type=TransactionCategory.TYPE_INCOME
+        )
 
-        if inv_record:
-            inv_record.delete()
+        # Amount depends on status: Final bills include GST, Drafts include only subtotal
+        total_revenue = self.total_amount if self.status == self.STATUS_FINAL else self.subtotal
+
+        # Find or create consolidated invoice record
+        inv_record, created = FinancialRecord.objects.get_or_create(
+            associated_bill=self,
+            record_type=FinancialRecord.RECORD_TYPE_INVOICE,
+            defaults={
+                'date': self.date,
+                'account': self.issuer,
+                'party': self.party,
+                'category': category,
+                'amount': total_revenue,
+                'description': f"Invoice {self.bill_number or 'Draft'} for {self.trips.count()} trips",
+            }
+        )
+
+        if not created:
+            inv_record.date = self.date
+            inv_record.account = self.issuer
+            inv_record.party = self.party
+            inv_record.amount = total_revenue
+            inv_record.description = f"Invoice {self.bill_number or 'Draft'} for {self.trips.count()} trips"
+            inv_record.save()
 
     @property
     def amount_received(self):
         """
         Calculate total received for this bill.
         Includes:
-        1. Direct payments to this bill (Invoice Payment)
-        2. Deductions (recorded as expenses against this bill)
+        1. Direct payments to this bill (Income / Deductions)
+        2. Deductions (regardless of category name, if type is correct)
         3. For Trip-based bills: Payments allocated to individual trips
         """
-        # 1. Direct payments & deductions linked to this bill
-        direct_income = self.financial_records.filter(
-            category__type=TransactionCategory.TYPE_INCOME,
-            record_type=FinancialRecord.RECORD_TYPE_TRANSACTION
-        ).aggregate(total=Sum('amount'))['total'] or 0
-        
-        deductions = self.financial_records.filter(
-            category__name="Deductions",
-            record_type=FinancialRecord.RECORD_TYPE_TRANSACTION
+        # 1. Direct links to this bill (Exclude Invoices as they are debits)
+        direct = self.financial_records.exclude(
+            record_type=FinancialRecord.RECORD_TYPE_INVOICE
+        ).filter(
+            models.Q(category__type=TransactionCategory.TYPE_INCOME) | 
+            models.Q(category__name="Deductions")
         ).aggregate(total=Sum('amount'))['total'] or 0
 
         # 2. Trip-based allocations
@@ -583,14 +608,17 @@ class Bill(models.Model):
             
             # Also consider direct trip payments not through allocations (if any exist)
             direct_trip_payments = FinancialRecord.objects.filter(
-                associated_trip__in=self.trips.all(),
-                category__type=TransactionCategory.TYPE_INCOME,
-                record_type=FinancialRecord.RECORD_TYPE_TRANSACTION
+                associated_trip__in=self.trips.all()
+            ).exclude(
+                record_type=FinancialRecord.RECORD_TYPE_INVOICE
+            ).filter(
+                models.Q(category__type=TransactionCategory.TYPE_INCOME) | 
+                models.Q(category__name="Deductions")
             ).aggregate(total=Sum('amount'))['total'] or 0
             
             trip_payments += direct_trip_payments
 
-        return direct_income + deductions + trip_payments
+        return direct + trip_payments
 
     @property
     def outstanding_balance(self):

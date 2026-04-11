@@ -2,7 +2,7 @@
 Admin configuration for Fleet app
 """
 from django.contrib import admin
-from .models import Vehicle, MaintenanceRecord, Tyre, TyreLog, FuelLog
+from .models import Vehicle, MaintenanceRecord, Tyre, TyreLog
 
 
 @admin.register(Vehicle)
@@ -68,19 +68,12 @@ class MaintenanceRecordAdmin(admin.ModelAdmin):
 
 @admin.register(Tyre)
 class TyreAdmin(admin.ModelAdmin):
-    list_display = ['serial_number', 'brand', 'size', 'status', 'current_vehicle', 'total_km']
+    list_display = ['serial_number', 'brand', 'size', 'status', 'current_vehicle']
     list_filter = ['status', 'brand']
     search_fields = ['serial_number', 'brand', 'current_vehicle__registration_plate']
 
 
 @admin.register(TyreLog)
 class TyreLogAdmin(admin.ModelAdmin):
-    list_display = ['tyre', 'action', 'vehicle', 'date', 'distance_covered']
+    list_display = ['tyre', 'action', 'vehicle', 'date']
     list_filter = ['action', 'date', 'vehicle']
-
-
-@admin.register(FuelLog)
-class FuelLogAdmin(admin.ModelAdmin):
-    list_display = ['vehicle', 'date', 'liters', 'total_cost', 'odometer']
-    list_filter = ['date', 'vehicle']
-    search_fields = ['vehicle__registration_plate']

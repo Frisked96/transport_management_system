@@ -79,7 +79,7 @@ class Document(models.Model):
     class Meta:
         verbose_name = 'Document'
         verbose_name_plural = 'Documents'
-        ordering = ['expiry_date']
+        ordering = ['expiry_date', '-created_at']
 
     def __str__(self):
         return f"{self.document_type} - {self.document_number}"

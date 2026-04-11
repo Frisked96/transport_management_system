@@ -80,7 +80,7 @@ class FinancialRecordListView(LoginRequiredMixin, BaseLedgerPermissionMixin, Lis
         if end_date:
             queryset = queryset.filter(date__lte=end_date)
         
-        return queryset.order_by('-date')
+        return queryset.order_by('-date', '-created_at')
     
     def get_context_data(self, **kwargs):
 
@@ -374,49 +374,8 @@ class PartyListView(LoginRequiredMixin, BaseLedgerPermissionMixin, ListView):
                 Q(state__icontains=search)
             )
             
-        # Correctly calculate totals without using RECORD_TYPE_INVOICE
-        # 1. Total Trip Revenue
-        trip_revenue_subquery = Trip.objects.filter(
-            party=OuterRef('pk')
-        ).values('party').annotate(
-            total=Sum(F('weight') * F('rate_per_ton'), output_field=DecimalField())
-        ).values('total')
-
-        # 2. Total GST from Final Bills
-        # Since GST is a property/calculation, we'll sum it via standard aggregation for simplicity in subquery if possible, 
-        # but Bill.gst_amount depends on subtotal which is another sum.
-        # For simplicity, we can sum (subtotal * gst_rate / 100)
-        # Trip-based bills subtotal = sum(trip revenue)
-        # Standard bills subtotal = amount_override
-        
-        # This is complex for a single subquery. Let's use a simpler approach for now:
-        # We'll calculate it using the current_balance property logic but optimized for the queryset.
-        
-        # Total Received = Sum of Income Transactions (Payments) + Deductions
-        received_subquery = FinancialRecord.objects.filter(
-            party=OuterRef('pk'),
-            record_type=FinancialRecord.RECORD_TYPE_TRANSACTION
-        ).filter(
-            Q(category__type=TransactionCategory.TYPE_INCOME) | Q(category__name='Deductions')
-        ).values('party').annotate(
-            total=Sum('amount')
-        ).values('total')
-
-        queryset = queryset.annotate(
-            total_trip_rev=Coalesce(Subquery(trip_revenue_subquery, output_field=DecimalField()), Value(0, output_field=DecimalField())),
-            total_received=Coalesce(Subquery(received_subquery, output_field=DecimalField()), Value(0, output_field=DecimalField()))
-        )
-        
-        # We can't easily do the full GST and Standard Bill revenue in pure SQL subqueries 
-        # without complex joins because they are calculated properties.
-        # For now, we will rely on the current_balance property for individual rows 
-        # but provide these annotations for the list view columns if needed.
-        # Note: 'total_revenue' in the template will now need to be updated.
-        
-        queryset = queryset.annotate(
-            total_revenue=F('total_trip_rev'), # Simplified for list view, property handles full detail
-            outstanding_balance=F('opening_balance') + F('total_trip_rev') - F('total_received')
-        )
+        # We'll use the model properties in the template for absolute accuracy.
+        # Annotations are kept for basic filtering/ordering if needed.
         return queryset.order_by('name')
 
 class PartyDetailView(LoginRequiredMixin, BaseLedgerPermissionMixin, DetailView):
@@ -431,49 +390,22 @@ class PartyDetailView(LoginRequiredMixin, BaseLedgerPermissionMixin, DetailView)
         context = super().get_context_data(**kwargs)
         
         # Get associated trips with annotations (Payment & Billing Info)
-        all_trips = Trip.objects.filter(party=self.object).with_payment_info().with_billing_info().order_by('-date')
+        all_trips = Trip.objects.filter(party=self.object).with_payment_info().with_billing_info().order_by('-date', '-created_at')
         context['trips'] = all_trips
 
         # Get Bills
-        context['bills'] = self.object.bills.all().order_by('-date')
+        context['bills'] = self.object.bills.all().order_by('-date', '-created_at')
         
-        # Get associated financial records (Excluding Accrual Invoices)
-        financial_records = self.object.financial_records.exclude(
-            record_type=FinancialRecord.RECORD_TYPE_INVOICE
-        ).select_related('category', 'associated_trip', 'associated_bill').order_by('-date')
+        # Get associated financial records (Including Invoices for complete history)
+        financial_records = self.object.financial_records.select_related(
+            'category', 'associated_trip', 'associated_bill'
+        ).order_by('-date', '-created_at')
         context['financial_records'] = financial_records
         
-        # Calculate Totals using the model properties for accuracy
-        total_revenue = self.object.opening_balance
-        
-        # 1. Base Trip Revenue
-        trip_revenue = all_trips.aggregate(
-            total=Sum(F('weight') * F('rate_per_ton'), output_field=DecimalField())
-        )['total'] or Decimal('0')
-        total_revenue += trip_revenue
-        
-        # 2. GST from Final Bills
-        total_gst = Decimal('0')
-        for bill in context['bills'].filter(status=Bill.STATUS_FINAL):
-            total_gst += bill.gst_amount
-        total_revenue += total_gst
-        
-        # 3. Standard Bill Overrides
-        standard_rev = context['bills'].filter(bill_type=Bill.TYPE_STANDARD).aggregate(
-            total=Sum('amount_override')
-        )['total'] or Decimal('0')
-        total_revenue += standard_rev
-
-        # Calculate Total Received (Payments from Party + Deductions)
-        total_received = financial_records.filter(
-            record_type=FinancialRecord.RECORD_TYPE_TRANSACTION
-        ).filter(
-            Q(category__type=TransactionCategory.TYPE_INCOME) | Q(category__name='Deductions')
-        ).aggregate(total=Sum('amount'))['total'] or Decimal('0')
-        
-        context['total_revenue'] = total_revenue
-        context['total_received'] = total_received
-        context['balance'] = total_revenue - total_received # Total Outstanding
+        # Use model properties for accurate totals (They are more inclusive of manual entries)
+        context['total_revenue'] = self.object.total_billed
+        context['total_received'] = self.object.total_received
+        context['balance'] = self.object.current_balance
         
         return context
 
@@ -604,7 +536,7 @@ class CompanyAccountDetailView(LoginRequiredMixin, BaseLedgerPermissionMixin, De
         if end_date:
             records = records.filter(date__lte=end_date)
             
-        context['financial_records'] = records.order_by('-date')
+        context['financial_records'] = records.order_by('-date', '-created_at')
         return context
 
 
@@ -674,7 +606,7 @@ def get_party_unbilled_trips(request):
         else:
             qs = qs.filter(bills__isnull=True)
             
-        trips = qs.distinct().order_by('-date')
+        trips = qs.distinct().order_by('-date', '-created_at')
         
         data = [{
             'id': trip.id,
@@ -900,7 +832,9 @@ def party_statement_pdf(request, pk):
     
     for rec in pre_records:
         if rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE:
-            opening_bal += rec.amount
+            # Only count invoices linked to formal bills
+            if rec.associated_bill:
+                opening_bal += rec.amount
         elif rec.is_income or (rec.category and rec.category.name == 'Deductions'):
             # Payment or Deduction decreases what they owe (Credit)
             opening_bal -= rec.amount

@@ -74,7 +74,7 @@ class DriverDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
         context['expenses_list'] = FinancialRecord.objects.filter(
             associated_trip__driver=driver,
             category__type=TransactionCategory.TYPE_EXPENSE
-        ).order_by('-date')
+        ).order_by('-date', '-created_at')
 
         # Pocket Transactions
         context['transactions'] = driver.transactions.all().order_by('-date', '-created_at')
@@ -157,7 +157,7 @@ class DriverLedgerView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
         driver = self.object
         
         # Get all financial records associated with this driver
-        records = FinancialRecord.objects.filter(driver=driver).order_by('-date')
+        records = FinancialRecord.objects.filter(driver=driver).order_by('-date', '-created_at')
         context['financial_records'] = records
         
         # Calculate Balance

@@ -18,13 +18,11 @@ This project is a comprehensive Transport Management System built with Django. I
 ## High-Level Models Overview
 To assist in understanding the application architecture:
 *   **`trips`**: 
-    *   `Trip`: Uses a single-leg structure to track end-to-end transport operations. Supports `fixed` and `per_ton` revenue models.
-    *   `TripExpense`: Dynamically tracks custom expenses (e.g., Diesel, Toll) associated with a specific trip.
+    *   `Trip`: Uses a single-leg structure to track end-to-end transport operations. Status is derived from payment.
 *   **`fleet`**: 
     *   `Vehicle`: Central entity for fleet assets.
-    *   `MaintenanceTask` & `MaintenanceLog`: Decouples maintenance into recurring requirements (Tasks) and historical events (Logs).
-    *   `Tyre` & `TyreLog`: Manages tyre inventory, including statuses (Mounted, Scrap, etc.), automatic movement tracking, and KM usage calculations based on completed trips.
-    *   `FuelLog`: Tracks fueling events, synchronized with trip diesel entries.
+    *   `MaintenanceRecord`: Unified model for tracking maintenance expirations and historical completions.
+    *   `Tyre` & `TyreLog`: Manages tyre inventory, including statuses (Mounted, Scrap, etc.) and automatic movement tracking.
 *   **`drivers`**:
     *   `Driver`: Core driver profile extending the default User.
     *   `DriverTransaction`: Manages a driver's "Pocket/Wallet" balance (e.g., Salary, Allowance, Loan, Repayment).

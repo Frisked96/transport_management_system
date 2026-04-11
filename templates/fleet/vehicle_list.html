@@ -103,9 +103,10 @@
                     {% if perms.fleet.change_vehicle %}
                     <a href="{% url 'vehicle-update' vehicle.pk %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"><i class="fa-regular fa-pen-to-square mr-2"></i>Edit Vehicle</a>
                     {% endif %}
-                    {% if perms.fleet.create_maintenance_log %}
-                    <a href="{% url 'maintenance-log-create' %}?vehicle={{ vehicle.pk }}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"><i class="fa-solid fa-tools mr-2 text-xs"></i>Add Maint. Log</a>
+                    {% if perms.fleet.add_maintenancerecord %}
+                    <a href="{% url 'maintenance-create' %}?vehicle={{ vehicle.pk }}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"><i class="fa-solid fa-tools mr-2 text-xs"></i>Add Maint. Log</a>
                     {% endif %}
+
                     {% if perms.fleet.delete_vehicle %}
                     <hr class="my-1 border-slate-100">
                     <a href="{% url 'vehicle-delete' vehicle.pk %}" class="block px-4 py-2 text-sm text-rose-600 hover:bg-slate-50"><i class="fa-regular fa-trash-can mr-2"></i>Delete</a>

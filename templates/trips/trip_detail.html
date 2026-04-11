@@ -207,33 +207,3 @@
     </div>
 </div>
 {% endblock %}
-
-{% block extra_js %}
-<script>
-    $(document).ready(function() {
-        const $liters = $('#id_diesel_liters');
-        const $rate = $('#id_diesel_rate');
-        const $total = $('#id_diesel_total_cost');
-
-        function updateFromRate() {
-            const liters = parseFloat($liters.val()) || 0;
-            const rate = parseFloat($rate.val()) || 0;
-            if (liters > 0 && rate > 0) {
-                $total.val((liters * rate).toFixed(2));
-            }
-        }
-
-        function updateFromTotal() {
-            const liters = parseFloat($liters.val()) || 0;
-            const total = parseFloat($total.val()) || 0;
-            if (liters > 0 && total > 0) {
-                $rate.val((total / liters).toFixed(2));
-            }
-        }
-
-        $liters.on('input', updateFromRate);
-        $rate.on('input', updateFromRate);
-        $total.on('input', updateFromTotal);
-    });
-</script>
-{% endblock %}

@@ -34,14 +34,22 @@
 <!-- END: Page Header -->
 
 <!-- BEGIN: Summary Cards -->
-<div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+<div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
     <div class="bg-white border border-slate-200 rounded-lg p-5 shadow-sm">
-        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1 text-emerald-600">Total Received (Payments)</span>
-        <h3 class="text-2xl font-bold text-emerald-600">${{ total_received|floatformat:2 }}</h3>
+        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">Opening Balance</span>
+        <h3 class="text-2xl font-bold text-slate-700">₹{{ party.opening_balance|floatformat:2 }}</h3>
     </div>
-    <div class="border rounded-lg p-5 shadow-sm {% if balance > 0 %}bg-red-50 border-red-200 text-red-900{% else %}bg-emerald-50 border-emerald-200 text-emerald-900{% endif %}">
-        <span class="text-xs font-semibold uppercase tracking-wider block mb-1 {% if balance > 0 %}text-red-600{% else %}text-emerald-600{% endif %}">Current Outstanding Balance</span>
-        <h3 class="text-2xl font-bold">${{ balance|floatformat:2 }}</h3>
+    <div class="bg-white border border-slate-200 rounded-lg p-5 shadow-sm border-l-4 border-l-blue-500">
+        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1 text-blue-600">Total Billed</span>
+        <h3 class="text-2xl font-bold text-blue-600">₹{{ party.total_billed|floatformat:2 }}</h3>
+    </div>
+    <div class="bg-white border border-slate-200 rounded-lg p-5 shadow-sm border-l-4 border-l-emerald-500">
+        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1 text-emerald-600">Total Received</span>
+        <h3 class="text-2xl font-bold text-emerald-600">₹{{ party.total_received|floatformat:2 }}</h3>
+    </div>
+    <div class="border rounded-lg p-5 shadow-sm border-l-4 {% if party.current_balance > 0 %}bg-red-50 border-red-200 border-l-red-500 text-red-900{% else %}bg-emerald-50 border-emerald-200 border-l-emerald-500 text-emerald-900{% endif %}">
+        <span class="text-xs font-semibold uppercase tracking-wider block mb-1 {% if party.current_balance > 0 %}text-red-600{% else %}text-emerald-600{% endif %}">Outstanding Balance</span>
+        <h3 class="text-2xl font-bold">₹{{ party.current_balance|floatformat:2 }}</h3>
     </div>
 </div>
 <!-- END: Summary Cards -->
@@ -119,9 +127,9 @@
                                         <span class="truncate max-w-[100px]">{{ trip.delivery_location|default:"-" }}</span>
                                     </div>
                                 </td>
-                                <td class="px-6 py-4 text-sm text-slate-900 text-right font-medium">${{ trip.revenue|floatformat:2 }}</td>
+                                <td class="px-6 py-4 text-sm text-slate-900 text-right font-medium">₹{{ trip.revenue|floatformat:2 }}</td>
                                 <td class="px-6 py-4 text-sm text-right font-bold {% if trip.outstanding_balance > 0 %}text-red-600{% else %}text-emerald-600{% endif %}">
-                                    ${{ trip.outstanding_balance|floatformat:2 }}
+                                    ₹{{ trip.outstanding_balance|floatformat:2 }}
                                 </td>
                                 <td class="px-6 py-4 text-center">
                                     {% if trip.is_billed %}
@@ -287,7 +295,7 @@
                                 {% endif %}
                             </td>
                             <td class="px-6 py-4 text-sm text-right font-bold {% if record.is_income %}text-emerald-600{% else %}text-red-600{% endif %}">
-                                {% if record.is_income %}+{% else %}-{% endif %}${{ record.amount|floatformat:2 }}
+                                {% if record.is_income %}+{% else %}-{% endif %}₹{{ record.amount|floatformat:2 }}
                             </td>
                             <td class="px-6 py-4 text-sm text-slate-500 max-w-xs truncate">{{ record.description|default:"-" }}</td>
                             <td class="px-6 py-4 text-right">

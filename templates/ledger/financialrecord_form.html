@@ -180,11 +180,11 @@
             }
 
             // 2. Handle Associated Trip
-            // ONLY show for Trip Payment (if not multi-trip) or other Income types EXCEPT General Income
+            // ONLY show for Trip Payment (if not multi-trip) or other Income types EXCEPT Payment In
             if (associatedTripWrapper) {
                 if (isTripPayment && hasParty) {
                     associatedTripWrapper.classList.add('hidden'); // We use multi-trip area instead
-                } else if (isTripPayment || (categoryName.includes('Income') && !categoryName.includes('General'))) {
+                } else if (isTripPayment || (categoryName.includes('Income') && !categoryName.includes('Payment In'))) {
                     // Only show for income types if NOT specifically invoice payment
                     if (isInvoicePayment) {
                         associatedTripWrapper.classList.add('hidden');

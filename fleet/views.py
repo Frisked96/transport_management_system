@@ -11,7 +11,7 @@ from django.contrib import messages
 from django.db.models import Q, Count, Sum
 from django.http import JsonResponse, HttpResponse
 
-from .models import Vehicle, MaintenanceRecord, Tyre, TyreLog, FuelLog
+from .models import Vehicle, MaintenanceRecord, Tyre, TyreLog
 from .forms import VehicleForm, MaintenanceRecordForm, MaintenanceCompleteForm, TyreForm, TyreLogForm
 
 
@@ -147,18 +147,6 @@ class TyreLogCreateView(LoginRequiredMixin, CreateView):
         # then manually saving the TyreLog from the form 
         # which has user notes/date/etc.
         
-        # Calculate ODO and Distance for the form's log
-        form.instance.tyre_odo = tyre.total_km
-        if action in [TyreLog.ACTION_DISMOUNT, TyreLog.ACTION_ROTATION]:
-            v = tyre.current_vehicle or form.instance.vehicle
-            last_mount = tyre.logs.filter(action=TyreLog.ACTION_MOUNT, vehicle=v).first()
-            if last_mount:
-                form.instance.distance_covered = tyre.total_km - last_mount.tyre_odo
-            else:
-                form.instance.distance_covered = 0
-        else:
-            form.instance.distance_covered = 0
-
         tyre._skip_auto_log = True
         tyre.save()
         

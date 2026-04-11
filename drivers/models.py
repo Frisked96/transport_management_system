@@ -57,6 +57,7 @@ class Driver(models.Model):
     class Meta:
         verbose_name = 'Driver'
         verbose_name_plural = 'Drivers'
+        ordering = ['-joined_date', '-id']
         permissions = [
             ('can_view_all_drivers', 'Can view all drivers'),
             ('can_manage_driver_finance', 'Can manage driver finances'),
