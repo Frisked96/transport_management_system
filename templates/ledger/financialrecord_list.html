@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load ledger_extras %}
 
 {% block title %}Financial Records - Transport Management System{% endblock %}
 
@@ -27,17 +28,17 @@
 <!-- BEGIN: Summary Cards -->
 <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
     <div class="bg-white border border-slate-200 rounded-lg p-5 border-l-4 border-l-emerald-500 shadow-sm">
-        <h5 class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Total Income</h5>
+        <h5 class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Total Debit (In)</h5>
         <h2 class="text-2xl font-bold text-emerald-600">₹{{ total_income|floatformat:2 }}</h2>
     </div>
     <div class="bg-white border border-slate-200 rounded-lg p-5 border-l-4 border-l-red-500 shadow-sm">
-        <h5 class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Total Expenses</h5>
+        <h5 class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Total Credit (Out)</h5>
         <h2 class="text-2xl font-bold text-red-600">₹{{ total_expenses|floatformat:2 }}</h2>
     </div>
     <div class="bg-white border border-slate-200 rounded-lg p-5 border-l-4 {% if net_total >= 0 %}border-l-emerald-500{% else %}border-l-red-500{% endif %} shadow-sm">
-        <h5 class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Net Total</h5>
+        <h5 class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Net Balance</h5>
         <h2 class="text-2xl font-bold {% if net_total >= 0 %}text-emerald-600{% else %}text-red-600{% endif %}">
-            {% if net_total >= 0 %}+{% endif %}₹{{ net_total|floatformat:2 }}
+            ₹{{ net_total|abs_val|floatformat:2 }} {% if net_total >= 0 %}Dr{% else %}Cr{% endif %}
         </h2>
     </div>
 </div>
@@ -142,10 +143,10 @@
             {% endif %}
         </div>
 
-        <div class="w-28 text-right">
+        <div class="w-32 text-right">
             <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">Amount</span>
             <p class="text-lg font-bold {% if record.is_income %}text-emerald-600{% else %}text-red-600{% endif %}">
-                {% if record.is_income %}+{% else %}-{% endif %}₹{{ record.amount|floatformat:2 }}
+                ₹{{ record.amount|floatformat:2 }} {% if record.is_income %}Dr{% else %}Cr{% endif %}
             </p>
         </div>
 

@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% load static %}
+{% load ledger_extras %}
 
 {% block title %}{{ party.name }} - Transport Management System{% endblock %}
 
@@ -40,16 +41,16 @@
         <h3 class="text-2xl font-bold text-slate-700">₹{{ party.opening_balance|floatformat:2 }}</h3>
     </div>
     <div class="bg-white border border-slate-200 rounded-lg p-5 shadow-sm border-l-4 border-l-blue-500">
-        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1 text-blue-600">Total Billed</span>
-        <h3 class="text-2xl font-bold text-blue-600">₹{{ party.total_billed|floatformat:2 }}</h3>
+        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1 text-blue-600">Total Debit (Dr)</span>
+        <h3 class="text-2xl font-bold text-blue-600">₹{{ party.total_debit|floatformat:2 }}</h3>
     </div>
     <div class="bg-white border border-slate-200 rounded-lg p-5 shadow-sm border-l-4 border-l-emerald-500">
-        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1 text-emerald-600">Total Received</span>
-        <h3 class="text-2xl font-bold text-emerald-600">₹{{ party.total_received|floatformat:2 }}</h3>
+        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1 text-emerald-600">Total Credit (Cr)</span>
+        <h3 class="text-2xl font-bold text-emerald-600">₹{{ party.total_credit|floatformat:2 }}</h3>
     </div>
-    <div class="border rounded-lg p-5 shadow-sm border-l-4 {% if party.current_balance > 0 %}bg-red-50 border-red-200 border-l-red-500 text-red-900{% else %}bg-emerald-50 border-emerald-200 border-l-emerald-500 text-emerald-900{% endif %}">
-        <span class="text-xs font-semibold uppercase tracking-wider block mb-1 {% if party.current_balance > 0 %}text-red-600{% else %}text-emerald-600{% endif %}">Outstanding Balance</span>
-        <h3 class="text-2xl font-bold">₹{{ party.current_balance|floatformat:2 }}</h3>
+    <div class="border rounded-lg p-5 shadow-sm border-l-4 {% if party.current_balance_value > 0 %}bg-red-50 border-red-200 border-l-red-500 text-red-900{% elif party.current_balance_value < 0 %}bg-emerald-50 border-emerald-200 border-l-emerald-500 text-emerald-900{% else %}bg-slate-50 border-slate-200 border-l-slate-500 text-slate-900{% endif %}">
+        <span class="text-xs font-semibold uppercase tracking-wider block mb-1 {% if party.current_balance_value > 0 %}text-red-600{% elif party.current_balance_value < 0 %}text-emerald-600{% else %}text-slate-600{% endif %}">Current Balance</span>
+        <h3 class="text-2xl font-bold">₹{{ party.current_balance }}</h3>
     </div>
 </div>
 <!-- END: Summary Cards -->
@@ -193,11 +194,11 @@
                             </td>
                             <td class="px-6 py-4 text-sm text-slate-600">{{ bill.date|date:"d/m/Y" }}</td>
                             <td class="px-6 py-4"><span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">{{ bill.trips.count }} Trips</span></td>
-                            <td class="px-6 py-4 text-xs text-slate-500 text-right">${{ bill.subtotal|floatformat:2 }}</td>
-                            <td class="px-6 py-4 text-xs text-slate-500 text-right">${{ bill.gst_amount|floatformat:2 }}</td>
-                            <td class="px-6 py-4 text-sm font-medium text-slate-900 text-right">${{ bill.total_amount|floatformat:2 }}</td>
+                            <td class="px-6 py-4 text-xs text-slate-500 text-right">₹{{ bill.subtotal|floatformat:2 }}</td>
+                            <td class="px-6 py-4 text-xs text-slate-500 text-right">₹{{ bill.gst_amount|floatformat:2 }}</td>
+                            <td class="px-6 py-4 text-sm font-medium text-slate-900 text-right">₹{{ bill.total_amount|floatformat:2 }}</td>
                             <td class="px-6 py-4 text-sm font-bold text-right {% if bill.outstanding_balance > 0 %}text-red-600{% else %}text-emerald-600{% endif %}">
-                                ${{ bill.outstanding_balance|floatformat:2 }}
+                                ₹{{ bill.outstanding_balance|floatformat:2 }}
                             </td>
                             <td class="px-6 py-4 text-center">
                                 <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium 
@@ -252,8 +253,8 @@
             <div class="p-5 border-b border-slate-200 flex flex-col md:flex-row justify-between items-center gap-4">
                 <h3 class="font-bold text-slate-900">Financial Transactions</h3>
                 <div class="flex space-x-4">
-                     <span class="inline-flex items-center text-xs font-medium text-emerald-600"><i class="fa-solid fa-circle text-[8px] mr-1.5"></i>Income (+)</span>
-                     <span class="inline-flex items-center text-xs font-medium text-red-600"><i class="fa-solid fa-circle text-[8px] mr-1.5"></i>Expense (-)</span>
+                     <span class="inline-flex items-center text-xs font-medium text-blue-600"><i class="fa-solid fa-circle text-[8px] mr-1.5"></i>Debit (Dr)</span>
+                     <span class="inline-flex items-center text-xs font-medium text-emerald-600"><i class="fa-solid fa-circle text-[8px] mr-1.5"></i>Credit (Cr)</span>
                 </div>
             </div>
             <div class="overflow-x-auto">
@@ -263,7 +264,8 @@
                             <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Date</th>
                             <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Type / Category</th>
                             <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Reference</th>
-                            <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Amount</th>
+                            <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Debit (Dr)</th>
+                            <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Credit (Cr)</th>
                             <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Description</th>
                             <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Actions</th>
                         </tr>
@@ -271,10 +273,10 @@
                     <tbody class="divide-y divide-slate-200">
                         {% for record in financial_records %}
                         <tr class="hover:bg-slate-50 transition-colors">
-                            <td class="px-6 py-4 text-sm text-slate-600">{{ record.date|date:"d/m/Y" }}</td>
+                            <td class="px-6 py-4 text-sm text-slate-600 whitespace-nowrap">{{ record.date|date:"d/m/Y" }}</td>
                             <td class="px-6 py-4">
                                 {% if record.is_invoice %}
-                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">Invoice/Bill</span>
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">Invoice</span>
                                 {% else %}
                                 <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-700">{{ record.category.name }}</span>
                                 {% endif %}
@@ -294,8 +296,11 @@
                                 <span class="text-slate-400">-</span>
                                 {% endif %}
                             </td>
-                            <td class="px-6 py-4 text-sm text-right font-bold {% if record.is_income %}text-emerald-600{% else %}text-red-600{% endif %}">
-                                {% if record.is_income %}+{% else %}-{% endif %}₹{{ record.amount|floatformat:2 }}
+                            <td class="px-6 py-4 text-sm text-right font-bold text-blue-600">
+                                {% if record.debit_amount %}₹{{ record.debit_amount|floatformat:2 }}{% else %}-{% endif %}
+                            </td>
+                            <td class="px-6 py-4 text-sm text-right font-bold text-emerald-600">
+                                {% if record.credit_amount %}₹{{ record.credit_amount|floatformat:2 }}{% else %}-{% endif %}
                             </td>
                             <td class="px-6 py-4 text-sm text-slate-500 max-w-xs truncate">{{ record.description|default:"-" }}</td>
                             <td class="px-6 py-4 text-right">

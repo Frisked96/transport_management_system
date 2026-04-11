@@ -821,26 +821,24 @@ def party_statement_pdf(request, pk):
         except ValueError:
             end_date = timezone.now().date()
 
+    def format_balance(val):
+        if val > 0: return f"{abs(val):.2f} Dr"
+        elif val < 0: return f"{abs(val):.2f} Cr"
+        return "0.00"
+
     # 1. Calculate Opening Balance (before start_date)
     opening_bal = party.opening_balance
     
-    # Add all transactions before start_date
+    # Add all transactions before start_date using new Dr/Cr properties
     pre_records = FinancialRecord.objects.filter(
         party=party,
         date__lt=start_date
     ).select_related('category')
     
     for rec in pre_records:
-        if rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE:
-            # Only count invoices linked to formal bills
-            if rec.associated_bill:
-                opening_bal += rec.amount
-        elif rec.is_income or (rec.category and rec.category.name == 'Deductions'):
-            # Payment or Deduction decreases what they owe (Credit)
-            opening_bal -= rec.amount
-        else:
-            # Expense to party (e.g. refund) increases what they owe (Debit)
-            opening_bal += rec.amount
+        debit = rec.debit_amount or Decimal('0')
+        credit = rec.credit_amount or Decimal('0')
+        opening_bal += (debit - credit)
 
     # 2. Get records in range
     records = FinancialRecord.objects.filter(
@@ -851,25 +849,16 @@ def party_statement_pdf(request, pk):
     # 3. Build statement rows with running balance
     statement_rows = []
     current_running_bal = opening_bal
+    total_period_debit = Decimal('0')
+    total_period_credit = Decimal('0')
     
     for rec in records:
-        debit = 0
-        credit = 0
+        debit = rec.debit_amount or Decimal('0')
+        credit = rec.credit_amount or Decimal('0')
         
-        # DEBIT = Billing/Refunds (increases what they owe us)
-        # CREDIT = Payments received or Deductions (decreases what they owe us)
-        
-        is_credit = rec.is_income or (rec.category and rec.category.name == 'Deductions')
-
-        if rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE:
-            debit = rec.amount
-            current_running_bal += debit
-        elif is_credit:
-            credit = rec.amount
-            current_running_bal -= credit
-        else:
-            debit = rec.amount
-            current_running_bal += debit
+        current_running_bal += (debit - credit)
+        total_period_debit += debit
+        total_period_credit += credit
             
         # Get reference string
         ref = "-"
@@ -888,39 +877,34 @@ def party_statement_pdf(request, pk):
             'reference': ref,
             'debit': debit,
             'credit': credit,
-            'balance': current_running_bal
+            'balance': current_running_bal,
+            'balance_formatted': format_balance(current_running_bal)
         })
 
     # 4. Render to PDF
     context = {
         'party': party,
-        'recipient_name': party.name,
-        'recipient_address': party.address,
-        'recipient_gstin': party.gstin,
-        'recipient_phone': party.phone_number,
-        'title': f"Statement of Account - {party.name}",
         'start_date': start_date,
         'end_date': end_date,
         'opening_balance': opening_bal,
+        'opening_balance_formatted': format_balance(opening_bal),
         'statement_rows': statement_rows,
+        'total_debit': total_period_debit,
+        'total_credit': total_period_credit,
         'closing_balance': current_running_bal,
+        'closing_balance_formatted': format_balance(current_running_bal),
         'generated_at': timezone.now(),
-        'company': CompanyAccount.objects.first(), # Header info
+        'company': CompanyAccount.objects.first(),
+        'title': f"Statement of Account - {party.name}",
     }
     
-    template = get_template('ledger/statement_pdf.html')
-    html = template.render(context)
-    
+    html = render_to_string('ledger/party_statement_pdf.html', context)
     response = HttpResponse(content_type='application/pdf')
-    # Use inline for testing, attachment for production
     response['Content-Disposition'] = f'inline; filename="Statement_{party.name.replace(" ", "_")}_{start_date}.pdf"'
     
-    # Create PDF
     pisa_status = pisa.CreatePDF(html, dest=response)
-    
     if pisa_status.err:
         return HttpResponse('Error generating PDF', status=500)
-        
     return response
 
 
@@ -952,6 +936,11 @@ def account_statement_pdf(request, pk):
         except ValueError:
             end_date = timezone.now().date()
 
+    def format_balance(val):
+        if val > 0: return f"{abs(val):.2f} Dr"
+        elif val < 0: return f"{abs(val):.2f} Cr"
+        return "0.00"
+
     # 1. Calculate Opening Balance (before start_date)
     opening_bal = account.opening_balance
     
@@ -963,6 +952,8 @@ def account_statement_pdf(request, pk):
     for rec in pre_records:
         if rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE:
             continue # Skip accruals for cash statements
+        
+        # For Company Account (Asset): Income=Debit (+), Expense=Credit (-)
         if rec.is_income:
             opening_bal += rec.amount
         else:
@@ -977,20 +968,24 @@ def account_statement_pdf(request, pk):
     # 3. Build statement rows
     statement_rows = []
     current_running_bal = opening_bal
+    total_period_debit = Decimal('0')
+    total_period_credit = Decimal('0')
     
     for rec in records:
-        debit = 0
-        credit = 0
-        
         if rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE:
             continue # Skip accruals
             
+        debit = Decimal('0')
+        credit = Decimal('0')
+
         if rec.is_income:
             debit = rec.amount
-            current_running_bal += debit
         else:
             credit = rec.amount
-            current_running_bal -= credit
+            
+        current_running_bal += (debit - credit)
+        total_period_debit += debit
+        total_period_credit += credit
             
         # Get reference string
         ref = "-"
@@ -1010,11 +1005,13 @@ def account_statement_pdf(request, pk):
             'reference': ref,
             'debit': debit,
             'credit': credit,
-            'balance': current_running_bal
+            'balance': current_running_bal,
+            'balance_formatted': format_balance(current_running_bal)
         })
 
     # 4. Render to PDF
     context = {
+        'party': account, # Reusing template variable name for simplicity
         'recipient_name': account.name,
         'recipient_label': 'ACCOUNT',
         'recipient_address': account.address,
@@ -1025,15 +1022,17 @@ def account_statement_pdf(request, pk):
         'start_date': start_date,
         'end_date': end_date,
         'opening_balance': opening_bal,
+        'opening_balance_formatted': format_balance(opening_bal),
         'statement_rows': statement_rows,
+        'total_debit': total_period_debit,
+        'total_credit': total_period_credit,
         'closing_balance': current_running_bal,
+        'closing_balance_formatted': format_balance(current_running_bal),
         'generated_at': timezone.now(),
-        'company': account, # This account is the company
+        'company': account, 
     }
     
-    template = get_template('ledger/statement_pdf.html')
-    html = template.render(context)
-    
+    html = render_to_string('ledger/party_statement_pdf.html', context)
     response = HttpResponse(content_type='application/pdf')
     response['Content-Disposition'] = f'inline; filename="Account_Statement_{account.name.replace(" ", "_")}.pdf"'
     
@@ -1069,6 +1068,11 @@ def unified_ledger_pdf(request):
         except ValueError:
             end_date = timezone.now().date()
 
+    def format_balance(val):
+        if val > 0: return f"{abs(val):.2f} Dr"
+        elif val < 0: return f"{abs(val):.2f} Cr"
+        return "0.00"
+
     # 1. Calculate Combined Opening Balance
     opening_bal = CompanyAccount.objects.aggregate(total=Sum('opening_balance'))['total'] or Decimal('0')
     
@@ -1079,6 +1083,7 @@ def unified_ledger_pdf(request):
     for rec in pre_records:
         if rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE:
             continue # Skip accruals for cash statements
+        
         if rec.is_income:
             opening_bal += rec.amount
         else:
@@ -1092,20 +1097,24 @@ def unified_ledger_pdf(request):
     # 3. Build statement rows
     statement_rows = []
     current_running_bal = opening_bal
+    total_period_debit = Decimal('0')
+    total_period_credit = Decimal('0')
     
     for rec in records:
-        debit = 0
-        credit = 0
-        
         if rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE:
             continue # Skip accruals
             
+        debit = Decimal('0')
+        credit = Decimal('0')
+
         if rec.is_income:
             debit = rec.amount
-            current_running_bal += debit
         else:
             credit = rec.amount
-            current_running_bal -= credit
+            
+        current_running_bal += (debit - credit)
+        total_period_debit += debit
+        total_period_credit += credit
             
         # Get reference string
         ref = "-"
@@ -1131,12 +1140,14 @@ def unified_ledger_pdf(request):
             'reference': ref,
             'debit': debit,
             'credit': credit,
-            'balance': current_running_bal
+            'balance': current_running_bal,
+            'balance_formatted': format_balance(current_running_bal)
         })
 
     # 4. Render to PDF
     company_main = CompanyAccount.objects.first()
     context = {
+        'party': company_main, # Template placeholder
         'recipient_name': "All Company Accounts",
         'recipient_label': 'CONSOLIDATED',
         'recipient_address': "Multi-firm Consolidated Ledger",
@@ -1144,15 +1155,17 @@ def unified_ledger_pdf(request):
         'start_date': start_date,
         'end_date': end_date,
         'opening_balance': opening_bal,
+        'opening_balance_formatted': format_balance(opening_bal),
         'statement_rows': statement_rows,
+        'total_debit': total_period_debit,
+        'total_credit': total_period_credit,
         'closing_balance': current_running_bal,
+        'closing_balance_formatted': format_balance(current_running_bal),
         'generated_at': timezone.now(),
         'company': company_main,
     }
     
-    template = get_template('ledger/statement_pdf.html')
-    html = template.render(context)
-    
+    html = render_to_string('ledger/party_statement_pdf.html', context)
     response = HttpResponse(content_type='application/pdf')
     response['Content-Disposition'] = f'inline; filename="Unified_Ledger_{start_date}.pdf"'
     

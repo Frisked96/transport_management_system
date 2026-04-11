@@ -91,7 +91,7 @@
                 <td width="40%" class="text-right" style="vertical-align: bottom;">
                     <table align="right">
                         <tr><td class="info-label">Period:</td><td class="text-right">{{ start_date|date:"d/m/Y" }} to {{ end_date|date:"d/m/Y" }}</td></tr>
-                        <tr><td class="info-label">Closing Bal:</td><td class="text-right font-bold" style="font-size: 11pt;">${{ closing_balance|floatformat:2 }}</td></tr>
+                        <tr><td class="info-label">Closing Bal:</td><td class="text-right font-bold" style="font-size: 11pt;">₹{{ closing_balance_formatted }}</td></tr>
                     </table>
                 </td>
             </tr>
@@ -103,8 +103,8 @@
                     <th width="12%">Date</th>
                     <th width="35%">Description / Particulars</th>
                     <th width="13%">Ref</th>
-                    <th width="13%" class="text-right">Debit (+)</th>
-                    <th width="13%" class="text-right">Credit (-)</th>
+                    <th width="13%" class="text-right">Debit (Dr)</th>
+                    <th width="13%" class="text-right">Credit (Cr)</th>
                     <th width="14%" class="text-right">Balance</th>
                 </tr>
             </thead>
@@ -114,7 +114,7 @@
                     <td colspan="2">OPENING BALANCE</td>
                     <td class="text-right">{% if opening_balance > 0 %}{{ opening_balance|abs_val|floatformat:2 }}{% else %}-{% endif %}</td>
                     <td class="text-right">{% if opening_balance < 0 %}{{ opening_balance|abs_val|floatformat:2 }}{% else %}-{% endif %}</td>
-                    <td class="text-right">{{ opening_balance|floatformat:2 }}</td>
+                    <td class="text-right">{{ opening_balance_formatted }}</td>
                 </tr>
                 
                 {% for row in statement_rows %}
@@ -124,23 +124,19 @@
                     <td class="text-center">{{ row.reference }}</td>
                     <td class="text-right debit">{% if row.debit > 0 %}{{ row.debit|floatformat:2 }}{% else %}-{% endif %}</td>
                     <td class="text-right credit">{% if row.credit > 0 %}{{ row.credit|floatformat:2 }}{% else %}-{% endif %}</td>
-                    <td class="text-right font-bold">{{ row.balance|floatformat:2 }}</td>
+                    <td class="text-right font-bold">{{ row.balance_formatted }}</td>
                 </tr>
                 {% endfor %}
                 
                 <tr class="summary-row">
                     <td colspan="3" class="text-right text-xs">TOTALS / CLOSING</td>
                     <td class="text-right">
-                        {% with total_debit=statement_rows|sum_list:"debit" %}
-                            {{ total_debit|floatformat:2 }}
-                        {% endwith %}
+                        {{ total_debit|floatformat:2 }}
                     </td>
                     <td class="text-right">
-                        {% with total_credit=statement_rows|sum_list:"credit" %}
-                            {{ total_credit|floatformat:2 }}
-                        {% endwith %}
+                        {{ total_credit|floatformat:2 }}
                     </td>
-                    <td class="text-right" style="background-color: #e2e8f0; font-size: 11pt;">{{ closing_balance|floatformat:2 }}</td>
+                    <td class="text-right" style="background-color: #e2e8f0; font-size: 11pt;">₹{{ closing_balance_formatted }}</td>
                 </tr>
             </tbody>
         </table>

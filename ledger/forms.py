@@ -133,7 +133,7 @@ class PartyForm(forms.ModelForm):
     class Meta:
         model = Party
         fields = [
-            'name', 'phone_number', 'state', 'address', 'gstin',
+            'name', 'party_type', 'phone_number', 'state', 'address', 'gstin',
             'bank_name', 'bank_branch', 'account_number', 'ifsc_code', 'account_holder_name',
             'bank_details', 'opening_balance'
         ]

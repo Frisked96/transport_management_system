@@ -33,9 +33,22 @@ class Sequence(models.Model):
 
 class Party(models.Model):
     """
-    Party/Client model for managing business entities
+    Party/Client/Vendor model for managing business entities
     """
+    TYPE_DEBTOR = 'Debtor'
+    TYPE_CREDITOR = 'Creditor'
+    TYPE_CHOICES = [
+        (TYPE_DEBTOR, 'Customer (Debtor)'),
+        (TYPE_CREDITOR, 'Vendor/Supplier (Creditor)'),
+    ]
+
     name = models.CharField(max_length=200, unique=True, verbose_name='Party Name')
+    party_type = models.CharField(
+        max_length=20, 
+        choices=TYPE_CHOICES, 
+        default=TYPE_DEBTOR,
+        verbose_name='Party Type'
+    )
     phone_number = models.CharField(max_length=20, blank=True, verbose_name='Phone Number')
     state = models.CharField(max_length=100, blank=True, verbose_name='State')
     address = models.TextField(blank=True, verbose_name='Address')
@@ -66,48 +79,52 @@ class Party(models.Model):
         return self.name
 
     @property
-    def total_billed(self):
+    def total_debit(self):
         """
-        Calculate total amount billed to this party:
-        Opening Balance + formal Invoices (associated with Bills) + Manual Debits (Expenses to Party)
+        Total Debits: Opening Balance (if positive) + Invoices + Manual Expenses
         """
-        # 1. Formal Invoice records (linked to Bills)
+        base = self.opening_balance if self.opening_balance > 0 else Decimal('0')
         invoices = self.financial_records.filter(
             record_type=FinancialRecord.RECORD_TYPE_INVOICE,
             associated_bill__isnull=False
         ).aggregate(total=models.Sum('amount'))['total'] or Decimal('0')
-
-        # 2. Manual Debits (Expense type records to party, e.g. Refunds)
-        # Exclude Invoice type and 'Deductions' as they are already accounted for or are credits
         manual_debits = self.financial_records.filter(
             category__type=TransactionCategory.TYPE_EXPENSE
         ).exclude(
             models.Q(record_type=FinancialRecord.RECORD_TYPE_INVOICE) | 
             models.Q(category__name='Deductions')
         ).aggregate(total=models.Sum('amount'))['total'] or Decimal('0')
-
-        return self.opening_balance + invoices + manual_debits
+        return base + invoices + manual_debits
 
     @property
-    def total_received(self):
+    def total_credit(self):
         """
-        Calculate total amount received from this party:
-        Income Transactions + Deductions (regardless of category type)
+        Total Credits: Opening Balance (if negative) + Income Transactions + Deductions
         """
-        return self.financial_records.filter(
+        base = abs(self.opening_balance) if self.opening_balance < 0 else Decimal('0')
+        credits = self.financial_records.filter(
             models.Q(category__type=TransactionCategory.TYPE_INCOME) | 
             models.Q(category__name='Deductions')
         ).exclude(
             record_type=FinancialRecord.RECORD_TYPE_INVOICE
         ).aggregate(total=models.Sum('amount'))['total'] or Decimal('0')
+        return base + credits
+
+    @property
+    def current_balance_value(self):
+        return self.total_debit - self.total_credit
 
     @property
     def current_balance(self):
-        """
-        Calculate current balance dynamically without accrual records: 
-        Total Billed - Total Received
-        """
-        return self.total_billed - self.total_received
+        val = self.current_balance_value
+        if val > 0: return f"{abs(val):.2f} Dr"
+        elif val < 0: return f"{abs(val):.2f} Cr"
+        return "0.00"
+
+    @property
+    def total_billed(self): return self.total_debit
+    @property
+    def total_received(self): return self.total_credit
 
 class TransactionCategory(models.Model):
     """
@@ -175,11 +192,9 @@ class CompanyAccount(models.Model):
         return self.name
 
     @property
-    def current_balance(self):
+    def current_balance_value(self):
         """
-        Calculate current balance: Opening Balance + Total Income - Total Expenses
-        Excludes 'Invoice' type records as they are accruals, not cash flow.
-        Excludes 'Deductions' as they are non-cash revenue reductions.
+        Numeric balance: Opening (Dr) + Debits (Income) - Credits (Expenses)
         """
         income = self.financial_records.filter(
             category__type=TransactionCategory.TYPE_INCOME
@@ -195,6 +210,14 @@ class CompanyAccount(models.Model):
         ).aggregate(total=models.Sum('amount'))['total'] or 0
 
         return self.opening_balance + income - expenses
+
+    @property
+    def current_balance(self):
+        """Formatted balance with Dr/Cr"""
+        val = self.current_balance_value
+        if val > 0: return f"{abs(val):.2f} Dr"
+        elif val < 0: return f"{abs(val):.2f} Cr"
+        return "0.00"
 
 def financial_record_upload_path(instance, filename):
     """
@@ -385,6 +408,33 @@ class FinancialRecord(models.Model):
     @property
     def is_invoice(self):
         return self.record_type == self.RECORD_TYPE_INVOICE
+
+    @property
+    def debit_amount(self):
+        """
+        Returns amount if it is a Debit for the primary entity in context
+        Party Ledger: Invoices/Expenses = Debit (EXCLUDING Deductions)
+        Company Account: Income = Debit
+        """
+        # Deductions must NEVER be debits for a party
+        if self.category and self.category.name == 'Deductions':
+            return None
+
+        if self.is_invoice or self.is_expense:
+            return self.amount
+        return None
+
+    @property
+    def credit_amount(self):
+        """
+        Returns amount if it is a Credit for the primary entity in context
+        Party Ledger: Income/Deductions = Credit
+        Company Account: Expense = Credit
+        """
+        if self.is_income or self.category.name == 'Deductions':
+            # Note: Deductions are technically expenses in DB but credits for Party
+            return self.amount
+        return None
 
     @property
     def signed_amount(self):

@@ -12,10 +12,11 @@
 <div class="mb-1">
     <strong>Date:</strong> {{ object.date|date:"M d, Y" }}<br>
     <strong>Category:</strong> {{ object.category }}<br>
-    <strong>Amount:</strong> 
+    <strong>Amount:</strong>
     <span style="font-weight: bold; {% if object.is_income %}color: #27ae60;{% else %}color: #e74c3c;{% endif %}">
-        {% if object.is_income %}+{% else %}-{% endif %}${{ object.amount|floatformat:2 }}
+        ₹{{ object.amount|floatformat:2 }} {% if object.is_income %}Dr{% else %}Cr{% endif %}
     </span><br>
+
     {% if object.associated_trip %}
         <strong>Associated Trip:</strong> {{ object.associated_trip.trip_number }}<br>
     {% endif %}
