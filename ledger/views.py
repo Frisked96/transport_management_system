@@ -14,7 +14,7 @@ from decimal import Decimal, InvalidOperation
 from datetime import datetime
 import json
 from django.http import JsonResponse, HttpResponse
-from django.template.loader import get_template
+from django.template.loader import get_template, render_to_string
 from xhtml2pdf import pisa
 from itertools import groupby
 from operator import attrgetter
@@ -305,15 +305,13 @@ def financial_summary(request):
         date__year=current_year
     ).aggregate(total=Sum('amount'))['total'] or 0
 
-    # Calculate GST portion from Final Bills
+    # Calculate GST portion from all Bills
     from .models import Bill
     monthly_gst = sum(bill.gst_amount for bill in Bill.objects.filter(
-        status=Bill.STATUS_FINAL,
         date__month=current_month,
         date__year=current_year
     ))
     yearly_gst = sum(bill.gst_amount for bill in Bill.objects.filter(
-        status=Bill.STATUS_FINAL,
         date__year=current_year
     ))
     
@@ -579,7 +577,7 @@ def get_bill_balance(request):
         bill = get_object_or_404(Bill, pk=bill_id)
         return JsonResponse({
             'balance': float(bill.outstanding_balance),
-            'total': float(bill.total_amount if bill.status == Bill.STATUS_FINAL else bill.subtotal),
+            'total': float(bill.total_amount),
             'received': float(bill.amount_received)
         })
     except Exception as e:
@@ -598,7 +596,7 @@ def get_party_unbilled_trips(request):
     
     try:
         # Show trips for this party
-        qs = Trip.objects.filter(party_id=party_id).exclude(status='Cancelled')
+        qs = Trip.objects.filter(party_id=party_id)
         
         if bill_id:
             # Include currently selected trips for this bill + unbilled ones
@@ -822,29 +820,58 @@ def party_statement_pdf(request, pk):
             end_date = timezone.now().date()
 
     def format_balance(val):
-        if val > 0: return f"{abs(val):.2f} Dr"
-        elif val < 0: return f"{abs(val):.2f} Cr"
+        if party.party_type == Party.TYPE_DEBTOR:
+            if val > 0: return f"{abs(val):.2f} Dr"
+            elif val < 0: return f"{abs(val):.2f} Cr"
+        else:
+            # For Creditors, positive internal balance usually means we owe them (Credit)
+            if val > 0: return f"{abs(val):.2f} Cr"
+            elif val < 0: return f"{abs(val):.2f} Dr"
         return "0.00"
 
     # 1. Calculate Opening Balance (before start_date)
     opening_bal = party.opening_balance
     
-    # Add all transactions before start_date using new Dr/Cr properties
+    # Include records directly linked to party OR linked to trips of this party
     pre_records = FinancialRecord.objects.filter(
-        party=party,
+        Q(party=party) | Q(associated_trip__party=party) | Q(allocations__trip__party=party),
         date__lt=start_date
-    ).select_related('category')
+    ).select_related('category', 'party', 'associated_trip', 'associated_trip__party').distinct()
     
     for rec in pre_records:
-        debit = rec.debit_amount or Decimal('0')
-        credit = rec.credit_amount or Decimal('0')
+        # We need debit/credit from the perspective of THIS party
+        # Even if the record.party is None (but it's linked via trip)
+        
+        # Determine if this record acts as a debit or credit for THIS specific party
+        # We can't just use rec.debit_amount because that might use rec.party which could be None
+        
+        debit = Decimal('0')
+        credit = Decimal('0')
+
+        # Logic similar to rec.debit_amount but explicitly for 'party'
+        is_invoice = rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE
+        is_expense = rec.category.type == TransactionCategory.TYPE_EXPENSE if rec.category else False
+        is_income = rec.category.type == TransactionCategory.TYPE_INCOME if rec.category else False
+        is_deduction = rec.category.name == 'Deductions' if rec.category else False
+
+        if party.party_type == Party.TYPE_DEBTOR:
+            if (is_invoice or is_expense) and not is_deduction:
+                debit = rec.amount
+            if is_income or is_deduction:
+                credit = rec.amount
+        else: # CREDITOR
+            if is_income or is_deduction:
+                debit = rec.amount
+            if (is_invoice or is_expense) and not is_deduction:
+                credit = rec.amount
+
         opening_bal += (debit - credit)
 
     # 2. Get records in range
     records = FinancialRecord.objects.filter(
-        party=party,
+        Q(party=party) | Q(associated_trip__party=party) | Q(allocations__trip__party=party),
         date__range=[start_date, end_date]
-    ).select_related('category', 'associated_trip', 'associated_bill').order_by('date', 'created_at')
+    ).select_related('category', 'associated_trip', 'associated_bill', 'party').order_by('date', 'created_at').distinct()
 
     # 3. Build statement rows with running balance
     statement_rows = []
@@ -853,9 +880,14 @@ def party_statement_pdf(request, pk):
     total_period_credit = Decimal('0')
     
     for rec in records:
+        # Use model properties for debit/credit from the perspective of the record's primary entity
         debit = rec.debit_amount or Decimal('0')
         credit = rec.credit_amount or Decimal('0')
         
+        # Skip records that have neither debit nor credit for the primary party
+        if debit == 0 and credit == 0:
+            continue
+
         current_running_bal += (debit - credit)
         total_period_debit += debit
         total_period_credit += credit
@@ -975,13 +1007,8 @@ def account_statement_pdf(request, pk):
         if rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE:
             continue # Skip accruals
             
-        debit = Decimal('0')
-        credit = Decimal('0')
-
-        if rec.is_income:
-            debit = rec.amount
-        else:
-            credit = rec.amount
+        debit = rec.debit_amount or Decimal('0')
+        credit = rec.credit_amount or Decimal('0')
             
         current_running_bal += (debit - credit)
         total_period_debit += debit
@@ -1104,13 +1131,8 @@ def unified_ledger_pdf(request):
         if rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE:
             continue # Skip accruals
             
-        debit = Decimal('0')
-        credit = Decimal('0')
-
-        if rec.is_income:
-            debit = rec.amount
-        else:
-            credit = rec.amount
+        debit = rec.debit_amount or Decimal('0')
+        credit = rec.credit_amount or Decimal('0')
             
         current_running_bal += (debit - credit)
         total_period_debit += debit
@@ -1173,3 +1195,41 @@ def unified_ledger_pdf(request):
     if pisa_status.err:
         return HttpResponse('Error generating PDF', status=500)
     return response
+
+
+@login_required
+def get_next_invoice_number(request):
+    """
+    Returns the next available invoice number for a given issuer via AJAX.
+    Does not increment the sequence.
+    """
+    issuer_id = request.GET.get('issuer_id')
+    if not issuer_id:
+        return JsonResponse({'error': 'No issuer ID provided'}, status=400)
+    
+    from .models import CompanyAccount, Bill, Sequence
+    import datetime
+    
+    issuer = CompanyAccount.objects.filter(pk=issuer_id).first()
+    if not issuer:
+        return JsonResponse({'error': 'Issuer not found'}, status=404)
+    
+    now = datetime.datetime.now()
+    seq_key = f"bill_sequence_{issuer.pk}"
+    
+    # Initialize if doesn't exist
+    if not Sequence.objects.filter(key=seq_key).exists():
+        Sequence.objects.create(key=seq_key, value=issuer.invoice_sequence_start - 1)
+    
+    # Just peek at current value + 1
+    current_seq = Sequence.objects.get(key=seq_key).value
+    next_val = current_seq + 1
+    
+    prefix = issuer.invoice_prefix.replace("{YYYY}", str(now.year))
+    padding = issuer.invoice_padding
+    suffix = issuer.invoice_suffix
+    
+    invoice_number = f"{prefix}{next_val:0{padding}d}{suffix}"
+    
+    return JsonResponse({'invoice_number': invoice_number})
+

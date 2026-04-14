@@ -25,6 +25,7 @@ urlpatterns = [
     path('ajax/get-party-unpaid-trips/', views.get_party_unpaid_trips, name='get-party-unpaid-trips'),
     path('ajax/get-party-unbilled-trips/', views.get_party_unbilled_trips, name='get-party-unbilled-trips'),
     path('ajax/get-bill-balance/', views.get_bill_balance, name='get-bill-balance'),
+    path('ajax/get-next-invoice-number/', views.get_next_invoice_number, name='get-next-invoice-number'),
 
     # Account URLs
     path('accounts/', views.CompanyAccountListView.as_view(), name='account-list'),

@@ -350,6 +350,22 @@ class FinancialRecord(models.Model):
             self.entry_number = Sequence.next_value('financial_record_entry_number')
         super().save(*args, **kwargs)
 
+    def delete(self, *args, **kwargs):
+        """
+        If a ledger entry representing an Invoice is deleted, the Bill itself should be deleted.
+        """
+        if self.record_type == self.RECORD_TYPE_INVOICE and self.associated_bill:
+            # We must be careful not to recurse. super().delete() should be called 
+            # after deleting the bill if Bill doesn't CASCADE back here.
+            # But Bill DOES CASCADE back here. So deleting the bill will delete this record.
+            bill = self.associated_bill
+            # Set to None to prevent CASCADE from trying to delete an already-deleting instance
+            self.associated_bill = None 
+            bill.delete()
+            return # Bill.delete will have deleted this record via CASCADE
+        
+        super().delete(*args, **kwargs)
+
     class Meta:
         verbose_name = 'Financial Record'
         verbose_name_plural = 'Financial Records'
@@ -410,31 +426,57 @@ class FinancialRecord(models.Model):
         return self.record_type == self.RECORD_TYPE_INVOICE
 
     @property
+    def is_deduction(self):
+        return self.category.name == 'Deductions' if self.category else False
+
+    @property
     def debit_amount(self):
         """
-        Returns amount if it is a Debit for the primary entity in context
-        Party Ledger: Invoices/Expenses = Debit (EXCLUDING Deductions)
-        Company Account: Income = Debit
+        Returns amount if it is a Debit for the primary entity in context.
         """
-        # Deductions must NEVER be debits for a party
-        if self.category and self.category.name == 'Deductions':
+        # 1. Perspective of the Party (if present)
+        if self.party:
+            if self.party.party_type == Party.TYPE_DEBTOR:
+                # Debtors: Invoices and Expenses are Debits (+)
+                if (self.is_invoice or self.is_expense) and not self.is_deduction:
+                    return self.amount
+            else: # CREDITOR
+                # Creditors: Payments/Income (not the invoice itself) are Debits (+)
+                if (self.is_income and not self.is_invoice) or self.is_deduction:
+                    return self.amount
             return None
 
-        if self.is_invoice or self.is_expense:
+        # 2. Perspective of the Company Account (Asset)
+        # Income is Debit (+)
+        if self.is_income and not self.is_invoice:
             return self.amount
+        
         return None
 
     @property
     def credit_amount(self):
         """
-        Returns amount if it is a Credit for the primary entity in context
-        Party Ledger: Income/Deductions = Credit
-        Company Account: Expense = Credit
+        Returns amount if it is a Credit for the primary entity in context.
         """
-        if self.is_income or self.category.name == 'Deductions':
-            # Note: Deductions are technically expenses in DB but credits for Party
+        # 1. Perspective of the Party (if present)
+        if self.party:
+            if self.party.party_type == Party.TYPE_DEBTOR:
+                # Debtors: Payments/Income are Credits (-)
+                if (self.is_income and not self.is_invoice) or self.is_deduction:
+                    return self.amount
+            else: # CREDITOR
+                # Creditors: Invoices and Expenses are Credits (-)
+                if (self.is_invoice or self.is_expense) and not self.is_deduction:
+                    return self.amount
+            return None
+
+        # 2. Perspective of the Company Account (Asset)
+        # Expenses are Credit (-)
+        if self.is_expense or self.is_invoice:
             return self.amount
+        
         return None
+
 
     @property
     def signed_amount(self):
@@ -474,13 +516,6 @@ class Bill(models.Model):
     """
     Bill/Invoice Document aggregating multiple trips or standard items.
     """
-    STATUS_DRAFT = 'Draft'
-    STATUS_FINAL = 'Final'
-    STATUS_CHOICES = [
-        (STATUS_DRAFT, 'Draft'),
-        (STATUS_FINAL, 'Final'),
-    ]
-
     TYPE_TRIP = 'Trip'
     TYPE_STANDARD = 'Standard'
     TYPE_CHOICES = [
@@ -506,11 +541,9 @@ class Bill(models.Model):
         (GST_RATE_18, '18% GST'),
     ]
 
-    GST_TYPE_INTRA = 'INTRA'
-    GST_TYPE_INTER = 'INTER'
+    GST_TYPE_GST = 'GST'
     GST_TYPE_CHOICES = [
-        (GST_TYPE_INTRA, 'Intra-state'),
-        (GST_TYPE_INTER, 'Inter-state'),
+        (GST_TYPE_GST, 'GST'),
     ]
 
     bill_number = models.CharField(max_length=50, unique=True, blank=True, null=True, verbose_name="Invoice Number")
@@ -527,8 +560,7 @@ class Bill(models.Model):
     amount_override = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, verbose_name="Subtotal Amount (Manual)")
     
     gst_rate = models.PositiveIntegerField(choices=GST_CHOICES, default=GST_RATE_0, verbose_name="GST Rate (%)")
-    gst_type = models.CharField(max_length=10, choices=GST_TYPE_CHOICES, default=GST_TYPE_INTRA, verbose_name="GST Type")
-    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=STATUS_DRAFT)
+    gst_type = models.CharField(max_length=10, choices=GST_TYPE_CHOICES, default=GST_TYPE_GST, verbose_name="GST Type")
     
     # Snapshot fields for Company Details at time of invoice
     invoice_company_name = models.CharField(max_length=200, blank=True, verbose_name="Company Name (Snapshot)")
@@ -561,31 +593,50 @@ class Bill(models.Model):
         
         # 2. Generate Bill Number if missing
         if not self.bill_number and self.issuer:
-            import datetime
-            now = datetime.datetime.now()
-            
-            # Get Sequence per Issuer
-            seq_key = f"bill_sequence_{self.issuer.pk}"
-            
-            # Check if sequence exists; if not, initialize with sequence_start - 1
-            if not Sequence.objects.filter(key=seq_key).exists():
-                Sequence.objects.create(key=seq_key, value=self.issuer.invoice_sequence_start - 1)
-                
-            seq_val = Sequence.next_value(seq_key)
-            
-            # Format using new granular fields
-            prefix = self.issuer.invoice_prefix.replace("{YYYY}", str(now.year))
-            padding = self.issuer.invoice_padding
-            suffix = self.issuer.invoice_suffix
-            
-            self.bill_number = f"{prefix}{seq_val:0{padding}d}{suffix}"
+            self.bill_number = self.generate_next_number()
             
         super().save(*args, **kwargs)
+
+    def generate_next_number(self):
+        """Helper to generate the next invoice number based on issuer settings"""
+        if not self.issuer:
+            return None
+            
+        import datetime
+        now = datetime.datetime.now()
+        
+        # Get Sequence per Issuer
+        seq_key = f"bill_sequence_{self.issuer.pk}"
+        
+        # Check if sequence exists; if not, initialize with sequence_start - 1
+        if not Sequence.objects.filter(key=seq_key).exists():
+            Sequence.objects.create(key=seq_key, value=self.issuer.invoice_sequence_start - 1)
+            
+        seq_val = Sequence.next_value(seq_key)
+        
+        # Format using issuer granular fields
+        prefix = self.issuer.invoice_prefix.replace("{YYYY}", str(now.year))
+        padding = self.issuer.invoice_padding
+        suffix = self.issuer.invoice_suffix
+        
+        return f"{prefix}{seq_val:0{padding}d}{suffix}"
 
     def delete(self, *args, **kwargs):
         """
         Custom delete for Bill.
+        Clean up all related ledger entries (including trip-level payments).
         """
+        # 1. Direct Bill Financial Records (already handled by CASCADE, but good to be explicit if needed)
+        # self.financial_records.all().delete()
+        
+        # 2. Trip-level entries related to this bill
+        if self.bill_type == self.TYPE_TRIP:
+            trips = self.trips.all()
+            # Delete direct payments linked to these trips
+            FinancialRecord.objects.filter(associated_trip__in=trips).delete()
+            # Delete allocations linked to these trips
+            TripAllocation.objects.filter(trip__in=trips).delete()
+
         super().delete(*args, **kwargs)
 
     def sync_to_ledger(self):
@@ -598,7 +649,7 @@ class Bill(models.Model):
         """
         Create/Update a single consolidated 'Invoice' type record in the ledger 
         representing the entire bill.
-        Final bills include GST. Draft bills show subtotal only.
+        Now all bills include GST in the ledger.
         """
         # Ensure category 'Trip Payment' exists
         category, _ = TransactionCategory.objects.get_or_create(
@@ -606,8 +657,8 @@ class Bill(models.Model):
             type=TransactionCategory.TYPE_INCOME
         )
 
-        # Amount depends on status: Final bills include GST, Drafts include only subtotal
-        total_revenue = self.total_amount if self.status == self.STATUS_FINAL else self.subtotal
+        # Amount always includes GST
+        total_revenue = self.total_amount
 
         # Find or create consolidated invoice record
         inv_record, created = FinancialRecord.objects.get_or_create(
@@ -672,12 +723,11 @@ class Bill(models.Model):
 
     @property
     def outstanding_balance(self):
-        total = self.total_amount if self.status == self.STATUS_FINAL else self.subtotal
-        return total - self.amount_received
+        return self.total_amount - self.amount_received
 
     @property
     def payment_status(self):
-        total = self.total_amount if self.status == self.STATUS_FINAL else self.subtotal
+        total = self.total_amount
         received = self.amount_received
         
         if total <= 0:
@@ -692,20 +742,14 @@ class Bill(models.Model):
 
     @property
     def cgst_amount(self):
-        if self.gst_rate > 0 and self.gst_type == self.GST_TYPE_INTRA:
+        if self.gst_rate > 0:
             return self.gst_amount / 2
         return 0
 
     @property
     def sgst_amount(self):
-        if self.gst_rate > 0 and self.gst_type == self.GST_TYPE_INTRA:
+        if self.gst_rate > 0:
             return self.gst_amount / 2
-        return 0
-
-    @property
-    def igst_amount(self):
-        if self.gst_rate > 0 and self.gst_type == self.GST_TYPE_INTER:
-            return self.gst_amount
         return 0
 
     def get_trip_gst(self, trip):

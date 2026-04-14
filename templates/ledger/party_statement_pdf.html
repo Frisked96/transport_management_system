@@ -91,7 +91,7 @@
                 <td width="40%" class="text-right" style="vertical-align: bottom;">
                     <table align="right">
                         <tr><td class="info-label">Period:</td><td class="text-right">{{ start_date|date:"d/m/Y" }} to {{ end_date|date:"d/m/Y" }}</td></tr>
-                        <tr><td class="info-label">Closing Bal:</td><td class="text-right font-bold" style="font-size: 11pt;">₹{{ closing_balance_formatted }}</td></tr>
+                        <tr><td class="info-label">Closing Bal:</td><td class="text-right font-bold" style="font-size: 11pt;">Rs. {{ closing_balance_formatted }}</td></tr>
                     </table>
                 </td>
             </tr>
@@ -136,7 +136,7 @@
                     <td class="text-right">
                         {{ total_credit|floatformat:2 }}
                     </td>
-                    <td class="text-right" style="background-color: #e2e8f0; font-size: 11pt;">₹{{ closing_balance_formatted }}</td>
+                    <td class="text-right" style="background-color: #e2e8f0; font-size: 11pt;">Rs. {{ closing_balance_formatted }}</td>
                 </tr>
             </tbody>
         </table>

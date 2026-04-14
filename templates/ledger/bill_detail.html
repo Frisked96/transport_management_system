@@ -25,11 +25,6 @@
     </div>
 
     <div class="flex items-center gap-3">
-        {% if bill.status == 'Draft' %}
-        <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-orange-100 text-orange-800 border border-orange-200">
-            DRAFT
-        </span>
-        {% endif %}
         {% if perms.ledger.change_financialrecord %}
         <a href="{% url 'bill-update' bill.pk %}" class="px-4 py-2 border border-slate-300 rounded-md bg-white text-slate-700 text-sm font-medium hover:bg-slate-50 transition-colors">
             <i class="fa-regular fa-pen-to-square mr-2"></i>Edit Invoice
@@ -87,10 +82,6 @@
                     <div class="flex justify-between text-xs">
                         <span class="font-bold uppercase text-slate-400">Place of Supply:</span>
                         <span class="font-black text-slate-900">{{ bill.party.state }}</span>
-                    </div>
-                    <div class="flex justify-between text-xs">
-                        <span class="font-bold uppercase text-slate-400">Status:</span>
-                        <span class="font-black {% if bill.status == 'Final' %}text-emerald-600{% else %}text-slate-500{% endif %}">{{ bill.status }}</span>
                     </div>
                 </div>
             </div>

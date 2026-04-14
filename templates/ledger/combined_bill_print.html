@@ -345,12 +345,8 @@
                             <tr>
                                 <th>HSN</th>
                                 <th>Taxable</th>
-                                {% if bill.gst_type == 'INTRA' %}
                                 <th>CGST</th>
                                 <th>SGST</th>
-                                {% else %}
-                                <th>IGST</th>
-                                {% endif %}
                                 <th>Total Tax</th>
                             </tr>
                         </thead>
@@ -358,12 +354,8 @@
                             <tr>
                                 <td class="text-center">{{ bill.hsn_code }}</td>
                                 <td class="text-right">{{ bill.subtotal|floatformat:2 }}</td>
-                                {% if bill.gst_type == 'INTRA' %}
                                 <td class="text-right">{{ bill.cgst_amount|floatformat:2 }}<br><small>({% widthratio bill.gst_rate 2 1 %}%)</small></td>
                                 <td class="text-right">{{ bill.sgst_amount|floatformat:2 }}<br><small>({% widthratio bill.gst_rate 2 1 %}%)</small></td>
-                                {% else %}
-                                <td class="text-right">{{ bill.igst_amount|floatformat:2 }}<br><small>({{ bill.gst_rate }}%)</small></td>
-                                {% endif %}
                                 <td class="text-right font-bold">{{ bill.gst_amount|floatformat:2 }}</td>
                             </tr>
                         </tbody>
@@ -379,7 +371,6 @@
                             <td>Taxable Amount</td>
                             <td class="text-right">₹ {{ bill.subtotal|floatformat:2 }}</td>
                         </tr>
-                        {% if bill.gst_type == 'INTRA' %}
                         <tr>
                             <td>Add: CGST</td>
                             <td class="text-right">₹ {{ bill.cgst_amount|floatformat:2 }}</td>
@@ -388,16 +379,11 @@
                             <td>Add: SGST</td>
                             <td class="text-right">₹ {{ bill.sgst_amount|floatformat:2 }}</td>
                         </tr>
-                        {% else %}
-                        <tr>
-                            <td>Add: IGST</td>
-                            <td class="text-right">₹ {{ bill.igst_amount|floatformat:2 }}</td>
-                        </tr>
-                        {% endif %}
                         <tr>
                             <td>Round Off</td>
                             <td class="text-right">₹ {{ bill.roundoff|floatformat:2 }}</td>
                         </tr>
+
                         <tr class="grand-total-row font-bold">
                             <td>Total Amount</td>
                             <td class="text-right">₹ {{ bill.rounded_total|floatformat:2 }}</td>

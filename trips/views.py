@@ -261,7 +261,6 @@ def manager_dashboard(request):
     ).aggregate(total=Sum('amount'))['total'] or 0
 
     gst_this_month = sum(bill.gst_amount for bill in Bill.objects.filter(
-        status=Bill.STATUS_FINAL,
         date__month=current_month,
         date__year=current_year
     ))

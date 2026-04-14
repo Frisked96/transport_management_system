@@ -187,6 +187,12 @@ class Trip(models.Model):
         blank=True,
         verbose_name='Trip Notes'
     )
+
+    can_be_grouped = models.BooleanField(
+        default=True,
+        verbose_name='Can be Grouped',
+        help_text='Whether this trip can be grouped with others in a bill'
+    )
     
     # Audit fields
     created_by = models.ForeignKey(
@@ -312,14 +318,9 @@ class Trip(models.Model):
         If no bill exists or GST rate is 0, returns 0.
         """
         bill = self.associated_bill
-        if not bill or bill.gst_rate == 0:
+        if not bill or not bill.gst_rate:
             return 0
         
-        # Only apply GST if the bill is FINALized
-        from ledger.models import Bill
-        if bill.status != Bill.STATUS_FINAL:
-            return 0
-
         from decimal import Decimal
         return self.revenue * (Decimal(bill.gst_rate) / Decimal(100))
 

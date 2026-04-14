@@ -180,10 +180,8 @@ class BillForm(forms.ModelForm):
             'issuer',
             'party', 
             'date', 
-            'status',
             'item_type',
             'amount_override',
-            'gst_type', 
             'gst_rate', 
             'trips',
             'trips_data'
@@ -201,7 +199,23 @@ class BillForm(forms.ModelForm):
             if name not in ['trips', 'trips_data']:
                 field.widget.attrs.update({'class': 'block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white'})
         
-        # Logic to filter trips based on Party
+        # 1. Pre-populate bill_number for new records if issuer exists
+        if not self.instance.pk and not self.data.get('bill_number'):
+            issuer = None
+            if self.initial.get('issuer'):
+                issuer = CompanyAccount.objects.filter(pk=self.initial.get('issuer')).first()
+            elif self.fields['issuer'].initial:
+                 issuer = CompanyAccount.objects.filter(pk=self.fields['issuer'].initial).first()
+            elif CompanyAccount.objects.count() == 1:
+                issuer = CompanyAccount.objects.first()
+                self.fields['issuer'].initial = issuer
+
+            if issuer:
+                # Create a temporary instance to generate number
+                temp_bill = Bill(issuer=issuer)
+                self.fields['bill_number'].initial = temp_bill.generate_next_number()
+
+        # 2. Logic to filter trips based on Party
         party_id = None
         
         if self.is_bound: # POST data
@@ -215,7 +229,7 @@ class BillForm(forms.ModelForm):
         if party_id:
             try:
                 # Show trips for this party
-                qs = Trip.objects.filter(party_id=party_id).exclude(status='Cancelled')
+                qs = Trip.objects.filter(party_id=party_id)
                 
                 if self.instance and self.instance.pk:
                     # Include currently selected trips + unbilled ones
