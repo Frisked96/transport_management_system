@@ -166,5 +166,47 @@ def abs_val(value):
     """
     try:
         return abs(Decimal(str(value)))
-    except (ValueError, TypeError, InvalidOperation):
+    except (ValueError, TypeError, Exception):
         return 0
+
+@register.filter
+def indian_comma(value):
+    """
+    Formats a number into Indian style commas (e.g., 1,45,140.00).
+    """
+    if value is None or value == "":
+        return "0.00"
+    try:
+        amount = Decimal(str(value))
+    except (ValueError, TypeError, Exception):
+        return "0.00"
+
+    # Separate decimal and whole part
+    parts = f"{amount:.2f}".split(".")
+    whole = parts[0]
+    decimal = parts[1]
+
+    # Handle negative
+    is_negative = whole.startswith("-")
+    if is_negative:
+        whole = whole[1:]
+
+    # Last 3 digits remain as a block
+    if len(whole) <= 3:
+        res = whole
+    else:
+        # Separate the last 3 digits
+        last_three = whole[-3:]
+        remaining = whole[:-3]
+        # Group the rest in 2s
+        res = ""
+        while len(remaining) > 2:
+            res = "," + remaining[-2:] + res
+            remaining = remaining[:-2]
+        res = remaining + res + "," + last_three
+
+    if is_negative:
+        res = "-" + res
+
+    return res + "." + decimal
+

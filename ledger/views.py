@@ -24,6 +24,32 @@ from .forms import FinancialRecordForm, PartyForm, CompanyAccountForm, BillForm
 from trips.models import Trip
 
 
+def format_indian_comma(amount):
+    """Formats a number into Indian style commas (e.g., 1,45,140.00)."""
+    try:
+        val = Decimal(str(amount))
+    except (ValueError, TypeError, Exception):
+        return "0.00"
+    
+    parts = f"{val:.2f}".split(".")
+    whole, decimal = parts[0], parts[1]
+    is_negative = whole.startswith("-")
+    if is_negative: whole = whole[1:]
+    
+    if len(whole) <= 3:
+        res = whole
+    else:
+        last_three = whole[-3:]
+        remaining = whole[:-3]
+        res = ""
+        while len(remaining) > 2:
+            res = "," + remaining[-2:] + res
+            remaining = remaining[:-2]
+        res = remaining + res + "," + last_three
+    
+    if is_negative: res = "-" + res
+    return res + "." + decimal
+
 class BaseLedgerPermissionMixin:
     """Base mixin for ledger permissions"""
     
@@ -819,14 +845,40 @@ def party_statement_pdf(request, pk):
         except ValueError:
             end_date = timezone.now().date()
 
-    def format_balance(val):
-        if party.party_type == Party.TYPE_DEBTOR:
-            if val > 0: return f"{abs(val):.2f} Dr"
-            elif val < 0: return f"{abs(val):.2f} Cr"
+    def format_indian_comma(amount):
+        """Formats a number into Indian style commas (e.g., 1,45,140.00)."""
+        try:
+            val = Decimal(str(amount))
+        except (ValueError, TypeError, DecimalException):
+            return "0.00"
+        
+        parts = f"{val:.2f}".split(".")
+        whole, decimal = parts[0], parts[1]
+        is_negative = whole.startswith("-")
+        if is_negative: whole = whole[1:]
+        
+        if len(whole) <= 3:
+            res = whole
         else:
-            # For Creditors, positive internal balance usually means we owe them (Credit)
-            if val > 0: return f"{abs(val):.2f} Cr"
-            elif val < 0: return f"{abs(val):.2f} Dr"
+            last_three = whole[-3:]
+            remaining = whole[:-3]
+            res = ""
+            while len(remaining) > 2:
+                res = "," + remaining[-2:] + res
+                remaining = remaining[:-2]
+            res = remaining + res + "," + last_three
+        
+        if is_negative: res = "-" + res
+        return res + "." + decimal
+
+    def format_balance(val):
+        formatted_val = format_indian_comma(abs(val))
+        if party.party_type == Party.TYPE_DEBTOR:
+            if val > 0: return f"{formatted_val} Dr"
+            elif val < 0: return f"{formatted_val} Cr"
+        else:
+            if val > 0: return f"{formatted_val} Cr"
+            elif val < 0: return f"{formatted_val} Dr"
         return "0.00"
 
     # 1. Calculate Opening Balance (before start_date)
@@ -969,8 +1021,9 @@ def account_statement_pdf(request, pk):
             end_date = timezone.now().date()
 
     def format_balance(val):
-        if val > 0: return f"{abs(val):.2f} Dr"
-        elif val < 0: return f"{abs(val):.2f} Cr"
+        formatted_val = format_indian_comma(abs(val))
+        if val > 0: return f"{formatted_val} Dr"
+        elif val < 0: return f"{formatted_val} Cr"
         return "0.00"
 
     # 1. Calculate Opening Balance (before start_date)
@@ -1096,8 +1149,9 @@ def unified_ledger_pdf(request):
             end_date = timezone.now().date()
 
     def format_balance(val):
-        if val > 0: return f"{abs(val):.2f} Dr"
-        elif val < 0: return f"{abs(val):.2f} Cr"
+        formatted_val = format_indian_comma(abs(val))
+        if val > 0: return f"{formatted_val} Dr"
+        elif val < 0: return f"{formatted_val} Cr"
         return "0.00"
 
     # 1. Calculate Combined Opening Balance

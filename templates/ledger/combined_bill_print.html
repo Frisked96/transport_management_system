@@ -306,9 +306,9 @@
                                 <span style="font-size: 10px; color: #666;">Consolidated charges for {{ item.count }} trip(s)</span>
                             </td>
                             <td class="text-center">{{ bill.hsn_code }}</td>
-                            <td class="text-right">{{ item.weight|floatformat:2 }}</td>
-                            <td class="text-right">{{ item.rate|floatformat:2 }}</td>
-                            <td class="text-right font-bold">{{ item.amount|floatformat:2 }}</td>
+                            <td class="text-right">{{ item.weight|indian_comma }}</td>
+                            <td class="text-right">{{ item.rate|indian_comma }}</td>
+                            <td class="text-right font-bold">{{ item.amount|indian_comma }}</td>
                         </tr>
                         {% endfor %}
                         
@@ -329,9 +329,9 @@
                     <tfoot>
                         <tr class="font-bold" style="background-color: #f8f9fa;">
                             <td colspan="3" class="text-right">Total</td>
-                            <td class="text-right">{{ bill.total_weight|floatformat:2 }}</td>
+                            <td class="text-right">{{ bill.total_weight|indian_comma }}</td>
                             <td></td>
-                            <td class="text-right"><span class="rupee-symbol">₹</span> {{ bill.subtotal|floatformat:2 }}</td>
+                            <td class="text-right"><span class="rupee-symbol">Rs.</span> {{ bill.subtotal|indian_comma }}</td>
                         </tr>
                     </tfoot>
                 </table>
@@ -353,10 +353,10 @@
                         <tbody>
                             <tr>
                                 <td class="text-center">{{ bill.hsn_code }}</td>
-                                <td class="text-right">{{ bill.subtotal|floatformat:2 }}</td>
-                                <td class="text-right">{{ bill.cgst_amount|floatformat:2 }}<br><small>({% widthratio bill.gst_rate 2 1 %}%)</small></td>
-                                <td class="text-right">{{ bill.sgst_amount|floatformat:2 }}<br><small>({% widthratio bill.gst_rate 2 1 %}%)</small></td>
-                                <td class="text-right font-bold">{{ bill.gst_amount|floatformat:2 }}</td>
+                                <td class="text-right">{{ bill.subtotal|indian_comma }}</td>
+                                <td class="text-right">{{ bill.cgst_amount|indian_comma }}<br><small>({% widthratio bill.gst_rate 2 1 %}%)</small></td>
+                                <td class="text-right">{{ bill.sgst_amount|indian_comma }}<br><small>({% widthratio bill.gst_rate 2 1 %}%)</small></td>
+                                <td class="text-right font-bold">{{ bill.gst_amount|indian_comma }}</td>
                             </tr>
                         </tbody>
                     </table>
@@ -369,24 +369,24 @@
                     <table class="totals-table">
                         <tr>
                             <td>Taxable Amount</td>
-                            <td class="text-right">₹ {{ bill.subtotal|floatformat:2 }}</td>
+                            <td class="text-right">Rs. {{ bill.subtotal|indian_comma }}</td>
                         </tr>
                         <tr>
                             <td>Add: CGST</td>
-                            <td class="text-right">₹ {{ bill.cgst_amount|floatformat:2 }}</td>
+                            <td class="text-right">Rs. {{ bill.cgst_amount|indian_comma }}</td>
                         </tr>
                         <tr>
                             <td>Add: SGST</td>
-                            <td class="text-right">₹ {{ bill.sgst_amount|floatformat:2 }}</td>
+                            <td class="text-right">Rs. {{ bill.sgst_amount|indian_comma }}</td>
                         </tr>
                         <tr>
                             <td>Round Off</td>
-                            <td class="text-right">₹ {{ bill.roundoff|floatformat:2 }}</td>
+                            <td class="text-right">Rs. {{ bill.roundoff|indian_comma }}</td>
                         </tr>
 
                         <tr class="grand-total-row font-bold">
                             <td>Total Amount</td>
-                            <td class="text-right">₹ {{ bill.rounded_total|floatformat:2 }}</td>
+                            <td class="text-right">Rs. {{ bill.rounded_total|indian_comma }}</td>
                         </tr>
                     </table>
                 </div>
@@ -452,11 +452,11 @@
                             <td class="text-center">{{ bt.trip.vehicle.registration_plate }}</td>
                             <td class="text-center">{{ bt.lr_no|default:"-" }}</td>
                             <td>{{ bt.trip.pickup_location }} - {{ bt.trip.delivery_location }}</td>
-                            <td class="text-right">{{ bt.trip.weight|floatformat:2 }}</td>
-                            <td class="text-right font-bold">{{ bt.trip.revenue|floatformat:2 }}</td>
+                            <td class="text-right">{{ bt.trip.weight|indian_comma }}</td>
+                            <td class="text-right font-bold">{{ bt.trip.revenue|indian_comma }}</td>
                             {% if bill.gst_rate > 0 %}
-                            <td class="text-right">{{ bill|get_trip_gst:bt.trip|floatformat:2 }}</td>
-                            <td class="text-right font-bold">{{ bill|get_trip_total:bt.trip|floatformat:2 }}</td>
+                            <td class="text-right">{{ bill|get_trip_gst:bt.trip|indian_comma }}</td>
+                            <td class="text-right font-bold">{{ bill|get_trip_total:bt.trip|indian_comma }}</td>
                             {% endif %}
                         </tr>
                         {% endfor %}
@@ -464,11 +464,11 @@
                     <tfoot>
                         <tr class="font-bold" style="background-color: #f8f9fa;">
                             <td colspan="5" class="text-right">Total for Annexure</td>
-                            <td class="text-right">{{ bill.total_weight|floatformat:2 }}</td>
-                            <td class="text-right">₹ {{ bill.subtotal|floatformat:2 }}</td>
+                            <td class="text-right">{{ bill.total_weight|indian_comma }}</td>
+                            <td class="text-right">Rs. {{ bill.subtotal|indian_comma }}</td>
                             {% if bill.gst_rate > 0 %}
-                            <td class="text-right">₹ {{ bill.gst_amount|floatformat:2 }}</td>
-                            <td class="text-right">₹ {{ bill.total_amount|floatformat:2 }}</td>
+                            <td class="text-right">Rs. {{ bill.gst_amount|indian_comma }}</td>
+                            <td class="text-right">Rs. {{ bill.total_amount|indian_comma }}</td>
                             {% endif %}
                         </tr>
                     </tfoot>
