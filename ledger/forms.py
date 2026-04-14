@@ -177,6 +177,7 @@ class BillForm(forms.ModelForm):
         fields = [
             'bill_number', 
             'bill_type',
+            'category',
             'issuer',
             'party', 
             'date', 
@@ -199,6 +200,14 @@ class BillForm(forms.ModelForm):
             if name not in ['trips', 'trips_data']:
                 field.widget.attrs.update({'class': 'block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white'})
         
+        # Filter categories for standard invoices
+        from .models import TransactionCategory
+        self.fields['category'].queryset = TransactionCategory.objects.filter(
+            models.Q(name__in=['Halting', 'Debit Note', 'Credit Note', 'Standard'])
+        ).order_by('name')
+        self.fields['category'].empty_label = "Select Category (Standard Only)"
+        self.fields['category'].required = False
+        
         # 1. Pre-populate bill_number for new records if issuer exists
         if not self.instance.pk and not self.data.get('bill_number'):
             issuer = None
@@ -211,9 +220,9 @@ class BillForm(forms.ModelForm):
                 self.fields['issuer'].initial = issuer
 
             if issuer:
-                # Create a temporary instance to generate number
+                # Use peek_next_number() to show what's next without incrementing yet
                 temp_bill = Bill(issuer=issuer)
-                self.fields['bill_number'].initial = temp_bill.generate_next_number()
+                self.fields['bill_number'].initial = temp_bill.peek_next_number()
 
         # 2. Logic to filter trips based on Party
         party_id = None

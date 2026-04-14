@@ -434,23 +434,41 @@ class FinancialRecord(models.Model):
         """
         Returns amount if it is a Debit for the primary entity in context.
         """
-        # 1. Perspective of the Party (if present)
+        # Perspective of the Party
         if self.party:
+            # Special handling for Credit/Debit Note labels in Invoices
+            is_credit_note = (
+                self.associated_bill and 
+                self.associated_bill.category and 
+                self.associated_bill.category.name == 'Credit Note'
+            )
+            is_debit_note = (
+                self.associated_bill and 
+                self.associated_bill.category and 
+                self.associated_bill.category.name == 'Debit Note'
+            )
+
             if self.party.party_type == Party.TYPE_DEBTOR:
-                # Debtors: Invoices and Expenses are Debits (+)
-                if (self.is_invoice or self.is_expense) and not self.is_deduction:
+                # Debtors: Invoices are usually Debits (+). Credit Notes are Credits (-).
+                if self.is_invoice:
+                    if is_credit_note: return None
+                    return self.amount
+                # Expenses/Transactions:
+                if self.is_expense and not self.is_deduction:
                     return self.amount
             else: # CREDITOR
-                # Creditors: Payments/Income (not the invoice itself) are Debits (+)
+                # Creditors: Payments/Income/Debit Notes are Debits (+).
                 if (self.is_income and not self.is_invoice) or self.is_deduction:
                     return self.amount
+                if self.is_invoice and (is_credit_note or is_debit_note):
+                    # Credit Note for Creditor increases debt (Credit), 
+                    # Debit Note for Creditor reduces debt (Debit).
+                    if is_debit_note: return self.amount
             return None
 
-        # 2. Perspective of the Company Account (Asset)
-        # Income is Debit (+)
+        # Perspective of the Company Account (Asset)
         if self.is_income and not self.is_invoice:
             return self.amount
-        
         return None
 
     @property
@@ -458,23 +476,37 @@ class FinancialRecord(models.Model):
         """
         Returns amount if it is a Credit for the primary entity in context.
         """
-        # 1. Perspective of the Party (if present)
+        # Perspective of the Party
         if self.party:
+            is_credit_note = (
+                self.associated_bill and 
+                self.associated_bill.category and 
+                self.associated_bill.category.name == 'Credit Note'
+            )
+            is_debit_note = (
+                self.associated_bill and 
+                self.associated_bill.category and 
+                self.associated_bill.category.name == 'Debit Note'
+            )
+
             if self.party.party_type == Party.TYPE_DEBTOR:
-                # Debtors: Payments/Income are Credits (-)
+                # Debtors: Payments/Income/Credit Notes are Credits (-).
                 if (self.is_income and not self.is_invoice) or self.is_deduction:
                     return self.amount
+                if self.is_invoice and is_credit_note:
+                    return self.amount
             else: # CREDITOR
-                # Creditors: Invoices and Expenses are Credits (-)
-                if (self.is_invoice or self.is_expense) and not self.is_deduction:
+                # Creditors: Invoices are usually Credits (-). Debit Notes are Debits (+).
+                if self.is_invoice:
+                    if is_debit_note: return None
+                    return self.amount
+                if self.is_expense and not self.is_deduction:
                     return self.amount
             return None
 
-        # 2. Perspective of the Company Account (Asset)
-        # Expenses are Credit (-)
+        # Perspective of the Company Account (Asset)
         if self.is_expense or self.is_invoice:
             return self.amount
-        
         return None
 
 
@@ -577,6 +609,7 @@ class Bill(models.Model):
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    category = models.ForeignKey(TransactionCategory, null=True, blank=True, on_delete=models.SET_NULL, related_name='bills', verbose_name="Bill Category")
 
     def save(self, *args, **kwargs):
         # 1. Snapshot Company Details from Issuer
@@ -591,11 +624,67 @@ class Bill(models.Model):
             self.invoice_bank_account = self.issuer.account_number
             self.invoice_bank_ifsc = self.issuer.ifsc_code
         
-        # 2. Generate Bill Number if missing
+        # 2. Handle Invoice Number and Sequence
         if not self.bill_number and self.issuer:
+            # Generate and increment sequence
             self.bill_number = self.generate_next_number()
+        elif self.bill_number and self.issuer:
+            # Manually provided number - sync sequence so we don't use it again
+            self.sync_sequence_with_bill_number()
             
         super().save(*args, **kwargs)
+
+    def sync_sequence_with_bill_number(self):
+        """Extract numeric part of current bill_number and ensure sequence is at least that high."""
+        if not self.issuer or not self.bill_number:
+            return
+            
+        import datetime
+        now = datetime.datetime.now()
+        prefix = self.issuer.invoice_prefix.replace("{YYYY}", str(now.year))
+        suffix = self.issuer.invoice_suffix
+        
+        num_str = self.bill_number
+        if num_str.startswith(prefix):
+            num_str = num_str[len(prefix):]
+        if suffix and num_str.endswith(suffix):
+            num_str = num_str[:-len(suffix)]
+            
+        try:
+            # Extract digits only from numeric part (e.g. "0006" -> 6)
+            import re
+            numeric_match = re.search(r'(\d+)', num_str)
+            if numeric_match:
+                val = int(numeric_match.group(1))
+                seq_key = f"bill_sequence_{self.issuer.pk}"
+                seq, _ = Sequence.objects.get_or_create(key=seq_key, defaults={'value': 0})
+                if val > seq.value:
+                    seq.value = val
+                    seq.save()
+        except (ValueError, TypeError):
+            pass
+
+    def peek_next_number(self):
+        """Show what the next number would be without incrementing sequence."""
+        if not self.issuer:
+            return None
+            
+        import datetime
+        now = datetime.datetime.now()
+        seq_key = f"bill_sequence_{self.issuer.pk}"
+        
+        seq = Sequence.objects.filter(key=seq_key).first()
+        if not seq:
+            current_val = self.issuer.invoice_sequence_start - 1
+        else:
+            current_val = seq.value
+            
+        next_val = current_val + 1
+        prefix = self.issuer.invoice_prefix.replace("{YYYY}", str(now.year))
+        padding = self.issuer.invoice_padding
+        suffix = self.issuer.invoice_suffix
+        
+        return f"{prefix}{next_val:0{padding}d}{suffix}"
 
     def generate_next_number(self):
         """Helper to generate the next invoice number based on issuer settings"""
@@ -649,16 +738,24 @@ class Bill(models.Model):
         """
         Create/Update a single consolidated 'Invoice' type record in the ledger 
         representing the entire bill.
-        Now all bills include GST in the ledger.
         """
-        # Ensure category 'Trip Payment' exists
-        category, _ = TransactionCategory.objects.get_or_create(
-            name='Trip Payment',
-            type=TransactionCategory.TYPE_INCOME
-        )
+        # Determine the category: use self.category if set (Standard Invoices), 
+        # otherwise default to 'Trip Payment'
+        category = self.category
+        if not category:
+            category, _ = TransactionCategory.objects.get_or_create(
+                name='Trip Payment',
+                type=TransactionCategory.TYPE_INCOME
+            )
 
         # Amount always includes GST
         total_revenue = self.total_amount
+
+        # Description varies by bill type
+        if self.bill_type == self.TYPE_TRIP:
+            description = f"Invoice {self.bill_number or 'Draft'} for {self.trips.count()} trips"
+        else:
+            description = f"{category.name} {self.bill_number or 'Draft'}: {self.item_type or ''}"
 
         # Find or create consolidated invoice record
         inv_record, created = FinancialRecord.objects.get_or_create(
@@ -670,7 +767,7 @@ class Bill(models.Model):
                 'party': self.party,
                 'category': category,
                 'amount': total_revenue,
-                'description': f"Invoice {self.bill_number or 'Draft'} for {self.trips.count()} trips",
+                'description': description,
             }
         )
 
@@ -678,8 +775,9 @@ class Bill(models.Model):
             inv_record.date = self.date
             inv_record.account = self.issuer
             inv_record.party = self.party
+            inv_record.category = category
             inv_record.amount = total_revenue
-            inv_record.description = f"Invoice {self.bill_number or 'Draft'} for {self.trips.count()} trips"
+            inv_record.description = description
             inv_record.save()
 
     @property

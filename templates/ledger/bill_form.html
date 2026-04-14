@@ -98,11 +98,16 @@
                     </div>
                     <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-8 bg-slate-50/30">
                         <div class="space-y-2">
+                            <label class="block text-xs font-bold text-slate-500 uppercase">Category</label>
+                            {{ form.category }}
+                            <p class="text-[10px] text-slate-400 italic">Select "Halting", "Debit Note", or "Credit Note".</p>
+                        </div>
+                        <div class="space-y-2">
                             <label class="block text-xs font-bold text-slate-500 uppercase">Item Description / Type</label>
                             {{ form.item_type }}
                             <p class="text-[10px] text-slate-400">e.g., Detention Charges, Loading/Unloading, etc.</p>
                         </div>
-                        <div class="space-y-2">
+                        <div class="space-y-2 md:col-span-2">
                             <label class="block text-xs font-bold text-slate-500 uppercase">Subtotal Amount (Excl. GST)</label>
                             {{ form.amount_override }}
                             <p class="text-[10px] text-slate-400">Enter the base amount. GST will be added automatically based on the rate above.</p>

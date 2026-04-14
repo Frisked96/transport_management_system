@@ -147,12 +147,8 @@
                         <tr class="bg-slate-50 border-b border-slate-200">
                             <th class="p-2 text-left font-black text-slate-500 uppercase tracking-wider">HSN</th>
                             <th class="p-2 text-right font-black text-slate-500 uppercase tracking-wider">Taxable</th>
-                            {% if bill.gst_type == 'INTRA' %}
                             <th class="p-2 text-right font-black text-slate-500 uppercase tracking-wider">CGST</th>
                             <th class="p-2 text-right font-black text-slate-500 uppercase tracking-wider">SGST</th>
-                            {% else %}
-                            <th class="p-2 text-right font-black text-slate-500 uppercase tracking-wider">IGST</th>
-                            {% endif %}
                             <th class="p-2 text-right font-black text-slate-500 uppercase tracking-wider">Total Tax</th>
                         </tr>
                     </thead>
@@ -160,12 +156,8 @@
                         <tr class="border-b border-slate-100">
                             <td class="p-2 font-bold text-slate-900">{{ bill.hsn_code }}</td>
                             <td class="p-2 text-right font-bold text-slate-900">₹{{ bill.subtotal|floatformat:2 }}</td>
-                            {% if bill.gst_type == 'INTRA' %}
                             <td class="p-2 text-right font-bold text-slate-900">₹{{ bill.cgst_amount|floatformat:2 }}<br/><span class="text-[8px] text-slate-400 font-black">{% widthratio bill.gst_rate 2 1 %}%</span></td>
                             <td class="p-2 text-right font-bold text-slate-900">₹{{ bill.sgst_amount|floatformat:2 }}<br/><span class="text-[8px] text-slate-400 font-black">{% widthratio bill.gst_rate 2 1 %}%</span></td>
-                            {% else %}
-                            <td class="p-2 text-right font-bold text-slate-900">₹{{ bill.igst_amount|floatformat:2 }}<br/><span class="text-[8px] text-slate-400 font-black">{{ bill.gst_rate }}%</span></td>
-                            {% endif %}
                             <td class="p-2 text-right font-black text-slate-900">₹{{ bill.gst_amount|floatformat:2 }}</td>
                         </tr>
                     </tbody>
@@ -187,7 +179,6 @@
                         <td class="p-3 text-right font-black text-slate-900">₹{{ bill.subtotal|floatformat:2 }}</td>
                     </tr>
                     {% if bill.gst_rate > 0 %}
-                        {% if bill.gst_type == 'INTRA' %}
                         <tr class="border-b border-slate-100">
                             <td class="p-3 text-slate-500 font-bold uppercase tracking-wider">CGST</td>
                             <td class="p-3 text-right font-black text-slate-900">₹{{ bill.cgst_amount|floatformat:2 }}</td>
@@ -196,12 +187,6 @@
                             <td class="p-3 text-slate-500 font-bold uppercase tracking-wider">SGST</td>
                             <td class="p-3 text-right font-black text-slate-900">₹{{ bill.sgst_amount|floatformat:2 }}</td>
                         </tr>
-                        {% else %}
-                        <tr class="border-b border-slate-100">
-                            <td class="p-3 text-slate-500 font-bold uppercase tracking-wider">IGST</td>
-                            <td class="p-3 text-right font-black text-slate-900">₹{{ bill.igst_amount|floatformat:2 }}</td>
-                        </tr>
-                        {% endif %}
                     {% endif %}
                     <tr class="border-b border-slate-100 text-slate-400">
                         <td class="p-3 font-bold uppercase tracking-wider">Round Off</td>

@@ -1299,22 +1299,9 @@ def get_next_invoice_number(request):
     if not issuer:
         return JsonResponse({'error': 'Issuer not found'}, status=404)
     
-    now = datetime.datetime.now()
-    seq_key = f"bill_sequence_{issuer.pk}"
-    
-    # Initialize if doesn't exist
-    if not Sequence.objects.filter(key=seq_key).exists():
-        Sequence.objects.create(key=seq_key, value=issuer.invoice_sequence_start - 1)
-    
-    # Just peek at current value + 1
-    current_seq = Sequence.objects.get(key=seq_key).value
-    next_val = current_seq + 1
-    
-    prefix = issuer.invoice_prefix.replace("{YYYY}", str(now.year))
-    padding = issuer.invoice_padding
-    suffix = issuer.invoice_suffix
-    
-    invoice_number = f"{prefix}{next_val:0{padding}d}{suffix}"
+    # Use model's peek_next_number logic
+    temp_bill = Bill(issuer=issuer)
+    invoice_number = temp_bill.peek_next_number()
     
     return JsonResponse({'invoice_number': invoice_number})
 

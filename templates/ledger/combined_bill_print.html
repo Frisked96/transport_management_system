@@ -4,7 +4,9 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Tax Invoice {{ bill.bill_number }}</title>
+    <title>
+        {% if bill.category.name == 'Debit Note' %}Debit Note{% elif bill.category.name == 'Credit Note' %}Credit Note{% elif bill.category.name == 'Halting' %}Halting Invoice{% else %}Tax Invoice{% endif %} {{ bill.bill_number }}
+    </title>
     <style>
         /* Global Reset */
         * {
@@ -250,7 +252,9 @@
     <!-- PAGE 1: TAX INVOICE -->
     <div class="page">
         <div class="page-border">
-            <div class="header-title">Tax Invoice</div>
+            <div class="header-title">
+                {% if bill.category.name == 'Debit Note' %}Debit Note{% elif bill.category.name == 'Credit Note' %}Credit Note{% elif bill.category.name == 'Halting' %}Halting Charges{% else %}Tax Invoice{% endif %}
+            </div>
             
             <div class="company-section">
                 <div class="company-logo-container">
@@ -298,6 +302,19 @@
                         </tr>
                     </thead>
                     <tbody>
+                        {% if bill.bill_type == 'Standard' %}
+                        <tr>
+                            <td class="text-center">1</td>
+                            <td>
+                                <strong>{{ bill.item_type|default:bill.category.name }}</strong><br>
+                                <span style="font-size: 10px; color: #666;">{{ bill.description }}</span>
+                            </td>
+                            <td class="text-center">{{ bill.hsn_code }}</td>
+                            <td class="text-right">-</td>
+                            <td class="text-right">-</td>
+                            <td class="text-right font-bold">{{ bill.amount_override|indian_comma }}</td>
+                        </tr>
+                        {% else %}
                         {% for item in invoice_items %}
                         <tr>
                             <td class="text-center">{{ forloop.counter }}</td>
@@ -311,6 +328,7 @@
                             <td class="text-right font-bold">{{ item.amount|indian_comma }}</td>
                         </tr>
                         {% endfor %}
+                        {% endif %}
                         
                         <!-- Empty rows to fill space and maintain lines -->
                         {% with ""|center:5 as range %}
@@ -418,6 +436,7 @@
     </div>
 
     <!-- PAGE 2: ANNEXURE (DETAILS) -->
+    {% if bill.bill_type != 'Standard' %}
     <div class="page">
         <div class="page-border">
             <div class="annexure-title">Annexure to Invoice #{{ bill.bill_number }}</div>
@@ -480,6 +499,7 @@
             </div>
         </div>
     </div>
+    {% endif %}
 
     <script>
         window.onload = function() {
