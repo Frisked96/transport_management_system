@@ -41,11 +41,15 @@
         <h3 class="text-2xl font-bold text-slate-700">₹{{ party.opening_balance|floatformat:2 }}</h3>
     </div>
     <div class="bg-white border border-slate-200 rounded-lg p-5 shadow-sm border-l-4 border-l-blue-500">
-        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1 text-blue-600">Total Debit (Dr)</span>
+        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1 text-blue-600">
+            {% if party.party_type == 'Creditor' %}Total Debit (Payments){% else %}Total Debit (Dr){% endif %}
+        </span>
         <h3 class="text-2xl font-bold text-blue-600">₹{{ party.total_debit|floatformat:2 }}</h3>
     </div>
     <div class="bg-white border border-slate-200 rounded-lg p-5 shadow-sm border-l-4 border-l-emerald-500">
-        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1 text-emerald-600">Total Credit (Cr)</span>
+        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1 text-emerald-600">
+            {% if party.party_type == 'Creditor' %}Total Credit (Bills){% else %}Total Credit (Cr){% endif %}
+        </span>
         <h3 class="text-2xl font-bold text-emerald-600">₹{{ party.total_credit|floatformat:2 }}</h3>
     </div>
     <div class="border rounded-lg p-5 shadow-sm border-l-4 {% if party.current_balance_value > 0 %}bg-red-50 border-red-200 border-l-red-500 text-red-900{% elif party.current_balance_value < 0 %}bg-emerald-50 border-emerald-200 border-l-emerald-500 text-emerald-900{% else %}bg-slate-50 border-slate-200 border-l-slate-500 text-slate-900{% endif %}">
@@ -58,13 +62,15 @@
 <!-- BEGIN: Tabs Navigation -->
 <div class="border-b border-slate-200 mb-6">
     <nav class="flex space-x-8" aria-label="Tabs">
+        {% if party.party_type != 'Creditor' %}
         <button onclick="switchTab('trips')" id="tab-trips" class="tab-btn border-emerald-500 text-emerald-600 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors">
             <i class="fa-solid fa-truck mr-2"></i>Trips & Operations
         </button>
         <button onclick="switchTab('invoices')" id="tab-invoices" class="tab-btn border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors">
             <i class="fa-solid fa-file-invoice-dollar mr-2"></i>Invoices
         </button>
-        <button onclick="switchTab('ledger')" id="tab-ledger" class="tab-btn border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors">
+        {% endif %}
+        <button onclick="switchTab('ledger')" id="tab-ledger" class="tab-btn {% if party.party_type == 'Creditor' %}border-emerald-500 text-emerald-600{% else %}border-transparent text-slate-500{% endif %} hover:text-slate-700 hover:border-slate-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors">
             <i class="fa-solid fa-book mr-2"></i>Financial Ledger
         </button>
         <button onclick="switchTab('profile')" id="tab-profile" class="tab-btn border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors">
@@ -77,6 +83,7 @@
 <!-- BEGIN: Tabs Content -->
 <div id="tab-content">
 
+    {% if party.party_type != 'Creditor' %}
     <!-- TRIPS TAB -->
     <div id="content-trips" class="tab-pane">
         <div class="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-sm">
@@ -220,9 +227,10 @@
             </div>
         </div>
     </div>
+    {% endif %}
 
     <!-- LEDGER TAB -->
-    <div id="content-ledger" class="tab-pane hidden">
+    <div id="content-ledger" class="tab-pane {% if party.party_type == 'Creditor' %}{% else %}hidden{% endif %}">
         <div class="mb-6 bg-slate-50 border border-slate-200 rounded-lg p-5">
             <h4 class="text-sm font-bold text-slate-900 mb-4 flex items-center">
                 <i class="fa-solid fa-file-pdf text-red-600 mr-2"></i>Generate PDF Statement
@@ -429,7 +437,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function updateBtnState() {
         const anyChecked = Array.from(checkboxes).some(cb => cb.checked);
-        createBtn.disabled = !anyChecked;
+        if (createBtn) createBtn.disabled = !anyChecked;
     }
 
     if (selectAll) {

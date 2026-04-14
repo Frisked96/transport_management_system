@@ -447,6 +447,8 @@ class FinancialRecord(models.Model):
                 self.associated_bill.category and 
                 self.associated_bill.category.name == 'Debit Note'
             )
+            is_payment_out = self.category.name == 'Payment Out' if self.category else False
+            is_deduction = self.category.name == 'Deductions' if self.category else False
 
             if self.party.party_type == Party.TYPE_DEBTOR:
                 # Debtors: Invoices are usually Debits (+). Credit Notes are Credits (-).
@@ -458,10 +460,10 @@ class FinancialRecord(models.Model):
                     return self.amount
             else: # CREDITOR
                 # Creditors: Payments/Income/Debit Notes are Debits (+).
-                if (self.is_income and not self.is_invoice) or self.is_deduction:
+                # Liability decreases (Debit): Payment Out, Deductions, and general Income
+                if (self.is_income and not self.is_invoice) or is_deduction or is_payment_out:
                     return self.amount
                 if self.is_invoice and (is_credit_note or is_debit_note):
-                    # Credit Note for Creditor increases debt (Credit), 
                     # Debit Note for Creditor reduces debt (Debit).
                     if is_debit_note: return self.amount
             return None
@@ -488,6 +490,8 @@ class FinancialRecord(models.Model):
                 self.associated_bill.category and 
                 self.associated_bill.category.name == 'Debit Note'
             )
+            is_payment_out = self.category.name == 'Payment Out' if self.category else False
+            is_deduction = self.category.name == 'Deductions' if self.category else False
 
             if self.party.party_type == Party.TYPE_DEBTOR:
                 # Debtors: Payments/Income/Credit Notes are Credits (-).
@@ -496,11 +500,14 @@ class FinancialRecord(models.Model):
                 if self.is_invoice and is_credit_note:
                     return self.amount
             else: # CREDITOR
-                # Creditors: Invoices are usually Credits (-). Debit Notes are Debits (+).
+                # Creditors: Invoices are usually Credits (-). Liability increases.
                 if self.is_invoice:
                     if is_debit_note: return None
                     return self.amount
-                if self.is_expense and not self.is_deduction:
+                # General Expenses (NOT payment out/deduction) increase liability (Credit)
+                if self.is_expense and not (is_deduction or is_payment_out):
+                    return self.amount
+                if self.is_invoice and is_credit_note:
                     return self.amount
             return None
 

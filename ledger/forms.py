@@ -49,16 +49,34 @@ class FinancialRecordForm(forms.ModelForm):
             if 'driver' in self.fields:
                 del self.fields['driver']
             
-            # Setup trips for party using dynamic payment info
-            # Allow all trips that are not fully paid
-            self.fields['associated_trip'].queryset = Trip.objects.with_payment_info().with_billing_info().filter(
-                party=party
-            ).exclude(
-                annotated_status=Trip.PAYMENT_STATUS_PAID
-            ).order_by('-date')
+            if party.party_type == Party.TYPE_CREDITOR:
+                # Creditors: No trips or bills (except manual entries)
+                if 'associated_trip' in self.fields: del self.fields['associated_trip']
+                if 'associated_bill' in self.fields: del self.fields['associated_bill']
+                if 'payment_distribution' in self.fields: del self.fields['payment_distribution']
+                
+                # Filter categories for Creditor
+                from .models import TransactionCategory
+                self.fields['category'].queryset = TransactionCategory.objects.filter(
+                    models.Q(name__in=['Payment Out', 'Expense', 'Deductions', 'Debit Note', 'Credit Note'])
+                ).order_by('name')
+            else:
+                # Setup trips for debtor party using dynamic payment info
+                # Allow all trips that are not fully paid
+                self.fields['associated_trip'].queryset = Trip.objects.with_payment_info().with_billing_info().filter(
+                    party=party
+                ).exclude(
+                    annotated_status=Trip.PAYMENT_STATUS_PAID
+                ).order_by('-date')
 
-            # Filter bills for this party
-            self.fields['associated_bill'].queryset = Bill.objects.filter(party=party).order_by('-date')
+                # Filter bills for this debtor
+                self.fields['associated_bill'].queryset = Bill.objects.filter(party=party).order_by('-date')
+                
+                # Filter categories for Debtor
+                from .models import TransactionCategory
+                self.fields['category'].queryset = TransactionCategory.objects.exclude(
+                    name='Payment Out'
+                ).order_by('name')
         
         # 2. If Driver context: Remove Party, Trip, and Bill fields
         elif driver_user:
