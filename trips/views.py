@@ -64,7 +64,7 @@ class TripListView(LoginRequiredMixin, BaseTripPermissionMixin, ListView):
     
     def get_queryset(self):
         """Filter and sort trips based on user input and permissions"""
-        queryset = self.get_queryset_for_user().with_payment_info().select_related('vehicle', 'party', 'driver')
+        queryset = self.get_queryset_for_user().with_payment_info().with_billing_info().select_related('vehicle', 'party', 'driver')
         
         # Search functionality
         search = self.request.GET.get('search')

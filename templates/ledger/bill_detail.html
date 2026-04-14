@@ -270,7 +270,11 @@
                 <tr>
                     <td class="border border-slate-900 p-2 text-[10px] text-center text-slate-500">{{ forloop.counter }}</td>
                     <td class="border border-slate-900 p-2 text-[10px] text-center whitespace-nowrap">{{ bt.trip.date|date:"d/m/y" }}</td>
-                    <td class="border border-slate-900 p-2 text-[10px] text-center font-bold">{{ bt.trip.vehicle.registration_plate }}</td>
+                    <td class="border border-slate-900 p-2 text-[10px] text-center font-bold">
+                        <a href="{% url 'trip-detail' bt.trip.pk %}" class="text-emerald-600 hover:text-emerald-700 hover:underline">
+                            {{ bt.trip.vehicle.registration_plate }}
+                        </a>
+                    </td>
                     <td class="border border-slate-900 p-2 text-[10px] text-center">{{ bt.lr_no|default:"-" }}</td>
                     <td class="border border-slate-900 p-2 text-[10px] uppercase truncate max-w-[150px]">{{ bt.trip.pickup_location }} - {{ bt.trip.delivery_location }}</td>
                     <td class="border border-slate-900 p-2 text-[10px] text-center">{{ bt.trip.weight|floatformat:2 }}</td>

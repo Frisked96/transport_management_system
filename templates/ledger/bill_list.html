@@ -20,6 +20,54 @@
 </header>
 <!-- END: Page Header -->
 
+<!-- BEGIN: Filter Bar -->
+<section class="bg-slate-100 p-5 rounded-lg border border-slate-200 mb-6">
+    <form method="get">
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
+            <!-- Issuer Filter -->
+            <div class="md:col-span-3 flex flex-col">
+                <label for="issuer" class="text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">Issued From:</label>
+                <select id="issuer" name="issuer" class="block w-full pl-3 pr-10 py-2 border border-slate-300 rounded-md text-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white">
+                    <option value="">All Companies</option>
+                    {% for issuer in issuers %}
+                    <option value="{{ issuer.id }}" {% if current_issuer == issuer.id|stringformat:"s" %}selected{% endif %}>{{ issuer.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Party Filter -->
+            <div class="md:col-span-3 flex flex-col">
+                <label for="party" class="text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">Bill To:</label>
+                <select id="party" name="party" class="block w-full pl-3 pr-10 py-2 border border-slate-300 rounded-md text-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white">
+                    <option value="">All Parties</option>
+                    {% for party in parties %}
+                    <option value="{{ party.id }}" {% if current_party == party.id|stringformat:"s" %}selected{% endif %}>{{ party.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <!-- Date Range -->
+            <div class="md:col-span-4 flex flex-col">
+                <label class="text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">Date Range:</label>
+                <div class="flex space-x-2">
+                    <input type="date" name="start_date" class="block w-full pl-3 pr-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white" 
+                           value="{{ start_date }}" placeholder="From">
+                    <input type="date" name="end_date" class="block w-full pl-3 pr-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white" 
+                           value="{{ end_date }}" placeholder="To">
+                </div>
+            </div>
+
+            <!-- Action -->
+            <div class="md:col-span-2 flex items-end">
+                <button type="submit" class="w-full bg-slate-800 text-white px-4 py-2 rounded-md hover:bg-slate-900 transition-colors text-sm font-medium">
+                    <i class="fa-solid fa-filter mr-2"></i>Apply
+                </button>
+            </div>
+        </div>
+    </form>
+</section>
+<!-- END: Filter Bar -->
+
 <!-- BEGIN: Bill List -->
 {% if bills %}
 <div class="space-y-4">
@@ -31,11 +79,16 @@
                 <a href="{% url 'bill-detail' bill.pk %}" class="hover:text-emerald-600 transition-colors">{{ bill.bill_number|default:"Draft" }}</a>
             </h3>
             <p class="text-xs text-slate-500 mt-1">{{ bill.date|date:"M d, Y" }}</p>
+            {% if bill.issuer %}
+            <p class="text-[10px] text-slate-400 mt-1 uppercase font-bold tracking-tighter">From: {{ bill.issuer.name }}</p>
+            {% endif %}
         </div>
         
         <div class="flex-1 min-w-[200px]">
             <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">Bill To</span>
-            <p class="text-sm text-slate-800 font-medium">{{ bill.party.name }}</p>
+            <a href="{% url 'party-detail' bill.party.pk %}" class="text-sm text-emerald-600 font-bold hover:underline">
+                {{ bill.party.name }}
+            </a>
         </div>
         
         <div class="w-24 text-center">

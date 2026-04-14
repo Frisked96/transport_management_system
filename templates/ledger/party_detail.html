@@ -134,9 +134,9 @@
                                 </td>
                                 <td class="px-6 py-4 text-center">
                                     {% if trip.is_billed %}
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800">
-                                        <i class="fa-solid fa-check mr-1"></i> Yes
-                                    </span>
+                                    <a href="{% url 'bill-detail' trip.associated_bill.pk %}" class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800 hover:bg-emerald-200 transition-colors">
+                                        <i class="fa-solid fa-file-invoice mr-1"></i> Yes
+                                    </a>
                                     {% else %}
                                     <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600">No</span>
                                     {% endif %}

@@ -659,7 +659,38 @@ class BillListView(LoginRequiredMixin, BaseLedgerPermissionMixin, ListView):
     def get_queryset(self):
         if self.has_driver_permission():
             return Bill.objects.none()
-        return Bill.objects.all().select_related('party').order_by('-date', '-created_at')
+            
+        queryset = Bill.objects.all().select_related('party', 'issuer').order_by('-date', '-created_at')
+        
+        # Filter by Issuer (Company Account)
+        issuer_id = self.request.GET.get('issuer')
+        if issuer_id:
+            queryset = queryset.filter(issuer_id=issuer_id)
+            
+        # Filter by Party
+        party_id = self.request.GET.get('party')
+        if party_id:
+            queryset = queryset.filter(party_id=party_id)
+            
+        # Filter by Date Range
+        start_date = self.request.GET.get('start_date')
+        end_date = self.request.GET.get('end_date')
+        if start_date:
+            queryset = queryset.filter(date__gte=start_date)
+        if end_date:
+            queryset = queryset.filter(date__lte=end_date)
+            
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['issuers'] = CompanyAccount.objects.all().order_by('name')
+        context['parties'] = Party.objects.all().order_by('name')
+        context['current_issuer'] = self.request.GET.get('issuer', '')
+        context['current_party'] = self.request.GET.get('party', '')
+        context['start_date'] = self.request.GET.get('start_date', '')
+        context['end_date'] = self.request.GET.get('end_date', '')
+        return context
 
 class BillCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
     model = Bill
@@ -874,11 +905,11 @@ def party_statement_pdf(request, pk):
     def format_balance(val):
         formatted_val = format_indian_comma(abs(val))
         if party.party_type == Party.TYPE_DEBTOR:
-            if val > 0: return f"{formatted_val} Dr"
-            elif val < 0: return f"{formatted_val} Cr"
+            if val > 0: return f"{formatted_val}\u00A0Dr"
+            elif val < 0: return f"{formatted_val}\u00A0Cr"
         else:
-            if val > 0: return f"{formatted_val} Cr"
-            elif val < 0: return f"{formatted_val} Dr"
+            if val > 0: return f"{formatted_val}\u00A0Cr"
+            elif val < 0: return f"{formatted_val}\u00A0Dr"
         return "0.00"
 
     # 1. Calculate Opening Balance (before start_date)

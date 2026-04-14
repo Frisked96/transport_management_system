@@ -148,6 +148,48 @@
             </div>
         </div>
 
+        <!-- Billing Status Card -->
+        <div class="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
+            <div class="bg-slate-50 border-b border-slate-200 px-6 py-4 flex justify-between items-center">
+                <h3 class="text-xs font-bold text-slate-500 uppercase tracking-widest">Billing Status</h3>
+                {% if trip.bills.all %}
+                <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest bg-emerald-100 text-emerald-700 border border-emerald-200">Billed</span>
+                {% else %}
+                <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest bg-slate-100 text-slate-600 border border-slate-200">Unbilled</span>
+                {% endif %}
+            </div>
+            <div class="p-6">
+                {% if trip.bills.all %}
+                <div class="space-y-4">
+                    {% for bill in trip.bills.all %}
+                    <a href="{% url 'bill-detail' bill.pk %}" class="flex items-center justify-between p-3 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 transition-colors group">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                                <i class="fa-solid fa-file-invoice-dollar"></i>
+                            </div>
+                            <div>
+                                <p class="text-sm font-bold text-slate-900 group-hover:text-emerald-600 transition-colors">{{ bill.bill_number|default:"Draft Invoice" }}</p>
+                                <p class="text-xs text-slate-500">{{ bill.date|date:"M d, Y" }}</p>
+                            </div>
+                        </div>
+                        <i class="fa-solid fa-chevron-right text-slate-300 group-hover:text-emerald-500 transition-colors"></i>
+                    </a>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="text-center py-4">
+                    <p class="text-sm text-slate-500 italic mb-4">This trip has not been included in any invoice yet.</p>
+                    {% if perms.ledger.add_financialrecord %}
+                    <a href="{% url 'bill-create' %}?party={{ trip.party.pk }}&trip_ids={{ trip.pk }}" class="inline-flex items-center space-x-2 px-4 py-2 bg-emerald-600 text-white rounded-md text-sm font-medium hover:bg-emerald-700 shadow-sm transition-colors">
+                        <i class="fa-solid fa-plus"></i>
+                        <span>Create Invoice</span>
+                    </a>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
         <!-- Payment Status Card -->
         <div class="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
             <div class="bg-slate-50 border-b border-slate-200 px-6 py-4 flex justify-between items-center">

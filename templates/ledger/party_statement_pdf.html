@@ -36,9 +36,9 @@
         .info-table { width: 100%; margin-bottom: 20pt; }
         .info-label { width: 80pt; color: #64748b; font-weight: bold; }
         
-        .ledger-table { width: 100%; border-collapse: collapse; }
-        .ledger-table th { background-color: #334155; color: white; padding: 6pt; font-weight: bold; border: 0.5pt solid #334155; }
-        .ledger-table td { padding: 5pt; border: 0.5pt solid #cbd5e1; vertical-align: top; }
+        .ledger-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+        .ledger-table th { background-color: #334155; color: white; padding: 4pt; font-weight: bold; border: 0.5pt solid #334155; font-size: 8pt; }
+        .ledger-table td { padding: 4pt; border: 0.5pt solid #cbd5e1; vertical-align: top; font-size: 8pt; overflow: hidden; }
         .ledger-table tr.opening-row { background-color: #f8fafc; font-weight: bold; }
         .ledger-table tr.summary-row { background-color: #f1f5f9; font-weight: bold; }
         
@@ -48,6 +48,7 @@
         .credit { color: #000; }
         .balance-dr { color: #b91c1c; } /* Red if they owe us */
         .balance-cr { color: #15803d; } /* Green if we owe them */
+        .nowrap { white-space: nowrap; }
     </style>
 </head>
 <body>
@@ -100,12 +101,12 @@
         <table class="ledger-table">
             <thead>
                 <tr>
-                    <th width="12%">Date</th>
-                    <th width="35%">Description / Particulars</th>
-                    <th width="13%">Ref</th>
-                    <th width="13%" class="text-right">Debit (Dr)</th>
-                    <th width="13%" class="text-right">Credit (Cr)</th>
-                    <th width="14%" class="text-right">Balance</th>
+                    <th width="10%">Date</th>
+                    <th width="30%">Description / Particulars</th>
+                    <th width="12%">Ref</th>
+                    <th width="16%" class="text-right">Debit (Dr)</th>
+                    <th width="16%" class="text-right">Credit (Cr)</th>
+                    <th width="16%" class="text-right">Balance</th>
                 </tr>
             </thead>
             <tbody>
@@ -120,11 +121,11 @@
                 {% for row in statement_rows %}
                 <tr>
                     <td>{{ row.date|date:"d/m/Y" }}</td>
-                    <td>{{ row.description }}</td>
+                    <td style="word-wrap: break-word;">{{ row.description }}</td>
                     <td class="text-center">{{ row.reference }}</td>
                     <td class="text-right debit">{% if row.debit > 0 %}{{ row.debit|indian_comma }}{% else %}-{% endif %}</td>
                     <td class="text-right credit">{% if row.credit > 0 %}{{ row.credit|indian_comma }}{% else %}-{% endif %}</td>
-                    <td class="text-right font-bold">{{ row.balance_formatted }}</td>
+                    <td class="text-right font-bold nowrap">{{ row.balance_formatted }}</td>
                 </tr>
                 {% endfor %}
                 
@@ -136,7 +137,7 @@
                     <td class="text-right">
                         {{ total_credit|indian_comma }}
                     </td>
-                    <td class="text-right" style="background-color: #e2e8f0; font-size: 11pt;">Rs. {{ closing_balance_formatted }}</td>
+                    <td class="text-right" style="background-color: #e2e8f0; font-size: 10pt;">Rs. {{ closing_balance_formatted }}</td>
                 </tr>
             </tbody>
         </table>
