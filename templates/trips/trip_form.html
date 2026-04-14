@@ -31,13 +31,18 @@
             <div class="p-6">
                 <!-- ... existing fields ... -->
                 <div class="grid grid-cols-1 md:grid-cols-12 gap-6">
-                    <!-- Vehicle & Driver -->
-                    <div class="md:col-span-6">
+                    <!-- Date, Vehicle & Driver -->
+                    <div class="md:col-span-4">
+                        <label for="{{ form.date.id_for_label }}" class="block text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider">Date</label>
+                        {{ form.date }}
+                        {% if form.date.errors %}<div class="text-red-600 text-xs mt-1">{{ form.date.errors }}</div>{% endif %}
+                    </div>
+                    <div class="md:col-span-4">
                         <label for="{{ form.vehicle.id_for_label }}" class="block text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider">Vehicle</label>
                         {{ form.vehicle }}
                         {% if form.vehicle.errors %}<div class="text-red-600 text-xs mt-1">{{ form.vehicle.errors }}</div>{% endif %}
                     </div>
-                    <div class="md:col-span-6">
+                    <div class="md:col-span-4">
                         <label for="{{ form.driver.id_for_label }}" class="block text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider">Driver</label>
                         {{ form.driver }}
                         {% if form.driver.errors %}<div class="text-red-600 text-xs mt-1">{{ form.driver.errors }}</div>{% endif %}

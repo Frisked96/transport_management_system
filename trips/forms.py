@@ -28,6 +28,7 @@ class TripForm(forms.ModelForm):
     class Meta:
         model = Trip
         fields = [
+            'date',
             'vehicle',
             'driver',
             'party',
@@ -53,6 +54,7 @@ class TripForm(forms.ModelForm):
                     'rows': 3,
                 }
             ),
+            'date': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date'}),
             'pickup_lat': forms.HiddenInput(),
             'pickup_lng': forms.HiddenInput(),
             'delivery_lat': forms.HiddenInput(),
