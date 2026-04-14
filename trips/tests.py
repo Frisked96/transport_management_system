@@ -21,6 +21,10 @@ class TripSimplificationTest(TestCase):
             except Permission.DoesNotExist:
                 pass
 
+        from django.contrib.auth.models import Group
+        manager_group, _ = Group.objects.get_or_create(name='manager')
+        self.user.groups.add(manager_group)
+
         self.driver_profile = Driver.objects.create(
             user=self.user,
             employee_id='D001',
@@ -46,6 +50,7 @@ class TripSimplificationTest(TestCase):
         """Test creating a trip with the new simplified form (no fuel/odo/expenses)"""
         url = reverse('trip-create')
         data = {
+            'date': timezone.now().date().strftime('%Y-%m-%d'),
             'vehicle': self.vehicle.pk,
             'driver': self.driver_profile.pk,
             'party': self.party.pk,
@@ -64,9 +69,9 @@ class TripSimplificationTest(TestCase):
         self.assertEqual(trip.weight, 15.5)
         self.assertEqual(trip.revenue, 15.5 * 1200)
         
-        # Verify no automatic expenses were created
-        self.assertEqual(trip.custom_expenses.count(), 0)
-        self.assertEqual(trip.total_cost, 0)
+        # Verify custom expenses attributes do not exist anymore
+        self.assertFalse(hasattr(trip, 'custom_expenses'))
+        self.assertFalse(hasattr(trip, 'total_cost'))
 
     def test_revenue_types(self):
         """Test calculation logic for Per Ton vs Fixed revenue types still works"""
