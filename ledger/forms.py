@@ -189,35 +189,48 @@ class CompanyAccountForm(forms.ModelForm):
 class BillForm(forms.ModelForm):
     # Hidden field to store JSON mapping of trip_id -> lr_no
     trips_data = forms.CharField(widget=forms.HiddenInput(), required=False)
+    prefix = forms.CharField(required=False, widget=forms.TextInput(attrs={
+        'id': 'id_prefix',
+        'readonly': 'readonly',
+        'tabindex': '-1',
+        'style': 'width: 130px; border-right: none; border-top-right-radius: 0; border-bottom-right-radius: 0;',
+        'class': 'bg-slate-100 border border-slate-300 px-3 py-2 text-sm text-slate-500 focus:outline-none'
+    }))
 
     class Meta:
         model = Bill
         fields = [
-            'bill_number', 
+            'bill_no',
             'bill_type',
             'category',
             'issuer',
-            'party', 
-            'date', 
+            'party',
+            'date',
             'item_type',
             'amount_override',
-            'gst_rate', 
+            'gst_rate',
             'trips',
             'trips_data'
         ]
         widgets = {
-            'date': forms.DateInput(attrs={'type': 'date'}),
+            'date': forms.DateInput(attrs={'type': 'date', 'id': 'id_date'}),
             'trips': forms.CheckboxSelectMultiple(),
+            'bill_no': forms.NumberInput(attrs={
+                'id': 'id_bill_no',
+                'min': '1',
+                'style': 'border-top-left-radius: 0; border-bottom-left-radius: 0;',
+                'class': 'flex-1 px-3 py-2 border border-slate-300 text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white'
+            }),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        
+
         # Apply Tailwind classes
         for name, field in self.fields.items():
-            if name not in ['trips', 'trips_data']:
+            if name not in ['trips', 'trips_data', 'prefix', 'bill_no', 'date']:
                 field.widget.attrs.update({'class': 'block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white'})
-        
+
         # Filter categories for standard invoices
         from .models import TransactionCategory
         self.fields['category'].queryset = TransactionCategory.objects.filter(
@@ -225,23 +238,26 @@ class BillForm(forms.ModelForm):
         ).order_by('name')
         self.fields['category'].empty_label = "Select Category (Standard Only)"
         self.fields['category'].required = False
-        
-        # 1. Pre-populate bill_number for new records if issuer exists
-        if not self.instance.pk and not self.data.get('bill_number'):
+
+        # 1. Pre-populate bill_no for new records if issuer exists
+        if not self.instance.pk:
             issuer = None
-            if self.initial.get('issuer'):
+            if self.data.get('issuer'):
+                issuer = CompanyAccount.objects.filter(pk=self.data.get('issuer')).first()
+            elif self.initial.get('issuer'):
                 issuer = CompanyAccount.objects.filter(pk=self.initial.get('issuer')).first()
-            elif self.fields['issuer'].initial:
-                 issuer = CompanyAccount.objects.filter(pk=self.fields['issuer'].initial).first()
             elif CompanyAccount.objects.count() == 1:
                 issuer = CompanyAccount.objects.first()
-                self.fields['issuer'].initial = issuer
+                self.initial['issuer'] = issuer.id
+                # Also set the bound field initial just in case
+                self.fields['issuer'].initial = issuer.id
 
             if issuer:
-                # Use peek_next_number() to show what's next without incrementing yet
-                temp_bill = Bill(issuer=issuer)
-                self.fields['bill_number'].initial = temp_bill.peek_next_number()
-
+                self.fields['bill_no'].initial = Bill.get_next_available_no(issuer, self.initial.get('date'))
+                # Set prefix initial using model method
+                self.fields['prefix'].initial = self.instance.get_prefix(date=self.initial.get('date'))
+        else:
+             self.fields['prefix'].initial = self.instance.get_prefix()
         # 2. Logic to filter trips based on Party
         party_id = None
         

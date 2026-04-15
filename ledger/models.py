@@ -585,7 +585,8 @@ class Bill(models.Model):
         (GST_TYPE_GST, 'GST'),
     ]
 
-    bill_number = models.CharField(max_length=50, unique=True, blank=True, null=True, verbose_name="Invoice Number")
+    bill_number = models.CharField(max_length=50, unique=True, blank=True, null=True, verbose_name="Full Invoice Number")
+    bill_no = models.PositiveIntegerField(null=True, blank=True, verbose_name="Invoice No")
     bill_type = models.CharField(max_length=10, choices=TYPE_CHOICES, default=TYPE_TRIP, verbose_name="Bill Type")
     issuer = models.ForeignKey(CompanyAccount, on_delete=models.PROTECT, related_name='bills', verbose_name="Issued From", null=True)
     party = models.ForeignKey(Party, on_delete=models.PROTECT, related_name='bills', verbose_name="Bill To")
@@ -618,6 +619,40 @@ class Bill(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     category = models.ForeignKey(TransactionCategory, null=True, blank=True, on_delete=models.SET_NULL, related_name='bills', verbose_name="Bill Category")
 
+    @classmethod
+    def get_next_available_no(cls, issuer, date=None):
+        """Finds the next numeric invoice number (Max + 1), respecting start sequence."""
+        if not issuer:
+            return 1
+        
+        from django.utils import timezone
+        from django.db.models import Max
+        year = date.year if date else timezone.now().year
+        prefix = issuer.invoice_prefix.replace("{YYYY}", str(year))
+        
+        # Get the maximum bill_no for this issuer and prefix
+        max_no = cls.objects.filter(
+            issuer=issuer,
+            bill_number__startswith=prefix,
+            bill_no__isnull=False
+        ).aggregate(max_val=Max('bill_no'))['max_val']
+        
+        if max_no is not None:
+            return max_no + 1
+        
+        # If no invoices exist yet for this prefix, use the start sequence
+        return issuer.invoice_sequence_start
+
+    def get_prefix(self, date=None):
+        """Returns the invoice prefix for this bill based on its issuer and date."""
+        if not self.issuer:
+            return ""
+        
+        from django.utils import timezone
+        dt = date or self.date or timezone.now()
+        year = dt.year
+        return self.issuer.invoice_prefix.replace("{YYYY}", str(year))
+
     def save(self, *args, **kwargs):
         # 1. Snapshot Company Details from Issuer
         if self.issuer and not self.invoice_company_name:
@@ -631,91 +666,18 @@ class Bill(models.Model):
             self.invoice_bank_account = self.issuer.account_number
             self.invoice_bank_ifsc = self.issuer.ifsc_code
         
-        # 2. Handle Invoice Number and Sequence
-        if not self.bill_number and self.issuer:
-            # Generate and increment sequence
-            self.bill_number = self.generate_next_number()
-        elif self.bill_number and self.issuer:
-            # Manually provided number - sync sequence so we don't use it again
-            self.sync_sequence_with_bill_number()
+        # 2. Handle Invoice Numbering
+        if self.issuer:
+            if not self.bill_no:
+                self.bill_no = self.get_next_available_no(self.issuer, self.date)
+            
+            # Update the full string representation
+            prefix = self.get_prefix()
+            padding = self.issuer.invoice_padding
+            suffix = self.issuer.invoice_suffix
+            self.bill_number = f"{prefix}{self.bill_no:0{padding}d}{suffix}"
             
         super().save(*args, **kwargs)
-
-    def sync_sequence_with_bill_number(self):
-        """Extract numeric part of current bill_number and ensure sequence is at least that high."""
-        if not self.issuer or not self.bill_number:
-            return
-            
-        import datetime
-        now = datetime.datetime.now()
-        prefix = self.issuer.invoice_prefix.replace("{YYYY}", str(now.year))
-        suffix = self.issuer.invoice_suffix
-        
-        num_str = self.bill_number
-        if num_str.startswith(prefix):
-            num_str = num_str[len(prefix):]
-        if suffix and num_str.endswith(suffix):
-            num_str = num_str[:-len(suffix)]
-            
-        try:
-            # Extract digits only from numeric part (e.g. "0006" -> 6)
-            import re
-            numeric_match = re.search(r'(\d+)', num_str)
-            if numeric_match:
-                val = int(numeric_match.group(1))
-                seq_key = f"bill_sequence_{self.issuer.pk}"
-                seq, _ = Sequence.objects.get_or_create(key=seq_key, defaults={'value': 0})
-                if val > seq.value:
-                    seq.value = val
-                    seq.save()
-        except (ValueError, TypeError):
-            pass
-
-    def peek_next_number(self):
-        """Show what the next number would be without incrementing sequence."""
-        if not self.issuer:
-            return None
-            
-        import datetime
-        now = datetime.datetime.now()
-        seq_key = f"bill_sequence_{self.issuer.pk}"
-        
-        seq = Sequence.objects.filter(key=seq_key).first()
-        if not seq:
-            current_val = self.issuer.invoice_sequence_start - 1
-        else:
-            current_val = seq.value
-            
-        next_val = current_val + 1
-        prefix = self.issuer.invoice_prefix.replace("{YYYY}", str(now.year))
-        padding = self.issuer.invoice_padding
-        suffix = self.issuer.invoice_suffix
-        
-        return f"{prefix}{next_val:0{padding}d}{suffix}"
-
-    def generate_next_number(self):
-        """Helper to generate the next invoice number based on issuer settings"""
-        if not self.issuer:
-            return None
-            
-        import datetime
-        now = datetime.datetime.now()
-        
-        # Get Sequence per Issuer
-        seq_key = f"bill_sequence_{self.issuer.pk}"
-        
-        # Check if sequence exists; if not, initialize with sequence_start - 1
-        if not Sequence.objects.filter(key=seq_key).exists():
-            Sequence.objects.create(key=seq_key, value=self.issuer.invoice_sequence_start - 1)
-            
-        seq_val = Sequence.next_value(seq_key)
-        
-        # Format using issuer granular fields
-        prefix = self.issuer.invoice_prefix.replace("{YYYY}", str(now.year))
-        padding = self.issuer.invoice_padding
-        suffix = self.issuer.invoice_suffix
-        
-        return f"{prefix}{seq_val:0{padding}d}{suffix}"
 
     def delete(self, *args, **kwargs):
         """

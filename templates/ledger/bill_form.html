@@ -73,7 +73,13 @@
                         <div class="space-y-4">
                             <div class="flex items-center justify-between gap-4">
                                 <label class="text-sm font-semibold text-slate-700">Invoice #:</label>
-                                <div class="flex-grow max-w-[200px]">{{ form.bill_number }}</div>
+                                <div class="flex-grow max-w-[350px]">
+                                    <div class="flex items-stretch shadow-sm rounded-md overflow-hidden">
+                                        {{ form.prefix }}
+                                        {{ form.bill_no }}
+                                    </div>
+                                    <p class="mt-1 text-[10px] text-slate-500 italic">Prefix is automatic. Edit the number if needed.</p>
+                                </div>
                             </div>
                             <div class="flex items-center justify-between gap-4">
                                 <label class="text-sm font-semibold text-slate-700">Date:</label>
@@ -285,15 +291,31 @@
         }
 
         function updateInvoiceNumber(issuerId) {
-            if (!issuerId || "{% if form.instance.pk %}true{% endif %}" === "true") return;
+            console.log("Updating invoice number for issuer:", issuerId);
+            if (!issuerId || "{% if form.instance.pk %}true{% endif %}" === "true") {
+                console.log("Skipping: issuerId is null or editing existing record");
+                return;
+            }
+
+            const date = $('#id_date').val();
+            console.log("Date for AJAX:", date);
 
             $.ajax({
                 url: "{% url 'get-next-invoice-number' %}",
-                data: { 'issuer_id': issuerId },
+                data: { 
+                    'issuer_id': issuerId,
+                    'date': date
+                },
                 success: function(data) {
-                    if (data.invoice_number) {
-                        $('#id_bill_number').val(data.invoice_number);
+                    console.log("AJAX Success Data:", data);
+                    if (data.bill_no) {
+                        $('#id_bill_no').val(data.bill_no);
+                        $('#id_prefix').val(data.prefix);
                     }
+                },
+                error: function(xhr, status, error) {
+                    console.error("AJAX Error:", status, error);
+                    console.error("Response Text:", xhr.responseText);
                 }
             });
         }
@@ -316,17 +338,20 @@
             }
         }
 
-        // Initial bind
-        bindTableEvents();
+        // Initial run for invoice number (for NEW invoices)
+        const initialIssuer = $('#id_issuer').val();
+        if (initialIssuer && "{% if form.instance.pk %}true{% endif %}" !== "true") {
+            updateInvoiceNumber(initialIssuer);
+        }
 
         // AJAX Load on Party change
         $('#id_party').on('change', function() {
             updateTripsTable($(this).val());
         });
 
-        // AJAX Invoice Number on Issuer change (only for NEW invoices)
-        $('#id_issuer').on('change', function() {
-            updateInvoiceNumber($(this).val());
+        // AJAX Invoice Number on Issuer or Date change (only for NEW invoices)
+        $('#id_issuer, #id_date').on('change', function() {
+            updateInvoiceNumber($('#id_issuer').val());
         });
 
         // Final sync before submission

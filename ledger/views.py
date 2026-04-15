@@ -1286,22 +1286,38 @@ def unified_ledger_pdf(request):
 def get_next_invoice_number(request):
     """
     Returns the next available invoice number for a given issuer via AJAX.
-    Does not increment the sequence.
     """
     issuer_id = request.GET.get('issuer_id')
+    date_str = request.GET.get('date')
+    
     if not issuer_id:
         return JsonResponse({'error': 'No issuer ID provided'}, status=400)
     
-    from .models import CompanyAccount, Bill, Sequence
+    from .models import CompanyAccount, Bill
     import datetime
     
     issuer = CompanyAccount.objects.filter(pk=issuer_id).first()
     if not issuer:
         return JsonResponse({'error': 'Issuer not found'}, status=404)
     
-    # Use model's peek_next_number logic
-    temp_bill = Bill(issuer=issuer)
-    invoice_number = temp_bill.peek_next_number()
+    # Parse date if provided
+    date_obj = None
+    if date_str:
+        try:
+            date_obj = datetime.datetime.strptime(date_str, '%Y-%m-%d')
+        except ValueError:
+            pass
+
+    # Use the gap-filling logic
+    next_no = Bill.get_next_available_no(issuer, date_obj)
     
-    return JsonResponse({'invoice_number': invoice_number})
+    # Get current prefix based on date_obj or now
+    from django.utils import timezone
+    now = date_obj or timezone.now()
+    prefix = issuer.invoice_prefix.replace("{YYYY}", str(now.year))
+    
+    return JsonResponse({
+        'bill_no': next_no,
+        'prefix': prefix
+    })
 
