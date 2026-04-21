@@ -12,8 +12,8 @@ from django.utils import timezone
 from django.http import JsonResponse
 from datetime import datetime, timedelta
 
-from .models import Trip
-from .forms import TripForm
+from .models import Trip, Route
+from .forms import TripForm, RouteForm
 from fleet.models import Vehicle, MaintenanceRecord, Tyre
 from ledger.models import FinancialRecord, TransactionCategory, Bill
 
@@ -64,7 +64,7 @@ class TripListView(LoginRequiredMixin, BaseTripPermissionMixin, ListView):
     
     def get_queryset(self):
         """Filter and sort trips based on user input and permissions"""
-        queryset = self.get_queryset_for_user().with_payment_info().with_billing_info().select_related('vehicle', 'party', 'driver')
+        queryset = self.get_queryset_for_user().with_payment_info().with_billing_info().select_related('vehicle', 'party', 'driver', 'route')
         
         # Search functionality
         search = self.request.GET.get('search')
@@ -74,6 +74,8 @@ class TripListView(LoginRequiredMixin, BaseTripPermissionMixin, ListView):
                 Q(party__name__icontains=search) |
                 Q(pickup_location__icontains=search) |
                 Q(delivery_location__icontains=search) |
+                Q(route__pickup_location__icontains=search) |
+                Q(route__delivery_location__icontains=search) |
                 Q(vehicle__registration_plate__icontains=search)
             ).distinct()
         
@@ -315,3 +317,60 @@ def get_autocomplete_suggestions(request):
         results = [{'id': x, 'text': x} for x in qs]
         
     return JsonResponse({'results': results})
+
+# --- Route Views ---
+
+class RouteListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
+    model = Route
+    template_name = 'trips/route_list.html'
+    context_object_name = 'routes'
+    permission_required = 'trips.view_route'
+    paginate_by = 25
+
+    def get_queryset(self):
+        queryset = Route.objects.all().order_by('pickup_location', 'delivery_location')
+        search = self.request.GET.get('search')
+        if search:
+            queryset = queryset.filter(
+                Q(pickup_location__icontains=search) |
+                Q(delivery_location__icontains=search) |
+                Q(route_type__icontains=search)
+            )
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['search_term'] = self.request.GET.get('search', '')
+        return context
+
+class RouteCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+    model = Route
+    form_class = RouteForm
+    template_name = 'trips/route_form.html'
+    permission_required = 'trips.add_route'
+    success_url = reverse_lazy('route-list')
+
+    def form_valid(self, form):
+        messages.success(self.request, 'Route created successfully.')
+        return super().form_valid(form)
+
+class RouteUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+    model = Route
+    form_class = RouteForm
+    template_name = 'trips/route_form.html'
+    permission_required = 'trips.change_route'
+    success_url = reverse_lazy('route-list')
+
+    def form_valid(self, form):
+        messages.success(self.request, 'Route updated successfully.')
+        return super().form_valid(form)
+
+class RouteDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
+    model = Route
+    template_name = 'trips/route_confirm_delete.html'
+    permission_required = 'trips.delete_route'
+    success_url = reverse_lazy('route-list')
+
+    def delete(self, request, *args, **kwargs):
+        messages.success(self.request, 'Route deleted successfully.')
+        return super().delete(request, *args, **kwargs)

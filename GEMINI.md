@@ -47,3 +47,6 @@ To assist in understanding the application architecture:
 *   **On-Demand Storage Access**: To prevent slow page loads when using Google Drive storage, document URLs are generated via a proxy view (`document-view`) only when clicked. Avoid calling `.url` on many file fields within a single template loop.
 *   **Database Annotations**: Document list counts (Total, Expired, Expiring) are calculated using SQL-level `Count` and `Q` filters in `get_queryset` to avoid N+1 issues and Python-side loop overhead.
 *   **Query Prefetching**: Always use `select_related` and `prefetch_related` for nested attributes (e.g., `driver__user`, `documents`) especially in global context processors like `document_alerts`.
+
+## UI & Application Philosophy
+*   **IGNORE DJANGO ADMIN**: Normal users (including managers and admins within the business domain) should NEVER need to access the default Django Admin interface to perform daily tasks, manage reference data (like Routes, Categories, Settings), or view reports. All functional models must have dedicated, stylized front-end views (List, Create, Update, Delete) integrated into the main application layout. The Django Admin is strictly for developer debugging and superuser backend maintenance.

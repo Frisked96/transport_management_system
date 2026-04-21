@@ -75,7 +75,10 @@ class FinancialRecordForm(forms.ModelForm):
                 # Filter categories for Debtor
                 from .models import TransactionCategory
                 self.fields['category'].queryset = TransactionCategory.objects.exclude(
-                    name='Payment Out'
+                    models.Q(name='Payment Out') |
+                    models.Q(name='Halting') |
+                    models.Q(name='Debit Note') |
+                    models.Q(name='Credit Note')
                 ).order_by('name')
         
         # 2. If Driver context: Remove Party, Trip, and Bill fields
@@ -203,12 +206,14 @@ class BillForm(forms.ModelForm):
             'bill_no',
             'bill_type',
             'category',
+            'original_bill',
             'issuer',
             'party',
             'date',
             'item_type',
             'amount_override',
             'gst_rate',
+            'gst_type',
             'trips',
             'trips_data'
         ]
@@ -242,6 +247,8 @@ class BillForm(forms.ModelForm):
         # 1. Pre-populate bill_no for new records if issuer exists
         if not self.instance.pk:
             issuer = None
+            category = None
+            
             if self.data.get('issuer'):
                 issuer = CompanyAccount.objects.filter(pk=self.data.get('issuer')).first()
             elif self.initial.get('issuer'):
@@ -249,16 +256,21 @@ class BillForm(forms.ModelForm):
             elif CompanyAccount.objects.count() == 1:
                 issuer = CompanyAccount.objects.first()
                 self.initial['issuer'] = issuer.id
-                # Also set the bound field initial just in case
                 self.fields['issuer'].initial = issuer.id
 
+            if self.data.get('category'):
+                category = TransactionCategory.objects.filter(pk=self.data.get('category')).first()
+            elif self.initial.get('category'):
+                category = TransactionCategory.objects.filter(pk=self.initial.get('category')).first()
+
             if issuer:
-                self.fields['bill_no'].initial = Bill.get_next_available_no(issuer, self.initial.get('date'))
+                self.fields['bill_no'].initial = Bill.get_next_available_no(issuer, self.initial.get('date'), category)
                 # Set prefix initial using model method
                 self.fields['prefix'].initial = self.instance.get_prefix(date=self.initial.get('date'))
         else:
              self.fields['prefix'].initial = self.instance.get_prefix()
-        # 2. Logic to filter trips based on Party
+        
+        # 2. Logic to filter trips and original_bill based on Party
         party_id = None
         
         if self.is_bound: # POST data
@@ -273,24 +285,58 @@ class BillForm(forms.ModelForm):
             try:
                 # Show trips for this party
                 qs = Trip.objects.filter(party_id=party_id)
-                
                 if self.instance and self.instance.pk:
-                    # Include currently selected trips + unbilled ones
                     qs = qs.filter(models.Q(bills__isnull=True) | models.Q(bills=self.instance))
                 else:
                      qs = qs.filter(bills__isnull=True)
-                
                 self.fields['trips'].queryset = qs.distinct().order_by('-date')
+
+                # Show original bills for this party (excluding CN/DN themselves if possible, but keep it simple)
+                self.fields['original_bill'].queryset = Bill.objects.filter(
+                    party_id=party_id
+                ).exclude(
+                    category__name__in=['Credit Note', 'Debit Note']
+                ).order_by('-date')
             except (ValueError, TypeError):
                 self.fields['trips'].queryset = Trip.objects.none()
+                self.fields['original_bill'].queryset = Bill.objects.none()
         else:
             self.fields['trips'].queryset = Trip.objects.none()
+            self.fields['original_bill'].queryset = Bill.objects.none()
 
         # If editing, populate trips_data with existing LR Nos
         if self.instance and self.instance.pk:
             from .models import BillTrip
             bt_data = {bt.trip_id: bt.lr_no for bt in self.instance.bill_trips.all()}
             self.fields['trips_data'].initial = json.dumps(bt_data)
+
+    def clean(self):
+        cleaned_data = super().clean()
+        bill_type = cleaned_data.get('bill_type')
+        selected_trips = cleaned_data.get('trips')
+        gst_type = cleaned_data.get('gst_type')
+
+        # Logic for Trip-based Invoices
+        if bill_type == 'Trip-based':
+            if selected_trips:
+                # Check for mixed GST types among selected trips
+                trip_gst_types = set(trip.gst_type for trip in selected_trips)
+                
+                if len(trip_gst_types) > 1:
+                    raise forms.ValidationError(
+                        "Mixed Route Types! You cannot combine 'Local' and 'Intra/Interstate' trips in the same invoice. "
+                        "Please create separate invoices for different route types."
+                    )
+                
+                # Automatically set the Bill's GST type based on the trips
+                derived_gst_type = list(trip_gst_types)[0]
+                cleaned_data['gst_type'] = derived_gst_type
+            else:
+                # If no trips selected for a Trip-based bill, it should fail anyway if required
+                pass
+        
+        # For Standard invoices, we keep the user-selected gst_type
+        return cleaned_data
 
     def save(self, commit=True):
         instance = super().save(commit=False)

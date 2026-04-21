@@ -48,33 +48,27 @@
                         {% if form.driver.errors %}<div class="text-red-600 text-xs mt-1">{{ form.driver.errors }}</div>{% endif %}
                     </div>
 
-                    <!-- Party & Revenue Type -->
-                    <div class="md:col-span-8">
+                    <!-- Party & Route -->
+                    <div class="md:col-span-6">
                         <label for="{{ form.party.id_for_label }}" class="block text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider">Party</label>
                         {{ form.party }}
                         {% if form.party.errors %}<div class="text-red-600 text-xs mt-1">{{ form.party.errors }}</div>{% endif %}
                     </div>
+                    <div class="md:col-span-6">
+                        <label for="{{ form.route.id_for_label }}" class="block text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider">Route</label>
+                        {{ form.route }}
+                        {% if form.route.errors %}<div class="text-red-600 text-xs mt-1">{{ form.route.errors }}</div>{% endif %}
+                    </div>
+
                     <div class="md:col-span-4">
                         <label for="{{ form.revenue_type.id_for_label }}" class="block text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider">Revenue Type</label>
                         {{ form.revenue_type }}
                         {% if form.revenue_type.errors %}<div class="text-red-600 text-xs mt-1">{{ form.revenue_type.errors }}</div>{% endif %}
                     </div>
 
-                    <!-- Locations - Full Width -->
-                    <div class="md:col-span-12">
-                        <label for="{{ form.pickup_location.id_for_label }}" class="block text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider">Pickup Location</label>
-                        {{ form.pickup_location }}
-                        {{ form.pickup_lat }}
-                        {{ form.pickup_lng }}
-                        {% if form.pickup_location.errors %}<div class="text-red-600 text-xs mt-1">{{ form.pickup_location.errors }}</div>{% endif %}
-                    </div>
-                    <div class="md:col-span-12">
-                        <label for="{{ form.delivery_location.id_for_label }}" class="block text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider">Delivery Location</label>
-                        {{ form.delivery_location }}
-                        {{ form.delivery_lat }}
-                        {{ form.delivery_lng }}
-                         {% if form.delivery_location.errors %}<div class="text-red-600 text-xs mt-1">{{ form.delivery_location.errors }}</div>{% endif %}
-                    </div>
+                    <!-- Hidden locations for form submission -->
+                    {{ form.pickup_location }}
+                    {{ form.delivery_location }}
 
                     <!-- Cargo Details -->
                     <div class="md:col-span-4">
@@ -120,7 +114,7 @@
 {% block extra_js %}
 <script>
 $(document).ready(function() {
-    // 1. Initialize Standard Select2 (default theme for custom styles)
+    // 1. Initialize Standard Select2
     $('#id_vehicle').select2({
         placeholder: 'Select Vehicle'
     });
@@ -131,98 +125,9 @@ $(document).ready(function() {
     $('#id_party').select2({
         placeholder: 'Select Party'
     });
-
-    // 2. Initialize Select2 for Locations (Hybrid: History + Map)
-    function setupLocationSelect2(fieldSelector, fieldName) {
-        const select = $(fieldSelector);
-        const latInput = $(fieldSelector.replace('location', 'lat'));
-        const lngInput = $(fieldSelector.replace('location', 'lng'));
-
-        // Replace the input with a select element for AJAX+Tagging
-        const initialValue = select.val();
-        const newSelect = $('<select class="block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white"></select>');
-        newSelect.attr('id', select.attr('id'));
-        newSelect.attr('name', select.attr('name'));
-        if (initialValue) {
-            newSelect.append(new Option(initialValue, initialValue, true, true));
-        }
-        select.replaceWith(newSelect);
-        
-        newSelect.select2({
-            placeholder: 'Search or type location...',
-            tags: true, 
-            minimumInputLength: 0,
-            ajax: {
-                delay: 0,
-                transport: function (params, success, failure) {
-                    const term = params.data.term || '';
-                    const localRequest = $.ajax({
-                        url: '{% url "autocomplete-suggestions" %}',
-                        dataType: 'json',
-                        data: { term: term, field: fieldName }
-                    });
-
-                    let mapRequest = Promise.resolve({ features: [] });
-                    if (term.length >= 2) {
-                        const mapUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(term)}&limit=20&lat=22.0&lon=79.0&osm_tag=place:city&osm_tag=place:town&osm_tag=place:village&lang=en`;
-                        mapRequest = $.ajax({ url: mapUrl, dataType: 'json' }).catch(() => ({ features: [] }));
-                    }
-
-                    Promise.all([localRequest, mapRequest]).then(([localData, mapData]) => {
-                        const results = [];
-                        const seen = new Set();
-                        
-                        if (term && term.trim().length > 0) {
-                           const cleanTerm = term.trim();
-                           results.push({ id: cleanTerm, text: `"${cleanTerm}" (Manual Entry)`, newOption: true });
-                           seen.add(cleanTerm.toLowerCase());
-                        }
-
-                        if (localData.results) {
-                            localData.results.forEach(item => {
-                                if (!seen.has(item.id.toLowerCase())) {
-                                    results.push(item);
-                                    seen.add(item.id.toLowerCase());
-                                }
-                            });
-                        }
-
-                        if (mapData && mapData.features) {
-                            mapData.features.forEach(feature => {
-                                const p = feature.properties;
-                                const coords = feature.geometry.coordinates;
-                                const c_code = (p.countrycode || '').toUpperCase();
-                                if (c_code === 'IN') {
-                                    const displayName = p.name || p.city || p.town || p.village || '';
-                                    if (displayName && !seen.has(displayName.toLowerCase())) {
-                                        results.push({ id: displayName, text: `🌍 ${displayName}`, lat: coords[1], lng: coords[0] });
-                                        seen.add(displayName.toLowerCase());
-                                    }
-                                }
-                            });
-                        }
-                        success({ results: results });
-                    }).catch(failure);
-                },
-                processResults: function (data) { return data; },
-                cache: true
-            }
-        });
-
-        newSelect.on('select2:select', function (e) {
-            const data = e.params.data;
-            if (data.lat && data.lng) {
-                latInput.val(parseFloat(data.lat).toFixed(6));
-                lngInput.val(parseFloat(data.lng).toFixed(6));
-            } else {
-                latInput.val('');
-                lngInput.val('');
-            }
-        });
-    }
-
-    setupLocationSelect2('#id_pickup_location', 'pickup_location');
-    setupLocationSelect2('#id_delivery_location', 'delivery_location');
+    $('#id_route').select2({
+        placeholder: 'Select Route'
+    });
 
     // Revenue calculation logic
     const $revenueType = $('#id_revenue_type');

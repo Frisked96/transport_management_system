@@ -581,8 +581,10 @@ class Bill(models.Model):
     ]
 
     GST_TYPE_GST = 'GST'
+    GST_TYPE_IGST = 'IGST'
     GST_TYPE_CHOICES = [
         (GST_TYPE_GST, 'GST'),
+        (GST_TYPE_IGST, 'IGST'),
     ]
 
     bill_number = models.CharField(max_length=50, unique=True, blank=True, null=True, verbose_name="Full Invoice Number")
@@ -618,40 +620,60 @@ class Bill(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     category = models.ForeignKey(TransactionCategory, null=True, blank=True, on_delete=models.SET_NULL, related_name='bills', verbose_name="Bill Category")
+    original_bill = models.ForeignKey('self', null=True, blank=True, on_delete=models.SET_NULL, related_name='adjustment_bills', verbose_name="Against Invoice")
 
     @classmethod
-    def get_next_available_no(cls, issuer, date=None):
-        """Finds the next numeric invoice number (Max + 1), respecting start sequence."""
+    def get_next_available_no(cls, issuer, date=None, category=None):
+        """Finds the next numeric invoice number (Max + 1), respecting start sequence and category series."""
         if not issuer:
             return 1
         
         from django.utils import timezone
         from django.db.models import Max
-        year = date.year if date else timezone.now().year
-        prefix = issuer.invoice_prefix.replace("{YYYY}", str(year))
+        dt = date or timezone.now()
+        year = dt.year
         
-        # Get the maximum bill_no for this issuer and prefix
-        max_no = cls.objects.filter(
-            issuer=issuer,
-            bill_number__startswith=prefix,
-            bill_no__isnull=False
-        ).aggregate(max_val=Max('bill_no'))['max_val']
+        # Determine prefix and series filter based on category (Credit/Debit Note)
+        prefix = issuer.invoice_prefix.replace("{YYYY}", str(year))
+        qs = cls.objects.filter(issuer=issuer, bill_no__isnull=False)
+
+        if category:
+            if category.name == 'Credit Note':
+                prefix = f"CN-{prefix}"
+            elif category.name == 'Debit Note':
+                prefix = f"DN-{prefix}"
+            
+            qs = qs.filter(category=category)
+        else:
+            # Standard/Trip sequence (No prefix modification, exclude CN/DN)
+            qs = qs.exclude(category__name__in=['Credit Note', 'Debit Note'])
+        
+        # Get the maximum bill_no for this issuer and specific prefix series
+        max_no = qs.filter(bill_number__startswith=prefix).aggregate(max_val=Max('bill_no'))['max_val']
         
         if max_no is not None:
             return max_no + 1
         
-        # If no invoices exist yet for this prefix, use the start sequence
+        # If no invoices exist yet for this series, use the start sequence
         return issuer.invoice_sequence_start
 
     def get_prefix(self, date=None):
-        """Returns the invoice prefix for this bill based on its issuer and date."""
+        """Returns the invoice prefix for this bill based on its issuer, date, and category."""
         if not self.issuer:
             return ""
         
         from django.utils import timezone
         dt = date or self.date or timezone.now()
         year = dt.year
-        return self.issuer.invoice_prefix.replace("{YYYY}", str(year))
+        base_prefix = self.issuer.invoice_prefix.replace("{YYYY}", str(year))
+
+        if self.category:
+            if self.category.name == 'Credit Note':
+                return f"CN-{base_prefix}"
+            elif self.category.name == 'Debit Note':
+                return f"DN-{base_prefix}"
+        
+        return base_prefix
 
     def save(self, *args, **kwargs):
         # 1. Snapshot Company Details from Issuer
@@ -786,7 +808,18 @@ class Bill(models.Model):
             
             trip_payments += direct_trip_payments
 
-        return direct + trip_payments
+        # 3. Adjustment Bills (Credit/Debit Notes) linked to this bill
+        adjustments = 0
+        for adj in self.adjustment_bills.all():
+            if adj.category:
+                if adj.category.name == 'Credit Note':
+                    # Credit Note reduces outstanding (acts as payment/deduction)
+                    adjustments += adj.total_amount
+                elif adj.category.name == 'Debit Note':
+                    # Debit Note increases outstanding (negative payment)
+                    adjustments -= adj.total_amount
+
+        return direct + trip_payments + adjustments
 
     @property
     def outstanding_balance(self):
@@ -817,6 +850,12 @@ class Bill(models.Model):
     def sgst_amount(self):
         if self.gst_rate > 0:
             return self.gst_amount / 2
+        return 0
+
+    @property
+    def igst_amount(self):
+        if self.gst_rate > 0:
+            return self.gst_amount
         return 0
 
     def get_trip_gst(self, trip):
@@ -850,10 +889,8 @@ class Bill(models.Model):
     def subtotal(self):
         if self.bill_type == self.TYPE_STANDARD:
             return self.amount_override or 0
-        # revenue = weight * rate_per_ton
-        return self.trips.aggregate(
-            total=models.Sum(models.F('weight') * models.F('rate_per_ton'))
-        )['total'] or 0
+        # Sum individual trip revenues correctly (handles fixed vs per-ton)
+        return sum(trip.revenue for trip in self.trips.all())
 
     @property
     def gst_amount(self):

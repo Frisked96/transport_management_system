@@ -89,6 +89,13 @@
                                 <label class="text-sm font-semibold text-slate-700">GST Rate (%):</label>
                                 <div class="flex-grow max-w-[200px]">{{ form.gst_rate }}</div>
                             </div>
+                            <div class="flex items-center justify-between gap-4">
+                                <label class="text-sm font-semibold text-slate-700">GST Type:</label>
+                                <div class="flex-grow max-w-[200px]">
+                                    {{ form.gst_type }}
+                                    <p id="gstTypeSuggestion" class="text-[9px] text-emerald-600 mt-1 font-bold hidden"></p>
+                                </div>
+                            </div>
                         </div>
 
                     </div>
@@ -106,7 +113,12 @@
                         <div class="space-y-2">
                             <label class="block text-xs font-bold text-slate-500 uppercase">Category</label>
                             {{ form.category }}
-                            <p class="text-[10px] text-slate-400 italic">Select "Halting", "Debit Note", or "Credit Note".</p>
+                            <p class="text-[10px] text-slate-400 italic">Select category. Credit/Debit Notes have their own numbering series.</p>
+                        </div>
+                        <div id="originalBillContainer" class="space-y-2 hidden">
+                            <label class="block text-xs font-bold text-slate-500 uppercase">Against Invoice</label>
+                            {{ form.original_bill }}
+                            <p class="text-[10px] text-rose-500 italic font-bold">Select the original invoice this adjustment is for.</p>
                         </div>
                         <div class="space-y-2">
                             <label class="block text-xs font-bold text-slate-500 uppercase">Item Description / Type</label>
@@ -150,6 +162,7 @@
                                             <input class="trip-checkbox rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" type="checkbox" 
                                                    name="trips" value="{{ trip.pk }}" 
                                                    id="trip_{{ trip.pk }}"
+                                                   data-gst-type="{{ trip.gst_type }}"
                                                    {% if trip.pk in form.trips.value %}checked{% endif %}>
                                         </td>
                                         <td class="px-6 py-4">
@@ -256,6 +269,7 @@
                                         <input class="trip-checkbox rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" type="checkbox" 
                                                name="trips" value="${trip.id}" 
                                                id="trip_${trip.id}"
+                                               data-gst-type="${trip.gst_type}"
                                                ${isChecked ? 'checked' : ''}>
                                     </td>
                                     <td class="px-6 py-4">
@@ -298,13 +312,15 @@
             }
 
             const date = $('#id_date').val();
-            console.log("Date for AJAX:", date);
+            const categoryId = $('#id_category').val();
+            console.log("Params for AJAX:", {date, categoryId});
 
             $.ajax({
                 url: "{% url 'get-next-invoice-number' %}",
                 data: { 
                     'issuer_id': issuerId,
-                    'date': date
+                    'date': date,
+                    'category_id': categoryId
                 },
                 success: function(data) {
                     console.log("AJAX Success Data:", data);
@@ -315,9 +331,63 @@
                 },
                 error: function(xhr, status, error) {
                     console.error("AJAX Error:", status, error);
-                    console.error("Response Text:", xhr.responseText);
                 }
             });
+        }
+
+        function updateCategoryUI() {
+            const categoryText = $('#id_category option:selected').text();
+            if (categoryText.includes('Credit Note') || categoryText.includes('Debit Note')) {
+                $('#originalBillContainer').removeClass('hidden');
+            } else {
+                $('#originalBillContainer').addClass('hidden');
+            }
+            updateInvoiceNumber($('#id_issuer').val());
+        }
+
+        $('#id_category').on('change', updateCategoryUI);
+        updateCategoryUI(); // Initial run
+
+        function suggestGstType() {
+            const billType = $('#id_bill_type').val();
+            const gstTypeField = $('#id_gst_type');
+            const suggestionEl = $('#gstTypeSuggestion');
+            
+            if (billType === 'Standard') {
+                gstTypeField.prop('disabled', false).removeClass('bg-slate-100 cursor-not-allowed');
+                suggestionEl.addClass('hidden');
+                return;
+            }
+
+            const selectedTrips = $('.trip-checkbox:checked');
+            if (selectedTrips.length === 0) {
+                gstTypeField.prop('disabled', false).removeClass('bg-slate-100 cursor-not-allowed');
+                suggestionEl.addClass('hidden');
+                return;
+            }
+
+            let igstCount = 0;
+            let gstCount = 0;
+
+            selectedTrips.each(function() {
+                const type = $(this).data('gst-type');
+                if (type === 'IGST') igstCount++;
+                else gstCount++;
+            });
+
+            if (igstCount > 0 && gstCount === 0) {
+                suggestionEl.text('Auto-locked: IGST (Based on selected routes)').removeClass('hidden text-rose-600').addClass('text-emerald-600');
+                gstTypeField.val('IGST').trigger('change').prop('disabled', true).addClass('bg-slate-100 cursor-not-allowed');
+            } else if (gstCount > 0 && igstCount === 0) {
+                suggestionEl.text('Auto-locked: GST (Based on selected routes)').removeClass('hidden text-rose-600').addClass('text-emerald-600');
+                gstTypeField.val('GST').trigger('change').prop('disabled', true).addClass('bg-slate-100 cursor-not-allowed');
+            } else if (igstCount > 0 && gstCount > 0) {
+                suggestionEl.text('Mixed Route Types Selected! Invoicing blocked.').removeClass('hidden text-emerald-600').addClass('text-rose-600');
+                gstTypeField.prop('disabled', false).removeClass('bg-slate-100 cursor-not-allowed');
+            } else {
+                suggestionEl.addClass('hidden');
+                gstTypeField.prop('disabled', false).removeClass('bg-slate-100 cursor-not-allowed');
+            }
         }
 
         function bindTableEvents() {
@@ -328,15 +398,26 @@
                 tripsDataInput.value = JSON.stringify(tripsData);
             });
 
+            // Trip selection change
+            $('.trip-checkbox').on('change', function() {
+                suggestGstType();
+            });
+
             // Re-bind select all
             const selectAll = document.getElementById('selectAllTrips');
-            const checkboxes = document.querySelectorAll('.trip-checkbox');
             if(selectAll) {
                 $(selectAll).off('change').on('change', function() {
+                    const checkboxes = document.querySelectorAll('.trip-checkbox');
                     checkboxes.forEach(cb => cb.checked = this.checked);
+                    suggestGstType();
                 });
             }
         }
+
+        $('#id_bill_type').on('change', function() {
+            updateBillTypeUI();
+            suggestGstType();
+        });
 
         // Initial run for invoice number (for NEW invoices)
         const initialIssuer = $('#id_issuer').val();
@@ -344,10 +425,46 @@
             updateInvoiceNumber(initialIssuer);
         }
 
+        // Function to update original bills (Against Invoice) via AJAX
+        function updateOriginalBills(partyId) {
+            const billSelect = $('#id_original_bill');
+            if (!partyId) {
+                billSelect.empty().append('<option value="">---------</option>');
+                return;
+            }
+
+            const currentOriginalBillId = "{{ form.original_bill.value|default:'' }}";
+
+            $.ajax({
+                url: "{% url 'get-party-bills' %}",
+                data: { 'party_id': partyId },
+                success: function(data) {
+                    billSelect.empty().append('<option value="">---------</option>');
+                    if (data.bills.length > 0) {
+                        data.bills.forEach(bill => {
+                            const isSelected = bill.id.toString() === currentOriginalBillId ? 'selected' : '';
+                            billSelect.append(`<option value="${bill.id}" ${isSelected}>${bill.label}</option>`);
+                        });
+                    }
+                },
+                error: function() {
+                    console.error("Failed to fetch bills for party");
+                }
+            });
+        }
+
         // AJAX Load on Party change
         $('#id_party').on('change', function() {
-            updateTripsTable($(this).val());
+            const partyId = $(this).val();
+            updateTripsTable(partyId);
+            updateOriginalBills(partyId);
         });
+
+        // Initial run if party is already selected
+        const initialPartyId = $('#id_party').val();
+        if (initialPartyId) {
+            updateOriginalBills(initialPartyId);
+        }
 
         // AJAX Invoice Number on Issuer or Date change (only for NEW invoices)
         $('#id_issuer, #id_date').on('change', function() {
@@ -356,6 +473,9 @@
 
         // Final sync before submission
         $('#invoiceForm').on('submit', function() {
+            // Re-enable disabled fields so they are submitted
+            $('#id_gst_type').prop('disabled', false);
+            
             const finalData = {};
             $('.lr-input').each(function() {
                 const tripId = $(this).data('trip-id');
@@ -366,6 +486,10 @@
             });
             tripsDataInput.value = JSON.stringify(finalData);
         });
+
+        // Initial setup
+        bindTableEvents();
+        suggestGstType();
     });
 </script>
 {% endblock %}

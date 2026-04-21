@@ -94,6 +94,7 @@
                             <i class="fa-solid fa-truck-fast"></i><span>Fleet</span><i class="fa-solid fa-chevron-down text-xs ml-1"></i>
                         </button>
                         <div class="absolute left-0 mt-1 w-48 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5 hidden dropdown-menu">
+                            <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'route-list' %}">Routes</a>
                             <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'vehicle-list' %}">Vehicles</a>
                             <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'document-list' %}">Documents</a>
                             <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'maintenance-list' %}">Maintenance</a>
@@ -277,6 +278,7 @@
             <!-- Fleet Mobile -->
             <div class="space-y-1 pl-4 border-l border-slate-700">
                 <p class="px-3 py-1 text-xs font-bold text-slate-500 uppercase tracking-widest">Fleet</p>
+                <a class="block px-3 py-2 rounded-md text-base font-medium text-slate-300 hover:bg-slate-700 hover:text-white" href="{% url 'route-list' %}">Routes</a>
                 <a class="block px-3 py-2 rounded-md text-base font-medium text-slate-300 hover:bg-slate-700 hover:text-white" href="{% url 'vehicle-list' %}">Vehicles</a>
                 <a class="block px-3 py-2 rounded-md text-base font-medium text-slate-300 hover:bg-slate-700 hover:text-white" href="{% url 'maintenance-list' %}">Maintenance</a>
                 <a class="block px-3 py-2 rounded-md text-base font-medium text-slate-300 hover:bg-slate-700 hover:text-white" href="{% url 'tyre-list' %}">Tyre Inventory</a>

@@ -2,7 +2,13 @@
 Admin configuration for Trips app
 """
 from django.contrib import admin
-from .models import Trip
+from .models import Trip, Route
+
+@admin.register(Route)
+class RouteAdmin(admin.ModelAdmin):
+    list_display = ('pickup_location', 'delivery_location', 'route_type')
+    list_filter = ('route_type',)
+    search_fields = ('pickup_location', 'delivery_location')
 
 @admin.register(Trip)
 class TripAdmin(admin.ModelAdmin):
@@ -11,6 +17,7 @@ class TripAdmin(admin.ModelAdmin):
         'date',
         'vehicle', 
         'party',
+        'route',
         'weight',
         'rate_per_ton',
         'driver'
@@ -19,6 +26,7 @@ class TripAdmin(admin.ModelAdmin):
     list_filter = [
         'vehicle',
         'party',
+        'route',
         'date',
         'created_at'
     ]
@@ -39,7 +47,7 @@ class TripAdmin(admin.ModelAdmin):
             'fields': ('trip_number', 'date', 'created_at')
         }),
         ('Details', {
-            'fields': ('vehicle', 'party', 'revenue_type', 'weight', 'rate_per_ton')
+            'fields': ('vehicle', 'party', 'route', 'revenue_type', 'weight', 'rate_per_ton')
         }),
         ('Driver Assignment', {
             'fields': ('driver',)

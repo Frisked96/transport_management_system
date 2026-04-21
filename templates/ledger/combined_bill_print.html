@@ -284,6 +284,9 @@
                     <div class="section-content">
                         Invoice No: <strong>{{ bill.bill_number }}</strong><br>
                         Invoice Date: <strong>{{ bill.date|date:"d-m-Y" }}</strong><br>
+                        {% if bill.original_bill %}
+                        Against Inv: <strong>{{ bill.original_bill.bill_number }}</strong><br>
+                        {% endif %}
                         Place of Supply: <strong>{{ bill.party.state }}</strong>
                     </div>
                 </div>
@@ -363,8 +366,12 @@
                             <tr>
                                 <th>HSN</th>
                                 <th>Taxable</th>
+                                {% if bill.gst_type == 'IGST' %}
+                                <th>IGST</th>
+                                {% else %}
                                 <th>CGST</th>
                                 <th>SGST</th>
+                                {% endif %}
                                 <th>Total Tax</th>
                             </tr>
                         </thead>
@@ -372,8 +379,12 @@
                             <tr>
                                 <td class="text-center">{{ bill.hsn_code }}</td>
                                 <td class="text-right">{{ bill.subtotal|indian_comma }}</td>
+                                {% if bill.gst_type == 'IGST' %}
+                                <td class="text-right">{{ bill.igst_amount|indian_comma }}<br><small>({{ bill.gst_rate }}%)</small></td>
+                                {% else %}
                                 <td class="text-right">{{ bill.cgst_amount|indian_comma }}<br><small>({% widthratio bill.gst_rate 2 1 %}%)</small></td>
                                 <td class="text-right">{{ bill.sgst_amount|indian_comma }}<br><small>({% widthratio bill.gst_rate 2 1 %}%)</small></td>
+                                {% endif %}
                                 <td class="text-right font-bold">{{ bill.gst_amount|indian_comma }}</td>
                             </tr>
                         </tbody>
@@ -389,6 +400,12 @@
                             <td>Taxable Amount</td>
                             <td class="text-right">Rs. {{ bill.subtotal|indian_comma }}</td>
                         </tr>
+                        {% if bill.gst_type == 'IGST' %}
+                        <tr>
+                            <td>Add: IGST</td>
+                            <td class="text-right">Rs. {{ bill.igst_amount|indian_comma }}</td>
+                        </tr>
+                        {% else %}
                         <tr>
                             <td>Add: CGST</td>
                             <td class="text-right">Rs. {{ bill.cgst_amount|indian_comma }}</td>
@@ -397,6 +414,7 @@
                             <td>Add: SGST</td>
                             <td class="text-right">Rs. {{ bill.sgst_amount|indian_comma }}</td>
                         </tr>
+                        {% endif %}
                         <tr>
                             <td>Round Off</td>
                             <td class="text-right">Rs. {{ bill.roundoff|indian_comma }}</td>

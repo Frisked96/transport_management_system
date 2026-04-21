@@ -73,6 +73,41 @@ class TripManager(models.Manager):
     def with_billing_info(self):
         return self.get_queryset().with_billing_info()
 
+class Route(models.Model):
+    """
+    Pre-defined routes with pickup and delivery locations.
+    Also defines if the route is local (GST) or intra/interstate (IGST).
+    """
+    pickup_location = models.CharField(
+        max_length=300,
+        verbose_name='Pickup Location'
+    )
+    delivery_location = models.CharField(
+        max_length=300,
+        verbose_name='Delivery Location'
+    )
+    
+    ROUTE_TYPE_LOCAL = 'local'
+    ROUTE_TYPE_INTRA = 'intra'
+    ROUTE_TYPE_CHOICES = [
+        (ROUTE_TYPE_LOCAL, 'Local (GST)'),
+        (ROUTE_TYPE_INTRA, 'Intra/Interstate (IGST)'),
+    ]
+    route_type = models.CharField(
+        max_length=10, 
+        choices=ROUTE_TYPE_CHOICES, 
+        default=ROUTE_TYPE_LOCAL,
+        verbose_name='Route Type'
+    )
+
+    class Meta:
+        verbose_name = 'Route'
+        verbose_name_plural = 'Routes'
+        unique_together = ['pickup_location', 'delivery_location', 'route_type']
+
+    def __str__(self):
+        return f"{self.pickup_location} to {self.delivery_location} ({self.get_route_type_display()})"
+
 class Trip(models.Model):
     """
     Trip model to manage transport operations.
@@ -148,6 +183,14 @@ class Trip(models.Model):
         verbose_name='Party',
         null=True,
         blank=True
+    )
+
+    route = models.ForeignKey(
+        Route,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name='Route'
     )
 
     pickup_location = models.CharField(
@@ -245,6 +288,11 @@ class Trip(models.Model):
         if not is_new:
             old_instance = Trip.objects.get(pk=self.pk)
 
+        # Sync locations from route if provided
+        if self.route:
+            self.pickup_location = self.route.pickup_location
+            self.delivery_location = self.route.delivery_location
+
         # Handle Trip Number generation and regeneration
         reg_plate = self.vehicle.registration_plate
         
@@ -284,6 +332,14 @@ class Trip(models.Model):
         # Sync to Ledger
         self.sync_ledger_invoice()
     
+    @property
+    def gst_type(self):
+        """Returns GST type based on Route"""
+        from ledger.models import Bill
+        if self.route and self.route.route_type == Route.ROUTE_TYPE_INTRA:
+            return Bill.GST_TYPE_IGST
+        return Bill.GST_TYPE_GST
+
     @property
     def start_date(self):
         """Alias for date, for backward compatibility"""

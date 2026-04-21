@@ -641,6 +641,7 @@ def get_party_unbilled_trips(request):
             'weight': float(trip.weight or 0),
             'rate': float(trip.rate_per_ton or 0),
             'revenue': float(trip.revenue or 0),
+            'gst_type': trip.gst_type, # IGST or GST
         } for trip in trips]
         
         return JsonResponse({'trips': data})
@@ -1283,17 +1284,45 @@ def unified_ledger_pdf(request):
 
 
 @login_required
+def get_party_bills(request):
+    """
+    AJAX endpoint to get bills for a party (excluding adjustment notes)
+    """
+    party_id = request.GET.get('party_id')
+    if not party_id:
+        return JsonResponse({'bills': []})
+    
+    try:
+        from .models import Bill
+        bills = Bill.objects.filter(
+            party_id=party_id
+        ).exclude(
+            category__name__in=['Credit Note', 'Debit Note']
+        ).order_by('-date', '-created_at')
+        
+        data = [{
+            'id': bill.id,
+            'label': f"{bill.bill_number} - {bill.date.strftime('%d/%m/%Y')} (Total: ₹{bill.total_amount:.2f})"
+        } for bill in bills]
+        
+        return JsonResponse({'bills': data})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+
+@login_required
 def get_next_invoice_number(request):
     """
     Returns the next available invoice number for a given issuer via AJAX.
     """
     issuer_id = request.GET.get('issuer_id')
     date_str = request.GET.get('date')
+    category_id = request.GET.get('category_id')
     
     if not issuer_id:
         return JsonResponse({'error': 'No issuer ID provided'}, status=400)
     
-    from .models import CompanyAccount, Bill
+    from .models import CompanyAccount, Bill, TransactionCategory
     import datetime
     
     issuer = CompanyAccount.objects.filter(pk=issuer_id).first()
@@ -1308,13 +1337,25 @@ def get_next_invoice_number(request):
         except ValueError:
             pass
 
+    category = None
+    if category_id:
+        category = TransactionCategory.objects.filter(pk=category_id).first()
+
     # Use the gap-filling logic
-    next_no = Bill.get_next_available_no(issuer, date_obj)
+    next_no = Bill.get_next_available_no(issuer, date_obj, category)
     
     # Get current prefix based on date_obj or now
     from django.utils import timezone
-    now = date_obj or timezone.now()
-    prefix = issuer.invoice_prefix.replace("{YYYY}", str(now.year))
+    dt = date_obj or timezone.now()
+    year = dt.year
+    base_prefix = issuer.invoice_prefix.replace("{YYYY}", str(year))
+    
+    prefix = base_prefix
+    if category:
+        if category.name == 'Credit Note':
+            prefix = f"CN-{base_prefix}"
+        elif category.name == 'Debit Note':
+            prefix = f"DN-{base_prefix}"
     
     return JsonResponse({
         'bill_no': next_no,
