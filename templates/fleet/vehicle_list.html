@@ -9,7 +9,17 @@
         <h1 class="text-3xl font-bold text-slate-900">Fleet Management</h1>
         <p class="text-sm text-slate-600 mt-1">Manage and monitor your vehicle fleet</p>
     </div>
-    <div class="mt-4 md:mt-0 flex space-x-3">
+    <div class="mt-4 md:mt-0 flex items-center space-x-4">
+        <!-- View Toggle -->
+        <div class="bg-slate-200 p-1 rounded-lg flex items-center shadow-inner">
+            <button id="gridViewBtn" class="px-3 py-1.5 rounded-md text-xs font-bold uppercase tracking-wider transition-all flex items-center" title="Grid View">
+                <i class="fa-solid fa-grip mr-2"></i>Grid
+            </button>
+            <button id="listViewBtn" class="px-3 py-1.5 rounded-md text-xs font-bold uppercase tracking-wider transition-all flex items-center" title="List View">
+                <i class="fa-solid fa-list mr-2"></i>List
+            </button>
+        </div>
+
         {% if perms.fleet.add_vehicle %}
         <a href="{% url 'vehicle-create' %}" class="flex items-center space-x-2 px-4 py-2 bg-emerald-600 text-white rounded-md text-sm font-medium hover:bg-emerald-700 shadow-sm transition-colors">
             <i class="fa-solid fa-plus"></i>
@@ -58,94 +68,108 @@
 
 <!-- BEGIN: Vehicle List -->
 {% if vehicles %}
-<div class="space-y-4">
+<div id="vehicleGridView" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
     {% for vehicle in vehicles %}
-    <!-- Vehicle Card -->
-    <div class="bg-white border border-slate-200 rounded-lg overflow-hidden hover:shadow-md transition-shadow">
-        <div class="p-4 md:p-5">
-            <div class="flex items-center justify-between mb-4 md:mb-0">
-                <div class="flex-1 min-w-0">
-                    <h3 class="font-bold text-lg text-slate-900 leading-tight truncate">
-                        <a href="{% url 'vehicle-detail' vehicle.pk %}" class="hover:text-emerald-600 transition-colors">{{ vehicle.registration_plate }}</a>
+    <!-- Vehicle Card (Grid) -->
+    <div class="bg-white border border-slate-200 rounded-xl overflow-hidden hover:shadow-lg transition-all group">
+        <div class="p-5">
+            <div class="flex items-start justify-between mb-4">
+                <div class="min-w-0">
+                    <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Registration No.</span>
+                    <h3 class="font-black text-xl text-slate-900 leading-tight truncate group-hover:text-emerald-600 transition-colors uppercase">
+                        <a href="{% url 'vehicle-detail' vehicle.pk %}">{{ vehicle.registration_plate }}</a>
                     </h3>
-                    <p class="text-sm text-slate-600 truncate">{{ vehicle.make_model|default:"-" }}</p>
+                    <p class="text-xs font-bold text-slate-500 mt-1 uppercase">{{ vehicle.make_model|default:"-" }}</p>
                 </div>
-                
-                <div class="flex items-center space-x-3 md:hidden">
-                    <div class="relative dropdown-container">
-                        <button class="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 transition-colors dropdown-toggle">
-                            <i class="fa-solid fa-ellipsis-vertical"></i>
-                        </button>
-                        <div class="absolute right-0 mt-2 w-48 z-20 dropdown-menu hidden">
-                            <div class="bg-white rounded-md shadow-lg py-1 border border-slate-100">
-                                <a href="{% url 'vehicle-detail' vehicle.pk %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"><i class="fa-regular fa-eye mr-2"></i>View Details</a>
-                                {% if perms.fleet.change_vehicle %}
-                                <a href="{% url 'vehicle-update' vehicle.pk %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"><i class="fa-regular fa-pen-to-square mr-2"></i>Edit Vehicle</a>
-                                {% endif %}
-                                {% if perms.fleet.add_maintenancerecord %}
-                                <a href="{% url 'maintenance-create' %}?vehicle={{ vehicle.pk }}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"><i class="fa-solid fa-tools mr-2 text-xs"></i>Add Maint. Log</a>
-                                {% endif %}
-                                {% if perms.fleet.delete_vehicle %}
-                                <hr class="my-1 border-slate-100">
-                                <a href="{% url 'vehicle-delete' vehicle.pk %}" class="block px-4 py-2 text-sm text-rose-600 hover:bg-slate-50"><i class="fa-regular fa-trash-can mr-2"></i>Delete</a>
-                                {% endif %}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 mt-4 md:mt-0 md:flex md:items-center">
-                <div class="md:flex-1">
-                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Purchase Date</span>
-                    <p class="text-sm text-slate-800 font-medium">{{ vehicle.purchase_date|date:"M d, Y"|default:"-" }}</p>
-                </div>
-                
-                <div class="md:w-32">
-                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Status</span>
-                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold uppercase tracking-tight
+                <div class="flex flex-col items-end gap-2">
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-tight
                         {% if vehicle.status == 'Active' %}bg-emerald-100 text-emerald-800
                         {% elif vehicle.status == 'Maintenance' %}bg-orange-100 text-orange-800
                         {% else %}bg-slate-100 text-slate-800{% endif %}">
-                        {% if vehicle.status == 'Active' %}<i class="fa-solid fa-circle-check mr-1 text-[10px]"></i>{% endif %}
-                        {% if vehicle.status == 'Maintenance' %}<i class="fa-solid fa-wrench mr-1 text-[10px]"></i>{% endif %}
                         {{ vehicle.status }}
                     </span>
                 </div>
-                
-                <div class="md:w-32">
-                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Maint. Logs</span>
-                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
-                        {{ vehicle.maintenance_count }} logs
-                    </span>
-                </div>
+            </div>
 
-                <div class="hidden md:block md:w-10">
-                    <div class="relative dropdown-container">
-                        <button class="w-8 h-8 rounded-full bg-slate-50 hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-600 transition-colors dropdown-toggle">
-                            <i class="fa-solid fa-ellipsis"></i>
-                        </button>
-                        <div class="absolute right-0 mt-2 w-48 z-20 dropdown-menu hidden">
-                            <div class="bg-white rounded-md shadow-lg py-1 border border-slate-100">
-                                <a href="{% url 'vehicle-detail' vehicle.pk %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"><i class="fa-regular fa-eye mr-2"></i>View Details</a>
-                                {% if perms.fleet.change_vehicle %}
-                                <a href="{% url 'vehicle-update' vehicle.pk %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"><i class="fa-regular fa-pen-to-square mr-2"></i>Edit Vehicle</a>
-                                {% endif %}
-                                {% if perms.fleet.add_maintenancerecord %}
-                                <a href="{% url 'maintenance-create' %}?vehicle={{ vehicle.pk }}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"><i class="fa-solid fa-tools mr-2 text-xs"></i>Add Maint. Log</a>
-                                {% endif %}
-                                {% if perms.fleet.delete_vehicle %}
-                                <hr class="my-1 border-slate-100">
-                                <a href="{% url 'vehicle-delete' vehicle.pk %}" class="block px-4 py-2 text-sm text-rose-600 hover:bg-slate-50"><i class="fa-regular fa-trash-can mr-2"></i>Delete</a>
-                                {% endif %}
-                            </div>
-                        </div>
-                    </div>
+            <div class="grid grid-cols-2 gap-4 py-4 border-t border-slate-100">
+                <div>
+                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">Purchase Date</span>
+                    <p class="text-sm font-black text-slate-700">{{ vehicle.purchase_date|date:"d M Y"|default:"-" }}</p>
+                </div>
+                <div class="text-right">
+                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">Maintenance</span>
+                    <p class="text-sm font-black text-slate-700">{{ vehicle.maintenance_count }} logs</p>
                 </div>
             </div>
         </div>
+        
+        <div class="bg-slate-50 px-5 py-3 flex items-center justify-end space-x-2 border-t border-slate-100">
+            <a href="{% url 'vehicle-detail' vehicle.pk %}" class="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:text-emerald-600 hover:border-emerald-600 transition-all shadow-sm" title="View Details">
+                <i class="fa-regular fa-eye text-xs"></i>
+            </a>
+            {% if perms.fleet.change_vehicle %}
+            <a href="{% url 'vehicle-update' vehicle.pk %}" class="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:text-blue-600 hover:border-blue-600 transition-all shadow-sm" title="Edit">
+                <i class="fa-regular fa-pen-to-square text-xs"></i>
+            </a>
+            {% endif %}
+            {% if perms.fleet.add_maintenancerecord %}
+            <a href="{% url 'maintenance-create' %}?vehicle={{ vehicle.pk }}" class="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:text-orange-600 hover:border-orange-600 transition-all shadow-sm" title="Add Maintenance">
+                <i class="fa-solid fa-wrench text-xs"></i>
+            </a>
+            {% endif %}
+        </div>
     </div>
     {% endfor %}
+</div>
+
+<div id="vehicleListView" class="hidden overflow-hidden bg-white border border-slate-200 rounded-xl shadow-sm">
+    <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+            <thead>
+                <tr class="bg-slate-50 border-b border-slate-200">
+                    <th class="px-6 py-4 text-[11px] font-black uppercase tracking-widest text-slate-400">Reg. No.</th>
+                    <th class="px-6 py-4 text-[11px] font-black uppercase tracking-widest text-slate-400">Make/Model</th>
+                    <th class="px-6 py-4 text-[11px] font-black uppercase tracking-widest text-slate-400">Purchase Date</th>
+                    <th class="px-6 py-4 text-[11px] font-black uppercase tracking-widest text-slate-400 text-center">Status</th>
+                    <th class="px-6 py-4 text-[11px] font-black uppercase tracking-widest text-slate-400 text-center">Logs</th>
+                    <th class="px-6 py-4"></th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+                {% for vehicle in vehicles %}
+                <tr class="hover:bg-slate-50/80 transition-colors group">
+                    <td class="px-6 py-4">
+                        <a href="{% url 'vehicle-detail' vehicle.pk %}" class="text-sm font-black text-slate-900 hover:text-emerald-600 transition-colors uppercase">{{ vehicle.registration_plate }}</a>
+                    </td>
+                    <td class="px-6 py-4 text-xs font-bold text-slate-600 uppercase">{{ vehicle.make_model|default:"-" }}</td>
+                    <td class="px-6 py-4 text-xs font-bold text-slate-500">{{ vehicle.purchase_date|date:"d/m/y"|default:"-" }}</td>
+                    <td class="px-6 py-4 text-center">
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-tighter
+                            {% if vehicle.status == 'Active' %}bg-emerald-100 text-emerald-800
+                            {% elif vehicle.status == 'Maintenance' %}bg-orange-100 text-orange-800
+                            {% else %}bg-slate-100 text-slate-800{% endif %}">
+                            {{ vehicle.status }}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 text-center">
+                        <span class="text-xs font-black text-slate-600 bg-slate-100 px-2 py-1 rounded-full">{{ vehicle.maintenance_count }}</span>
+                    </td>
+                    <td class="px-6 py-4 text-right">
+                        <div class="flex items-center justify-end space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <a href="{% url 'vehicle-detail' vehicle.pk %}" class="text-slate-400 hover:text-emerald-600" title="View"><i class="fa-regular fa-eye"></i></a>
+                            {% if perms.fleet.change_vehicle %}
+                            <a href="{% url 'vehicle-update' vehicle.pk %}" class="text-slate-400 hover:text-blue-600" title="Edit"><i class="fa-regular fa-pen-to-square"></i></a>
+                            {% endif %}
+                            {% if perms.fleet.add_maintenancerecord %}
+                            <a href="{% url 'maintenance-create' %}?vehicle={{ vehicle.pk }}" class="text-slate-400 hover:text-orange-600" title="Maint."><i class="fa-solid fa-wrench"></i></a>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 </div>
 
 <!-- BEGIN: Pagination -->
@@ -194,4 +218,37 @@
 </div>
 {% endif %}
 <!-- END: Vehicle List -->
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    $(document).ready(function() {
+        const gridViewBtn = $('#gridViewBtn');
+        const listViewBtn = $('#listViewBtn');
+        const gridView = $('#vehicleGridView');
+        const listView = $('#vehicleListView');
+
+        function setView(viewType) {
+            if (viewType === 'list') {
+                gridView.addClass('hidden');
+                listView.removeClass('hidden');
+                listViewBtn.addClass('bg-white shadow-sm text-emerald-600').removeClass('text-slate-500');
+                gridViewBtn.removeClass('bg-white shadow-sm text-emerald-600').addClass('text-slate-500');
+            } else {
+                listView.addClass('hidden');
+                gridView.removeClass('hidden');
+                gridViewBtn.addClass('bg-white shadow-sm text-emerald-600').removeClass('text-slate-500');
+                listViewBtn.removeClass('bg-white shadow-sm text-emerald-600').addClass('text-slate-500');
+            }
+            localStorage.setItem('vehicleViewPreference', viewType);
+        }
+
+        gridViewBtn.on('click', () => setView('grid'));
+        listViewBtn.on('click', () => setView('list'));
+
+        // Load preference
+        const savedView = localStorage.getItem('vehicleViewPreference') || 'grid';
+        setView(savedView);
+    });
+</script>
 {% endblock %}

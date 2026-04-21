@@ -9,7 +9,17 @@
         <h1 class="text-3xl font-bold text-slate-900">Trips</h1>
         <p class="text-sm text-slate-600 mt-1">Total {{ total_count }} trips found</p>
     </div>
-    <div class="mt-4 md:mt-0 flex space-x-3">
+    <div class="mt-4 md:mt-0 flex items-center space-x-4">
+        <!-- View Toggle -->
+        <div class="bg-slate-200 p-1 rounded-lg flex items-center shadow-inner">
+            <button id="gridViewBtn" class="px-3 py-1.5 rounded-md text-xs font-bold uppercase tracking-wider transition-all flex items-center" title="Grid View">
+                <i class="fa-solid fa-grip mr-2"></i>Grid
+            </button>
+            <button id="listViewBtn" class="px-3 py-1.5 rounded-md text-xs font-bold uppercase tracking-wider transition-all flex items-center" title="List View">
+                <i class="fa-solid fa-list mr-2"></i>List
+            </button>
+        </div>
+
         {% if perms.trips.add_trip %}
         <a href="{% url 'trip-create' %}" class="flex items-center space-x-2 px-4 py-2 bg-emerald-600 text-white rounded-md text-sm font-medium hover:bg-emerald-700 shadow-sm transition-colors">
             <i class="fa-solid fa-plus"></i>
@@ -85,97 +95,156 @@
 
 <!-- BEGIN: Trip List -->
 {% if trips %}
-<div class="space-y-4">
+<div id="tripGridView" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
     {% for trip in trips %}
-    <!-- Trip Card -->
-    <div class="bg-white border border-slate-200 rounded-lg overflow-hidden hover:shadow-md transition-shadow">
-        <div class="p-4 md:p-5">
-            <div class="flex items-center justify-between mb-4">
-                <div class="flex-1 min-w-0">
-                    <div class="flex items-center gap-2 mb-1">
-                        <h3 class="font-bold text-lg text-slate-900 leading-tight truncate">
-                            <a href="{% url 'trip-detail' trip.pk %}" class="hover:text-emerald-600 transition-colors">{{ trip.trip_number }}</a>
-                        </h3>
-                        <div class="flex flex-wrap gap-1">
-                            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-tight
-                                {% if trip.annotated_status == 'Paid' %}bg-emerald-100 text-emerald-700
-                                {% elif trip.annotated_status == 'Partially Paid' %}bg-amber-100 text-amber-700
-                                {% else %}bg-slate-100 text-slate-600{% endif %}">
-                                {{ trip.annotated_status }}
-                            </span>
-                        </div>
-                    </div>
-                    <div class="flex flex-col sm:flex-row sm:items-center sm:gap-3">
-                        <p class="text-sm text-slate-600 font-medium truncate">{{ trip.vehicle.registration_plate }}</p>
-                        <span class="hidden sm:inline text-slate-300">•</span>
-                        <p class="text-xs text-slate-400 font-medium truncate">{{ trip.date|date:"M d, Y" }}</p>
-                    </div>
+    <!-- Trip Card (Grid) -->
+    <div class="bg-white border border-slate-200 rounded-xl overflow-hidden hover:shadow-lg transition-all group">
+        <div class="p-5">
+            <div class="flex items-start justify-between mb-4">
+                <div class="min-w-0">
+                    <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Trip Number</span>
+                    <h3 class="font-black text-xl text-slate-900 leading-tight truncate group-hover:text-emerald-600 transition-colors">
+                        <a href="{% url 'trip-detail' trip.pk %}">{{ trip.trip_number }}</a>
+                    </h3>
                 </div>
-                
-                <div class="flex items-center space-x-3">
-                    {% if trip.annotated_is_billed %}
-                    <span class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-50 text-blue-600 border border-blue-100" title="Billed">
-                        <i class="fa-solid fa-file-invoice text-xs"></i>
+                <div class="flex flex-col items-end gap-2">
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-tight
+                        {% if trip.annotated_status == 'Paid' %}bg-emerald-100 text-emerald-700
+                        {% elif trip.annotated_status == 'Partially Paid' %}bg-amber-100 text-amber-700
+                        {% else %}bg-slate-100 text-slate-600{% endif %}">
+                        {{ trip.annotated_status }}
                     </span>
+                    {% if trip.annotated_is_billed %}
+                    <span class="text-[9px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100 uppercase">Billed</span>
                     {% endif %}
-                    <div class="relative dropdown-container">
-                        <button class="w-9 h-9 rounded-full bg-slate-50 hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-600 transition-colors dropdown-toggle">
-                            <i class="fa-solid fa-ellipsis-vertical"></i>
-                        </button>
-                        <div class="absolute right-0 mt-2 w-48 z-20 dropdown-menu hidden">
-                            <div class="bg-white rounded-md shadow-lg py-1 border border-slate-100">
-                                <a href="{% url 'trip-detail' trip.pk %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"><i class="fa-regular fa-eye mr-2"></i>View Details</a>
-                                {% if perms.trips.change_trip %}
-                                <a href="{% url 'trip-update' trip.pk %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"><i class="fa-regular fa-pen-to-square mr-2"></i>Edit Trip</a>
-                                {% endif %}
-                                {% if perms.trips.delete_trip %}
-                                <hr class="my-1 border-slate-100">
-                                <a href="{% url 'trip-delete' trip.pk %}" class="block px-4 py-2 text-sm text-rose-600 hover:bg-slate-50"><i class="fa-regular fa-trash-can mr-2"></i>Delete</a>
-                                {% endif %}
-                            </div>
-                        </div>
+                </div>
+            </div>
+
+            <div class="bg-slate-50 rounded-lg p-3 mb-4 border border-slate-100">
+                <div class="flex flex-col mb-2">
+                    <span class="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-0.5">Bill To / Party</span>
+                    <span class="text-sm font-black text-slate-900 truncate">{% if trip.party %}{{ trip.party.name }}{% else %}-{% endif %}</span>
+                </div>
+                <div class="flex items-center justify-between pt-2 border-t border-slate-200/50">
+                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Vehicle</span>
+                    <span class="text-xs font-black text-slate-700 uppercase tracking-tight">{{ trip.vehicle.registration_plate }}</span>
+                </div>
+            </div>
+
+            <div class="mb-4">
+                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2">Route Details</span>
+                <div class="flex items-center justify-between bg-white border border-slate-100 rounded p-2">
+                    <div class="flex flex-col min-w-0">
+                        <span class="text-[11px] font-black text-slate-900 truncate uppercase">{{ trip.pickup_location|default:"-" }}</span>
+                    </div>
+                    <i class="fa-solid fa-arrow-right text-slate-300 mx-2 text-xs"></i>
+                    <div class="flex flex-col items-end min-w-0">
+                        <span class="text-[11px] font-black text-slate-900 truncate uppercase">{{ trip.delivery_location|default:"-" }}</span>
                     </div>
                 </div>
             </div>
 
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 border-t border-slate-50 pt-4">
-                <div class="col-span-2 md:col-span-1">
-                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Route</span>
-                    <p class="text-sm text-slate-800 flex items-center">
-                        <span class="truncate font-medium">{{ trip.pickup_location|default:"-" }}</span>
-                        <i class="fa-solid fa-arrow-right text-slate-300 mx-2 text-[10px]"></i>
-                        <span class="truncate font-medium">{{ trip.delivery_location|default:"-" }}</span>
-                    </p>
-                    <p class="text-[10px] text-slate-400 mt-0.5 truncate font-medium">{% if trip.party %}{{ trip.party.name }}{% else %}-{% endif %}</p>
+            <div class="grid grid-cols-2 gap-4 pt-4 border-t border-slate-100">
+                <div>
+                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">Weight</span>
+                    <p class="text-sm font-black text-slate-900">{{ trip.weight|default:"0.00" }} <span class="text-[10px] text-slate-400 ml-0.5">MT</span></p>
                 </div>
-                
-                <div class="md:w-32">
-                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Weight & Rate</span>
-                    <p class="text-sm text-slate-800 font-medium">{{ trip.weight|default:"0.00" }} <span class="text-[10px] text-slate-400">MT</span></p>
-                    <p class="text-xs text-slate-500">₹{{ trip.rate_per_ton|default:"0" }}/MT</p>
+                <div class="text-right">
+                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">Total Revenue</span>
+                    <p class="text-lg font-black text-emerald-600">₹{{ trip.revenue|floatformat:2|default:"0.00" }}</p>
                 </div>
-
-                <div class="md:w-32 md:text-right">
-                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1 md:text-right">Revenue</span>
-                    <p class="text-lg font-bold text-emerald-600">
-                        ₹{{ trip.revenue|floatformat:2|default:"0.00" }}
-                    </p>
-                </div>
-                
-                <div class="hidden md:flex md:flex-col md:items-end">
-                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Trip Time</span>
-                    <p class="text-sm text-slate-800 font-medium">{{ trip.date|date:"H:i" }}</p>
-                </div>
+            </div>
+        </div>
+        
+        <div class="bg-slate-50 px-5 py-3 flex items-center justify-between border-t border-slate-100">
+            <span class="text-[10px] font-bold text-slate-400 uppercase">{{ trip.date|date:"d M Y" }} • {{ trip.date|date:"H:i" }}</span>
+            <div class="flex items-center space-x-2">
+                <a href="{% url 'trip-detail' trip.pk %}" class="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:text-emerald-600 hover:border-emerald-600 transition-all shadow-sm" title="View Details">
+                    <i class="fa-regular fa-eye text-xs"></i>
+                </a>
+                {% if perms.trips.change_trip %}
+                <a href="{% url 'trip-update' trip.pk %}" class="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:text-blue-600 hover:border-blue-600 transition-all shadow-sm" title="Edit">
+                    <i class="fa-regular fa-pen-to-square text-xs"></i>
+                </a>
+                {% endif %}
             </div>
         </div>
     </div>
     {% endfor %}
 </div>
 
+<div id="tripListView" class="hidden overflow-hidden bg-white border border-slate-200 rounded-xl shadow-sm">
+    <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+            <thead>
+                <tr class="bg-slate-50 border-b border-slate-200">
+                    <th class="px-6 py-4 text-[11px] font-black uppercase tracking-widest text-slate-400">Date</th>
+                    <th class="px-6 py-4 text-[11px] font-black uppercase tracking-widest text-slate-400">Trip #</th>
+                    <th class="px-6 py-4 text-[11px] font-black uppercase tracking-widest text-slate-400">Party</th>
+                    <th class="px-6 py-4 text-[11px] font-black uppercase tracking-widest text-slate-400">Vehicle</th>
+                    <th class="px-6 py-4 text-[11px] font-black uppercase tracking-widest text-slate-400">Route</th>
+                    <th class="px-6 py-4 text-[11px] font-black uppercase tracking-widest text-slate-400 text-right">Weight</th>
+                    <th class="px-6 py-4 text-[11px] font-black uppercase tracking-widest text-slate-400 text-right">Revenue</th>
+                    <th class="px-6 py-4 text-[11px] font-black uppercase tracking-widest text-slate-400 text-center">Status</th>
+                    <th class="px-6 py-4"></th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+                {% for trip in trips %}
+                <tr class="hover:bg-slate-50/80 transition-colors group">
+                    <td class="px-6 py-4">
+                        <span class="text-xs font-bold text-slate-500 block">{{ trip.date|date:"d/m/y" }}</span>
+                        <span class="text-[9px] font-medium text-slate-400">{{ trip.date|date:"H:i" }}</span>
+                    </td>
+                    <td class="px-6 py-4">
+                        <a href="{% url 'trip-detail' trip.pk %}" class="text-sm font-black text-slate-900 hover:text-emerald-600 transition-colors">{{ trip.trip_number }}</a>
+                    </td>
+                    <td class="px-6 py-4">
+                        <span class="text-xs font-black text-slate-700 truncate block max-w-[200px]">{% if trip.party %}{{ trip.party.name }}{% else %}-{% endif %}</span>
+                    </td>
+                    <td class="px-6 py-4">
+                        <span class="text-xs font-black text-slate-600 uppercase tracking-tight">{{ trip.vehicle.registration_plate }}</span>
+                    </td>
+                    <td class="px-6 py-4">
+                        <div class="flex items-center text-[10px] font-bold text-slate-500 uppercase tracking-tight">
+                            <span class="truncate max-w-[100px]">{{ trip.pickup_location|default:"-" }}</span>
+                            <i class="fa-solid fa-arrow-right mx-2 opacity-30"></i>
+                            <span class="truncate max-w-[100px]">{{ trip.delivery_location|default:"-" }}</span>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4 text-right">
+                        <span class="text-sm font-black text-slate-900">{{ trip.weight|default:"0.00" }}</span>
+                    </td>
+                    <td class="px-6 py-4 text-right">
+                        <span class="text-sm font-black text-emerald-600">₹{{ trip.revenue|floatformat:2 }}</span>
+                    </td>
+                    <td class="px-6 py-4 text-center">
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-tighter
+                            {% if trip.annotated_status == 'Paid' %}bg-emerald-100 text-emerald-700
+                            {% elif trip.annotated_status == 'Partially Paid' %}bg-amber-100 text-amber-700
+                            {% else %}bg-slate-100 text-slate-600{% endif %}">
+                            {{ trip.annotated_status }}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 text-right">
+                        <div class="flex items-center justify-end space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <a href="{% url 'trip-detail' trip.pk %}" class="text-slate-400 hover:text-emerald-600" title="View"><i class="fa-regular fa-eye"></i></a>
+                            {% if perms.trips.change_trip %}
+                            <a href="{% url 'trip-update' trip.pk %}" class="text-slate-400 hover:text-blue-600" title="Edit"><i class="fa-regular fa-pen-to-square"></i></a>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
 <!-- BEGIN: Summary Footer -->
 <div class="mt-6 bg-slate-100 border border-slate-200 rounded-lg p-4 flex justify-between items-center px-6">
     <span class="text-xs font-bold text-slate-500 uppercase tracking-widest">Total Weight</span>
-    <span class="font-bold text-xl text-slate-900">{{ total_weight|floatformat:2 }}</span>
+    <span class="font-bold text-xl text-slate-900">{{ total_weight|floatformat:2 }} MT</span>
 </div>
 <!-- END: Summary Footer -->
 
@@ -228,5 +297,37 @@
     {% endif %}
 </div>
 {% endif %}
+{% endblock %}
 
+{% block extra_js %}
+<script>
+    $(document).ready(function() {
+        const gridViewBtn = $('#gridViewBtn');
+        const listViewBtn = $('#listViewBtn');
+        const gridView = $('#tripGridView');
+        const listView = $('#tripListView');
+
+        function setView(viewType) {
+            if (viewType === 'list') {
+                gridView.addClass('hidden');
+                listView.removeClass('hidden');
+                listViewBtn.addClass('bg-white shadow-sm text-emerald-600').removeClass('text-slate-500');
+                gridViewBtn.removeClass('bg-white shadow-sm text-emerald-600').addClass('text-slate-500');
+            } else {
+                listView.addClass('hidden');
+                gridView.removeClass('hidden');
+                gridViewBtn.addClass('bg-white shadow-sm text-emerald-600').removeClass('text-slate-500');
+                listViewBtn.removeClass('bg-white shadow-sm text-emerald-600').addClass('text-slate-500');
+            }
+            localStorage.setItem('tripViewPreference', viewType);
+        }
+
+        gridViewBtn.on('click', () => setView('grid'));
+        listViewBtn.on('click', () => setView('list'));
+
+        // Load preference
+        const savedView = localStorage.getItem('tripViewPreference') || 'grid';
+        setView(savedView);
+    });
+</script>
 {% endblock %}
