@@ -96,6 +96,13 @@
                                     <p id="gstTypeSuggestion" class="text-[9px] text-emerald-600 mt-1 font-bold hidden"></p>
                                 </div>
                             </div>
+                            <div class="flex items-center justify-between gap-4 py-2 border-t border-slate-100">
+                                <label class="text-sm font-semibold text-slate-700">Round Off:</label>
+                                <div class="flex items-center space-x-2">
+                                    {{ form.use_roundoff }}
+                                    <span class="text-xs text-slate-500">Auto-round to whole rupee</span>
+                                </div>
+                            </div>
                         </div>
 
                     </div>
@@ -109,7 +116,7 @@
                             <i class="fa-solid fa-file-invoice mr-2"></i>Standard Invoice Details
                         </h3>
                     </div>
-                    <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-8 bg-slate-50/30">
+                    <div class="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 bg-slate-50/30">
                         <div class="space-y-2">
                             <label class="block text-xs font-bold text-slate-500 uppercase">Category</label>
                             {{ form.category }}
@@ -125,10 +132,27 @@
                             {{ form.item_type }}
                             <p class="text-[10px] text-slate-400">e.g., Detention Charges, Loading/Unloading, etc.</p>
                         </div>
-                        <div class="space-y-2 md:col-span-2">
-                            <label class="block text-xs font-bold text-slate-500 uppercase">Subtotal Amount (Excl. GST)</label>
+
+                        <!-- Calculations Grid -->
+                        <div class="space-y-2">
+                            <label class="block text-xs font-bold text-slate-500 uppercase">Weight (Optional)</label>
+                            {{ form.standard_weight }}
+                        </div>
+                        <div class="space-y-2">
+                            <label class="block text-xs font-bold text-slate-500 uppercase">Rate per Ton</label>
+                            {{ form.standard_rate }}
+                        </div>
+                        <div class="space-y-2">
+                            <label class="block text-xs font-bold text-slate-500 uppercase">Base Amount (Excl. GST)</label>
                             {{ form.amount_override }}
-                            <p class="text-[10px] text-slate-400">Enter the base amount. GST will be added automatically based on the rate above.</p>
+                        </div>
+                        <div class="space-y-2">
+                            <label class="block text-xs font-bold text-slate-500 uppercase">GST Amount</label>
+                            <input type="number" id="id_gst_amount_manual" step="0.01" class="block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white">
+                        </div>
+                        <div class="space-y-2">
+                            <label class="block text-xs font-bold text-slate-500 uppercase font-black text-emerald-700">Final Total Amount (Incl. GST)</label>
+                            <input type="number" id="id_total_amount_manual" step="0.01" class="block w-full px-3 py-2 border-2 border-emerald-500 rounded-md text-sm shadow-sm font-bold focus:ring-emerald-600 focus:border-emerald-600 bg-white text-emerald-900">
                         </div>
                     </div>
                 </div>
@@ -204,6 +228,11 @@
 {% block extra_js %}
 <script>
     $(document).ready(function() {
+        // --- 1. Global: Disable Number Scroll ---
+        $('input[type=number]').on('wheel', function(e) {
+            $(this).blur();
+        });
+
         // Initialize Select2
         $('#id_issuer, #id_party').select2({
             theme: 'bootstrap-5',
@@ -219,6 +248,102 @@
             }
         } catch (e) {
             console.error("Error parsing trips data", e);
+        }
+
+        // --- 2. Standard Invoice Calculation Logic ---
+        const weightInput = $('#id_standard_weight');
+        const rateInput = $('#id_standard_rate');
+        const baseAmountInput = $('#id_amount_override');
+        const gstRateInput = $('#id_gst_rate');
+        const gstAmountInput = $('#id_gst_amount_manual');
+        const totalAmountInput = $('#id_total_amount_manual');
+
+        function getGstRate() {
+            return parseFloat(gstRateInput.val()) || 0;
+        }
+
+        function updateFromBase() {
+            const base = parseFloat(baseAmountInput.val()) || 0;
+            const gstRate = getGstRate();
+            const gst = base * (gstRate / 100);
+            const total = base + gst;
+
+            gstAmountInput.val(gst.toFixed(2));
+            totalAmountInput.val(total.toFixed(2));
+
+            // Update Rate if Weight exists
+            const weight = parseFloat(weightInput.val()) || 0;
+            if (weight > 0) {
+                rateInput.val((base / weight).toFixed(2));
+            }
+        }
+
+        function updateFromTotal() {
+            const total = parseFloat(totalAmountInput.val()) || 0;
+            const gstRate = getGstRate();
+            
+            // total = base + (base * rate/100) = base * (1 + rate/100)
+            const base = total / (1 + (gstRate / 100));
+            const gst = total - base;
+
+            baseAmountInput.val(base.toFixed(2));
+            gstAmountInput.val(gst.toFixed(2));
+
+            // Update Rate if Weight exists
+            const weight = parseFloat(weightInput.val()) || 0;
+            if (weight > 0) {
+                rateInput.val((base / weight).toFixed(2));
+            }
+        }
+
+        function updateFromWeightRate() {
+            const weight = parseFloat(weightInput.val()) || 0;
+            const rate = parseFloat(rateInput.val()) || 0;
+            if (weight > 0 && rate > 0) {
+                baseAmountInput.val((weight * rate).toFixed(2));
+                updateFromBase();
+            }
+        }
+
+        function updateFromGst() {
+            const gst = parseFloat(gstAmountInput.val()) || 0;
+            const gstRate = getGstRate();
+            
+            if (gstRate > 0) {
+                // If rate exists, calculate base from gst
+                const base = gst / (gstRate / 100);
+                const total = base + gst;
+                
+                baseAmountInput.val(base.toFixed(2));
+                totalAmountInput.val(total.toFixed(2));
+
+                // Update Rate if Weight exists
+                const weight = parseFloat(weightInput.val()) || 0;
+                if (weight > 0) {
+                    rateInput.val((base / weight).toFixed(2));
+                }
+            } else {
+                // If rate is 0, just update total based on current base + new gst
+                const base = parseFloat(baseAmountInput.val()) || 0;
+                totalAmountInput.val((base + gst).toFixed(2));
+            }
+        }
+
+        // Event listeners for Standard Invoice fields
+        weightInput.on('input', updateFromWeightRate);
+        rateInput.on('input', updateFromWeightRate);
+        baseAmountInput.on('input', updateFromBase);
+        gstAmountInput.on('input', updateFromGst);
+        totalAmountInput.on('input', updateFromTotal);
+        gstRateInput.on('change', function() {
+            if ($('#id_bill_type').val() === 'Standard') {
+                updateFromBase();
+            }
+        });
+
+        // Initial Calc for Edit mode
+        if ($('#id_bill_type').val() === 'Standard') {
+            updateFromBase();
         }
 
         // Bill Type Toggle Logic

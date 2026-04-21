@@ -105,12 +105,19 @@
                     <tr>
                         <td class="border border-slate-900 p-3 text-xs text-center text-slate-500">1</td>
                         <td class="border border-slate-900 p-3 text-xs">
-                            <div class="font-black text-slate-900 uppercase">{{ bill.item_type }}</div>
+                            <div class="font-black text-slate-900 uppercase">{{ bill.item_type|default:bill.category.name }}</div>
+                            {% if bill.description %}
+                            <div class="text-[10px] text-slate-400 mt-1 font-bold italic">{{ bill.description }}</div>
+                            {% endif %}
                         </td>
                         <td class="border border-slate-900 p-3 text-xs text-center text-slate-600">{{ bill.hsn_code }}</td>
-                        <td class="border border-slate-900 p-3 text-xs text-center text-slate-900 font-bold">1.00</td>
-                        <td class="border border-slate-900 p-3 text-xs text-right text-slate-600">₹{{ bill.amount_override|floatformat:2 }}</td>
-                        <td class="border border-slate-900 p-3 text-xs text-right text-slate-900 font-black">₹{{ bill.amount_override|floatformat:2 }}</td>
+                        <td class="border border-slate-900 p-3 text-xs text-center text-slate-900 font-bold">
+                            {% if bill.standard_weight %}{{ bill.standard_weight|floatformat:2 }}{% else %}-{% endif %}
+                        </td>
+                        <td class="border border-slate-900 p-3 text-xs text-right text-slate-600">
+                            {% if bill.standard_rate %}₹{{ bill.standard_rate|floatformat:2 }}{% else %}-{% endif %}
+                        </td>
+                        <td class="border border-slate-900 p-3 text-xs text-right text-slate-900 font-black">₹{{ bill.subtotal|floatformat:2 }}</td>
                     </tr>
                     {% else %}
                         {% for item in invoice_items %}
@@ -129,7 +136,7 @@
                     {% endif %}
                     <tr class="bg-slate-50 font-black">
                         <td colspan="3" class="border border-slate-900 p-3 text-[10px] text-right uppercase tracking-widest text-slate-400">Total</td>
-                        <td class="border border-slate-900 p-3 text-xs text-center">{% if bill.bill_type == 'Trip' %}{{ bill.total_weight|floatformat:2 }}{% else %}1.00{% endif %}</td>
+                        <td class="border border-slate-900 p-3 text-xs text-center">{% if bill.total_weight %}{{ bill.total_weight|floatformat:2 }}{% else %}-{% endif %}</td>
                         <td class="border border-slate-900 p-3"></td>
                         <td class="border border-slate-900 p-3 text-sm text-right">₹{{ bill.subtotal|floatformat:2 }}</td>
                     </tr>
@@ -188,10 +195,12 @@
                             <td class="p-3 text-right font-black text-slate-900">₹{{ bill.sgst_amount|floatformat:2 }}</td>
                         </tr>
                     {% endif %}
+                    {% if bill.use_roundoff %}
                     <tr class="border-b border-slate-100 text-slate-400">
                         <td class="p-3 font-bold uppercase tracking-wider">Round Off</td>
                         <td class="p-3 text-right font-black">₹{{ bill.roundoff|floatformat:2 }}</td>
                     </tr>
+                    {% endif %}
                     <tr class="bg-slate-900 text-white font-black">
                         <td class="p-4 text-sm uppercase tracking-widest">Grand Total</td>
                         <td class="p-4 text-xl text-right">₹{{ bill.rounded_total|floatformat:2 }}</td>

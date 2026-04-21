@@ -731,10 +731,9 @@ class BillUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
     form_class = BillForm
     template_name = 'ledger/bill_form.html'
     permission_required = 'ledger.change_financialrecord'
-    
-    def get_success_url(self):
-        return reverse_lazy('bill-list')
 
+    def get_success_url(self):
+        return reverse_lazy('bill-detail', kwargs={'pk': self.object.pk})
     def form_valid(self, form):
         response = super().form_valid(form)
         # sync_to_ledger is already called in BillForm.save()

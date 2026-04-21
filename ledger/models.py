@@ -599,6 +599,8 @@ class Bill(models.Model):
     
     # Standard bills
     item_type = models.CharField(max_length=200, blank=True, null=True, verbose_name="Item Type/Description")
+    standard_weight = models.DecimalField(max_digits=12, decimal_places=3, null=True, blank=True, verbose_name="Standard Weight")
+    standard_rate = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, verbose_name="Standard Rate")
     amount_override = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, verbose_name="Subtotal Amount (Manual)")
     
     gst_rate = models.PositiveIntegerField(choices=GST_CHOICES, default=GST_RATE_0, verbose_name="GST Rate (%)")
@@ -621,6 +623,7 @@ class Bill(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     category = models.ForeignKey(TransactionCategory, null=True, blank=True, on_delete=models.SET_NULL, related_name='bills', verbose_name="Bill Category")
     original_bill = models.ForeignKey('self', null=True, blank=True, on_delete=models.SET_NULL, related_name='adjustment_bills', verbose_name="Against Invoice")
+    use_roundoff = models.BooleanField(default=True, verbose_name="Use Round Off")
 
     @classmethod
     def get_next_available_no(cls, issuer, date=None, category=None):
@@ -739,8 +742,8 @@ class Bill(models.Model):
                 type=TransactionCategory.TYPE_INCOME
             )
 
-        # Amount always includes GST
-        total_revenue = self.total_amount
+        # Amount respects the roundoff toggle
+        total_revenue = self.rounded_total
 
         # Description varies by bill type
         if self.bill_type == self.TYPE_TRIP:
@@ -823,11 +826,11 @@ class Bill(models.Model):
 
     @property
     def outstanding_balance(self):
-        return self.total_amount - self.amount_received
+        return self.rounded_total - self.amount_received
 
     @property
     def payment_status(self):
-        total = self.total_amount
+        total = self.rounded_total
         received = self.amount_received
         
         if total <= 0:
@@ -883,12 +886,20 @@ class Bill(models.Model):
 
     @property
     def total_weight(self):
+        if self.bill_type == self.TYPE_STANDARD:
+            return self.standard_weight or 0
         return self.trips.aggregate(total=models.Sum('weight'))['total'] or 0
 
     @property
     def subtotal(self):
         if self.bill_type == self.TYPE_STANDARD:
-            return self.amount_override or 0
+            # For Standard invoices, we use amount_override as the base amount.
+            # If it's missing but we have weight/rate, calculate it as a fallback.
+            if self.amount_override is not None:
+                return self.amount_override
+            if self.standard_weight and self.standard_rate:
+                return self.standard_weight * self.standard_rate
+            return 0
         # Sum individual trip revenues correctly (handles fixed vs per-ton)
         return sum(trip.revenue for trip in self.trips.all())
 
@@ -902,11 +913,15 @@ class Bill(models.Model):
 
     @property
     def rounded_total(self):
+        if not self.use_roundoff:
+            return self.total_amount
         # Round to nearest whole rupee
         return self.total_amount.quantize(Decimal('1'), rounding='ROUND_HALF_UP')
 
     @property
     def roundoff(self):
+        if not self.use_roundoff:
+            return Decimal('0')
         return self.rounded_total - self.total_amount
 
 class BillTrip(models.Model):

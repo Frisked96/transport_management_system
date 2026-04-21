@@ -211,9 +211,12 @@ class BillForm(forms.ModelForm):
             'party',
             'date',
             'item_type',
+            'standard_weight',
+            'standard_rate',
             'amount_override',
             'gst_rate',
             'gst_type',
+            'use_roundoff',
             'trips',
             'trips_data'
         ]
@@ -226,6 +229,10 @@ class BillForm(forms.ModelForm):
                 'style': 'border-top-left-radius: 0; border-bottom-left-radius: 0;',
                 'class': 'flex-1 px-3 py-2 border border-slate-300 text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white'
             }),
+            'standard_weight': forms.NumberInput(attrs={'step': '0.001', 'id': 'id_standard_weight'}),
+            'standard_rate': forms.NumberInput(attrs={'step': '0.01', 'id': 'id_standard_rate'}),
+            'amount_override': forms.NumberInput(attrs={'step': '0.01', 'id': 'id_amount_override'}),
+            'use_roundoff': forms.CheckboxInput(attrs={'id': 'id_use_roundoff', 'class': 'w-4 h-4 text-emerald-600 border-slate-300 rounded focus:ring-emerald-500'}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -317,7 +324,7 @@ class BillForm(forms.ModelForm):
         gst_type = cleaned_data.get('gst_type')
 
         # Logic for Trip-based Invoices
-        if bill_type == 'Trip-based':
+        if bill_type == 'Trip':
             if selected_trips:
                 # Check for mixed GST types among selected trips
                 trip_gst_types = set(trip.gst_type for trip in selected_trips)

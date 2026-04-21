@@ -313,8 +313,8 @@
                                 <span style="font-size: 10px; color: #666;">{{ bill.description }}</span>
                             </td>
                             <td class="text-center">{{ bill.hsn_code }}</td>
-                            <td class="text-right">-</td>
-                            <td class="text-right">-</td>
+                            <td class="text-right">{% if bill.standard_weight %}{{ bill.standard_weight|indian_comma }}{% else %}-{% endif %}</td>
+                            <td class="text-right">{% if bill.standard_rate %}{{ bill.standard_rate|indian_comma }}{% else %}-{% endif %}</td>
                             <td class="text-right font-bold">{{ bill.amount_override|indian_comma }}</td>
                         </tr>
                         {% else %}
@@ -415,10 +415,12 @@
                             <td class="text-right">Rs. {{ bill.sgst_amount|indian_comma }}</td>
                         </tr>
                         {% endif %}
+                        {% if bill.use_roundoff %}
                         <tr>
                             <td>Round Off</td>
                             <td class="text-right">Rs. {{ bill.roundoff|indian_comma }}</td>
                         </tr>
+                        {% endif %}
 
                         <tr class="grand-total-row font-bold">
                             <td>Total Amount</td>
