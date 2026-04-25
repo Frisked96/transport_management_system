@@ -290,6 +290,29 @@ class FinancialRecordDeleteView(LoginRequiredMixin, PermissionRequiredMixin, Del
     template_name = 'ledger/financialrecord_confirm_delete.html'
     permission_required = 'ledger.delete_financialrecord'
     success_url = reverse_lazy('financialrecord-list')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        record = self.object
+        impact = []
+        if record.record_type == FinancialRecord.RECORD_TYPE_INVOICE and record.associated_bill:
+            bill = record.associated_bill
+            impact.append(f"The associated Bill/Invoice ({bill.bill_number or 'Draft'}) will be DELETED.")
+            impact.append(f"{bill.trips.count()} trips will become UNBILLED.")
+            payments = bill.amount_received
+            if payments > 0:
+                impact.append(f"₹{payments:,.2f} in payments made against this bill/trips will REMAIN in the system as unallocated Payments In/Deductions.")
+        elif record.allocations.exists():
+            impact.append(f"This record is allocated to {record.allocations.count()} trips. Deleting it will increase their outstanding balances.")
+        else:
+            if record.associated_trip:
+                impact.append(f"Deleting this will remove the payment/expense from Trip {record.associated_trip.trip_number}.")
+            else:
+                impact.append("Deleting this will directly adjust the party and account balances.")
+        
+        impact.append("Ledger entry numbers will be automatically re-sequenced to prevent gaps.")
+        context['impact_statements'] = impact
+        return context
     
     def delete(self, request, *args, **kwargs):
         self.object = self.get_object()
@@ -750,6 +773,21 @@ class BillDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
     template_name = 'ledger/bill_confirm_delete.html'
     permission_required = 'ledger.delete_financialrecord'
     success_url = reverse_lazy('bill-list')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        bill = self.object
+        impact = []
+        impact.append(f"The consolidated Ledger Entry (Invoice) for ₹{bill.rounded_total:,.2f} will be DELETED.")
+        impact.append(f"{bill.trips.count()} trips will become UNBILLED.")
+        
+        payments = bill.amount_received
+        if payments > 0:
+            impact.append(f"₹{payments:,.2f} in payments made against these trips will REMAIN in the system as Payments In/Deductions, protecting your cash balance.")
+            
+        impact.append("Ledger entry numbers will be automatically re-sequenced to prevent gaps.")
+        context['impact_statements'] = impact
+        return context
 
 class BillDetailView(LoginRequiredMixin, BaseLedgerPermissionMixin, DetailView):
     model = Bill

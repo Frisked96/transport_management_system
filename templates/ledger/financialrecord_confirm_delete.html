@@ -1,34 +1,93 @@
 {% extends 'base.html' %}
 
-{% block title %}Delete Financial Record - Transport Management System{% endblock %}
+{% block title %}Delete Ledger Entry - Transport Management System{% endblock %}
 
 {% block content %}
-<h2>Confirm Delete</h2>
-
-<div class="message error">
-    <strong>Warning!</strong> Are you sure you want to delete this financial record? This action cannot be undone.
-</div>
-
-<div class="mb-1">
-    <strong>Date:</strong> {{ object.date|date:"M d, Y" }}<br>
-    <strong>Category:</strong> {{ object.category }}<br>
-    <strong>Amount:</strong>
-    <span style="font-weight: bold; {% if object.is_income %}color: #27ae60;{% else %}color: #e74c3c;{% endif %}">
-        ₹{{ object.amount|floatformat:2 }} {% if object.is_income %}Dr{% else %}Cr{% endif %}
-    </span><br>
-
-    {% if object.associated_trip %}
-        <strong>Associated Trip:</strong> {{ object.associated_trip.trip_number }}<br>
-    {% endif %}
-    <strong>Description:</strong> {{ object.description|truncatechars:100 }}<br>
-</div>
-
-<form method="post">
-    {% csrf_token %}
-    
-    <div style="margin-top: 1.5rem;">
-        <button type="submit" class="btn btn-danger">Yes, Delete Record</button>
-        <a href="{% url 'financialrecord-detail' object.pk %}" class="btn" style="margin-left: 1rem;">Cancel</a>
+<header class="mb-6">
+    <div class="flex items-center space-x-2 text-sm text-slate-500 mb-2">
+        <a href="{% url 'financialrecord-list' %}" class="hover:text-emerald-600 transition-colors">Ledger</a>
+        <i class="fa-solid fa-chevron-right text-[10px]"></i>
+        <span>Delete Entry</span>
     </div>
-</form>
+    <h1 class="text-3xl font-bold text-slate-900">Confirm Deletion</h1>
+</header>
+
+<div class="max-w-4xl">
+    <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden mb-6">
+        <div class="bg-rose-600 px-6 py-3">
+            <h2 class="text-white font-bold flex items-center uppercase tracking-wider text-sm">
+                <i class="fa-solid fa-triangle-exclamation mr-2"></i>
+                Danger Zone: Deleting Entry #{{ object.entry_number }}
+            </h2>
+        </div>
+        
+        <div class="p-6">
+            <p class="text-slate-600 mb-6">
+                You are about to permanently delete this ledger record. This action cannot be reversed. 
+                Please review the details and impact analysis below before proceeding.
+            </p>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+                <!-- Record Summary -->
+                <div>
+                    <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 border-b pb-2">Entry Details</h3>
+                    <table class="w-full text-sm">
+                        <tr class="border-b border-slate-50">
+                            <td class="py-2 text-slate-500 font-medium">Date</td>
+                            <td class="py-2 text-slate-900 font-bold">{{ object.date|date:"d M Y" }}</td>
+                        </tr>
+                        <tr class="border-b border-slate-50">
+                            <td class="py-2 text-slate-500 font-medium">Category</td>
+                            <td class="py-2 text-slate-900 font-bold">{{ object.category.name }}</td>
+                        </tr>
+                        <tr class="border-b border-slate-50">
+                            <td class="py-2 text-slate-500 font-medium">Party</td>
+                            <td class="py-2 text-slate-900 font-bold">{{ object.party.name|default:"-" }}</td>
+                        </tr>
+                        <tr>
+                            <td class="py-3 text-slate-500 font-medium">Amount</td>
+                            <td class="py-3 font-black text-lg {% if object.is_income %}text-emerald-600{% else %}text-rose-600{% endif %}">
+                                ₹{{ object.amount|floatformat:2 }}
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+
+                <!-- Impact analysis -->
+                {% if impact_statements %}
+                <div>
+                    <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 border-b pb-2">Impact Analysis</h3>
+                    <ul class="space-y-3">
+                        {% for statement in impact_statements %}
+                        <li class="flex items-start">
+                            <i class="fa-solid fa-circle-dot text-rose-500 mt-1 mr-3 text-[10px]"></i>
+                            <span class="text-sm text-slate-700 leading-tight">{{ statement }}</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+            </div>
+
+            {% if object.description %}
+            <div class="bg-slate-50 rounded-lg p-4 border border-slate-100 italic text-slate-600 text-sm mb-8">
+                "{{ object.description }}"
+            </div>
+            {% endif %}
+
+            <div class="flex items-center justify-between pt-6 border-t border-slate-100">
+                <a href="{% url 'financialrecord-detail' object.pk %}" class="text-sm font-bold text-slate-500 hover:text-slate-800 transition-colors">
+                    <i class="fa-solid fa-arrow-left mr-2"></i> Cancel and go back
+                </a>
+                
+                <form method="post">
+                    {% csrf_token %}
+                    <button type="submit" class="px-6 py-2 bg-rose-600 text-white rounded-md text-sm font-bold hover:bg-rose-700 shadow-sm transition-colors uppercase tracking-widest">
+                        Yes, Delete Permanently
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}

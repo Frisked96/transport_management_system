@@ -345,6 +345,20 @@ class FinancialRecord(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='Created At')
 
+    @classmethod
+    def resequence_entry_numbers(cls):
+        """
+        Resequence all entry numbers to remove gaps.
+        """
+        from django.db import transaction
+        with transaction.atomic():
+            records = cls.objects.all().order_by('date', 'created_at')
+            for i, record in enumerate(records, start=1):
+                if record.entry_number != i:
+                    cls.objects.filter(pk=record.pk).update(entry_number=i)
+            # Update Sequence model
+            Sequence.objects.filter(key='financial_record_entry_number').update(value=records.count())
+
     def save(self, *args, **kwargs):
         if not self.entry_number:
             self.entry_number = Sequence.next_value('financial_record_entry_number')
@@ -362,9 +376,11 @@ class FinancialRecord(models.Model):
             # Set to None to prevent CASCADE from trying to delete an already-deleting instance
             self.associated_bill = None 
             bill.delete()
-            return # Bill.delete will have deleted this record via CASCADE
+        else:
+            super().delete(*args, **kwargs)
         
-        super().delete(*args, **kwargs)
+        # Resequence after deletion
+        FinancialRecord.resequence_entry_numbers()
 
     class Meta:
         verbose_name = 'Financial Record'
@@ -707,18 +723,14 @@ class Bill(models.Model):
     def delete(self, *args, **kwargs):
         """
         Custom delete for Bill.
-        Clean up all related ledger entries (including trip-level payments).
+        Only clean up the consolidated invoice record. 
+        Trip-level payments/allocations should remain intact as they are independent of the billing document.
         """
-        # 1. Direct Bill Financial Records (already handled by CASCADE, but good to be explicit if needed)
-        # self.financial_records.all().delete()
-        
-        # 2. Trip-level entries related to this bill
-        if self.bill_type == self.TYPE_TRIP:
-            trips = self.trips.all()
-            # Delete direct payments linked to these trips
-            FinancialRecord.objects.filter(associated_trip__in=trips).delete()
-            # Delete allocations linked to these trips
-            TripAllocation.objects.filter(trip__in=trips).delete()
+        # Delete only the consolidated invoice record associated with this bill
+        FinancialRecord.objects.filter(
+            associated_bill=self,
+            record_type=FinancialRecord.RECORD_TYPE_INVOICE
+        ).delete()
 
         super().delete(*args, **kwargs)
 
