@@ -1,311 +1,210 @@
 {% extends 'base.html' %}
 
-{% block title %}{{ vehicle.registration_plate }} - Vehicle Details{% endblock %}
+{% block title %}Vehicle Details: {{ vehicle.registration_plate }} - TMS{% endblock %}
 
 {% block content %}
-<!-- BEGIN: Page Header -->
-<header class="flex flex-col md:flex-row md:items-center justify-between mb-8">
-    <div>
-        <div class="flex items-center space-x-2 text-sm text-slate-500 mb-2">
-            <a href="{% url 'vehicle-list' %}" class="hover:text-emerald-600 transition-colors">Fleet</a>
-            <i class="fa-solid fa-chevron-right text-xs"></i>
-            <span>Vehicle Details</span>
-        </div>
-        <h1 class="text-3xl font-bold text-slate-900">{{ vehicle.registration_plate }}</h1>
-        <p class="text-sm text-slate-600 mt-1">{{ vehicle.make_model|default:"Unknown Make/Model" }}</p>
+<header class="mb-6">
+    <div class="flex items-center space-x-2 text-sm text-slate-500 mb-2">
+        <a href="{% url 'vehicle-list' %}" class="hover:text-emerald-600 transition-colors">Fleet</a>
+        <i class="fa-solid fa-chevron-right text-[10px]"></i>
+        <span>Vehicle Details</span>
     </div>
-    <div class="mt-4 md:mt-0 flex flex-wrap gap-3">
-        {% if perms.fleet.change_vehicle %}
-        <a href="{% url 'vehicle-update' vehicle.pk %}" class="flex items-center space-x-2 px-4 py-2 border border-slate-300 rounded-md bg-white text-sm font-medium hover:bg-slate-50 transition-colors shadow-sm">
-            <i class="fa-regular fa-pen-to-square"></i>
-            <span>Edit Vehicle</span>
-        </a>
-        {% endif %}
-        {% if perms.fleet.add_maintenancerecord %}
-        <a href="{% url 'maintenance-create' %}?vehicle={{ vehicle.pk }}" class="flex items-center space-x-2 px-4 py-2 bg-emerald-600 text-white rounded-md text-sm font-medium hover:bg-emerald-700 shadow-sm transition-colors">
-            <i class="fa-solid fa-wrench"></i>
-            <span>Add Record</span>
-        </a>
-        {% endif %}
-        {% if perms.fleet.delete_vehicle %}
-        <a href="{% url 'vehicle-delete' vehicle.pk %}" class="flex items-center space-x-2 px-4 py-2 border border-rose-200 text-rose-600 bg-rose-50 rounded-md text-sm font-medium hover:bg-rose-100 transition-colors shadow-sm">
-            <i class="fa-regular fa-trash-can"></i>
-            <span>Delete</span>
-        </a>
-        {% endif %}
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <h1 class="text-3xl font-bold text-slate-900 tracking-tight">{{ vehicle.registration_plate }}</h1>
+        <div class="flex items-center gap-2">
+            {% if perms.fleet.change_vehicle %}
+            <a href="{% url 'vehicle-update' vehicle.pk %}" class="px-4 py-2 border border-slate-300 rounded-md bg-white text-slate-700 text-sm font-bold hover:bg-slate-50 transition-colors">
+                <i class="fa-regular fa-pen-to-square mr-2"></i>Edit
+            </a>
+            {% endif %}
+            {% if perms.fleet.add_maintenancerecord %}
+            <a href="{% url 'maintenance-create' %}?vehicle={{ vehicle.pk }}" class="px-4 py-2 bg-emerald-600 text-white rounded-md text-sm font-bold hover:bg-emerald-700 shadow-sm transition-colors">
+                <i class="fa-solid fa-wrench mr-2"></i>Add Maintenance
+            </a>
+            {% endif %}
+            {% if perms.fleet.delete_vehicle %}
+            <a href="{% url 'vehicle-delete' vehicle.pk %}" class="px-4 py-2 border border-rose-200 rounded-md bg-rose-50 text-rose-700 text-sm font-bold hover:bg-rose-100 transition-colors">
+                <i class="fa-regular fa-trash-can mr-2"></i>Delete
+            </a>
+            {% endif %}
+        </div>
     </div>
 </header>
-<!-- END: Page Header -->
 
-<div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-    <!-- Left Column: Vehicle Info Card -->
-    <div class="lg:col-span-1 space-y-6">
-        <div class="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-sm">
-            <div class="bg-slate-800 px-6 py-6 text-center">
-                <div class="w-20 h-20 bg-emerald-500 rounded-lg flex items-center justify-center text-white text-3xl font-bold mx-auto mb-4 border-2 border-slate-700 shadow-inner">
-                    <i class="fa-solid fa-truck"></i>
-                </div>
-                <h2 class="text-xl font-bold text-white">{{ vehicle.registration_plate }}</h2>
-                <div class="mt-2">
-                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium 
-                        {% if vehicle.status == 'Active' %}bg-emerald-500/10 text-emerald-400 border border-emerald-500/20
-                        {% elif vehicle.status == 'Maintenance' %}bg-orange-500/10 text-orange-400 border border-orange-500/20
-                        {% else %}bg-slate-500/10 text-slate-400 border border-slate-500/20{% endif %}">
-                        {{ vehicle.status }}
-                    </span>
-                </div>
-            </div>
-            <div class="p-6">
+<div class="max-w-7xl mx-auto space-y-6">
+    <!-- Main Asset Grid -->
+    <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+        <div class="bg-slate-800 px-6 py-3 flex justify-between items-center">
+            <h2 class="text-white font-bold flex items-center uppercase tracking-wider text-xs">
+                <i class="fa-solid fa-truck mr-2 opacity-70"></i>
+                Vehicle Specifications & Status
+            </h2>
+            <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest
+                {% if vehicle.status == 'Active' %}bg-emerald-500 text-white
+                {% elif vehicle.status == 'Maintenance' %}bg-amber-500 text-white
+                {% else %}bg-slate-500 text-white{% endif %}">
+                {{ vehicle.status }}
+            </span>
+        </div>
+
+        <div class="p-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-x-12 gap-y-8">
+                <!-- Core Specs -->
                 <div class="space-y-4">
-                    <div class="flex justify-between items-center py-2 border-b border-slate-50">
-                        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Make & Model</span>
-                        <span class="text-sm font-medium text-slate-900">{{ vehicle.make_model|default:"-" }}</span>
-                    </div>
-                    <div class="flex justify-between items-center py-2 border-b border-slate-50">
-                        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Purchase Date</span>
-                        <span class="text-sm font-medium text-slate-900">{{ vehicle.purchase_date|date:"M d, Y"|default:"-" }}</span>
-                    </div>
-                    <div class="flex justify-between items-center py-2 border-b border-slate-50">
-                        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Current Odometer</span>
-                        <span class="text-sm font-medium text-slate-900">{{ vehicle.current_odometer|default:"0" }} km</span>
-                    </div>
-                    <div class="flex justify-between items-center py-2 border-b border-slate-50">
-                        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Maint. Cost</span>
-                        <span class="text-sm font-bold text-emerald-600">₹{{ total_maintenance_cost|floatformat:2 }}</span>
-                    </div>
+                    <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest border-b pb-2">Core Info</h3>
+                    <table class="w-full text-sm">
+                        <tr class="border-b border-slate-50">
+                            <td class="py-2 text-slate-500 font-medium">Make/Model</td>
+                            <td class="py-2 text-slate-900 font-bold">{{ vehicle.make_model|default:"-" }}</td>
+                        </tr>
+                        <tr class="border-b border-slate-50">
+                            <td class="py-2 text-slate-500 font-medium">Purchase Date</td>
+                            <td class="py-2 text-slate-900 font-bold">{{ vehicle.purchase_date|date:"d M Y"|default:"-" }}</td>
+                        </tr>
+                        <tr>
+                            <td class="py-2 text-slate-500 font-medium">Current Odo</td>
+                            <td class="py-2 text-slate-900 font-bold">{{ vehicle.current_odometer|default:"0" }} <span class="text-[10px] text-slate-400">km</span></td>
+                        </tr>
+                    </table>
                 </div>
-                <div class="mt-6 p-4 bg-slate-50 rounded-lg border border-slate-100">
-                    <h4 class="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2 flex items-center">
-                        <i class="fa-solid fa-calendar-check mr-2 text-slate-400"></i>Maintenance Status
-                    </h4>
-                    {% if vehicle.maintenance_records.exists %}
-                        <div class="text-sm mt-1">
-                            <span class="text-slate-500">Next Due:</span>
-                            {% if vehicle.next_due_maintenance %}
-                                <span class="font-semibold text-slate-800">
-                                    {{ vehicle.next_due_maintenance|date:"M d, Y" }}
-                                </span>
-                            {% else %}
-                                <span class="text-slate-400 italic">Not scheduled</span>
-                            {% endif %}
+
+                <!-- Maintenance Overview -->
+                <div class="space-y-4">
+                    <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest border-b pb-2">Maintenance</h3>
+                    <table class="w-full text-sm">
+                        <tr class="border-b border-slate-50">
+                            <td class="py-2 text-slate-500 font-medium">Next Due</td>
+                            <td class="py-2 text-slate-900 font-bold">
+                                {% if vehicle.next_due_maintenance %}
+                                    {{ vehicle.next_due_maintenance|date:"d M Y" }}
+                                {% else %}
+                                    <span class="text-slate-400 font-medium italic">Not set</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="py-2 text-slate-500 font-medium">Lifetime Cost</td>
+                            <td class="py-2 text-emerald-700 font-black">₹{{ total_maintenance_cost|floatformat:2 }}</td>
+                        </tr>
+                    </table>
+                </div>
+
+                <!-- Mounted Tyres Summary -->
+                <div class="lg:col-span-2 space-y-4">
+                    <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest border-b pb-2 flex justify-between">
+                        <span>Mounted Tyres</span>
+                        <a href="{% url 'tyre-list' %}" class="text-emerald-600 hover:text-emerald-700 normal-case tracking-normal">View Inventory</a>
+                    </h3>
+                    {% if vehicle.tyres.exists %}
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        {% for tyre in vehicle.tyres.all %}
+                        <div class="bg-slate-50 border border-slate-200 p-2 rounded-lg text-center relative group">
+                            <p class="text-[9px] font-black text-slate-400 uppercase mb-0.5">Pos: {{ tyre.current_position }}</p>
+                            <p class="text-xs font-bold text-slate-800 truncate">{{ tyre.brand }}</p>
+                            <a href="{% url 'tyre-detail' tyre.pk %}" class="absolute inset-0 opacity-0 group-hover:opacity-100 bg-slate-900/5 transition-opacity rounded-lg"></a>
                         </div>
+                        {% endfor %}
+                    </div>
                     {% else %}
-                        <p class="text-xs text-slate-400 italic">No maintenance records found.</p>
+                    <p class="text-xs text-slate-400 italic py-2">No tyres currently mounted.</p>
                     {% endif %}
                 </div>
             </div>
         </div>
+    </div>
 
-        <!-- Mounted Tyres Card -->
-        <div class="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-sm">
-            <div class="px-5 py-4 border-b border-slate-100 flex justify-between items-center">
-                <h3 class="text-xs font-bold text-slate-700 uppercase tracking-wider">Mounted Tyres</h3>
-                <a class="text-[10px] font-bold text-emerald-600 hover:text-emerald-700 uppercase" href="{% url 'tyre-list' %}">Inventory</a>
+    <!-- Secondary Detail Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <!-- Maintenance History Table -->
+        <div class="lg:col-span-8 bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden flex flex-col">
+            <div class="bg-slate-50 px-6 py-3 border-b border-slate-200">
+                <h3 class="text-xs font-bold text-slate-600 uppercase tracking-widest">Recent Maintenance History</h3>
             </div>
-            <div class="p-0">
-                {% if vehicle.tyres.exists %}
-                <table class="w-full text-left text-sm">
+            <div class="flex-grow overflow-x-auto">
+                <table class="w-full text-sm text-left border-collapse">
                     <thead>
-                        <tr class="bg-slate-50 text-slate-500 text-[10px] uppercase tracking-wider">
-                            <th class="px-4 py-2 font-semibold">Pos</th>
-                            <th class="px-4 py-2 font-semibold">Brand/Size</th>
-                            <th class="px-4 py-2 font-semibold">Action</th>
+                        <tr class="bg-slate-50/50 border-b border-slate-100">
+                            <th class="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider">Date</th>
+                            <th class="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider">Task / Service</th>
+                            <th class="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">Status</th>
+                            <th class="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider text-right">Cost</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100">
-                        {% for tyre in vehicle.tyres.all %}
-                        <tr>
-                            <td class="px-4 py-2 font-bold text-slate-700">{{ tyre.current_position }}</td>
-                            <td class="px-4 py-2">
-                                <div class="text-slate-900">{{ tyre.brand }}</div>
-                                <div class="text-[10px] text-slate-400">{{ tyre.size }}</div>
+                        {% for record in maintenance_records %}
+                        <tr class="hover:bg-slate-50/80 transition-colors">
+                            <td class="px-6 py-3 text-slate-500 font-medium">
+                                {% if record.is_completed %}{{ record.completion_date|date:"d/m/y" }}{% else %}{{ record.expiry_date|date:"d/m/y"|default:"Pending" }}{% endif %}
                             </td>
-                            <td class="px-4 py-2">
-                                <div class="flex items-center gap-2">
-                                    <a href="{% url 'tyre-action' tyre.pk 'Dismount' %}" class="text-blue-500 hover:text-blue-700 transition-colors" title="Dismount" onclick="return confirm('Dismount this tyre?')">
-                                        <i class="fa-solid fa-arrow-down-long"></i>
-                                    </a>
-                                    <a href="{% url 'tyre-log-create' %}?tyre={{ tyre.pk }}&action=Rotation" class="text-indigo-500 hover:text-indigo-700 transition-colors" title="Rotation">
-                                        <i class="fa-solid fa-arrows-rotate"></i>
-                                    </a>
-                                    <a href="{% url 'tyre-action' tyre.pk 'Repair' %}" class="text-orange-500 hover:text-orange-700 transition-colors" title="Move to Repair" onclick="return confirm('Move to repair?')">
-                                        <i class="fa-solid fa-screwdriver-wrench"></i>
-                                    </a>
-                                    <a href="{% url 'tyre-action' tyre.pk 'Scrap' %}" class="text-red-500 hover:text-red-700 transition-colors" title="Scrap" onclick="return confirm('SCRAP this tyre?')">
-                                        <i class="fa-solid fa-trash-can"></i>
-                                    </a>
-                                </div>
+                            <td class="px-6 py-3">
+                                <a href="{% url 'maintenance-detail' record.pk %}" class="font-bold text-slate-800 hover:text-emerald-600">{{ record.name }}</a>
                             </td>
+                            <td class="px-6 py-3 text-center">
+                                <span class="inline-flex px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-tight {% if record.is_completed %}bg-emerald-100 text-emerald-700{% else %}bg-amber-100 text-amber-800{% endif %}">
+                                    {{ record.is_completed|yesno:"Done,Pending" }}
+                                </span>
+                            </td>
+                            <td class="px-6 py-3 text-right font-black text-slate-900">₹{{ record.cost|floatformat:0 }}</td>
                         </tr>
+                        {% empty %}
+                        <tr><td colspan="4" class="px-6 py-10 text-center text-slate-400 italic">No maintenance history recorded.</td></tr>
                         {% endfor %}
                     </tbody>
                 </table>
-                {% else %}
-                <div class="p-6 text-center text-slate-400 text-xs italic">No tyres mounted.</div>
-                {% endif %}
             </div>
-        </div>
-    </div>
-
-    <!-- Right Column: Activity & History -->
-    <div class="lg:col-span-2 space-y-6">
-        <!-- Maintenance Records Card -->
-        <div class="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-sm">
-            <div class="px-6 py-4 border-b border-slate-100">
-                <h3 class="text-sm font-semibold text-slate-700 uppercase tracking-wider">Recent Maintenance Records</h3>
+            {% if maintenance_records %}
+            <div class="px-6 py-2 bg-slate-50 border-t border-slate-100 text-center">
+                <a href="{% url 'maintenance-list' %}?vehicle={{ vehicle.pk }}" class="text-[10px] font-bold text-emerald-600 hover:text-emerald-700 uppercase tracking-widest">View All Records</a>
             </div>
-            <div class="p-0">
-                {% if maintenance_records %}
-                <div class="overflow-x-auto max-h-[400px] overflow-y-auto">
-                    <table class="w-full text-left">
-                        <thead class="sticky top-0 bg-slate-50 z-10 shadow-sm border-b border-slate-100">
-                            <tr>
-                                <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Date</th>
-                                <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Task</th>
-                                <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
-                                <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Cost</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-slate-100 text-sm">
-                            {% for record in maintenance_records %}
-                            <tr class="hover:bg-slate-50 transition-colors">
-                                <td class="px-6 py-4 text-slate-600 whitespace-nowrap">
-                                    {% if record.is_completed %}
-                                        {{ record.completion_date|date:"M d, Y" }}
-                                    {% else %}
-                                        {{ record.expiry_date|date:"M d, Y"|default:"Pending" }}
-                                    {% endif %}
-                                </td>
-                                <td class="px-6 py-4">
-                                    <a href="{% url 'maintenance-detail' record.pk %}" class="font-medium text-slate-900 hover:text-emerald-600 transition-colors">{{ record.name }}</a>
-                                </td>
-                                <td class="px-6 py-4">
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider {% if record.is_completed %}bg-green-100 text-green-800{% else %}bg-amber-100 text-amber-800{% endif %}">
-                                        {{ record.is_completed|yesno:"Completed,Pending" }}
-                                    </span>
-                                    {% if not record.is_completed %}
-                                    <a href="{% url 'maintenance-complete' record.pk %}" class="ml-2 text-[10px] text-emerald-600 font-bold uppercase hover:underline">Mark Done</a>
-                                    {% endif %}
-                                </td>
-                                <td class="px-6 py-4 text-right font-bold text-slate-900">₹{{ record.cost|floatformat:0 }}</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-                <div class="px-6 py-3 bg-slate-50 border-t border-slate-100 text-center">
-                    <a class="text-xs font-bold text-emerald-600 hover:text-emerald-700 uppercase tracking-wider" href="{% url 'maintenance-list' %}?vehicle={{ vehicle.pk }}">View All Records</a>
-                </div>
-                {% else %}
-                <div class="p-8 text-center text-slate-500 italic text-sm">No maintenance records found.</div>
-                {% endif %}
-            </div>
+            {% endif %}
         </div>
 
-        <!-- Documents Card -->
-        <div class="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-sm">
-            <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center">
-                <h3 class="text-sm font-semibold text-slate-700 uppercase tracking-wider">Vehicle Documents</h3>
-                {% if perms.documents.add_document %}
-                <a class="text-xs font-semibold text-emerald-600 hover:text-emerald-700" href="{% url 'document-create-vehicle' vehicle.pk %}">
-                    <i class="fa-solid fa-plus mr-1"></i>Add Document
-                </a>
-                {% endif %}
-            </div>
-            <div class="p-0">
-                {% if vehicle.documents.exists %}
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left">
-                        <thead>
-                            <tr class="bg-slate-50 border-b border-slate-100">
-                                <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Type</th>
-                                <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Expiry</th>
-                                <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-slate-100 text-sm">
-                            {% for doc in vehicle.documents.all %}
-                            <tr class="hover:bg-slate-50 transition-colors">
-                                <td class="px-6 py-4">
-                                    <div class="font-medium text-slate-900">{{ doc.document_type }}</div>
-                                    <div class="text-[10px] text-slate-500">No: {{ doc.document_number }}</div>
-                                </td>
-                                <td class="px-6 py-4">
-                                    {% if doc.never_expires %}
-                                    <div class="text-slate-400 italic">No Expiry</div>
-                                    <span class="text-[10px] font-bold text-blue-600 uppercase">Permanent</span>
-                                    {% else %}
-                                    <div class="text-slate-600">{{ doc.expiry_date|date:"M d, Y" }}</div>
-                                    {% if doc.is_expired %}
-                                    <span class="text-[10px] font-bold text-rose-600 uppercase">Expired</span>
-                                    {% elif doc.days_until_expiry < 30 %}
-                                    <span class="text-[10px] font-bold text-amber-600 uppercase">Expiring Soon</span>
-                                    {% endif %}
-                                    {% endif %}
-                                </td>
-                                <td class="px-6 py-4 text-right flex justify-end space-x-3">
-                                    {% if doc.scanned_copy %}
-                                    <a class="text-slate-400 hover:text-emerald-600" href="{% url 'document-view' doc.pk %}" target="_blank"><i class="fa-regular fa-eye"></i></a>
-                                    {% endif %}
-                                    {% if perms.documents.change_document %}
-                                    <a class="text-slate-400 hover:text-amber-600" href="{% url 'document-update' doc.pk %}"><i class="fa-regular fa-pen-to-square"></i></a>
-                                    {% endif %}
-                                    {% if perms.documents.delete_document %}
-                                    <a class="text-slate-400 hover:text-rose-600" href="{% url 'document-delete' doc.pk %}"><i class="fa-regular fa-trash-can"></i></a>
-                                    {% endif %}
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+        <!-- Documents Section -->
+        <div class="lg:col-span-4 space-y-6">
+            <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+                <div class="bg-slate-50 px-6 py-3 border-b border-slate-200 flex justify-between items-center">
+                    <h3 class="text-xs font-bold text-slate-600 uppercase tracking-widest">Compliance Docs</h3>
+                    {% if perms.documents.add_document %}
+                    <a href="{% url 'document-create-vehicle' vehicle.pk %}" class="text-emerald-600 hover:text-emerald-700">
+                        <i class="fa-solid fa-circle-plus"></i>
+                    </a>
+                    {% endif %}
                 </div>
-                {% else %}
-                <div class="p-8 text-center text-slate-500 italic text-sm">No documents found.</div>
-                {% endif %}
+                <div class="p-4 space-y-3">
+                    {% for doc in vehicle.documents.all %}
+                    <div class="p-3 rounded-lg border border-slate-100 bg-slate-50/50 flex justify-between items-center group">
+                        <div class="min-w-0">
+                            <p class="text-xs font-bold text-slate-800 truncate uppercase">{{ doc.document_type }}</p>
+                            <p class="text-[10px] text-slate-400 font-bold uppercase tracking-tight">Exp: {{ doc.expiry_date|date:"d M Y"|default:"N/A" }}</p>
+                        </div>
+                        <div class="flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            {% if doc.scanned_copy %}
+                            <a href="{% url 'document-view' doc.pk %}" target="_blank" class="text-slate-400 hover:text-emerald-600"><i class="fa-regular fa-eye text-xs"></i></a>
+                            {% endif %}
+                            <a href="{% url 'document-update' doc.pk %}" class="text-slate-400 hover:text-amber-600"><i class="fa-regular fa-pen-to-square text-xs"></i></a>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <p class="text-center py-4 text-xs text-slate-400 italic">No documents uploaded.</p>
+                    {% endfor %}
+                </div>
             </div>
-        </div>
 
-        <!-- Recent Trips Card -->
-        <div class="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-sm">
-            <div class="px-6 py-4 border-b border-slate-100">
-                <h3 class="text-sm font-semibold text-slate-700 uppercase tracking-wider">Recent Trips</h3>
-            </div>
-            <div class="p-0">
-                {% if recent_trips %}
-                <div class="overflow-x-auto max-h-[400px] overflow-y-auto">
-                    <table class="w-full text-left">
-                        <thead class="sticky top-0 bg-slate-50 z-10 shadow-sm border-b border-slate-100">
-                            <tr>
-                                <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Trip ID</th>
-                                <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Date</th>
-                                <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-slate-100 text-sm">
-                            {% for trip in recent_trips %}
-                            <tr class="hover:bg-slate-50 transition-colors">
-                                <td class="px-6 py-4 font-bold text-slate-900">
-                                    <a class="hover:text-emerald-600" href="{% url 'trip-detail' trip.pk %}">{{ trip.trip_number }}</a>
-                                </td>
-                                <td class="px-6 py-4 text-slate-600">{{ trip.date|date:"M d, Y" }}</td>
-                                <td class="px-6 py-4">
-                                    {% with status=trip.payment_status %}
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase
-                                        {% if status == 'Paid' %}bg-emerald-100 text-emerald-800
-                                        {% elif status == 'Partially Paid' %}bg-amber-100 text-amber-800
-                                        {% else %}bg-slate-100 text-slate-600{% endif %}">
-                                        {{ status }}
-                                    </span>
-                                    {% endwith %}
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+            <!-- Recent Trips -->
+            <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+                <div class="bg-slate-50 px-6 py-3 border-b border-slate-200">
+                    <h3 class="text-xs font-bold text-slate-600 uppercase tracking-widest">Recent Activity</h3>
                 </div>
-                {% else %}
-                <div class="p-8 text-center text-slate-500 italic text-sm">No recent trips found.</div>
-                {% endif %}
+                <div class="p-4 space-y-3">
+                    {% for trip in recent_trips %}
+                    <a href="{% url 'trip-detail' trip.pk %}" class="flex items-center justify-between p-3 rounded-lg border border-slate-100 hover:border-emerald-500 hover:bg-emerald-50 transition-all">
+                        <span class="text-xs font-bold text-slate-700">{{ trip.trip_number }}</span>
+                        <span class="text-[10px] font-bold text-slate-400 uppercase">{{ trip.date|date:"d M" }}</span>
+                    </a>
+                    {% empty %}
+                    <p class="text-center py-4 text-xs text-slate-400 italic">No recent trips.</p>
+                    {% endfor %}
+                </div>
             </div>
         </div>
     </div>

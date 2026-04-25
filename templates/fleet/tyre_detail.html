@@ -1,216 +1,199 @@
 {% extends 'base.html' %}
 
-{% block title %}Tyre Detail - {{ tyre.serial_number }}{% endblock %}
+{% block title %}Tyre Details: {{ tyre.serial_number }} - TMS{% endblock %}
 
 {% block content %}
-<!-- BEGIN: Page Header -->
-<header class="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
-    <div class="flex items-center gap-4">
-        <div class="w-16 h-16 bg-emerald-100 rounded-lg flex items-center justify-center text-emerald-600 shadow-sm">
-            <i class="fa-solid fa-circle-notch text-3xl"></i>
-        </div>
-        <div>
-            <h1 class="text-3xl font-bold text-slate-900 leading-tight">{{ tyre.brand }} {{ tyre.size }}</h1>
-            <p class="text-sm text-slate-500 font-mono tracking-tight mt-1">SN: {{ tyre.serial_number }}</p>
-        </div>
+<header class="mb-6">
+    <div class="flex items-center space-x-2 text-sm text-slate-500 mb-2">
+        <a href="{% url 'tyre-list' %}" class="hover:text-emerald-600 transition-colors">Tyre Inventory</a>
+        <i class="fa-solid fa-chevron-right text-[10px]"></i>
+        <span>Tyre Details</span>
     </div>
-    <div class="flex flex-wrap items-center gap-3">
-        <a href="{% url 'tyre-list' %}" class="flex items-center space-x-2 px-4 py-2 border border-slate-300 rounded-md bg-white text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors shadow-sm">
-            <i class="fa-solid fa-arrow-left"></i>
-            <span>Back to Inventory</span>
-        </a>
-        <div class="flex flex-wrap gap-2">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <h1 class="text-3xl font-bold text-slate-900 tracking-tight">{{ tyre.brand }} {{ tyre.size }}</h1>
+        <div class="flex items-center gap-2">
+            {% if perms.fleet.change_tyre %}
+            <a href="{% url 'tyre-update' tyre.pk %}" class="px-4 py-2 border border-slate-300 rounded-md bg-white text-slate-700 text-sm font-bold hover:bg-slate-50 transition-colors">
+                <i class="fa-regular fa-pen-to-square mr-2"></i>Edit
+            </a>
+            {% endif %}
+            
+            <div class="h-6 w-px bg-slate-200 mx-1"></div>
+
             {% if tyre.status != 'Mounted' %}
-            <a href="{% url 'tyre-log-create' %}?tyre={{ tyre.pk }}&action=Mount" class="flex items-center space-x-1 px-3 py-1.5 bg-emerald-600 text-white rounded text-xs font-bold hover:bg-emerald-700 transition-colors shadow-sm">
-                <i class="fa-solid fa-truck-pickup"></i>
-                <span>Mount</span>
+            <a href="{% url 'tyre-log-create' %}?tyre={{ tyre.pk }}&action=Mount" class="px-4 py-2 bg-emerald-600 text-white rounded-md text-sm font-bold hover:bg-emerald-700 shadow-sm transition-colors">
+                <i class="fa-solid fa-truck-pickup mr-2"></i>Mount
             </a>
             {% else %}
-            <a href="{% url 'tyre-action' tyre.pk 'Dismount' %}" class="flex items-center space-x-1 px-3 py-1.5 bg-blue-600 text-white rounded text-xs font-bold hover:bg-blue-700 transition-colors shadow-sm" onclick="return confirm('Dismount this tyre?')">
-                <i class="fa-solid fa-arrow-down-long"></i>
-                <span>Dismount</span>
-            </a>
-            <a href="{% url 'tyre-log-create' %}?tyre={{ tyre.pk }}&action=Rotation" class="flex items-center space-x-1 px-3 py-1.5 bg-indigo-600 text-white rounded text-xs font-bold hover:bg-indigo-700 transition-colors shadow-sm">
-                <i class="fa-solid fa-arrows-rotate"></i>
-                <span>Rotate</span>
+            <a href="{% url 'tyre-action' tyre.pk 'Dismount' %}" class="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-bold hover:bg-blue-700 shadow-sm transition-colors" onclick="return confirm('Dismount this tyre?')">
+                <i class="fa-solid fa-arrow-down-long mr-2"></i>Dismount
             </a>
             {% endif %}
-            
-            {% if tyre.status != 'Under Repair' %}
-            <a href="{% url 'tyre-action' tyre.pk 'Repair' %}" class="flex items-center space-x-1 px-3 py-1.5 bg-orange-500 text-white rounded text-xs font-bold hover:bg-orange-600 transition-colors shadow-sm" onclick="return confirm('Move to repair?')">
-                <i class="fa-solid fa-screwdriver-wrench"></i>
-                <span>Repair</span>
-            </a>
-            <a href="{% url 'tyre-log-create' %}?tyre={{ tyre.pk }}&action=Remold" class="flex items-center space-x-1 px-3 py-1.5 bg-purple-600 text-white rounded text-xs font-bold hover:bg-purple-700 transition-colors shadow-sm">
-                <i class="fa-solid fa-retweet"></i>
-                <span>Remold</span>
-            </a>
-            {% else %}
-            <a href="{% url 'tyre-action' tyre.pk 'Stock' %}" class="flex items-center space-x-1 px-3 py-1.5 bg-emerald-600 text-white rounded text-xs font-bold hover:bg-emerald-700 transition-colors shadow-sm">
-                <i class="fa-solid fa-check"></i>
-                <span>Back to Stock</span>
-            </a>
-            {% endif %}
-            
+
             {% if tyre.status != 'Scrap' %}
-            <a href="{% url 'tyre-action' tyre.pk 'Scrap' %}" class="flex items-center space-x-1 px-3 py-1.5 bg-red-600 text-white rounded text-xs font-bold hover:bg-red-700 transition-colors shadow-sm" onclick="return confirm('SCRAP this tyre? This cannot be undone.')">
-                <i class="fa-solid fa-trash-can"></i>
-                <span>Scrap</span>
+            <a href="{% url 'tyre-action' tyre.pk 'Scrap' %}" class="px-4 py-2 border border-rose-200 rounded-md bg-rose-50 text-rose-700 text-sm font-bold hover:bg-rose-100 transition-colors" onclick="return confirm('SCRAP this tyre? This cannot be undone.')">
+                <i class="fa-solid fa-trash-can mr-2"></i>Scrap
             </a>
             {% endif %}
         </div>
-        <a href="{% url 'tyre-update' tyre.pk %}" class="flex items-center space-x-2 px-4 py-2 border border-orange-200 bg-orange-50 text-orange-700 rounded-md text-sm font-medium hover:bg-orange-100 transition-colors shadow-sm">
-            <i class="fa-regular fa-pen-to-square"></i>
-            <span>Edit Details</span>
-        </a>
     </div>
 </header>
-<!-- END: Page Header -->
 
-<div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-    <!-- Left Column: Status & Basic Info -->
-    <div class="lg:col-span-1 space-y-6">
-        <!-- Photo Card (Async Loading) -->
-        {% if tyre.photo %}
-        <div class="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden" id="photo-card">
-            <div class="bg-slate-50 border-b border-slate-200 py-3 px-5 flex justify-between items-center">
-                <h3 class="text-xs font-bold text-slate-700 uppercase tracking-wider">Tyre Photo</h3>
-                <a href="#" id="full-size-link" target="_blank" class="text-[10px] text-emerald-600 font-bold hover:underline hidden">View Full Size</a>
-            </div>
-            <div id="photo-container" class="w-full h-64 bg-slate-100 flex flex-col items-center justify-center relative">
-                <!-- Loading State -->
-                <div id="photo-loading" class="text-center">
-                    <i class="fa-solid fa-circle-notch fa-spin text-emerald-500 text-3xl mb-2"></i>
-                    <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Fetching from Drive...</p>
-                </div>
-                <!-- Error State -->
-                <div id="photo-error" class="hidden text-center p-4">
-                    <i class="fa-solid fa-circle-exclamation text-red-400 text-2xl mb-2"></i>
-                    <p class="text-xs text-slate-500">Failed to load photo</p>
-                </div>
-                <!-- Actual Image -->
-                <img id="tyre-photo" src="" alt="Tyre SN: {{ tyre.serial_number }}" class="hidden w-full h-full object-cover">
-            </div>
+<div class="max-w-7xl mx-auto space-y-6">
+    <!-- Main Info Grid -->
+    <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+        <div class="bg-slate-800 px-6 py-3 flex justify-between items-center">
+            <h2 class="text-white font-bold flex items-center uppercase tracking-wider text-xs">
+                <i class="fa-solid fa-circle-notch mr-2 opacity-70"></i>
+                Technical Specifications & Lifecycle
+            </h2>
+            <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest
+                {% if tyre.status == 'Mounted' %}bg-emerald-500 text-white
+                {% elif tyre.status == 'In Stock' %}bg-blue-500 text-white
+                {% elif tyre.status == 'Scrap' %}bg-rose-500 text-white
+                {% else %}bg-amber-500 text-white{% endif %}">
+                {{ tyre.status }}
+            </span>
         </div>
-        {% endif %}
 
-        <!-- Status Card -->
-        <div class="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
-            <div class="bg-slate-50 border-b border-slate-200 py-4 px-5">
-                <h3 class="text-sm font-bold text-slate-700 uppercase tracking-wider">Current Status</h3>
-            </div>
-            <div class="p-6 space-y-6">
-                <div>
-                    <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-2">Operational Status</span>
-                    <span class="inline-flex items-center px-3 py-1.5 rounded text-sm font-bold 
-                        {% if tyre.status == 'Mounted' %}bg-emerald-100 text-emerald-800
-                        {% elif tyre.status == 'In Stock' %}bg-blue-100 text-blue-800
-                        {% elif tyre.status == 'Scrap' %}bg-red-100 text-red-800
-                        {% else %}bg-orange-100 text-orange-800{% endif %}">
-                        {% if tyre.status == 'Mounted' %}<i class="fa-solid fa-truck-pickup mr-2"></i>{% endif %}
-                        {% if tyre.status == 'In Stock' %}<i class="fa-solid fa-warehouse mr-2"></i>{% endif %}
-                        {% if tyre.status == 'Scrap' %}<i class="fa-solid fa-trash-can mr-2"></i>{% endif %}
-                        {% if tyre.status == 'Under Repair' %}<i class="fa-solid fa-screwdriver-wrench mr-2"></i>{% endif %}
-                        {{ tyre.status }}
-                    </span>
+        <div class="p-6">
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-8">
+                <!-- Tyre Metadata -->
+                <div class="md:col-span-4 space-y-4">
+                    <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest border-b pb-2">Tyre Info</h3>
+                    <table class="w-full text-sm">
+                        <tr class="border-b border-slate-50">
+                            <td class="py-2 text-slate-500 font-medium">Serial Number</td>
+                            <td class="py-2 text-slate-900 font-mono font-bold">{{ tyre.serial_number }}</td>
+                        </tr>
+                        <tr class="border-b border-slate-50">
+                            <td class="py-2 text-slate-500 font-medium">Brand / Make</td>
+                            <td class="py-2 text-slate-900 font-bold uppercase">{{ tyre.brand }}</td>
+                        </tr>
+                        <tr class="border-b border-slate-50">
+                            <td class="py-2 text-slate-500 font-medium">Dimension/Size</td>
+                            <td class="py-2 text-slate-900 font-bold">{{ tyre.size }}</td>
+                        </tr>
+                        <tr>
+                            <td class="py-2 text-slate-500 font-medium">Purchase Cost</td>
+                            <td class="py-2 text-emerald-700 font-black">₹{{ tyre.purchase_cost|floatformat:2 }}</td>
+                        </tr>
+                    </table>
                 </div>
-                
-                {% if tyre.current_vehicle %}
-                <div class="grid grid-cols-2 gap-4 pt-4 border-t border-slate-100">
-                    <div>
-                        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">Mounted On</span>
-                        <a href="{% url 'vehicle-detail' tyre.current_vehicle.pk %}" class="text-sm font-bold text-emerald-600 hover:text-emerald-800 transition-colors underline decoration-dotted">
-                            {{ tyre.current_vehicle.registration_plate }}
+
+                <!-- Assignment Status -->
+                <div class="md:col-span-4 space-y-4">
+                    <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest border-b pb-2">Deployment</h3>
+                    {% if tyre.status == 'Mounted' and tyre.current_vehicle %}
+                    <div class="bg-emerald-50 p-4 rounded-xl border border-emerald-100 flex items-center space-x-4">
+                        <div class="w-12 h-12 rounded-lg bg-white flex items-center justify-center text-emerald-600 shadow-sm border border-emerald-50">
+                            <i class="fa-solid fa-truck text-xl"></i>
+                        </div>
+                        <div>
+                            <p class="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Active On</p>
+                            <p class="text-lg font-black text-slate-900 leading-tight">{{ tyre.current_vehicle.registration_plate }}</p>
+                            <p class="text-xs font-bold text-emerald-700 mt-0.5">Position: {{ tyre.current_position }}</p>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 flex items-center space-x-4">
+                        <div class="w-12 h-12 rounded-lg bg-white flex items-center justify-center text-slate-400 border border-slate-50">
+                            <i class="fa-solid fa-warehouse text-xl"></i>
+                        </div>
+                        <div>
+                            <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Storage Status</p>
+                            <p class="text-base font-bold text-slate-700">{{ tyre.status }}</p>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if tyre.notes %}
+                    <div class="mt-4">
+                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Remarks</p>
+                        <p class="text-xs text-slate-600 italic leading-relaxed">"{{ tyre.notes }}"</p>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <!-- Tyre Photo -->
+                <div class="md:col-span-4">
+                    <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest border-b pb-2 mb-4">Tyre Condition Photo</h3>
+                    {% if tyre.photo %}
+                    <div id="photo-container" class="relative group rounded-xl border border-slate-200 overflow-hidden bg-slate-100 h-40 flex flex-col items-center justify-center shadow-inner">
+                        <!-- Loading State -->
+                        <div id="photo-loading" class="text-center">
+                            <i class="fa-solid fa-circle-notch fa-spin text-emerald-500 text-2xl mb-2"></i>
+                            <p class="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">Drive Fetching...</p>
+                        </div>
+                        <!-- Error State -->
+                        <div id="photo-error" class="hidden text-center p-4">
+                            <i class="fa-solid fa-cloud-bolt text-rose-300 text-xl mb-1"></i>
+                            <p class="text-[10px] text-slate-400 font-bold uppercase">Image Offline</p>
+                        </div>
+                        <!-- Actual Image -->
+                        <img id="tyre-photo" src="" alt="Tyre Photo" class="hidden w-full h-full object-cover">
+                        <!-- Overlay -->
+                        <a href="#" id="full-size-link" target="_blank" class="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-bold uppercase tracking-widest hidden">
+                            <i class="fa-solid fa-expand-alt mr-2"></i> View Full
                         </a>
                     </div>
-                    <div>
-                        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">Position</span>
-                        <span class="text-sm font-bold text-slate-800">{{ tyre.current_position }}</span>
+                    {% else %}
+                    <div class="h-40 border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center text-slate-300">
+                        <i class="fa-solid fa-camera-rotate text-3xl mb-2"></i>
+                        <span class="text-[10px] font-bold uppercase tracking-widest">No Photo Attached</span>
                     </div>
-                </div>
-                {% endif %}
-
-                <div class="pt-4 border-t border-slate-100">
-                    <div>
-                        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">Purchase Cost</span>
-                        <span class="text-sm font-bold text-slate-800">₹{{ tyre.purchase_cost|floatformat:2 }}</span>
-                    </div>
+                    {% endif %}
                 </div>
             </div>
         </div>
-        
-        <!-- Notes Card -->
-        {% if tyre.notes %}
-        <div class="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
-            <div class="bg-slate-50 border-b border-slate-200 py-4 px-5">
-                <h3 class="text-sm font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
-                    <i class="fa-regular fa-note-sticky text-slate-400"></i>
-                    <span>Notes</span>
-                </h3>
-            </div>
-            <div class="p-5">
-                <p class="text-sm text-slate-600 leading-relaxed italic">"{{ tyre.notes }}"</p>
-            </div>
-        </div>
-        {% endif %}
     </div>
 
-    <!-- Right Column: History Log -->
-    <div class="lg:col-span-2">
-        <div class="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
-            <div class="bg-slate-800 py-4 px-5 flex justify-between items-center">
-                <h3 class="text-sm font-bold text-white uppercase tracking-wider">History Log</h3>
-                <span class="px-2 py-0.5 bg-slate-700 text-white rounded text-xs">{{ logs.count }} Entries</span>
-            </div>
-            <div class="overflow-x-auto max-h-[600px] overflow-y-auto">
-                <table class="min-w-full divide-y divide-slate-200 sticky-header">
-                    <thead class="bg-slate-50 sticky top-0 z-10 shadow-sm">
-                        <tr>
-                            <th scope="col" class="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Date</th>
-                            <th scope="col" class="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Action</th>
-                            <th scope="col" class="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Vehicle</th>
-                            <th scope="col" class="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Position</th>
-                            <th scope="col" class="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Notes</th>
-                        </tr>
-                    </thead>
-                    <tbody class="bg-white divide-y divide-slate-200">
-                        {% for log in logs %}
-                        <tr class="hover:bg-slate-50 transition-colors">
-                            <td class="px-5 py-4 whitespace-nowrap text-sm text-slate-600 font-medium">
-                                {{ log.date|date:"M d, Y" }}
-                            </td>
-                            <td class="px-5 py-4 whitespace-nowrap">
-                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-200 uppercase tracking-tighter">
-                                    {{ log.action }}
-                                </span>
-                            </td>
-                            <td class="px-5 py-4 whitespace-nowrap text-sm text-slate-700">
-                                {% if log.vehicle %}
-                                <span class="font-semibold text-slate-900">{{ log.vehicle.registration_plate }}</span>
-                                {% else %}
-                                <span class="text-slate-400">-</span>
-                                {% endif %}
-                            </td>
-                            <td class="px-5 py-4 whitespace-nowrap text-sm text-slate-600">
-                                {{ log.position|default:"-" }}
-                            </td>
-                            <td class="px-5 py-4 text-sm text-slate-600">
-                                {{ log.notes|default:"-" }}
-                            </td>
-                        </tr>
-                        {% empty %}
-                        <tr>
-                            <td colspan="6" class="px-5 py-16 text-center">
-                                <div class="inline-flex items-center justify-center w-12 h-12 bg-slate-50 rounded-full mb-3">
-                                    <i class="fa-solid fa-history text-2xl text-slate-300"></i>
-                                </div>
-                                <p class="text-slate-500 text-sm">No history logged yet.</p>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
+    <!-- Movement History -->
+    <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden flex flex-col">
+        <div class="bg-slate-50 px-6 py-3 border-b border-slate-200 flex justify-between items-center">
+            <h3 class="text-xs font-bold text-slate-600 uppercase tracking-widest">Complete Movement History</h3>
+            <span class="text-[10px] font-black text-slate-400 uppercase">{{ logs.count }} Log Entries</span>
+        </div>
+        <div class="flex-grow overflow-x-auto">
+            <table class="w-full text-sm text-left border-collapse">
+                <thead>
+                    <tr class="bg-slate-50/50 border-b border-slate-100">
+                        <th class="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider w-32">Date</th>
+                        <th class="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider w-40">Event / Action</th>
+                        <th class="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider">Asset Context</th>
+                        <th class="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">Position</th>
+                        <th class="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider">Remarks</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    {% for log in logs %}
+                    <tr class="hover:bg-slate-50/80 transition-colors">
+                        <td class="px-6 py-4 text-slate-500 font-medium">{{ log.date|date:"d M Y" }}</td>
+                        <td class="px-6 py-4">
+                            <span class="inline-flex px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-tight 
+                                {% if log.action == 'Mount' %}bg-emerald-100 text-emerald-700
+                                {% elif log.action == 'Dismount' %}bg-blue-100 text-blue-700
+                                {% elif log.action == 'Repair' %}bg-amber-100 text-amber-700
+                                {% elif log.action == 'Scrap' %}bg-rose-100 text-rose-700
+                                {% else %}bg-slate-100 text-slate-700{% endif %}">
+                                {{ log.action }}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4">
+                            {% if log.vehicle %}
+                            <span class="text-sm font-bold text-slate-900 uppercase tracking-tight">{{ log.vehicle.registration_plate }}</span>
+                            {% else %}
+                            <span class="text-slate-400 italic">Inventory / External</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 text-center font-bold text-slate-700">{{ log.position|default:"-" }}</td>
+                        <td class="px-6 py-4 text-slate-500 text-xs">{{ log.notes|default:"-" }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="5" class="px-6 py-12 text-center text-slate-400 italic">No movement history recorded.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
     </div>
 </div>
@@ -219,18 +202,14 @@
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const photoContainer = document.getElementById('photo-container');
-    if (!photoContainer) return;
+    const imgEl = document.getElementById('tyre-photo');
+    if (!imgEl) return;
 
     const loadingEl = document.getElementById('photo-loading');
     const errorEl = document.getElementById('photo-error');
-    const imgEl = document.getElementById('tyre-photo');
     const linkEl = document.getElementById('full-size-link');
     
-    // Stable URL that serves the image directly
     const photoUrl = '{% url "tyre-photo-serve" tyre.pk %}';
-
-    // Start loading the image in background
     imgEl.src = photoUrl;
     
     imgEl.onload = function() {
