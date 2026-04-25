@@ -19,5 +19,6 @@ urlpatterns = [
     path('routes/<int:pk>/delete/', views.RouteDeleteView.as_view(), name='route-delete'),
     
     # Autocomplete
+    path('trip/export-excel/', views.trip_export_excel, name='trip-export-excel'),
     path('autocomplete/', views.get_autocomplete_suggestions, name='autocomplete-suggestions'),
 ]

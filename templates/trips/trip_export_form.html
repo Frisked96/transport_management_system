@@ -1,0 +1,87 @@
+{% extends 'base.html' %}
+
+{% block title %}Export Billed Trips - Transport Management System{% endblock %}
+
+{% block content %}
+<header class="mb-6">
+    <div class="flex items-center space-x-2 text-sm text-slate-500 mb-2">
+        <a href="{% url 'trip-list' %}" class="hover:text-emerald-600 transition-colors">Trips</a>
+        <i class="fa-solid fa-chevron-right text-[10px]"></i>
+        <span>Export Billed Trips</span>
+    </div>
+    <h1 class="text-3xl font-bold text-slate-900">Export Billed Trips to Excel</h1>
+</header>
+
+<div class="max-w-4xl">
+    <form method="post" class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+        {% csrf_token %}
+        <div class="p-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                <!-- Date Range -->
+                <div class="flex flex-col">
+                    <label class="text-xs font-bold text-slate-700 mb-2 uppercase tracking-wider">Start Date</label>
+                    <input type="date" name="start_date" class="block w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-emerald-500 focus:border-emerald-500">
+                </div>
+                <div class="flex flex-col">
+                    <label class="text-xs font-bold text-slate-700 mb-2 uppercase tracking-wider">End Date</label>
+                    <input type="date" name="end_date" class="block w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-emerald-500 focus:border-emerald-500">
+                </div>
+            </div>
+
+            <div class="mb-6">
+                <div class="flex items-center justify-between mb-4">
+                    <label class="text-xs font-bold text-slate-700 uppercase tracking-wider">Select Vehicles to Include</label>
+                    <button type="button" id="selectAllVehicles" class="text-xs font-bold text-emerald-600 hover:text-emerald-700 transition-colors">Select All</button>
+                </div>
+                
+                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 max-h-64 overflow-y-auto p-2 border border-slate-100 rounded-lg bg-slate-50">
+                    {% for vehicle in vehicles %}
+                    <label class="flex items-center p-3 bg-white border border-slate-200 rounded-lg cursor-pointer hover:border-emerald-500 transition-all group">
+                        <input type="checkbox" name="vehicles" value="{{ vehicle.id }}" class="vehicle-checkbox h-4 w-4 text-emerald-600 focus:ring-emerald-500 border-slate-300 rounded mr-3">
+                        <span class="text-xs font-black text-slate-700 group-hover:text-emerald-600 uppercase">{{ vehicle.registration_plate }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="bg-blue-50 border border-blue-100 rounded-lg p-4 mb-6">
+                <div class="flex">
+                    <div class="flex-shrink-0">
+                        <i class="fa-solid fa-circle-info text-blue-400"></i>
+                    </div>
+                    <div class="ml-3">
+                        <p class="text-sm text-blue-700">
+                            Only trips that have been <strong>billed</strong> (associated with an invoice) will be included in the exported file.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-slate-50 px-6 py-4 flex items-center justify-between border-t border-slate-200">
+            <a href="{% url 'trip-list' %}" class="px-4 py-2 text-sm font-medium text-slate-700 hover:text-slate-900 transition-colors">Cancel</a>
+            <button type="submit" class="flex items-center space-x-2 px-6 py-2 bg-emerald-600 text-white rounded-md text-sm font-bold hover:bg-emerald-700 shadow-sm transition-colors uppercase tracking-wider">
+                <i class="fa-solid fa-file-excel"></i>
+                <span>Generate Excel</span>
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    $(document).ready(function() {
+        $('#selectAllVehicles').on('click', function() {
+            const allChecked = $('.vehicle-checkbox:checked').length === $('.vehicle-checkbox').length;
+            $('.vehicle-checkbox').prop('checked', !allChecked);
+            $(this).text(allChecked ? 'Select All' : 'Deselect All');
+        });
+
+        $('.vehicle-checkbox').on('change', function() {
+            const allChecked = $('.vehicle-checkbox:checked').length === $('.vehicle-checkbox').length;
+            $('#selectAllVehicles').text(allChecked ? 'Deselect All' : 'Select All');
+        });
+    });
+</script>
+{% endblock %}

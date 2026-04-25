@@ -20,6 +20,11 @@
             </button>
         </div>
 
+        <a href="{% url 'trip-export-excel' %}" class="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 shadow-sm transition-colors">
+            <i class="fa-solid fa-file-excel"></i>
+            <span>Export Excel</span>
+        </a>
+
         {% if perms.trips.add_trip %}
         <a href="{% url 'trip-create' %}" class="flex items-center space-x-2 px-4 py-2 bg-emerald-600 text-white rounded-md text-sm font-medium hover:bg-emerald-700 shadow-sm transition-colors">
             <i class="fa-solid fa-plus"></i>

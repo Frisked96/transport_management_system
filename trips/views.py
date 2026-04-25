@@ -9,13 +9,20 @@ from django.urls import reverse_lazy
 from django.contrib import messages
 from django.db.models import Q, Sum, F
 from django.utils import timezone
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
 from datetime import datetime, timedelta
+from decimal import Decimal
+
+try:
+    import openpyxl
+    from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
+except ImportError:
+    openpyxl = None
 
 from .models import Trip, Route
 from .forms import TripForm, RouteForm
 from fleet.models import Vehicle, MaintenanceRecord, Tyre
-from ledger.models import FinancialRecord, TransactionCategory, Bill
+from ledger.models import FinancialRecord, TransactionCategory, Bill, BillTrip
 
 
 class BaseTripPermissionMixin:
@@ -374,3 +381,116 @@ class RouteDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
     def delete(self, request, *args, **kwargs):
         messages.success(self.request, 'Route deleted successfully.')
         return super().delete(request, *args, **kwargs)
+
+
+@login_required
+def trip_export_excel(request):
+    """
+    Generates an Excel sheet for billed trips with vehicle selection.
+    """
+    if not openpyxl:
+        messages.error(request, "Excel export is not available. Please install 'openpyxl'.")
+        return redirect('trip-list')
+
+    # Get available vehicles for selection
+    vehicles = Vehicle.objects.all().order_by('registration_plate')
+    
+    if request.method == 'POST':
+        selected_vehicles = request.POST.getlist('vehicles')
+        start_date = request.POST.get('start_date')
+        end_date = request.POST.get('end_date')
+
+        if not selected_vehicles:
+            messages.error(request, "Please select at least one vehicle.")
+            return redirect('trip-export-excel')
+
+        # Filter trips: only billed trips for selected vehicles
+        trips = Trip.objects.with_billing_info().filter(
+            annotated_is_billed=True,
+            vehicle_id__in=selected_vehicles
+        ).select_related('vehicle', 'party').prefetch_related('bills')
+
+        if start_date:
+            trips = trips.filter(date__date__gte=start_date)
+        if end_date:
+            trips = trips.filter(date__date__lte=end_date)
+
+        trips = trips.order_by('date')
+
+        # Create Workbook
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Billed Trips Report"
+
+        # Define styles
+        header_font = Font(bold=True, color="FFFFFF")
+        header_fill = PatternFill(start_color="10B981", end_color="10B981", fill_type="solid") # Emerald-500
+        center_align = Alignment(horizontal='center')
+        border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
+
+        # Header Row
+        headers = [
+            'Sr no.', 'Invoice No.', 'Date of Invoice', 'Party Name', 'GST No.', 
+            'lo-Date', 'Truck no', 'From', 'To', 'Weight', 'Rate', 'Freight', 'GST (18%)', 'Total Taxable Value'
+        ]
+        
+        for col_num, header in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col_num)
+            cell.value = header
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = center_align
+            cell.border = border
+
+        # Data Rows
+        row_num = 2
+        for idx, trip in enumerate(trips, 1):
+            bill = trip.bills.first()
+            if not bill:
+                continue
+
+            # Calculations as per requirements
+            freight = trip.revenue or Decimal('0')
+            gst = (freight * Decimal('0.18')).quantize(Decimal('0.01'))
+            total_taxable = freight + gst
+
+            ws.cell(row=row_num, column=1, value=idx).border = border
+            ws.cell(row=row_num, column=2, value=bill.bill_number or 'N/A').border = border
+            ws.cell(row=row_num, column=3, value=bill.date.strftime('%d-%m-%Y') if bill.date else 'N/A').border = border
+            ws.cell(row=row_num, column=4, value=trip.party.name if trip.party else 'N/A').border = border
+            ws.cell(row=row_num, column=5, value=trip.party.gstin if trip.party else 'N/A').border = border
+            ws.cell(row=row_num, column=6, value=trip.date.strftime('%d-%m-%Y')).border = border
+            ws.cell(row=row_num, column=7, value=trip.vehicle.registration_plate).border = border
+            ws.cell(row=row_num, column=8, value=trip.pickup_location or 'N/A').border = border
+            ws.cell(row=row_num, column=9, value=trip.delivery_location or 'N/A').border = border
+            ws.cell(row=row_num, column=10, value=float(trip.weight or 0)).border = border
+            ws.cell(row=row_num, column=11, value=float(trip.rate_per_ton or 0)).border = border
+            ws.cell(row=row_num, column=12, value=float(freight)).border = border
+            ws.cell(row=row_num, column=13, value=float(gst)).border = border
+            ws.cell(row=row_num, column=14, value=float(total_taxable)).border = border
+            
+            row_num += 1
+
+        # Adjust column widths
+        for col in ws.columns:
+            max_length = 0
+            column = col[0].column_letter
+            for cell in col:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = (max_length + 2)
+            ws.column_dimensions[column].width = adjusted_width
+
+        # Response
+        response = HttpResponse(
+            content_type='application/vnd.openpyxl.sheet',
+        )
+        filename = f"Billed_Trips_{timezone.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        wb.save(response)
+        return response
+
+    return render(request, 'trips/trip_export_form.html', {'vehicles': vehicles})
