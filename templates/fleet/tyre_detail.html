@@ -42,12 +42,12 @@
 <div class="max-w-7xl mx-auto space-y-6">
     <!-- Main Info Grid -->
     <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-        <div class="bg-slate-800 px-6 py-3 flex justify-between items-center">
-            <h2 class="text-white font-bold flex items-center uppercase tracking-wider text-xs">
+        <div class="bg-slate-800 px-4 sm:px-6 py-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+            <h2 class="text-white font-bold flex items-center uppercase tracking-wider text-[10px] sm:text-xs">
                 <i class="fa-solid fa-circle-notch mr-2 opacity-70"></i>
                 Technical Specifications & Lifecycle
             </h2>
-            <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest
+            <span class="px-2 py-0.5 rounded text-[9px] sm:text-[10px] font-black uppercase tracking-widest
                 {% if tyre.status == 'Mounted' %}bg-emerald-500 text-white
                 {% elif tyre.status == 'In Stock' %}bg-blue-500 text-white
                 {% elif tyre.status == 'Scrap' %}bg-rose-500 text-white
@@ -56,29 +56,31 @@
             </span>
         </div>
 
-        <div class="p-6">
+        <div class="p-4 sm:p-6">
             <div class="grid grid-cols-1 md:grid-cols-12 gap-8">
                 <!-- Tyre Metadata -->
                 <div class="md:col-span-4 space-y-4">
                     <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest border-b pb-2">Tyre Info</h3>
-                    <table class="w-full text-sm">
-                        <tr class="border-b border-slate-50">
-                            <td class="py-2 text-slate-500 font-medium">Serial Number</td>
-                            <td class="py-2 text-slate-900 font-mono font-bold">{{ tyre.serial_number }}</td>
-                        </tr>
-                        <tr class="border-b border-slate-50">
-                            <td class="py-2 text-slate-500 font-medium">Brand / Make</td>
-                            <td class="py-2 text-slate-900 font-bold uppercase">{{ tyre.brand }}</td>
-                        </tr>
-                        <tr class="border-b border-slate-50">
-                            <td class="py-2 text-slate-500 font-medium">Dimension/Size</td>
-                            <td class="py-2 text-slate-900 font-bold">{{ tyre.size }}</td>
-                        </tr>
-                        <tr>
-                            <td class="py-2 text-slate-500 font-medium">Purchase Cost</td>
-                            <td class="py-2 text-emerald-700 font-black">₹{{ tyre.purchase_cost|floatformat:2 }}</td>
-                        </tr>
-                    </table>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <tr class="border-b border-slate-50">
+                                <td class="py-2 text-slate-500 font-medium whitespace-nowrap pr-4">Serial Number</td>
+                                <td class="py-2 text-slate-900 font-mono font-bold">{{ tyre.serial_number }}</td>
+                            </tr>
+                            <tr class="border-b border-slate-50">
+                                <td class="py-2 text-slate-500 font-medium whitespace-nowrap pr-4">Brand / Make</td>
+                                <td class="py-2 text-slate-900 font-bold uppercase">{{ tyre.brand }}</td>
+                            </tr>
+                            <tr class="border-b border-slate-50">
+                                <td class="py-2 text-slate-500 font-medium whitespace-nowrap pr-4">Dimension/Size</td>
+                                <td class="py-2 text-slate-900 font-bold">{{ tyre.size }}</td>
+                            </tr>
+                            <tr>
+                                <td class="py-2 text-slate-500 font-medium whitespace-nowrap pr-4">Purchase Cost</td>
+                                <td class="py-2 text-emerald-700 font-black">₹{{ tyre.purchase_cost|floatformat:2 }}</td>
+                            </tr>
+                        </table>
+                    </div>
                 </div>
 
                 <!-- Assignment Status -->

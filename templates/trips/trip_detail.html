@@ -34,51 +34,53 @@
 <div class="max-w-6xl mx-auto space-y-6">
     <!-- Main Info Grid -->
     <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-        <div class="bg-slate-800 px-6 py-3 flex justify-between items-center">
-            <h2 class="text-white font-bold flex items-center uppercase tracking-wider text-xs">
+        <div class="bg-slate-800 px-4 sm:px-6 py-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+            <h2 class="text-white font-bold flex items-center uppercase tracking-wider text-[10px] sm:text-xs">
                 <i class="fa-solid fa-truck-moving mr-2 opacity-70"></i>
                 Operational & Financial Summary
             </h2>
             <div class="flex gap-2">
-                <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest
+                <span class="px-2 py-0.5 rounded text-[9px] sm:text-[10px] font-black uppercase tracking-widest
                     {% if trip.annotated_status == 'Paid' %}bg-emerald-500 text-white
                     {% elif trip.annotated_status == 'Partially Paid' %}bg-amber-500 text-white
                     {% else %}bg-slate-500 text-white{% endif %}">
                     {{ trip.annotated_status }}
                 </span>
                 {% if trip.annotated_is_billed %}
-                <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest bg-blue-500 text-white">Billed</span>
+                <span class="px-2 py-0.5 rounded text-[9px] sm:text-[10px] font-black uppercase tracking-widest bg-blue-500 text-white">Billed</span>
                 {% endif %}
             </div>
         </div>
 
-        <div class="p-6">
+        <div class="p-4 sm:p-6">
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-12 gap-y-8">
                 <!-- Operational Details -->
                 <div class="space-y-4">
                     <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest border-b pb-2">Trip Info</h3>
-                    <table class="w-full text-sm">
-                        <tr class="border-b border-slate-50">
-                            <td class="py-2 text-slate-500 font-medium">Trip Date</td>
-                            <td class="py-2 text-slate-900 font-bold">{{ trip.date|date:"d M Y, H:i" }}</td>
-                        </tr>
-                        <tr class="border-b border-slate-50">
-                            <td class="py-2 text-slate-500 font-medium">LR Number</td>
-                            <td class="py-2 text-slate-900 font-bold">{{ trip.lr_no|default:"-" }}</td>
-                        </tr>
-                        <tr class="border-b border-slate-50">
-                            <td class="py-2 text-slate-500 font-medium">Vehicle</td>
-                            <td class="py-2 text-slate-900 font-bold uppercase tracking-tight">
-                                <a href="{% url 'vehicle-detail' trip.vehicle.pk %}" class="text-emerald-600 hover:underline">{{ trip.vehicle.registration_plate }}</a>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td class="py-2 text-slate-500 font-medium">Driver</td>
-                            <td class="py-2 text-slate-900 font-bold">
-                                {% if trip.driver %}<a href="{% url 'driver-detail' trip.driver.pk %}" class="hover:underline">{{ trip.driver }}</a>{% else %}-{% endif %}
-                            </td>
-                        </tr>
-                    </table>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <tr class="border-b border-slate-50">
+                                <td class="py-2 text-slate-500 font-medium whitespace-nowrap pr-4">Trip Date</td>
+                                <td class="py-2 text-slate-900 font-bold">{{ trip.date|date:"d M Y, H:i" }}</td>
+                            </tr>
+                            <tr class="border-b border-slate-50">
+                                <td class="py-2 text-slate-500 font-medium whitespace-nowrap pr-4">LR Number</td>
+                                <td class="py-2 text-slate-900 font-bold">{{ trip.lr_no|default:"-" }}</td>
+                            </tr>
+                            <tr class="border-b border-slate-50">
+                                <td class="py-2 text-slate-500 font-medium whitespace-nowrap pr-4">Vehicle</td>
+                                <td class="py-2 text-slate-900 font-bold uppercase tracking-tight">
+                                    <a href="{% url 'vehicle-detail' trip.vehicle.pk %}" class="text-emerald-600 hover:underline">{{ trip.vehicle.registration_plate }}</a>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="py-2 text-slate-500 font-medium whitespace-nowrap pr-4">Driver</td>
+                                <td class="py-2 text-slate-900 font-bold">
+                                    {% if trip.driver %}<a href="{% url 'driver-detail' trip.driver.pk %}" class="hover:underline">{{ trip.driver }}</a>{% else %}-{% endif %}
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
                 </div>
 
                 <!-- Journey & Party -->
@@ -86,16 +88,16 @@
                     <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest border-b pb-2">Journey Details</h3>
                     <div class="bg-slate-50 p-3 rounded-lg border border-slate-100 mb-2">
                         <p class="text-[10px] font-bold text-slate-400 uppercase mb-1">Party / Client</p>
-                        <p class="text-sm font-black text-slate-900">{{ trip.party.name|default:"Unlinked" }}</p>
+                        <p class="text-sm font-black text-slate-900 truncate">{{ trip.party.name|default:"Unlinked" }}</p>
                     </div>
-                    <div class="space-y-2">
+                    <div class="space-y-2 px-1">
                         <div class="flex items-center space-x-3">
-                            <div class="w-2 h-2 rounded-full bg-emerald-500"></div>
+                            <div class="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></div>
                             <span class="text-xs font-bold text-slate-700 uppercase">{{ trip.pickup_location|default:"-" }}</span>
                         </div>
                         <div class="ml-1 border-l-2 border-dashed border-slate-200 h-6"></div>
                         <div class="flex items-center space-x-3">
-                            <div class="w-2 h-2 rounded-full bg-rose-500"></div>
+                            <div class="w-2 h-2 rounded-full bg-rose-500 shrink-0"></div>
                             <span class="text-xs font-bold text-slate-700 uppercase">{{ trip.delivery_location|default:"-" }}</span>
                         </div>
                     </div>
@@ -104,24 +106,26 @@
                 <!-- Financial Summary -->
                 <div class="space-y-4">
                     <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest border-b pb-2">Financials</h3>
-                    <table class="w-full text-sm">
-                        <tr class="border-b border-slate-50">
-                            <td class="py-2 text-slate-500 font-medium">Weight / Rate</td>
-                            <td class="py-2 text-slate-900 font-bold">{{ trip.weight }} MT @ ₹{{ trip.rate_per_ton }}</td>
-                        </tr>
-                        <tr class="border-b border-slate-50">
-                            <td class="py-2 text-slate-500 font-medium">Revenue (Sub)</td>
-                            <td class="py-2 text-slate-900 font-bold">₹{{ trip.revenue|floatformat:2 }}</td>
-                        </tr>
-                        <tr class="border-b border-slate-50">
-                            <td class="py-2 text-slate-500 font-medium">GST Amount</td>
-                            <td class="py-2 text-emerald-600 font-bold">₹{{ trip.gst_amount|floatformat:2 }}</td>
-                        </tr>
-                        <tr>
-                            <td class="py-2 text-slate-700 font-black uppercase text-xs">Total Revenue</td>
-                            <td class="py-2 text-emerald-700 font-black text-lg">₹{{ trip.total_revenue|floatformat:2 }}</td>
-                        </tr>
-                    </table>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <tr class="border-b border-slate-50">
+                                <td class="py-2 text-slate-500 font-medium whitespace-nowrap pr-4">Weight / Rate</td>
+                                <td class="py-2 text-slate-900 font-bold">{{ trip.weight }} MT @ ₹{{ trip.rate_per_ton }}</td>
+                            </tr>
+                            <tr class="border-b border-slate-50">
+                                <td class="py-2 text-slate-500 font-medium whitespace-nowrap pr-4">Revenue (Sub)</td>
+                                <td class="py-2 text-slate-900 font-bold">₹{{ trip.revenue|floatformat:2 }}</td>
+                            </tr>
+                            <tr class="border-b border-slate-50">
+                                <td class="py-2 text-slate-500 font-medium whitespace-nowrap pr-4">GST Amount</td>
+                                <td class="py-2 text-emerald-600 font-bold">₹{{ trip.gst_amount|floatformat:2 }}</td>
+                            </tr>
+                            <tr>
+                                <td class="py-2 text-slate-700 font-black uppercase text-[10px]">Total Revenue</td>
+                                <td class="py-2 text-emerald-700 font-black text-lg">₹{{ trip.total_revenue|floatformat:2 }}</td>
+                            </tr>
+                        </table>
+                    </div>
                 </div>
             </div>
 
@@ -138,8 +142,8 @@
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <!-- Invoices -->
         <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-            <div class="bg-slate-50 px-6 py-3 border-b border-slate-200 flex justify-between items-center">
-                <h3 class="text-xs font-bold text-slate-600 uppercase tracking-widest">Invoices</h3>
+            <div class="bg-slate-50 px-4 sm:px-6 py-3 border-b border-slate-200 flex justify-between items-center">
+                <h3 class="text-[10px] sm:text-xs font-bold text-slate-600 uppercase tracking-widest">Invoices</h3>
                 {% if trip.annotated_is_billed %}
                 <i class="fa-solid fa-circle-check text-emerald-500"></i>
                 {% endif %}
@@ -149,11 +153,11 @@
                     <div class="space-y-2">
                         {% for bill in trip.bills.all %}
                         <a href="{% url 'bill-detail' bill.pk %}" class="flex items-center justify-between p-3 rounded-lg border border-slate-100 hover:border-emerald-500 hover:bg-emerald-50 transition-all group">
-                            <div class="flex items-center space-x-3">
-                                <i class="fa-solid fa-file-invoice-dollar text-slate-400 group-hover:text-emerald-600"></i>
-                                <span class="text-sm font-bold text-slate-700 group-hover:text-emerald-900">{{ bill.bill_number|default:"Draft Invoice" }}</span>
+                            <div class="flex items-center space-x-3 overflow-hidden">
+                                <i class="fa-solid fa-file-invoice-dollar text-slate-400 group-hover:text-emerald-600 shrink-0"></i>
+                                <span class="text-sm font-bold text-slate-700 group-hover:text-emerald-900 truncate">{{ bill.bill_number|default:"Draft Invoice" }}</span>
                             </div>
-                            <span class="text-[10px] font-bold text-slate-400 uppercase">{{ bill.date|date:"d M Y" }}</span>
+                            <span class="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase shrink-0">{{ bill.date|date:"d M Y" }}</span>
                         </a>
                         {% endfor %}
                     </div>
@@ -165,10 +169,10 @@
 
         <!-- Ledger History -->
         <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-            <div class="bg-slate-50 px-6 py-3 border-b border-slate-200 flex justify-between items-center">
-                <h3 class="text-xs font-bold text-slate-600 uppercase tracking-widest">Payment Ledger</h3>
-                <div class="flex items-center gap-4">
-                    <span class="text-[10px] font-black uppercase text-slate-400">Balance: <span class="{% if trip.outstanding_balance > 0 %}text-rose-600{% else %}text-emerald-600{% endif %}">₹{{ trip.outstanding_balance|floatformat:2 }}</span></span>
+            <div class="bg-slate-50 px-4 sm:px-6 py-3 border-b border-slate-200 flex justify-between items-center">
+                <h3 class="text-[10px] sm:text-xs font-bold text-slate-600 uppercase tracking-widest">Payment Ledger</h3>
+                <div class="flex items-center gap-2 sm:gap-4">
+                    <span class="text-[9px] sm:text-[10px] font-black uppercase text-slate-400">Bal: <span class="{% if trip.outstanding_balance > 0 %}text-rose-600{% else %}text-emerald-600{% endif %}">₹{{ trip.outstanding_balance|floatformat:2 }}</span></span>
                     {% if trip.party %}
                     <a href="{% url 'financialrecord-create' %}?party={{ trip.party.pk }}&associated_trip={{ trip.pk }}" class="text-emerald-600 hover:text-emerald-700">
                         <i class="fa-solid fa-plus-circle"></i>
@@ -182,21 +186,21 @@
                         {% for record in trip.financial_records.all %}
                             {% if not record.record_type == 'Invoice' %}
                             <div class="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100">
-                                <div>
-                                    <p class="text-[10px] font-black text-emerald-700 uppercase tracking-tight">{{ record.category.name }}</p>
+                                <div class="overflow-hidden">
+                                    <p class="text-[10px] font-black text-emerald-700 uppercase tracking-tight truncate">{{ record.category.name }}</p>
                                     <p class="text-[9px] text-slate-400">{{ record.date|date:"d M Y" }}</p>
                                 </div>
-                                <span class="text-sm font-black text-emerald-600">+₹{{ record.amount|floatformat:2 }}</span>
+                                <span class="text-sm font-black text-emerald-600 shrink-0">+₹{{ record.amount|floatformat:2 }}</span>
                             </div>
                             {% endif %}
                         {% endfor %}
                         {% for allocation in trip.payment_allocations.all %}
                         <div class="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100">
                             <div>
-                                <p class="text-[10px] font-black text-blue-700 uppercase tracking-tight">Allocated Payment</p>
+                                <p class="text-[10px] font-black text-blue-700 uppercase tracking-tight">Allocated</p>
                                 <p class="text-[9px] text-slate-400">{{ allocation.financial_record.date|date:"d M Y" }}</p>
                             </div>
-                            <span class="text-sm font-black text-blue-600">+₹{{ allocation.amount|floatformat:2 }}</span>
+                            <span class="text-sm font-black text-blue-600 shrink-0">+₹{{ allocation.amount|floatformat:2 }}</span>
                         </div>
                         {% endfor %}
                     </div>

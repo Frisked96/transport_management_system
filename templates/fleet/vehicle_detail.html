@@ -34,12 +34,12 @@
 <div class="max-w-7xl mx-auto space-y-6">
     <!-- Main Asset Grid -->
     <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-        <div class="bg-slate-800 px-6 py-3 flex justify-between items-center">
-            <h2 class="text-white font-bold flex items-center uppercase tracking-wider text-xs">
+        <div class="bg-slate-800 px-4 sm:px-6 py-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+            <h2 class="text-white font-bold flex items-center uppercase tracking-wider text-[10px] sm:text-xs">
                 <i class="fa-solid fa-truck mr-2 opacity-70"></i>
                 Vehicle Specifications & Status
             </h2>
-            <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest
+            <span class="px-2 py-0.5 rounded text-[9px] sm:text-[10px] font-black uppercase tracking-widest
                 {% if vehicle.status == 'Active' %}bg-emerald-500 text-white
                 {% elif vehicle.status == 'Maintenance' %}bg-amber-500 text-white
                 {% else %}bg-slate-500 text-white{% endif %}">
@@ -47,46 +47,50 @@
             </span>
         </div>
 
-        <div class="p-6">
+        <div class="p-4 sm:p-6">
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-x-12 gap-y-8">
                 <!-- Core Specs -->
                 <div class="space-y-4">
                     <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest border-b pb-2">Core Info</h3>
-                    <table class="w-full text-sm">
-                        <tr class="border-b border-slate-50">
-                            <td class="py-2 text-slate-500 font-medium">Make/Model</td>
-                            <td class="py-2 text-slate-900 font-bold">{{ vehicle.make_model|default:"-" }}</td>
-                        </tr>
-                        <tr class="border-b border-slate-50">
-                            <td class="py-2 text-slate-500 font-medium">Purchase Date</td>
-                            <td class="py-2 text-slate-900 font-bold">{{ vehicle.purchase_date|date:"d M Y"|default:"-" }}</td>
-                        </tr>
-                        <tr>
-                            <td class="py-2 text-slate-500 font-medium">Current Odo</td>
-                            <td class="py-2 text-slate-900 font-bold">{{ vehicle.current_odometer|default:"0" }} <span class="text-[10px] text-slate-400">km</span></td>
-                        </tr>
-                    </table>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <tr class="border-b border-slate-50">
+                                <td class="py-2 text-slate-500 font-medium whitespace-nowrap pr-4">Make/Model</td>
+                                <td class="py-2 text-slate-900 font-bold">{{ vehicle.make_model|default:"-" }}</td>
+                            </tr>
+                            <tr class="border-b border-slate-50">
+                                <td class="py-2 text-slate-500 font-medium whitespace-nowrap pr-4">Purchase Date</td>
+                                <td class="py-2 text-slate-900 font-bold">{{ vehicle.purchase_date|date:"d M Y"|default:"-" }}</td>
+                            </tr>
+                            <tr>
+                                <td class="py-2 text-slate-500 font-medium whitespace-nowrap pr-4">Current Odo</td>
+                                <td class="py-2 text-slate-900 font-bold">{{ vehicle.current_odometer|default:"0" }} <span class="text-[10px] text-slate-400">km</span></td>
+                            </tr>
+                        </table>
+                    </div>
                 </div>
 
                 <!-- Maintenance Overview -->
                 <div class="space-y-4">
                     <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest border-b pb-2">Maintenance</h3>
-                    <table class="w-full text-sm">
-                        <tr class="border-b border-slate-50">
-                            <td class="py-2 text-slate-500 font-medium">Next Due</td>
-                            <td class="py-2 text-slate-900 font-bold">
-                                {% if vehicle.next_due_maintenance %}
-                                    {{ vehicle.next_due_maintenance|date:"d M Y" }}
-                                {% else %}
-                                    <span class="text-slate-400 font-medium italic">Not set</span>
-                                {% endif %}
-                            </td>
-                        </tr>
-                        <tr>
-                            <td class="py-2 text-slate-500 font-medium">Lifetime Cost</td>
-                            <td class="py-2 text-emerald-700 font-black">₹{{ total_maintenance_cost|floatformat:2 }}</td>
-                        </tr>
-                    </table>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <tr class="border-b border-slate-50">
+                                <td class="py-2 text-slate-500 font-medium whitespace-nowrap pr-4">Next Due</td>
+                                <td class="py-2 text-slate-900 font-bold">
+                                    {% if vehicle.next_due_maintenance %}
+                                        {{ vehicle.next_due_maintenance|date:"d M Y" }}
+                                    {% else %}
+                                        <span class="text-slate-400 font-medium italic">Not set</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="py-2 text-slate-500 font-medium whitespace-nowrap pr-4">Lifetime Cost</td>
+                                <td class="py-2 text-emerald-700 font-black">₹{{ total_maintenance_cost|floatformat:2 }}</td>
+                            </tr>
+                        </table>
+                    </div>
                 </div>
 
                 <!-- Mounted Tyres Summary -->
