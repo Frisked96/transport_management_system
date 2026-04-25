@@ -665,6 +665,7 @@ def get_party_unbilled_trips(request):
             'rate': float(trip.rate_per_ton or 0),
             'revenue': float(trip.revenue or 0),
             'gst_type': trip.gst_type, # IGST or GST
+            'lr_no': trip.lr_no or '',
         } for trip in trips]
         
         return JsonResponse({'trips': data})

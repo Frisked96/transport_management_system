@@ -62,13 +62,19 @@
                 <h3 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Operational Details</h3>
             </div>
             <div class="p-6 space-y-8">
-                <div class="grid grid-cols-2 md:grid-cols-3 gap-6">
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
                     <div>
                         <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Vehicle</span>
                         <div class="text-base font-bold">
                             <a href="{% url 'vehicle-detail' trip.vehicle.pk %}" class="text-emerald-600 hover:underline decoration-emerald-200">
                                 {{ trip.vehicle.registration_plate }}
                             </a>
+                        </div>
+                    </div>
+                    <div>
+                        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">LR Number</span>
+                        <div class="text-base font-bold text-slate-900">
+                            {{ trip.lr_no|default:"-" }}
                         </div>
                     </div>
                     <div class="col-span-1 md:col-span-2">

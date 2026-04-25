@@ -29,6 +29,7 @@ class TripForm(forms.ModelForm):
         model = Trip
         fields = [
             'date',
+            'lr_no',
             'vehicle',
             'driver',
             'party',
@@ -43,6 +44,7 @@ class TripForm(forms.ModelForm):
         
         labels = {
             'rate_per_ton': 'Rate',
+            'lr_no': 'LR Number',
         }
         
         widgets = {

@@ -143,6 +143,14 @@ class Trip(models.Model):
         verbose_name='Trip Number',
         blank=True
     )
+
+    # LR Number
+    lr_no = models.CharField(
+        max_length=100,
+        verbose_name='LR No',
+        blank=True,
+        null=True
+    )
     
     # Revenue type
     revenue_type = models.CharField(

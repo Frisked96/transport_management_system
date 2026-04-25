@@ -316,6 +316,11 @@ class BillForm(forms.ModelForm):
             from .models import BillTrip
             bt_data = {bt.trip_id: bt.lr_no for bt in self.instance.bill_trips.all()}
             self.fields['trips_data'].initial = json.dumps(bt_data)
+        elif 'trips' in self.initial:
+            # For new bills with pre-selected trips, pre-populate LR Nos
+            trips = Trip.objects.filter(id__in=self.initial['trips'])
+            bt_data = {trip.id: trip.lr_no for trip in trips if trip.lr_no}
+            self.fields['trips_data'].initial = json.dumps(bt_data)
 
     def clean(self):
         cleaned_data = super().clean()
@@ -366,6 +371,10 @@ class BillForm(forms.ModelForm):
             from .models import BillTrip
             for trip in selected_trips:
                 lr_no = trips_extra.get(str(trip.id)) or trips_extra.get(trip.id)
+                # Fallback to trip.lr_no if not provided in extra data
+                if not lr_no:
+                    lr_no = trip.lr_no
+                
                 BillTrip.objects.update_or_create(
                     bill=instance,
                     trip=trip,
