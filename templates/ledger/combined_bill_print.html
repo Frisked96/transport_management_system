@@ -489,7 +489,7 @@
                             <td class="text-center">{{ forloop.counter }}</td>
                             <td class="text-center">{{ bt.trip.date|date:"d/m/y" }}</td>
                             <td class="text-center">{{ bt.trip.vehicle.registration_plate }}</td>
-                            <td class="text-center">{{ bt.lr_no|default:"-" }}</td>
+                            <td class="text-center">{{ bt.lr_no|default:bt.trip.lr_no|default:"-" }}</td>
                             <td>{{ bt.trip.pickup_location }} - {{ bt.trip.delivery_location }}</td>
                             <td class="text-right">{{ bt.trip.weight|indian_comma }}</td>
                             <td class="text-right font-bold">{{ bt.trip.revenue|indian_comma }}</td>

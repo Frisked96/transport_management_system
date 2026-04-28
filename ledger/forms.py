@@ -69,8 +69,15 @@ class FinancialRecordForm(forms.ModelForm):
                     annotated_status=Trip.PAYMENT_STATUS_PAID
                 ).order_by('-date')
 
-                # Filter bills for this debtor
-                self.fields['associated_bill'].queryset = Bill.objects.filter(party=party).order_by('-date')
+                # Filter bills for this debtor: Exclude CN/DN and already Paid bills
+                # We show Standard and Halting (which are part of the 'bills' queryset)
+                bills_qs = Bill.objects.filter(party=party).exclude(
+                    category__name__in=['Credit Note', 'Debit Note']
+                ).order_by('-date')
+                
+                # Further filter to only show unpaid bills
+                unpaid_bill_ids = [b.id for b in bills_qs if b.payment_status != Bill.PAYMENT_STATUS_PAID]
+                self.fields['associated_bill'].queryset = Bill.objects.filter(id__in=unpaid_bill_ids).order_by('-date')
                 
                 # Filter categories for Debtor
                 from .models import TransactionCategory
@@ -375,6 +382,16 @@ class BillForm(forms.ModelForm):
                 if not lr_no:
                     lr_no = trip.lr_no
                 
+                # Sync LR No back to Trip if Trip doesn't have one
+                if lr_no and not trip.lr_no:
+                    trip.lr_no = lr_no
+                    trip.save(update_fields=['lr_no'])
+                elif lr_no and trip.lr_no != lr_no:
+                    # Optional: Overwrite if different? 
+                    # User said "it should be saved into the trip", implying sync.
+                    trip.lr_no = lr_no
+                    trip.save(update_fields=['lr_no'])
+
                 BillTrip.objects.update_or_create(
                     bill=instance,
                     trip=trip,

@@ -275,17 +275,52 @@ class Trip(models.Model):
     
     def sync_ledger_invoice(self):
         """
-        Stop creating Trip Payment Invoices in the ledger.
-        If any existing invoice records exist for this trip, delete them.
+        Manage accrual-based revenue for this trip.
+        - If NOT billed: Create/Update a 'Trip Payment' invoice record in the ledger.
+        - If Billed: Delete the individual trip record (Bill handles the consolidated accrual).
         """
-        from ledger.models import FinancialRecord
+        from ledger.models import FinancialRecord, TransactionCategory, CompanyAccount
 
-        # Find and delete existing invoice record for this trip
-        # (Debits now only come from formal Bills/Invoices)
-        FinancialRecord.objects.filter(
+        # If trip is billed, individual trip accruals should be removed
+        if self.is_billed:
+            FinancialRecord.objects.filter(
+                associated_trip=self,
+                record_type=FinancialRecord.RECORD_TYPE_INVOICE
+            ).delete()
+            return
+
+        # If no revenue or no party, no accrual
+        if not self.revenue or not self.party:
+            FinancialRecord.objects.filter(
+                associated_trip=self,
+                record_type=FinancialRecord.RECORD_TYPE_INVOICE
+            ).delete()
+            return
+
+        # Get default category
+        category, _ = TransactionCategory.objects.get_or_create(
+            name='Trip Payment',
+            type=TransactionCategory.TYPE_INCOME
+        )
+
+        # Get default company account (issuer)
+        account = CompanyAccount.objects.first()
+        if not account:
+             return
+
+        # Find or create individual trip invoice record
+        FinancialRecord.objects.update_or_create(
             associated_trip=self,
-            record_type=FinancialRecord.RECORD_TYPE_INVOICE
-        ).delete()
+            record_type=FinancialRecord.RECORD_TYPE_INVOICE,
+            defaults={
+                'date': self.date,
+                'account': account,
+                'party': self.party,
+                'category': category,
+                'amount': self.revenue, # Subtotal only for unbilled
+                'description': f"Accrual for Trip {self.trip_number}",
+            }
+        )
 
     def save(self, *args, **kwargs):
         """

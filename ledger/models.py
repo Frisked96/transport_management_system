@@ -951,3 +951,30 @@ class BillTrip(models.Model):
 
     def __str__(self):
         return f"{self.bill.bill_number} - {self.trip.trip_number} (LR: {self.lr_no or 'N/A'})"
+
+
+# --- Signals ---
+from django.db.models.signals import post_save, post_delete
+from django.dispatch import receiver
+
+@receiver(post_save, sender=Trip)
+def update_bill_on_trip_change(sender, instance, **kwargs):
+    """
+    When a trip is updated, ensure any associated bills are synchronized.
+    This updates the consolidated FinancialRecord for the bill.
+    """
+    # Use direct query to find bills containing this trip
+    associated_bills = Bill.objects.filter(trips=instance)
+    for bill in associated_bills:
+        bill.sync_to_ledger()
+
+@receiver(post_delete, sender=Bill)
+def cleanup_financial_record_on_bill_delete(sender, instance, **kwargs):
+    """
+    Ensure the consolidated FinancialRecord is deleted when the Bill is deleted.
+    (Redundancy for the model's delete method)
+    """
+    FinancialRecord.objects.filter(
+        associated_bill_id=instance.id,
+        record_type=FinancialRecord.RECORD_TYPE_INVOICE
+    ).delete()

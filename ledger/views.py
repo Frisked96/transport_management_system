@@ -19,7 +19,7 @@ from xhtml2pdf import pisa
 from itertools import groupby
 from operator import attrgetter
 
-from .models import FinancialRecord, Party, CompanyAccount, TripAllocation, TransactionCategory, Bill
+from .models import FinancialRecord, Party, CompanyAccount, TripAllocation, TransactionCategory, Bill, BillTrip
 from .forms import FinancialRecordForm, PartyForm, CompanyAccountForm, BillForm
 from trips.models import Trip
 
@@ -655,18 +655,28 @@ def get_party_unbilled_trips(request):
             
         trips = qs.distinct().order_by('-date', '-created_at')
         
-        data = [{
-            'id': trip.id,
-            'date': trip.date.strftime('%d %b %Y'),
-            'vehicle': trip.vehicle.registration_plate,
-            'pickup': trip.pickup_location,
-            'delivery': trip.delivery_location,
-            'weight': float(trip.weight or 0),
-            'rate': float(trip.rate_per_ton or 0),
-            'revenue': float(trip.revenue or 0),
-            'gst_type': trip.gst_type, # IGST or GST
-            'lr_no': trip.lr_no or '',
-        } for trip in trips]
+        data = []
+        for trip in trips:
+            lr_no = trip.lr_no or ''
+            
+            # If editing a bill, get the specific LR No saved for this bill
+            if bill_id:
+                bill_trip = BillTrip.objects.filter(bill_id=bill_id, trip=trip).first()
+                if bill_trip:
+                    lr_no = bill_trip.lr_no or ''
+
+            data.append({
+                'id': trip.id,
+                'date': trip.date.strftime('%d %b %Y'),
+                'vehicle': trip.vehicle.registration_plate,
+                'pickup': trip.pickup_location,
+                'delivery': trip.delivery_location,
+                'weight': float(trip.weight or 0),
+                'rate': float(trip.rate_per_ton or 0),
+                'revenue': float(trip.revenue or 0),
+                'gst_type': trip.gst_type, # IGST or GST
+                'lr_no': lr_no,
+            })
         
         return JsonResponse({'trips': data})
     except Exception as e:

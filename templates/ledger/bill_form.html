@@ -386,7 +386,8 @@
                     if (data.trips.length > 0) {
                         data.trips.forEach(trip => {
                             const isChecked = tripsData.hasOwnProperty(trip.id.toString()) || (billId && {{ form.trips.value|safe|default:"[]" }}.includes(trip.id));
-                            const lrNo = tripsData[trip.id] || "";
+                            // Fallback sequence: 1. Current form session data, 2. AJAX returned LR (which includes BillTrip override), 3. Empty
+                            const lrNo = tripsData[trip.id] || trip.lr_no || "";
                             
                             const row = `
                                 <tr class="hover:bg-slate-50 transition-colors">
@@ -436,6 +437,12 @@
                 return;
             }
 
+            // DO NOT overwrite if user has manually entered a number
+            if ($('#id_bill_no').data('manual') === true && $('#id_bill_no').val() !== "") {
+                console.log("Skipping: User has manually entered a value");
+                return;
+            }
+
             const date = $('#id_date').val();
             const categoryId = $('#id_category').val();
             console.log("Params for AJAX:", {date, categoryId});
@@ -450,7 +457,11 @@
                 success: function(data) {
                     console.log("AJAX Success Data:", data);
                     if (data.bill_no) {
-                        $('#id_bill_no').val(data.bill_no);
+                        // Double check manual flag again before setting
+                        if ($('#id_bill_no').data('manual') !== true || $('#id_bill_no').val() === "") {
+                            $('#id_bill_no').val(data.bill_no);
+                            $('#id_bill_no').data('manual', false); // Reset if it was empty
+                        }
                         $('#id_prefix').val(data.prefix);
                     }
                 },
@@ -459,6 +470,15 @@
                 }
             });
         }
+
+        // Mark bill_no as manual when user types in it
+        $('#id_bill_no').on('input change', function() {
+            if ($(this).val() !== "") {
+                $(this).data('manual', true);
+            } else {
+                $(this).data('manual', false);
+            }
+        });
 
         function updateCategoryUI() {
             const categoryText = $('#id_category option:selected').text();
@@ -516,9 +536,28 @@
         }
 
         function bindTableEvents() {
-            // LR No. handling sync
-            $('.lr-input').on('input', function() {
-                const tripId = $(this).data('trip-id');
+            // Populate and Sync tripsData with the current table state
+            $('.lr-input').each(function() {
+                const tripId = $(this).data('trip-id').toString();
+                
+                // 1. If input is empty but we have a value in tripsData, fill it
+                if ($(this).val() === "" && tripsData[tripId]) {
+                    $(this).val(tripsData[tripId]);
+                }
+                
+                // 2. If input has a value, ensure it's in tripsData
+                const currentVal = $(this).val();
+                if (currentVal !== "") {
+                    tripsData[tripId] = currentVal;
+                }
+            });
+            
+            // Update the hidden input
+            tripsDataInput.value = JSON.stringify(tripsData);
+
+            // Bind live input event for future changes
+            $('.lr-input').off('input').on('input', function() {
+                const tripId = $(this).data('trip-id').toString();
                 tripsData[tripId] = $(this).val();
                 tripsDataInput.value = JSON.stringify(tripsData);
             });

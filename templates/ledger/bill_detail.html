@@ -269,7 +269,7 @@
                             {{ bt.trip.vehicle.registration_plate }}
                         </a>
                     </td>
-                    <td class="border border-slate-900 p-2 text-[10px] text-center">{{ bt.lr_no|default:"-" }}</td>
+                    <td class="border border-slate-900 p-2 text-[10px] text-center">{{ bt.lr_no|default:bt.trip.lr_no|default:"-" }}</td>
                     <td class="border border-slate-900 p-2 text-[10px] uppercase truncate max-w-[150px]">{{ bt.trip.pickup_location }} - {{ bt.trip.delivery_location }}</td>
                     <td class="border border-slate-900 p-2 text-[10px] text-center">{{ bt.trip.weight|floatformat:2 }}</td>
                     <td class="border border-slate-900 p-2 text-[10px] text-right font-black">₹{{ bt.trip.revenue|floatformat:2 }}</td>

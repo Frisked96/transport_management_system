@@ -167,17 +167,18 @@ class TripCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
     def form_valid(self, form):
         form.instance.created_by = self.request.user
         
-        # Set date from GET param if available
-        date_str = self.request.GET.get('date')
-        if date_str:
-            try:
-                trip_date = datetime.strptime(date_str, '%Y-%m-%d').date()
-                current_time = timezone.now().time()
-                form.instance.date = datetime.combine(trip_date, current_time)
-            except ValueError:
+        # Set date from GET param if not provided in form
+        if not form.cleaned_data.get('date'):
+            date_str = self.request.GET.get('date')
+            if date_str:
+                try:
+                    trip_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+                    current_time = timezone.now().time()
+                    form.instance.date = datetime.combine(trip_date, current_time)
+                except ValueError:
+                    form.instance.date = timezone.now()
+            else:
                 form.instance.date = timezone.now()
-        else:
-            form.instance.date = timezone.now()
 
         response = super().form_valid(form)
         messages.success(self.request, 'Trip created successfully!')
