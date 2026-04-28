@@ -1396,14 +1396,16 @@ def get_next_invoice_number(request):
     from django.utils import timezone
     dt = date_obj or timezone.now()
     year = dt.year
-    base_prefix = issuer.invoice_prefix.replace("{YYYY}", str(year))
     
-    prefix = base_prefix
     if category:
         if category.name == 'Credit Note':
-            prefix = f"CN-{base_prefix}"
+            prefix = issuer.cn_prefix.replace("{YYYY}", str(year))
         elif category.name == 'Debit Note':
-            prefix = f"DN-{base_prefix}"
+            prefix = issuer.dn_prefix.replace("{YYYY}", str(year))
+        else:
+            prefix = issuer.invoice_prefix.replace("{YYYY}", str(year))
+    else:
+        prefix = issuer.invoice_prefix.replace("{YYYY}", str(year))
     
     return JsonResponse({
         'bill_no': next_no,

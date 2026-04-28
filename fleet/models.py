@@ -405,3 +405,34 @@ class TyreLog(models.Model):
 
     def __str__(self):
         return f"{self.tyre} - {self.action} on {self.date}"
+
+
+# --- Signals ---
+from django.db.models.signals import post_delete, pre_save
+from django.dispatch import receiver
+
+@receiver(pre_save, sender=Tyre)
+def delete_old_tyre_photo_on_change(sender, instance, **kwargs):
+    """
+    Deletes the old photo from storage when a new one is uploaded.
+    """
+    if not instance.pk:
+        return False
+
+    try:
+        old_photo = Tyre.objects.get(pk=instance.pk).photo
+    except Tyre.DoesNotExist:
+        return False
+
+    new_photo = instance.photo
+    if old_photo and old_photo != new_photo:
+        old_photo.delete(save=False)
+
+@receiver(post_delete, sender=Tyre)
+def delete_tyre_photo_on_delete(sender, instance, **kwargs):
+    """
+    Deletes the tyre's photo from storage when the Tyre instance is deleted.
+    """
+    if instance.photo:
+        # save=False prevents the model from trying to save itself after deletion
+        instance.photo.delete(save=False)

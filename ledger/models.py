@@ -170,6 +170,8 @@ class CompanyAccount(models.Model):
     # Bill Generation Details
     authorized_signatory = models.CharField(max_length=200, blank=True, verbose_name="Authorized Signatory")
     invoice_prefix = models.CharField(max_length=50, default="INV/{YYYY}/", help_text="Prefix for invoice numbers. Use {YYYY} for year.")
+    cn_prefix = models.CharField(max_length=50, default="CN-{YYYY}/", help_text="Prefix for Credit Notes. Use {YYYY} for year.")
+    dn_prefix = models.CharField(max_length=50, default="DN-{YYYY}/", help_text="Prefix for Debit Notes. Use {YYYY} for year.")
     invoice_suffix = models.CharField(max_length=50, blank=True, help_text="Optional suffix for invoice numbers.")
     invoice_padding = models.PositiveIntegerField(default=4, help_text="Number of digits for the sequence (e.g. 4 for 0001)")
     invoice_sequence_start = models.PositiveIntegerField(default=1, help_text="Start the sequence from this number")
@@ -653,18 +655,18 @@ class Bill(models.Model):
         year = dt.year
         
         # Determine prefix and series filter based on category (Credit/Debit Note)
-        prefix = issuer.invoice_prefix.replace("{YYYY}", str(year))
-        qs = cls.objects.filter(issuer=issuer, bill_no__isnull=False)
-
         if category:
             if category.name == 'Credit Note':
-                prefix = f"CN-{prefix}"
+                prefix = issuer.cn_prefix.replace("{YYYY}", str(year))
             elif category.name == 'Debit Note':
-                prefix = f"DN-{prefix}"
+                prefix = issuer.dn_prefix.replace("{YYYY}", str(year))
+            else:
+                prefix = issuer.invoice_prefix.replace("{YYYY}", str(year))
             
             qs = qs.filter(category=category)
         else:
             # Standard/Trip sequence (No prefix modification, exclude CN/DN)
+            prefix = issuer.invoice_prefix.replace("{YYYY}", str(year))
             qs = qs.exclude(category__name__in=['Credit Note', 'Debit Note'])
         
         # Get the maximum bill_no for this issuer and specific prefix series
@@ -684,15 +686,14 @@ class Bill(models.Model):
         from django.utils import timezone
         dt = date or self.date or timezone.now()
         year = dt.year
-        base_prefix = self.issuer.invoice_prefix.replace("{YYYY}", str(year))
 
         if self.category:
             if self.category.name == 'Credit Note':
-                return f"CN-{base_prefix}"
+                return self.issuer.cn_prefix.replace("{YYYY}", str(year))
             elif self.category.name == 'Debit Note':
-                return f"DN-{base_prefix}"
+                return self.issuer.dn_prefix.replace("{YYYY}", str(year))
         
-        return base_prefix
+        return self.issuer.invoice_prefix.replace("{YYYY}", str(year))
 
     def save(self, *args, **kwargs):
         # 1. Snapshot Company Details from Issuer
@@ -954,7 +955,7 @@ class BillTrip(models.Model):
 
 
 # --- Signals ---
-from django.db.models.signals import post_save, post_delete
+from django.db.models.signals import post_save, post_delete, pre_save
 from django.dispatch import receiver
 
 @receiver(post_save, sender=Trip)
@@ -978,3 +979,28 @@ def cleanup_financial_record_on_bill_delete(sender, instance, **kwargs):
         associated_bill_id=instance.id,
         record_type=FinancialRecord.RECORD_TYPE_INVOICE
     ).delete()
+
+@receiver(pre_save, sender=FinancialRecord)
+def delete_old_financial_document_on_change(sender, instance, **kwargs):
+    """
+    Deletes the old supporting document from storage when a new one is uploaded.
+    """
+    if not instance.pk:
+        return False
+
+    try:
+        old_file = FinancialRecord.objects.get(pk=instance.pk).document_ref
+    except FinancialRecord.DoesNotExist:
+        return False
+
+    new_file = instance.document_ref
+    if old_file and old_file != new_file:
+        old_file.delete(save=False)
+
+@receiver(post_delete, sender=FinancialRecord)
+def delete_financial_document_on_delete(sender, instance, **kwargs):
+    """
+    Deletes the supporting document from storage when a FinancialRecord is deleted.
+    """
+    if instance.document_ref:
+        instance.document_ref.delete(save=False)

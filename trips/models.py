@@ -340,17 +340,17 @@ class Trip(models.Model):
         reg_plate = self.vehicle.registration_plate
         
         # If trip exists, check if vehicle changed
-        if not is_new:
-            if old_instance.vehicle != self.vehicle:
-                # Vehicle changed, clear trip_number to trigger regeneration
-                self.trip_number = ""
+        vehicle_changed = False
+        if not is_new and old_instance.vehicle != self.vehicle:
+            vehicle_changed = True
+            self.trip_number = "" # Clear to trigger regeneration
 
         # Generate Trip Number if not present or cleared
         if not self.trip_number:
             from ledger.models import Sequence
 
             # Use created_at if available (for re-numbering), else current time
-            ref_date = self.created_at or timezone.now()
+            ref_date = self.date or timezone.now()
             
             # Using Sequences for robust atomic numbering
             total_count = Sequence.next_value(f"trip_total_{self.vehicle.pk}")
@@ -372,9 +372,52 @@ class Trip(models.Model):
         # Perform the actual save
         super().save(*args, **kwargs)
 
+        # If vehicle changed, recalculate for the OLD vehicle
+        if vehicle_changed:
+            Trip.recalculate_vehicle_trip_numbers(old_instance.vehicle)
+
         # Sync to Ledger
         self.sync_ledger_invoice()
-    
+
+    @classmethod
+    def recalculate_vehicle_trip_numbers(cls, vehicle):
+        """
+        Recalculate and update all trip numbers for a specific vehicle to ensure gap-less sequencing.
+        """
+        from ledger.models import Sequence
+        
+        # Order by date first, then by created_at to maintain chronological order
+        trips = cls.objects.filter(vehicle=vehicle).order_by('date', 'created_at')
+        reg_plate = vehicle.registration_plate
+        
+        # Track counts
+        total_count = 0
+        monthly_counts = {} # Key: (year, month)
+        yearly_counts = {}  # Key: year
+        
+        for trip in trips:
+            total_count += 1
+            
+            # Use trip date
+            ref_date = trip.date
+            year, month = ref_date.year, ref_date.month
+            
+            monthly_key = (year, month)
+            monthly_counts[monthly_key] = monthly_counts.get(monthly_key, 0) + 1
+            yearly_counts[year] = yearly_counts.get(year, 0) + 1
+            
+            new_number = f"{reg_plate}-{total_count}/{monthly_counts[monthly_key]}/{yearly_counts[year]}"
+            
+            if trip.trip_number != new_number:
+                cls.objects.filter(pk=trip.pk).update(trip_number=new_number)
+        
+        # Update sequences to match the new state so future trips continue correctly
+        Sequence.objects.filter(key=f"trip_total_{vehicle.pk}").update(value=total_count)
+        for (year, month), val in monthly_counts.items():
+            Sequence.objects.filter(key=f"trip_month_{vehicle.pk}_{year}_{month}").update(value=val)
+        for year, val in yearly_counts.items():
+            Sequence.objects.filter(key=f"trip_year_{vehicle.pk}_{year}").update(value=val)
+
     @property
     def gst_type(self):
         """Returns GST type based on Route"""
@@ -476,4 +519,32 @@ class Trip(models.Model):
     def outstanding_balance(self):
         """Calculate outstanding balance dynamically based on Total Revenue (incl GST)"""
         return self.total_revenue - self.amount_received
+
+
+# --- Signals ---
+from django.db.models.signals import post_save, post_delete
+from django.dispatch import receiver
+
+@receiver(post_delete, sender=Trip)
+def recalculate_on_trip_delete(sender, instance, **kwargs):
+    """
+    Trigger recalculation of trip numbers for a vehicle when a trip is deleted.
+    """
+    # Use a small delay or ensure we don't trigger recursively if it were save
+    # But for delete it's straightforward.
+    Trip.recalculate_vehicle_trip_numbers(instance.vehicle)
+
+@receiver(post_save, sender=Trip)
+def recalculate_on_trip_update(sender, instance, created, **kwargs):
+    """
+    Trigger recalculation if date was changed (affecting sequence).
+    Vehicle change is already handled in save() override.
+    """
+    if not created:
+        # Check if date changed
+        # Since we don't have easy access to 'old' instance here without another query
+        # and trip numbers are chronological, any update might justify a sync.
+        # However, to be efficient, we only do it if the number would actually change.
+        # For simplicity and robust sequencing, we'll run it.
+        Trip.recalculate_vehicle_trip_numbers(instance.vehicle)
 
