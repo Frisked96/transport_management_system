@@ -653,6 +653,7 @@ class Bill(models.Model):
         from django.db.models import Max
         dt = date or timezone.now()
         year = dt.year
+        qs = cls.objects.filter(issuer=issuer)
         
         # Determine prefix and series filter based on category (Credit/Debit Note)
         if category:
