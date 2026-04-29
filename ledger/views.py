@@ -626,7 +626,7 @@ def get_bill_balance(request):
         bill = get_object_or_404(Bill, pk=bill_id)
         return JsonResponse({
             'balance': float(bill.outstanding_balance),
-            'total': float(bill.total_amount),
+            'total': float(bill.rounded_total),
             'received': float(bill.amount_received)
         })
     except Exception as e:
@@ -1350,7 +1350,7 @@ def get_party_bills(request):
         
         data = [{
             'id': bill.id,
-            'label': f"{bill.bill_number} - {bill.date.strftime('%d/%m/%Y')} (Total: ₹{bill.total_amount:.2f})"
+            'label': f"{bill.bill_number} - {bill.date.strftime('%d/%m/%Y')} (Total: ₹{bill.rounded_total:.2f})"
         } for bill in bills]
         
         return JsonResponse({'bills': data})

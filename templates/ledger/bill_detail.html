@@ -287,7 +287,7 @@
                     <td class="border border-slate-900 p-2 text-[10px] text-right">₹{{ bill.subtotal|floatformat:2 }}</td>
                     {% if bill.gst_rate > 0 %}
                     <td class="border border-slate-900 p-2 text-[10px] text-right">₹{{ bill.gst_amount|floatformat:2 }}</td>
-                    <td class="border border-slate-900 p-2 text-xs text-right">₹{{ bill.total_amount|floatformat:2 }}</td>
+                    <td class="border border-slate-900 p-2 text-xs text-right">₹{{ bill.rounded_total|floatformat:2 }}</td>
                     {% endif %}
                 </tr>
             </tfoot>

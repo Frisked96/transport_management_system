@@ -507,7 +507,7 @@
                             <td class="text-right">Rs. {{ bill.subtotal|indian_comma }}</td>
                             {% if bill.gst_rate > 0 %}
                             <td class="text-right">Rs. {{ bill.gst_amount|indian_comma }}</td>
-                            <td class="text-right">Rs. {{ bill.total_amount|indian_comma }}</td>
+                            <td class="text-right">Rs. {{ bill.rounded_total|indian_comma }}</td>
                             {% endif %}
                         </tr>
                     </tfoot>
