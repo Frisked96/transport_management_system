@@ -725,9 +725,11 @@ class Bill(models.Model):
     def delete(self, *args, **kwargs):
         """
         Custom delete for Bill.
-        Only clean up the consolidated invoice record. 
-        Trip-level payments/allocations should remain intact as they are independent of the billing document.
+        Ensure individual trip accruals are restored and the consolidated record is removed.
         """
+        # Get list of trips before they are unlinked
+        affected_trips = list(self.trips.all())
+
         # Delete only the consolidated invoice record associated with this bill
         FinancialRecord.objects.filter(
             associated_bill=self,
@@ -736,11 +738,20 @@ class Bill(models.Model):
 
         super().delete(*args, **kwargs)
 
+        # Re-sync trips to restore their individual accruals now that they are unbilled
+        for trip in affected_trips:
+            trip.sync_ledger_invoice()
+
     def sync_to_ledger(self):
         """
         Main entry point to synchronize this invoice to the ledger.
         """
         self.update_ledger_records()
+        
+        # Also clean up individual trip accruals for all trips in this bill
+        # If a trip is billed, it should not have an individual accrual entry.
+        for trip in self.trips.all():
+            trip.sync_ledger_invoice()
 
     def update_ledger_records(self):
         """
@@ -1005,3 +1016,24 @@ def delete_financial_document_on_delete(sender, instance, **kwargs):
     """
     if instance.document_ref:
         instance.document_ref.delete(save=False)
+
+@receiver(post_save, sender=BillTrip)
+def sync_trip_ledger_on_billtrip_save(sender, instance, **kwargs):
+    """
+    When a trip is linked to a bill, its individual accrual should be deleted.
+    """
+    instance.trip.sync_ledger_invoice()
+    instance.bill.sync_to_ledger()
+
+@receiver(post_delete, sender=BillTrip)
+def sync_trip_ledger_on_billtrip_delete(sender, instance, **kwargs):
+    """
+    When a trip is unlinked from a bill, its individual accrual should be restored.
+    """
+    instance.trip.sync_ledger_invoice()
+    # Note: bill.sync_to_ledger() might fail if bill is also being deleted, 
+    # but that's handled by cascade. We just want to ensure trip is updated.
+    try:
+        instance.bill.sync_to_ledger()
+    except (Bill.DoesNotExist, Exception):
+        pass
