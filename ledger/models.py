@@ -899,10 +899,12 @@ class Bill(models.Model):
             ).aggregate(total=Sum('amount'))['total'] or 0
             
             # Also consider direct trip payments not through allocations (if any exist)
+            # We EXCLUDE records that are already directly associated with THIS bill to avoid double counting
             direct_trip_payments = FinancialRecord.objects.filter(
                 associated_trip__in=self.trips.all()
             ).exclude(
-                record_type=FinancialRecord.RECORD_TYPE_INVOICE
+                models.Q(record_type=FinancialRecord.RECORD_TYPE_INVOICE) |
+                models.Q(associated_bill=self)
             ).filter(
                 models.Q(category__type=TransactionCategory.TYPE_INCOME) | 
                 models.Q(category__name="Deductions")
