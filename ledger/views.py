@@ -964,46 +964,22 @@ def party_statement_pdf(request, pk):
     # 1. Calculate Opening Balance (before start_date)
     opening_bal = party.opening_balance
     
-    # Include records directly linked to party OR linked to trips of this party
-    pre_records = FinancialRecord.objects.filter(
-        Q(party=party) | Q(associated_trip__party=party) | Q(allocations__trip__party=party),
+    # Efficiently aggregate totals before the start date
+    pre_totals = FinancialRecord.objects.filter(
+        party=party,
         date__lt=start_date
-    ).select_related('category', 'party', 'associated_trip', 'associated_trip__party').distinct()
+    ).select_related('category')
     
-    for rec in pre_records:
-        # We need debit/credit from the perspective of THIS party
-        # Even if the record.party is None (but it's linked via trip)
-        
-        # Determine if this record acts as a debit or credit for THIS specific party
-        # We can't just use rec.debit_amount because that might use rec.party which could be None
-        
-        debit = Decimal('0')
-        credit = Decimal('0')
-
-        # Logic similar to rec.debit_amount but explicitly for 'party'
-        is_invoice = rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE
-        is_expense = rec.category.type == TransactionCategory.TYPE_EXPENSE if rec.category else False
-        is_income = rec.category.type == TransactionCategory.TYPE_INCOME if rec.category else False
-        is_deduction = rec.category.name == 'Deductions' if rec.category else False
-
-        if party.party_type == Party.TYPE_DEBTOR:
-            if (is_invoice or is_expense) and not is_deduction:
-                debit = rec.amount
-            if is_income or is_deduction:
-                credit = rec.amount
-        else: # CREDITOR
-            if is_income or is_deduction:
-                debit = rec.amount
-            if (is_invoice or is_expense) and not is_deduction:
-                credit = rec.amount
-
+    for rec in pre_totals:
+        debit = rec.debit_amount or Decimal('0')
+        credit = rec.credit_amount or Decimal('0')
         opening_bal += (debit - credit)
 
     # 2. Get records in range
     records = FinancialRecord.objects.filter(
-        Q(party=party) | Q(associated_trip__party=party) | Q(allocations__trip__party=party),
+        party=party,
         date__range=[start_date, end_date]
-    ).select_related('category', 'associated_trip', 'associated_bill', 'party').order_by('date', 'created_at').distinct()
+    ).select_related('category', 'associated_trip', 'associated_bill', 'party').order_by('date', 'created_at')
 
     # 3. Build statement rows with running balance
     statement_rows = []
@@ -1337,26 +1313,34 @@ def get_party_bills(request):
     AJAX endpoint to get bills for a party (excluding adjustment notes)
     """
     party_id = request.GET.get('party_id')
+    unpaid_only = request.GET.get('unpaid_only') == 'true'
+
     if not party_id:
         return JsonResponse({'bills': []})
-    
+
     try:
         from .models import Bill
-        bills = Bill.objects.filter(
+        bills_qs = Bill.objects.filter(
             party_id=party_id
         ).exclude(
             category__name__in=['Credit Note', 'Debit Note']
         ).order_by('-date', '-created_at')
-        
+
+        if unpaid_only:
+            # We must filter in Python as payment_status is a property
+            unpaid_bill_ids = [b.id for b in bills_qs if b.payment_status != Bill.PAYMENT_STATUS_PAID]
+            bills = Bill.objects.filter(id__in=unpaid_bill_ids).order_by('-date', '-created_at')
+        else:
+            bills = bills_qs
+
         data = [{
             'id': bill.id,
             'label': f"{bill.bill_number} - {bill.date.strftime('%d/%m/%Y')} (Total: ₹{bill.rounded_total:.2f})"
         } for bill in bills]
-        
+
         return JsonResponse({'bills': data})
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
-
 
 @login_required
 def get_next_invoice_number(request):

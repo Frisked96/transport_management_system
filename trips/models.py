@@ -201,6 +201,14 @@ class Trip(models.Model):
         verbose_name='Route'
     )
 
+    # Snapshot Fields (Ensure historical integrity)
+    gst_type_snapshot = models.CharField(
+        max_length=10,
+        blank=True,
+        verbose_name='GST Type (Snapshot)',
+        help_text='IGST or GST. Snapshotted from Route at creation.'
+    )
+
     pickup_location = models.CharField(
         max_length=300,
         verbose_name='Pickup Location',
@@ -263,6 +271,12 @@ class Trip(models.Model):
         verbose_name = 'Trip'
         verbose_name_plural = 'Trips'
         ordering = ['-date', '-created_at']
+        indexes = [
+            models.Index(fields=['date', 'created_at']),
+            models.Index(fields=['vehicle', 'date']),
+            models.Index(fields=['party', 'date']),
+            models.Index(fields=['driver', 'date']),
+        ]
         permissions = [
             ('can_view_all_trips', 'Can view all trips'),
             ('can_view_driver_dashboard', 'Can access driver dashboard'),
@@ -335,6 +349,12 @@ class Trip(models.Model):
         if self.route:
             self.pickup_location = self.route.pickup_location
             self.delivery_location = self.route.delivery_location
+            if not self.gst_type_snapshot:
+                from ledger.models import Bill
+                if self.route.route_type == Route.ROUTE_TYPE_INTRA:
+                    self.gst_type_snapshot = Bill.GST_TYPE_IGST
+                else:
+                    self.gst_type_snapshot = Bill.GST_TYPE_GST
 
         # Handle Trip Number generation and regeneration
         reg_plate = self.vehicle.registration_plate
@@ -420,7 +440,10 @@ class Trip(models.Model):
 
     @property
     def gst_type(self):
-        """Returns GST type based on Route"""
+        """Returns GST type based on Snapshot, falling back to Route"""
+        if self.gst_type_snapshot:
+            return self.gst_type_snapshot
+            
         from ledger.models import Bill
         if self.route and self.route.route_type == Route.ROUTE_TYPE_INTRA:
             return Bill.GST_TYPE_IGST
@@ -547,4 +570,3 @@ def recalculate_on_trip_update(sender, instance, created, **kwargs):
         # However, to be efficient, we only do it if the number would actually change.
         # For simplicity and robust sequencing, we'll run it.
         Trip.recalculate_vehicle_trip_numbers(instance.vehicle)
-

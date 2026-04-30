@@ -49,10 +49,25 @@ class Driver(models.Model):
         verbose_name='Joined Date'
     )
 
+    # Denormalized Balance Fields
+    current_balance_cached = models.DecimalField(
+        max_digits=12, 
+        decimal_places=2, 
+        default=0, 
+        verbose_name='Current Balance'
+    )
+
     @property
     def name(self):
         """Returns the full name or username of the driver"""
         return self.user.get_full_name() or self.user.username
+
+    def refresh_balance(self):
+        """
+        Recalculate and update the cached balance fields from scratch.
+        """
+        self.current_balance_cached = self.current_balance # uses existing property logic
+        self.save(update_fields=['current_balance_cached'])
 
     class Meta:
         verbose_name = 'Driver'
@@ -76,7 +91,10 @@ class Driver(models.Model):
         Positive: Company owes Driver.
         Negative: Driver owes Company.
         """
-        return self.transactions.aggregate(balance=models.Sum('amount'))['balance'] or 0
+        # Prefer cached if available
+        if hasattr(self, '_refreshing_balance'):
+            return self.transactions.aggregate(balance=models.Sum('amount'))['balance'] or 0
+        return self.current_balance_cached
 
     @property
     def abs_current_balance(self):
@@ -155,6 +173,37 @@ class DriverTransaction(models.Model):
         verbose_name = 'Driver Transaction'
         verbose_name_plural = 'Driver Transactions'
         ordering = ['-date', '-created_at']
+        indexes = [
+            models.Index(fields=['date', 'created_at']),
+            models.Index(fields=['driver', 'date']),
+            models.Index(fields=['transaction_type']),
+        ]
 
     def __str__(self):
         return f"{self.driver} - {self.transaction_type} - {self.amount}"
+
+# --- Signals ---
+from django.db.models.signals import post_save, post_delete
+from django.dispatch import receiver
+from django.db.models import F
+
+@receiver(post_save, sender=DriverTransaction)
+def update_driver_balance_on_save(sender, instance, created, **kwargs):
+    """
+    Update Driver balance when a transaction is saved.
+    """
+    if created:
+        Driver.objects.filter(pk=instance.driver.pk).update(
+            current_balance_cached=F('current_balance_cached') + instance.amount
+        )
+    else:
+        instance.driver.refresh_balance()
+
+@receiver(post_delete, sender=DriverTransaction)
+def update_driver_balance_on_delete(sender, instance, **kwargs):
+    """
+    Update Driver balance when a transaction is deleted.
+    """
+    Driver.objects.filter(pk=instance.driver.pk).update(
+        current_balance_cached=F('current_balance_cached') - instance.amount
+    )

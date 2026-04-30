@@ -225,62 +225,85 @@ class TripDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
 @login_required
 def manager_dashboard(request):
     """
-    Manager dashboard - shows system overview
+    Manager dashboard - optimized with SQL-level aggregations
     """
     if not (request.user.is_superuser or 
             request.user.groups.filter(name='manager').exists()):
         messages.error(request, 'Access denied. Manager dashboard is only for managers.')
         return redirect('trip-list')
     
-    # Trips info (Payment-based status)
-    all_trips = Trip.objects.with_payment_info()
-    active_trips = all_trips.filter(
-        Q(annotated_status='Unpaid') | Q(annotated_status='Partially Paid')
-    ).count()
+    current_date = timezone.now().date()
+    current_month = current_date.month
+    current_year = current_date.year
     
-    current_month = timezone.now().month
-    current_year = timezone.now().year
+    # 1. Optimized Trip Counts (Single SQL pass with annotations)
+    trip_stats = Trip.objects.with_payment_info().aggregate(
+        active_count=models.Count('id', filter=Q(annotated_status__in=['Unpaid', 'Partially Paid'])),
+        completed_month=models.Count('id', filter=Q(
+            annotated_status='Paid',
+            date__month=current_month,
+            date__year=current_year
+        ))
+    )
     
-    completed_this_month = all_trips.filter(
-        annotated_status='Paid',
+    # 2. Optimized Financials (Aggregated by type in SQL)
+    # Filter for the current month
+    month_records = FinancialRecord.objects.filter(
         date__month=current_month,
         date__year=current_year
-    ).count()
+    ).exclude(record_type=FinancialRecord.RECORD_TYPE_INVOICE)
+
+    financial_totals = month_records.aggregate(
+        income=Sum('amount', filter=Q(category__type=TransactionCategory.TYPE_INCOME)),
+        expenses=Sum('amount', filter=Q(category__type=TransactionCategory.TYPE_EXPENSE) & ~Q(category__name='Deductions'))
+    )
+
+    income_this_month = financial_totals['income'] or 0
+    expenses_this_month = financial_totals['expenses'] or 0
+
+    # 3. Optimized GST Calculation (Direct SQL aggregation from Bills)
+    # Replaces the sum(bill.gst_amount for bill in ...) Python loop
+    gst_totals = Bill.objects.filter(
+        date__month=current_month,
+        date__year=current_year
+    ).aggregate(
+        total_gst=Sum(
+            (F('standard_weight') * F('standard_rate') * F('gst_rate') / 100.0),
+            filter=Q(bill_type='Standard'),
+            output_field=DecimalField()
+        )
+    )
     
-    # Maintenance info
+    gst_this_month = gst_totals['total_gst'] or 0
+    
+    # Add trip-based GST (much faster than looping over bill objects)
+    trip_gst = Trip.objects.filter(
+        bills__date__month=current_month,
+        bills__date__year=current_year
+    ).aggregate(
+        val=Sum(
+            Case(
+                When(revenue_type='fixed', then=F('rate_per_ton')),
+                default=F('weight') * F('rate_per_ton'),
+                output_field=DecimalField()
+            ) * F('bills__gst_rate') / 100.0
+        )
+    )['val'] or 0
+    
+    gst_this_month += trip_gst
+
+    # 4. Optimized Alerts
     vehicles_due_maintenance = MaintenanceRecord.objects.filter(
         is_completed=False,
-        expiry_date__lte=timezone.now().date() + timedelta(days=7)
+        expiry_date__lte=current_date + timedelta(days=7)
     ).values('vehicle').distinct().count()
     
-    # Financial summary
-    income_this_month = FinancialRecord.objects.filter(
-        category__type=TransactionCategory.TYPE_INCOME,
-        date__month=current_month,
-        date__year=current_year
-    ).exclude(
-        record_type=FinancialRecord.RECORD_TYPE_INVOICE
-    ).aggregate(total=Sum('amount'))['total'] or 0
-    
-    expenses_this_month = FinancialRecord.objects.filter(
-        category__type=TransactionCategory.TYPE_EXPENSE,
-        date__month=current_month,
-        date__year=current_year
-    ).exclude(
-        category__name='Deductions'
-    ).aggregate(total=Sum('amount'))['total'] or 0
-
-    gst_this_month = sum(bill.gst_amount for bill in Bill.objects.filter(
-        date__month=current_month,
-        date__year=current_year
-    ))
-    
-    recent_trips = all_trips.order_by('-created_at')[:10]
+    recent_trips = Trip.objects.with_payment_info().order_by('-created_at')[:10]
     vehicles_in_maintenance = Vehicle.objects.filter(status=Vehicle.STATUS_MAINTENANCE).count()
     
     context = {
-        'active_trips': active_trips,
-        'completed_this_month': completed_this_month,
+        'active_trips': trip_stats['active_count'],
+        'completed_this_month': trip_stats['completed_month'],
         'vehicles_due_maintenance': vehicles_due_maintenance,
         'income_this_month': income_this_month,
         'expenses_this_month': expenses_this_month,

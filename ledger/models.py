@@ -62,6 +62,27 @@ class Party(models.Model):
     account_holder_name = models.CharField(max_length=200, blank=True, verbose_name='Account Holder Name')
     
     bank_details = models.TextField(blank=True, verbose_name='Legacy Bank Details (Text)')
+    
+    # Denormalized Balance Fields
+    total_debit_amount = models.DecimalField(
+        max_digits=12, 
+        decimal_places=2, 
+        default=0, 
+        verbose_name='Total Billed/Debit'
+    )
+    total_credit_amount = models.DecimalField(
+        max_digits=12, 
+        decimal_places=2, 
+        default=0, 
+        verbose_name='Total Received/Credit'
+    )
+    current_balance_cached = models.DecimalField(
+        max_digits=12, 
+        decimal_places=2, 
+        default=0, 
+        verbose_name='Current Balance'
+    )
+
     opening_balance = models.DecimalField(
         max_digits=12, 
         decimal_places=2, 
@@ -78,41 +99,59 @@ class Party(models.Model):
     def __str__(self):
         return self.name
 
+    def refresh_balance(self):
+        """
+        Recalculate and update the cached balance fields from scratch.
+        Used for backfilling or emergency resync.
+        """
+        self._refreshing_balance = True
+        try:
+            self.total_debit_amount = self._calculate_total_debit()
+            self.total_credit_amount = self._calculate_total_credit()
+            self.current_balance_cached = self.total_debit_amount - self.total_credit_amount
+            self.save(update_fields=['total_debit_amount', 'total_credit_amount', 'current_balance_cached'])
+        finally:
+            del self._refreshing_balance
+
     @property
     def total_debit(self):
+        if hasattr(self, '_refreshing_balance'):
+            return self._calculate_total_debit()
+        return self.total_debit_amount
+
+    def _calculate_total_debit(self):
         """
-        Total Debits: Opening Balance (if positive) + Invoices + Manual Expenses
+        Total Debits: Opening Balance (if positive) + Debits (Revenue/Invoices/Notes)
         """
         base = self.opening_balance if self.opening_balance > 0 else Decimal('0')
-        invoices = self.financial_records.filter(
-            record_type=FinancialRecord.RECORD_TYPE_INVOICE,
-            associated_bill__isnull=False
-        ).aggregate(total=models.Sum('amount'))['total'] or Decimal('0')
-        manual_debits = self.financial_records.filter(
-            category__type=TransactionCategory.TYPE_EXPENSE
-        ).exclude(
-            models.Q(record_type=FinancialRecord.RECORD_TYPE_INVOICE) | 
-            models.Q(category__name='Deductions')
-        ).aggregate(total=models.Sum('amount'))['total'] or Decimal('0')
-        return base + invoices + manual_debits
+        
+        # Debits are records that have a positive debit_amount from THIS party's perspective
+        records = self.financial_records.all()
+        debits = sum((r.debit_amount or Decimal('0')) for r in records)
+        
+        return base + debits
 
     @property
     def total_credit(self):
+        if hasattr(self, '_refreshing_balance'):
+            return self._calculate_total_credit()
+        return self.total_credit_amount
+
+    def _calculate_total_credit(self):
         """
-        Total Credits: Opening Balance (if negative) + Income Transactions + Deductions
+        Total Credits: Opening Balance (if negative) + Credits (Payments/Notes)
         """
         base = abs(self.opening_balance) if self.opening_balance < 0 else Decimal('0')
-        credits = self.financial_records.filter(
-            models.Q(category__type=TransactionCategory.TYPE_INCOME) | 
-            models.Q(category__name='Deductions')
-        ).exclude(
-            record_type=FinancialRecord.RECORD_TYPE_INVOICE
-        ).aggregate(total=models.Sum('amount'))['total'] or Decimal('0')
+        
+        # Credits are records that have a positive credit_amount from THIS party's perspective
+        records = self.financial_records.all()
+        credits = sum((r.credit_amount or Decimal('0')) for r in records)
+        
         return base + credits
 
     @property
     def current_balance_value(self):
-        return self.total_debit - self.total_credit
+        return self.current_balance_cached
 
     @property
     def current_balance(self):
@@ -176,6 +215,14 @@ class CompanyAccount(models.Model):
     invoice_padding = models.PositiveIntegerField(default=4, help_text="Number of digits for the sequence (e.g. 4 for 0001)")
     invoice_sequence_start = models.PositiveIntegerField(default=1, help_text="Start the sequence from this number")
 
+    # Denormalized Balance Fields
+    current_balance_cached = models.DecimalField(
+        max_digits=12, 
+        decimal_places=2, 
+        default=0, 
+        verbose_name='Current Balance'
+    )
+
     opening_balance = models.DecimalField(
         max_digits=12, 
         decimal_places=2, 
@@ -193,8 +240,24 @@ class CompanyAccount(models.Model):
     def __str__(self):
         return self.name
 
+    def refresh_balance(self):
+        """
+        Recalculate and update the cached balance fields from scratch.
+        """
+        self._refreshing_balance = True
+        try:
+            self.current_balance_cached = self._calculate_balance()
+            self.save(update_fields=['current_balance_cached'])
+        finally:
+            del self._refreshing_balance
+
     @property
     def current_balance_value(self):
+        if hasattr(self, '_refreshing_balance'):
+            return self._calculate_balance()
+        return self.current_balance_cached
+
+    def _calculate_balance(self):
         """
         Numeric balance: Opening (Dr) + Debits (Income) - Credits (Expenses)
         """
@@ -364,6 +427,11 @@ class FinancialRecord(models.Model):
     def save(self, *args, **kwargs):
         if not self.entry_number:
             self.entry_number = Sequence.next_value('financial_record_entry_number')
+        
+        # Auto-populate party from trip if missing
+        if self.associated_trip and not self.party:
+            self.party = self.associated_trip.party
+            
         super().save(*args, **kwargs)
 
     def delete(self, *args, **kwargs):
@@ -388,6 +456,13 @@ class FinancialRecord(models.Model):
         verbose_name = 'Financial Record'
         verbose_name_plural = 'Financial Records'
         ordering = ['-date']
+        indexes = [
+            models.Index(fields=['date', 'created_at']),
+            models.Index(fields=['account', 'date']),
+            models.Index(fields=['party', 'date']),
+            models.Index(fields=['driver', 'date']),
+            models.Index(fields=['record_type', 'date']),
+        ]
         permissions = [
             ('can_view_financial_records', 'Can view financial records'),
             ('can_manage_financial_records', 'Can manage financial records'),
@@ -645,7 +720,7 @@ class Bill(models.Model):
 
     @classmethod
     def get_next_available_no(cls, issuer, date=None, category=None):
-        """Finds the next numeric invoice number (Max + 1), respecting start sequence and category series."""
+        """Finds the next numeric invoice number (Max + 1) for the specific prefix series."""
         if not issuer:
             return 1
         
@@ -653,9 +728,8 @@ class Bill(models.Model):
         from django.db.models import Max
         dt = date or timezone.now()
         year = dt.year
-        qs = cls.objects.filter(issuer=issuer)
         
-        # Determine prefix and series filter based on category (Credit/Debit Note)
+        # Determine prefix based on category (Credit/Debit Note)
         if category:
             if category.name == 'Credit Note':
                 prefix = issuer.cn_prefix.replace("{YYYY}", str(year))
@@ -663,15 +737,15 @@ class Bill(models.Model):
                 prefix = issuer.dn_prefix.replace("{YYYY}", str(year))
             else:
                 prefix = issuer.invoice_prefix.replace("{YYYY}", str(year))
-            
-            qs = qs.filter(category=category)
         else:
-            # Standard/Trip sequence (No prefix modification, exclude CN/DN)
             prefix = issuer.invoice_prefix.replace("{YYYY}", str(year))
-            qs = qs.exclude(category__name__in=['Credit Note', 'Debit Note'])
         
-        # Get the maximum bill_no for this issuer and specific prefix series
-        max_no = qs.filter(bill_number__startswith=prefix).aggregate(max_val=Max('bill_no'))['max_val']
+        # CRITICAL: We search for the maximum bill_no among ALL bills that share this prefix.
+        # Filtering by issuer or category here is dangerous because it can lead to 
+        # picking a number that is already used by another issuer/category using the same prefix.
+        max_no = cls.objects.filter(
+            bill_number__startswith=prefix
+        ).aggregate(max_val=Max('bill_no'))['max_val']
         
         if max_no is not None:
             return max_no + 1
@@ -1037,3 +1111,66 @@ def sync_trip_ledger_on_billtrip_delete(sender, instance, **kwargs):
         instance.bill.sync_to_ledger()
     except (Bill.DoesNotExist, Exception):
         pass
+
+@receiver(post_save, sender=FinancialRecord)
+def update_balances_on_save(sender, instance, created, **kwargs):
+    """
+    Update Party and CompanyAccount balances when a FinancialRecord is saved.
+    Uses F() expressions for atomic updates.
+    """
+    from django.db.models import F
+    
+    # 1. Update Party Balance
+    if instance.party:
+        # Determine if it's a debit or credit
+        debit = instance.debit_amount or Decimal('0')
+        credit = instance.credit_amount or Decimal('0')
+        
+        if created:
+            # Atomic increment
+            Party.objects.filter(pk=instance.party.pk).update(
+                total_debit_amount=F('total_debit_amount') + debit,
+                total_credit_amount=F('total_credit_amount') + credit,
+                current_balance_cached=F('current_balance_cached') + (debit - credit)
+            )
+        else:
+            # For updates, we'd need to track old values. 
+            # For simplicity and reliability on update, we trigger a refresh.
+            instance.party.refresh_balance()
+
+    # 2. Update CompanyAccount Balance
+    if instance.account:
+        # Perspective of CompanyAccount: Income is Dr (+), Expense is Cr (-)
+        # Balance = Opening + Income - Expenses
+        income = instance.amount if (instance.is_income and not instance.is_invoice) else Decimal('0')
+        expense = instance.amount if (instance.is_expense and not instance.is_invoice) else Decimal('0')
+        
+        if created:
+            CompanyAccount.objects.filter(pk=instance.account.pk).update(
+                current_balance_cached=F('current_balance_cached') + (income - expense)
+            )
+        else:
+            instance.account.refresh_balance()
+
+@receiver(post_delete, sender=FinancialRecord)
+def update_balances_on_delete(sender, instance, **kwargs):
+    """
+    Update Party and CompanyAccount balances when a FinancialRecord is deleted.
+    """
+    from django.db.models import F
+    
+    if instance.party:
+        debit = instance.debit_amount or Decimal('0')
+        credit = instance.credit_amount or Decimal('0')
+        Party.objects.filter(pk=instance.party.pk).update(
+            total_debit_amount=F('total_debit_amount') - debit,
+            total_credit_amount=F('total_credit_amount') - credit,
+            current_balance_cached=F('current_balance_cached') - (debit - credit)
+        )
+
+    if instance.account:
+        income = instance.amount if (instance.is_income and not instance.is_invoice) else Decimal('0')
+        expense = instance.amount if (instance.is_expense and not instance.is_invoice) else Decimal('0')
+        CompanyAccount.objects.filter(pk=instance.account.pk).update(
+            current_balance_cached=F('current_balance_cached') - (income - expense)
+        )

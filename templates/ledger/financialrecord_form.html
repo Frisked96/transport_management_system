@@ -254,6 +254,39 @@
                 });
         }
 
+        // Fetch Bills
+        function fetchBills(partyId) {
+            const billSelect = document.getElementById('id_associated_bill');
+            if (!billSelect) return;
+
+            if (!partyId) {
+                billSelect.innerHTML = '<option value="">---------</option>';
+                return;
+            }
+
+            const currentBillId = billSelect.value;
+            billSelect.innerHTML = '<option value="">Loading...</option>';
+
+            fetch(`{% url 'get-party-bills' %}?party_id=${partyId}&unpaid_only=true`)
+                .then(response => response.json())
+                .then(data => {
+                    billSelect.innerHTML = '<option value="">---------</option>';
+                    if (data.bills && data.bills.length > 0) {
+                        data.bills.forEach(bill => {
+                            const option = document.createElement('option');
+                            option.value = bill.id;
+                            option.textContent = bill.label;
+                            if (bill.id == currentBillId) option.selected = true;
+                            billSelect.appendChild(option);
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching bills:', error);
+                    billSelect.innerHTML = '<option value="">Error loading bills</option>';
+                });
+        }
+
         // Render Unpaid List (Left Side)
         function renderUnpaidTrips() {
             unpaidTripsList.innerHTML = '';
@@ -379,6 +412,7 @@
                 updateUIState();
                 selectedTripIds = []; // Clear on explicit user change
                 fetchTrips(this.value);
+                fetchBills(this.value);
             });
             
             // Initial load check
@@ -386,6 +420,7 @@
                 updateUIState();
                 restoreState(); // Load saved IDs into selectedTripIds
                 fetchTrips(partySelect.value); // This will trigger render using selectedTripIds
+                fetchBills(partySelect.value);
             }
         }
 
