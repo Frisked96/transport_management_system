@@ -37,6 +37,16 @@ class FinancialRecordFormTest(TestCase):
             date=timezone.now()
         )
         
+        from ledger.models import Bill, BillTrip
+        self.bill1 = Bill.objects.create(
+            party=self.party1,
+            date=timezone.now(),
+            status=Bill.STATUS_FINAL,
+            bill_type=Bill.TYPE_TRIP
+        )
+        BillTrip.objects.create(bill=self.bill1, trip=self.trip1)
+        self.bill1.sync_to_ledger()
+
         # Trip for Party 2
         self.trip2 = Trip.objects.create(
             driver=self.driver_profile,
