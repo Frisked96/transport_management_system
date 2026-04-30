@@ -265,13 +265,14 @@ class CompanyAccount(models.Model):
             category__type=TransactionCategory.TYPE_INCOME
         ).exclude(
             models.Q(record_type=FinancialRecord.RECORD_TYPE_INVOICE) | 
-            models.Q(category__name='Deductions')
+            models.Q(category__name__in=['Deductions', 'TDS', 'Shortage', 'Credit Note', 'Debit Note'])
         ).aggregate(total=models.Sum('amount'))['total'] or 0
 
         expenses = self.financial_records.filter(
             category__type=TransactionCategory.TYPE_EXPENSE
         ).exclude(
-            record_type=FinancialRecord.RECORD_TYPE_INVOICE
+            models.Q(record_type=FinancialRecord.RECORD_TYPE_INVOICE) |
+            models.Q(category__name__in=['Deductions', 'TDS', 'Shortage', 'Credit Note', 'Debit Note'])
         ).aggregate(total=models.Sum('amount'))['total'] or 0
 
         return self.opening_balance + income - expenses

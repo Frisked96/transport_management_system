@@ -1097,7 +1097,7 @@ def account_statement_pdf(request, pk):
         # For Company Account (Asset): Income=Debit (+), Expense=Credit (-)
         if rec.is_income:
             opening_bal += rec.amount
-        else:
+        elif rec.is_expense:
             opening_bal -= rec.amount
 
     # 2. Get records in range
@@ -1223,7 +1223,7 @@ def unified_ledger_pdf(request):
         
         if rec.is_income:
             opening_bal += rec.amount
-        else:
+        elif rec.is_expense:
             opening_bal -= rec.amount
 
     # 2. Get records in range
