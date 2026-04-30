@@ -139,6 +139,26 @@ def sum_list(data_list, key):
     return total
 
 @register.filter
+def get_trip_gst(bill, trip):
+    """
+    Calculates GST amount for a trip based on the bill's GST rate.
+    Usage: {{ bill|get_trip_gst:trip }}
+    """
+    if not trip.revenue or bill.gst_rate == 0:
+        return Decimal('0')
+    return Decimal(str(trip.revenue)) * (Decimal(bill.gst_rate) / Decimal(100))
+
+@register.filter
+def get_trip_total(bill, trip):
+    """
+    Calculates Total amount (Revenue + GST) for a trip.
+    Usage: {{ bill|get_trip_total:trip }}
+    """
+    rev = Decimal(str(trip.revenue or 0))
+    gst = get_trip_gst(bill, trip)
+    return rev + gst
+
+@register.filter
 def abs_val(value):
     """
     Returns absolute value of a number.
@@ -146,5 +166,47 @@ def abs_val(value):
     """
     try:
         return abs(Decimal(str(value)))
-    except (ValueError, TypeError, InvalidOperation):
+    except (ValueError, TypeError, Exception):
         return 0
+
+@register.filter
+def indian_comma(value):
+    """
+    Formats a number into Indian style commas (e.g., 1,45,140.00).
+    """
+    if value is None or value == "":
+        return "0.00"
+    try:
+        amount = Decimal(str(value))
+    except (ValueError, TypeError, Exception):
+        return "0.00"
+
+    # Separate decimal and whole part
+    parts = f"{amount:.2f}".split(".")
+    whole = parts[0]
+    decimal = parts[1]
+
+    # Handle negative
+    is_negative = whole.startswith("-")
+    if is_negative:
+        whole = whole[1:]
+
+    # Last 3 digits remain as a block
+    if len(whole) <= 3:
+        res = whole
+    else:
+        # Separate the last 3 digits
+        last_three = whole[-3:]
+        remaining = whole[:-3]
+        # Group the rest in 2s
+        res = ""
+        while len(remaining) > 2:
+            res = "," + remaining[-2:] + res
+            remaining = remaining[:-2]
+        res = remaining + res + "," + last_three
+
+    if is_negative:
+        res = "-" + res
+
+    return res + "." + decimal
+

@@ -18,13 +18,11 @@ This project is a comprehensive Transport Management System built with Django. I
 ## High-Level Models Overview
 To assist in understanding the application architecture:
 *   **`trips`**: 
-    *   `Trip`: Uses a single-leg structure to track end-to-end transport operations. Supports `fixed` and `per_ton` revenue models.
-    *   `TripExpense`: Dynamically tracks custom expenses (e.g., Diesel, Toll) associated with a specific trip.
+    *   `Trip`: Uses a single-leg structure to track end-to-end transport operations. Status is derived from payment.
 *   **`fleet`**: 
     *   `Vehicle`: Central entity for fleet assets.
-    *   `MaintenanceTask` & `MaintenanceLog`: Decouples maintenance into recurring requirements (Tasks) and historical events (Logs).
-    *   `Tyre` & `TyreLog`: Manages tyre inventory, including statuses (Mounted, Scrap, etc.), automatic movement tracking, and KM usage calculations based on completed trips.
-    *   `FuelLog`: Tracks fueling events, synchronized with trip diesel entries.
+    *   `MaintenanceRecord`: Unified model for tracking maintenance expirations and historical completions.
+    *   `Tyre` & `TyreLog`: Manages tyre inventory, including statuses (Mounted, Scrap, etc.) and automatic movement tracking.
 *   **`drivers`**:
     *   `Driver`: Core driver profile extending the default User.
     *   `DriverTransaction`: Manages a driver's "Pocket/Wallet" balance (e.g., Salary, Allowance, Loan, Repayment).
@@ -49,3 +47,6 @@ To assist in understanding the application architecture:
 *   **On-Demand Storage Access**: To prevent slow page loads when using Google Drive storage, document URLs are generated via a proxy view (`document-view`) only when clicked. Avoid calling `.url` on many file fields within a single template loop.
 *   **Database Annotations**: Document list counts (Total, Expired, Expiring) are calculated using SQL-level `Count` and `Q` filters in `get_queryset` to avoid N+1 issues and Python-side loop overhead.
 *   **Query Prefetching**: Always use `select_related` and `prefetch_related` for nested attributes (e.g., `driver__user`, `documents`) especially in global context processors like `document_alerts`.
+
+## UI & Application Philosophy
+*   **IGNORE DJANGO ADMIN**: Normal users (including managers and admins within the business domain) should NEVER need to access the default Django Admin interface to perform daily tasks, manage reference data (like Routes, Categories, Settings), or view reports. All functional models must have dedicated, stylized front-end views (List, Create, Update, Delete) integrated into the main application layout. The Django Admin is strictly for developer debugging and superuser backend maintenance.

@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load ledger_extras %}
 
 {% block title %}{{ account.name }} - Transport Management System{% endblock %}
 
@@ -67,7 +68,8 @@
                             <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Date</th>
                             <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Category</th>
                             <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Party/Driver</th>
-                            <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Amount</th>
+                            <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Debit (Dr)</th>
+                            <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Credit (Cr)</th>
                             <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Description</th>
                             <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Actions</th>
                         </tr>
@@ -90,8 +92,11 @@
                                 <span class="text-slate-400">-</span>
                                 {% endif %}
                             </td>
-                            <td class="px-6 py-4 text-sm text-right font-bold {% if record.is_income %}text-emerald-600{% else %}text-red-600{% endif %}">
-                                {% if record.is_income %}+{% else %}-{% endif %}${{ record.amount|floatformat:2 }}
+                            <td class="px-6 py-4 text-sm text-right font-bold text-blue-600">
+                                {% if record.is_income %}₹{{ record.amount|floatformat:2 }}{% else %}-{% endif %}
+                            </td>
+                            <td class="px-6 py-4 text-sm text-right font-bold text-red-600">
+                                {% if record.is_expense %}₹{{ record.amount|floatformat:2 }}{% else %}-{% endif %}
                             </td>
                             <td class="px-6 py-4 text-sm text-slate-500 max-w-xs truncate">{{ record.description|default:"-" }}</td>
                             <td class="px-6 py-4 text-right">
@@ -102,7 +107,7 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="6" class="px-6 py-10 text-center text-slate-500 italic">No transactions recorded for this account.</td>
+                            <td colspan="7" class="px-6 py-10 text-center text-slate-500 italic">No transactions recorded for this account.</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -193,21 +198,20 @@
         <div class="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden border-l-4 border-l-emerald-500">
             <div class="p-4 bg-emerald-50 border-b border-emerald-100 flex justify-between items-center">
                 <h3 class="font-bold text-sm uppercase tracking-wider text-emerald-900">Balance Summary</h3>
-                <i class="fa-solid fa-wallet text-emerald-400"></i>
+                <i class="fa-solid fa-wallet text-emerald-400 text-xl"></i>
             </div>
             <div class="p-5">
                 <div class="space-y-4">
-                    <div class="flex justify-between items-center">
-                        <span class="text-sm text-slate-600 font-medium">Opening Balance</span>
-                        <span class="text-sm font-bold text-slate-900">${{ account.opening_balance|floatformat:2 }}</span>
+                    <div class="flex justify-between items-center bg-slate-50 p-3 rounded-md border border-slate-100">
+                        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Opening Balance</span>
+                        <span class="text-sm font-bold text-slate-900">₹{{ account.opening_balance|floatformat:2 }}</span>
                     </div>
-                    <div class="pt-4 border-t border-slate-100">
-                        <div class="flex justify-between items-center mb-1">
-                            <span class="text-base font-bold text-slate-900">Current Balance</span>
-                            <span class="text-2xl font-bold {% if account.current_balance >= 0 %}text-emerald-600{% else %}text-red-600{% endif %}">
-                                ${{ account.current_balance|floatformat:2 }}
-                            </span>
-                        </div>
+                    
+                    <div class="bg-emerald-50 p-4 rounded-lg border border-emerald-100 flex flex-col items-center">
+                        <span class="text-xs font-semibold text-emerald-700 uppercase tracking-wider mb-2">Current Available Balance</span>
+                        <span class="text-3xl font-black {% if account.current_balance_value >= 0 %}text-emerald-600{% else %}text-red-600{% endif %}">
+                            ₹{{ account.current_balance }}
+                        </span>
                     </div>
                     
                     {% if account.description %}

@@ -4,7 +4,9 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Tax Invoice {{ bill.bill_number }}</title>
+    <title>
+        {% if bill.category.name == 'Debit Note' %}Debit Note{% elif bill.category.name == 'Credit Note' %}Credit Note{% elif bill.category.name == 'Halting' %}Halting Invoice{% else %}Tax Invoice{% endif %} {{ bill.bill_number }}
+    </title>
     <style>
         /* Global Reset */
         * {
@@ -18,35 +20,34 @@
         }
         
         body {
-            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            font-family: Arial, Helvetica, sans-serif;
             margin: 0;
             padding: 0;
-            color: #333;
-            font-size: 12px;
-            background-color: #f5f5f5;
+            color: #000;
+            font-size: 11px;
+            background-color: #f8fafc;
         }
 
         .page {
             width: 210mm;
             min-height: 297mm;
-            padding: 15mm;
+            padding: 12mm;
             margin: 10mm auto;
             background: white;
-            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
             position: relative;
         }
 
         @media print {
             body {
                 background: none;
+                color: #000;
             }
             .page {
                 margin: 0;
+                padding: 10mm;
                 box-shadow: none;
                 page-break-after: always;
-            }
-            .page:last-child {
-                page-break-after: auto;
             }
         }
 
@@ -63,7 +64,7 @@
             font-weight: bold;
             padding: 10px 0;
             border-bottom: 1px solid #000;
-            background-color: #f8f9fa;
+            background-color: #f1f5f9;
             text-transform: uppercase;
             letter-spacing: 2px;
         }
@@ -75,41 +76,44 @@
         }
         .company-logo-container {
             width: 80px;
-            padding: 15px;
+            padding: 12px;
             border-right: 1px solid #000;
             display: flex;
             align-items: center;
             justify-content: center;
         }
         .company-logo-box {
-            width: 60px;
-            height: 60px;
+            width: 56px;
+            height: 56px;
             background-color: #000;
             color: #fff;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 24px;
+            font-size: 28px;
             font-weight: bold;
+            border-radius: 2px;
         }
         .company-info {
             flex: 1;
-            padding: 15px;
+            padding: 12px;
         }
         .company-name {
             font-size: 18px;
             font-weight: bold;
-            margin: 0 0 5px 0;
+            margin: 0 0 4px 0;
+            text-transform: uppercase;
         }
         .company-address {
-            font-size: 11px;
+            font-size: 10px;
             line-height: 1.4;
-            margin-bottom: 8px;
+            margin-bottom: 6px;
         }
         .company-contact {
             display: flex;
-            font-size: 11px;
+            font-size: 10px;
             gap: 20px;
+            font-weight: bold;
         }
 
         /* Details Section */
@@ -123,15 +127,16 @@
         }
         .invoice-meta {
             flex: 0.8;
+            background-color: #f8fafc;
         }
         .section-header {
-            background-color: #f8f9fa;
+            background-color: #f1f5f9;
             border-bottom: 1px solid #000;
             padding: 4px 10px;
             font-weight: bold;
-            font-size: 10px;
+            font-size: 9px;
             text-transform: uppercase;
-            color: #666;
+            color: #475569;
         }
         .section-content {
             padding: 10px;
@@ -148,29 +153,29 @@
             padding: 6px 8px;
         }
         table th {
-            background-color: #f8f9fa;
-            font-size: 10px;
+            background-color: #f1f5f9;
+            font-size: 9px;
+            font-weight: bold;
             text-transform: uppercase;
         }
-        .text-right { text-align: right; }
+        .text-right { 
+            text-align: right; 
+            white-space: nowrap;
+        }
         .text-center { text-align: center; }
         .font-bold { font-weight: bold; }
+        .nowrap { white-space: nowrap; }
 
         .items-table {
-            border: none;
             flex-grow: 1;
+            margin-top: -1px; /* Overlap with details-section border */
         }
-        .items-table th, .items-table td {
-            border-top: none;
-        }
-        .items-table th:first-child, .items-table td:first-child { border-left: none; }
-        .items-table th:last-child, .items-table td:last-child { border-right: none; }
 
         /* Summary Section */
         .summary-row {
             display: flex;
-            border-top: 1px solid #000;
             border-bottom: 1px solid #000;
+            margin-top: -1px; /* Overlap with items-table bottom border */
         }
         .tax-summary {
             flex: 1.4;
@@ -180,25 +185,17 @@
             flex: 1;
         }
         
-        /* Explicit borders for summary tables to ensure they connect */
+        /* Inner tables in summary */
         .tax-summary table, .totals-summary table {
             border: none;
+            margin-top: -1px;
+            margin-left: -1px;
+            margin-right: -1px;
+            margin-bottom: -1px;
         }
-        .tax-summary table td, .tax-summary table th {
-            border-top: none;
-            border-left: none;
-        }
-        .tax-summary table tr:last-child td { border-bottom: none; }
-        .tax-summary table tr td:last-child, .tax-summary table tr th:last-child { border-right: none; }
 
-        .totals-table td {
-            border-top: none;
-            border-left: none;
-            border-right: none;
-        }
-        .totals-table tr:last-child td { border-bottom: none; }
         .grand-total-row {
-            background-color: #f8f9fa;
+            background-color: #f1f5f9;
             font-size: 14px;
         }
 
@@ -206,6 +203,7 @@
         .footer-row {
             display: flex;
             border-bottom: 1px solid #000;
+            margin-top: -1px; /* Overlap with summary-row bottom border */
         }
         .bank-details {
             flex: 1;
@@ -254,7 +252,9 @@
     <!-- PAGE 1: TAX INVOICE -->
     <div class="page">
         <div class="page-border">
-            <div class="header-title">Tax Invoice</div>
+            <div class="header-title">
+                {% if bill.category.name == 'Debit Note' %}Debit Note{% elif bill.category.name == 'Credit Note' %}Credit Note{% elif bill.category.name == 'Halting' %}Halting Charges{% else %}Tax Invoice{% endif %}
+            </div>
             
             <div class="company-section">
                 <div class="company-logo-container">
@@ -284,6 +284,9 @@
                     <div class="section-content">
                         Invoice No: <strong>{{ bill.bill_number }}</strong><br>
                         Invoice Date: <strong>{{ bill.date|date:"d-m-Y" }}</strong><br>
+                        {% if bill.original_bill %}
+                        Against Inv: <strong>{{ bill.original_bill.bill_number }}</strong><br>
+                        {% endif %}
                         Place of Supply: <strong>{{ bill.party.state }}</strong>
                     </div>
                 </div>
@@ -302,6 +305,19 @@
                         </tr>
                     </thead>
                     <tbody>
+                        {% if bill.bill_type == 'Standard' %}
+                        <tr>
+                            <td class="text-center">1</td>
+                            <td>
+                                <strong>{{ bill.item_type|default:bill.category.name }}</strong><br>
+                                <span style="font-size: 10px; color: #666;">{{ bill.description }}</span>
+                            </td>
+                            <td class="text-center">{{ bill.hsn_code }}</td>
+                            <td class="text-right">{% if bill.standard_weight %}{{ bill.standard_weight|indian_comma }}{% else %}-{% endif %}</td>
+                            <td class="text-right">{% if bill.standard_rate %}{{ bill.standard_rate|indian_comma }}{% else %}-{% endif %}</td>
+                            <td class="text-right font-bold">{{ bill.amount_override|indian_comma }}</td>
+                        </tr>
+                        {% else %}
                         {% for item in invoice_items %}
                         <tr>
                             <td class="text-center">{{ forloop.counter }}</td>
@@ -310,11 +326,12 @@
                                 <span style="font-size: 10px; color: #666;">Consolidated charges for {{ item.count }} trip(s)</span>
                             </td>
                             <td class="text-center">{{ bill.hsn_code }}</td>
-                            <td class="text-right">{{ item.weight|floatformat:2 }}</td>
-                            <td class="text-right">{{ item.rate|floatformat:2 }}</td>
-                            <td class="text-right font-bold">{{ item.amount|floatformat:2 }}</td>
+                            <td class="text-right">{{ item.weight|indian_comma }}</td>
+                            <td class="text-right">{{ item.rate|indian_comma }}</td>
+                            <td class="text-right font-bold">{{ item.amount|indian_comma }}</td>
                         </tr>
                         {% endfor %}
+                        {% endif %}
                         
                         <!-- Empty rows to fill space and maintain lines -->
                         {% with ""|center:5 as range %}
@@ -333,9 +350,9 @@
                     <tfoot>
                         <tr class="font-bold" style="background-color: #f8f9fa;">
                             <td colspan="3" class="text-right">Total</td>
-                            <td class="text-right">{{ bill.total_weight|floatformat:2 }}</td>
+                            <td class="text-right">{{ bill.total_weight|indian_comma }}</td>
                             <td></td>
-                            <td class="text-right"><span class="rupee-symbol">₹</span> {{ bill.subtotal|floatformat:2 }}</td>
+                            <td class="text-right"><span class="rupee-symbol">Rs.</span> {{ bill.subtotal|indian_comma }}</td>
                         </tr>
                     </tfoot>
                 </table>
@@ -349,11 +366,11 @@
                             <tr>
                                 <th>HSN</th>
                                 <th>Taxable</th>
-                                {% if bill.gst_type == 'INTRA' %}
+                                {% if bill.gst_type == 'IGST' %}
+                                <th>IGST</th>
+                                {% else %}
                                 <th>CGST</th>
                                 <th>SGST</th>
-                                {% else %}
-                                <th>IGST</th>
                                 {% endif %}
                                 <th>Total Tax</th>
                             </tr>
@@ -361,14 +378,14 @@
                         <tbody>
                             <tr>
                                 <td class="text-center">{{ bill.hsn_code }}</td>
-                                <td class="text-right">{{ bill.subtotal|floatformat:2 }}</td>
-                                {% if bill.gst_type == 'INTRA' %}
-                                <td class="text-right">{{ bill.cgst_amount|floatformat:2 }}<br><small>({% widthratio bill.gst_rate 2 1 %}%)</small></td>
-                                <td class="text-right">{{ bill.sgst_amount|floatformat:2 }}<br><small>({% widthratio bill.gst_rate 2 1 %}%)</small></td>
+                                <td class="text-right">{{ bill.subtotal|indian_comma }}</td>
+                                {% if bill.gst_type == 'IGST' %}
+                                <td class="text-right">{{ bill.igst_amount|indian_comma }}<br><small>({{ bill.gst_rate }}%)</small></td>
                                 {% else %}
-                                <td class="text-right">{{ bill.igst_amount|floatformat:2 }}<br><small>({{ bill.gst_rate }}%)</small></td>
+                                <td class="text-right">{{ bill.cgst_amount|indian_comma }}<br><small>({% widthratio bill.gst_rate 2 1 %}%)</small></td>
+                                <td class="text-right">{{ bill.sgst_amount|indian_comma }}<br><small>({% widthratio bill.gst_rate 2 1 %}%)</small></td>
                                 {% endif %}
-                                <td class="text-right font-bold">{{ bill.gst_amount|floatformat:2 }}</td>
+                                <td class="text-right font-bold">{{ bill.gst_amount|indian_comma }}</td>
                             </tr>
                         </tbody>
                     </table>
@@ -381,30 +398,33 @@
                     <table class="totals-table">
                         <tr>
                             <td>Taxable Amount</td>
-                            <td class="text-right">₹ {{ bill.subtotal|floatformat:2 }}</td>
+                            <td class="text-right">Rs. {{ bill.subtotal|indian_comma }}</td>
                         </tr>
-                        {% if bill.gst_type == 'INTRA' %}
+                        {% if bill.gst_type == 'IGST' %}
                         <tr>
-                            <td>Add: CGST</td>
-                            <td class="text-right">₹ {{ bill.cgst_amount|floatformat:2 }}</td>
-                        </tr>
-                        <tr>
-                            <td>Add: SGST</td>
-                            <td class="text-right">₹ {{ bill.sgst_amount|floatformat:2 }}</td>
+                            <td>Add: IGST</td>
+                            <td class="text-right">Rs. {{ bill.igst_amount|indian_comma }}</td>
                         </tr>
                         {% else %}
                         <tr>
-                            <td>Add: IGST</td>
-                            <td class="text-right">₹ {{ bill.igst_amount|floatformat:2 }}</td>
+                            <td>Add: CGST</td>
+                            <td class="text-right">Rs. {{ bill.cgst_amount|indian_comma }}</td>
+                        </tr>
+                        <tr>
+                            <td>Add: SGST</td>
+                            <td class="text-right">Rs. {{ bill.sgst_amount|indian_comma }}</td>
                         </tr>
                         {% endif %}
+                        {% if bill.use_roundoff %}
                         <tr>
                             <td>Round Off</td>
-                            <td class="text-right">₹ {{ bill.roundoff|floatformat:2 }}</td>
+                            <td class="text-right">Rs. {{ bill.roundoff|indian_comma }}</td>
                         </tr>
+                        {% endif %}
+
                         <tr class="grand-total-row font-bold">
                             <td>Total Amount</td>
-                            <td class="text-right">₹ {{ bill.rounded_total|floatformat:2 }}</td>
+                            <td class="text-right">Rs. {{ bill.rounded_total|indian_comma }}</td>
                         </tr>
                     </table>
                 </div>
@@ -436,6 +456,7 @@
     </div>
 
     <!-- PAGE 2: ANNEXURE (DETAILS) -->
+    {% if bill.bill_type != 'Standard' %}
     <div class="page">
         <div class="page-border">
             <div class="annexure-title">Annexure to Invoice #{{ bill.bill_number }}</div>
@@ -449,13 +470,17 @@
                 <table style="border: none;">
                     <thead>
                         <tr>
-                            <th width="5%">S.N.</th>
-                            <th width="12%">Date</th>
-                            <th width="15%">Vehicle No</th>
-                            <th width="15%">LR No</th>
-                            <th width="28%">From - To</th>
-                            <th width="10%">Weight</th>
-                            <th width="15%">Amount</th>
+                            <th width="4%">S.N.</th>
+                            <th width="10%">Date</th>
+                            <th width="12%">Vehicle No</th>
+                            <th width="12%">LR No</th>
+                            <th width="22%">From - To</th>
+                            <th width="8%">Weight</th>
+                            <th width="12%">Revenue</th>
+                            {% if bill.gst_rate > 0 %}
+                            <th width="10%">GST ({{ bill.gst_rate }}%)</th>
+                            <th width="10%">Total</th>
+                            {% endif %}
                         </tr>
                     </thead>
                     <tbody>
@@ -464,18 +489,26 @@
                             <td class="text-center">{{ forloop.counter }}</td>
                             <td class="text-center">{{ bt.trip.date|date:"d/m/y" }}</td>
                             <td class="text-center">{{ bt.trip.vehicle.registration_plate }}</td>
-                            <td class="text-center">{{ bt.lr_no|default:"-" }}</td>
+                            <td class="text-center">{{ bt.lr_no|default:bt.trip.lr_no|default:"-" }}</td>
                             <td>{{ bt.trip.pickup_location }} - {{ bt.trip.delivery_location }}</td>
-                            <td class="text-right">{{ bt.trip.weight|floatformat:2 }}</td>
-                            <td class="text-right font-bold">{{ bt.trip.revenue|floatformat:2 }}</td>
+                            <td class="text-right">{{ bt.trip.weight|indian_comma }}</td>
+                            <td class="text-right font-bold">{{ bt.trip.revenue|indian_comma }}</td>
+                            {% if bill.gst_rate > 0 %}
+                            <td class="text-right">{{ bill|get_trip_gst:bt.trip|indian_comma }}</td>
+                            <td class="text-right font-bold">{{ bill|get_trip_total:bt.trip|indian_comma }}</td>
+                            {% endif %}
                         </tr>
                         {% endfor %}
                     </tbody>
                     <tfoot>
                         <tr class="font-bold" style="background-color: #f8f9fa;">
                             <td colspan="5" class="text-right">Total for Annexure</td>
-                            <td class="text-right">{{ bill.total_weight|floatformat:2 }}</td>
-                            <td class="text-right">₹ {{ bill.subtotal|floatformat:2 }}</td>
+                            <td class="text-right">{{ bill.total_weight|indian_comma }}</td>
+                            <td class="text-right">Rs. {{ bill.subtotal|indian_comma }}</td>
+                            {% if bill.gst_rate > 0 %}
+                            <td class="text-right">Rs. {{ bill.gst_amount|indian_comma }}</td>
+                            <td class="text-right">Rs. {{ bill.rounded_total|indian_comma }}</td>
+                            {% endif %}
                         </tr>
                     </tfoot>
                 </table>
@@ -486,6 +519,7 @@
             </div>
         </div>
     </div>
+    {% endif %}
 
     <script>
         window.onload = function() {

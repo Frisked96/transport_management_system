@@ -2,7 +2,8 @@
 Forms for Fleet application
 """
 from django import forms
-from .models import Vehicle, MaintenanceLog, MaintenanceTask, Tyre, TyreLog
+from django.utils import timezone
+from .models import Vehicle, MaintenanceRecord, Tyre, TyreLog
 
 
 class VehicleForm(forms.ModelForm):
@@ -35,9 +36,9 @@ class VehicleForm(forms.ModelForm):
         }
 
 
-class MaintenanceLogForm(forms.ModelForm):
+class MaintenanceRecordForm(forms.ModelForm):
     """
-    Form for creating and editing maintenance logs
+    Form for creating and editing maintenance records (both pending and completed)
     """
     
     def __init__(self, *args, **kwargs):
@@ -45,69 +46,62 @@ class MaintenanceLogForm(forms.ModelForm):
         # Filter vehicles to show all
         self.fields['vehicle'].queryset = Vehicle.objects.all().order_by('registration_plate')
         
-        # Filter tasks based on vehicle if available
-        vehicle_id = self.initial.get('vehicle') or self.data.get('vehicle')
-        if vehicle_id:
-            self.fields['task'].queryset = MaintenanceTask.objects.filter(vehicle_id=vehicle_id)
-        else:
-            self.fields['task'].queryset = MaintenanceTask.objects.all().order_by('name')
-
         # Add basic styling for clarity
         for field_name, field in self.fields.items():
             field.widget.attrs.update({'class': 'block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white'})
     
     class Meta:
-        model = MaintenanceLog
+        model = MaintenanceRecord
         fields = [
             'vehicle',
-            'task',
-            'date',
-            'type',
-            'odometer_reading',
-            'description',
+            'name',
+            'is_completed',
+            'expiry_date',
+            'expiry_km',
+            'interval_days',
+            'interval_km',
+            'completion_date',
+            'completion_km',
             'cost',
             'service_provider',
-            'next_service_due',
-            'next_service_odometer'
+            'notes'
         ]
         
         widgets = {
-            'date': forms.DateInput(attrs={'type': 'date'}),
-            'next_service_due': forms.DateInput(attrs={'type': 'date'}),
-            'description': forms.Textarea(attrs={'rows': 3}),
+            'expiry_date': forms.DateInput(attrs={'type': 'date'}),
+            'completion_date': forms.DateInput(attrs={'type': 'date'}),
+            'notes': forms.Textarea(attrs={'rows': 3}),
             'cost': forms.NumberInput(attrs={'step': '0.01', 'min': '0'}),
         }
 
 
-class MaintenanceTaskForm(forms.ModelForm):
+class MaintenanceCompleteForm(forms.Form):
     """
-    Form for creating and editing maintenance tasks
+    Form for marking a pending maintenance record as completed
     """
-    
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # Filter vehicles to show all
-        self.fields['vehicle'].queryset = Vehicle.objects.all().order_by('registration_plate')
-        
-        # Add basic styling for clarity
-        for field_name, field in self.fields.items():
-            field.widget.attrs.update({'class': 'block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white'})
-    
-    class Meta:
-        model = MaintenanceTask
-        fields = [
-            'vehicle',
-            'name',
-            'interval_km',
-            'interval_days',
-            'last_performed_km',
-            'last_performed_date',
-            'is_active'
-        ]
-        
-        widgets = {
-            'last_performed_date': forms.DateInput(attrs={'type': 'date'}),
-        }
+    completion_date = forms.DateField(
+        widget=forms.DateInput(attrs={'type': 'date', 'class': 'block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white'}),
+        initial=timezone.now
+    )
+    completion_km = forms.IntegerField(
+        min_value=0,
+        widget=forms.NumberInput(attrs={'class': 'block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white'})
+    )
+    cost = forms.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        initial=0,
+        widget=forms.NumberInput(attrs={'step': '0.01', 'min': '0', 'class': 'block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white'})
+    )
+    service_provider = forms.CharField(
+        max_length=200,
+        required=False,
+        widget=forms.TextInput(attrs={'class': 'block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white'})
+    )
+    notes = forms.CharField(
+        widget=forms.Textarea(attrs={'rows': 3, 'class': 'block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white'}),
+        required=False
+    )
 
 
 class TyreForm(forms.ModelForm):

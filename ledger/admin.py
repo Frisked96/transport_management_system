@@ -37,8 +37,8 @@ class BillTripInline(admin.TabularInline):
 
 @admin.register(Bill)
 class BillAdmin(admin.ModelAdmin):
-    list_display = ['bill_number', 'date', 'party', 'status', 'total_amount']
-    list_filter = ['status', 'gst_rate', 'date']
+    list_display = ['bill_number', 'date', 'party', 'total_amount']
+    list_filter = ['gst_rate', 'date']
     search_fields = ['bill_number', 'party__name']
     inlines = [BillTripInline]
 

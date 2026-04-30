@@ -1,372 +1,225 @@
 {% extends 'base.html' %}
 
-{% block title %}{{ trip.trip_number }} - Transport Management System{% endblock %}
+{% block title %}Trip Details: {{ trip.trip_number }} - TMS{% endblock %}
 
 {% block content %}
-<!-- BEGIN: Page Header -->
-<header class="flex flex-col md:flex-row md:items-center justify-between mb-8">
-    <div>
-        <div class="flex items-center space-x-3">
-            <h1 class="text-3xl font-bold text-slate-900">{{ trip.trip_number }}</h1>
-            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider
-                {% if trip.status == 'Completed' %}bg-emerald-100 text-emerald-800
-                {% elif trip.status == 'Cancelled' %}bg-red-100 text-red-800
-                {% else %}bg-blue-100 text-blue-800{% endif %}">
-                {{ trip.status }}
-            </span>
-        </div>
-        <p class="text-sm font-semibold text-slate-500 mt-1 uppercase tracking-widest">{{ trip.date|date:"l, F d, Y" }}</p>
+<header class="mb-6">
+    <div class="flex items-center space-x-2 text-sm text-slate-500 mb-2">
+        <a href="{% url 'trip-list' %}" class="hover:text-emerald-600 transition-colors">Trips</a>
+        <i class="fa-solid fa-chevron-right text-[10px]"></i>
+        <span>Trip Details</span>
     </div>
-    <div class="mt-4 md:mt-0 flex flex-wrap gap-3">
-        <a href="{% url 'trip-list' %}?date={{ trip.date|date:'Y-m-d' }}" class="flex items-center space-x-2 px-4 py-2 border border-slate-300 rounded-md bg-white text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors">
-            <i class="fa-solid fa-arrow-left"></i>
-            <span>Back</span>
-        </a>
-        
-        {% if perms.trips.can_update_trip_status or user == trip.driver %}
-        <form action="{% url 'trip-status-update' trip.pk %}" method="post" class="flex items-center bg-white border border-slate-300 rounded-md px-3 py-2 shadow-sm focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 transition-all">
-            {% csrf_token %}
-            <i class="fa-solid fa-arrows-rotate text-blue-500 mr-2"></i>
-            <select name="status" onchange="this.form.submit()" class="text-sm font-bold text-slate-700 bg-transparent border-none p-0 pr-8 focus:ring-0 cursor-pointer">
-                {% for status_val, status_label in trip.STATUS_CHOICES %}
-                    <option value="{{ status_val }}" {% if trip.status == status_val %}selected{% endif %}>
-                        {{ status_label }}
-                    </option>
-                {% endfor %}
-            </select>
-        </form>
-        {% endif %}
-        
-        {% if perms.trips.change_trip %}
-        <div class="flex border border-slate-300 rounded-md overflow-hidden bg-white">
-            <a href="{% url 'trip-update' trip.pk %}" class="px-4 py-2 text-slate-700 hover:bg-slate-50 border-r border-slate-300 transition-colors" title="Edit">
-                <i class="fa-regular fa-pen-to-square"></i>
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <h1 class="text-3xl font-bold text-slate-900 tracking-tight">{{ trip.trip_number }}</h1>
+        <div class="flex items-center gap-2">
+            {% if perms.trips.change_trip %}
+            <a href="{% url 'trip-update' trip.pk %}" class="px-4 py-2 border border-slate-300 rounded-md bg-white text-slate-700 text-sm font-bold hover:bg-slate-50 transition-colors">
+                <i class="fa-regular fa-pen-to-square mr-2"></i>Edit
             </a>
+            {% endif %}
             {% if perms.trips.delete_trip %}
-            <a href="{% url 'trip-delete' trip.pk %}" class="px-4 py-2 text-red-600 hover:bg-red-50 transition-colors" title="Delete">
-                <i class="fa-regular fa-trash-can"></i>
+            <a href="{% url 'trip-delete' trip.pk %}" class="px-4 py-2 border border-rose-200 rounded-md bg-rose-50 text-rose-700 text-sm font-bold hover:bg-rose-100 transition-colors">
+                <i class="fa-regular fa-trash-can mr-2"></i>Delete
+            </a>
+            {% endif %}
+            {% if not trip.annotated_is_billed and perms.ledger.add_financialrecord %}
+            <a href="{% url 'bill-create' %}?party={{ trip.party.pk }}&trip_ids={{ trip.pk }}" class="px-4 py-2 bg-emerald-600 text-white rounded-md text-sm font-bold hover:bg-emerald-700 shadow-sm transition-colors">
+                <i class="fa-solid fa-file-invoice mr-2"></i>Generate Bill
             </a>
             {% endif %}
         </div>
-        {% endif %}
     </div>
 </header>
-<!-- END: Page Header -->
 
-<div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-    <!-- Left Col: Operational Data -->
-    <div class="lg:col-span-2 space-y-6">
-        <!-- Trip Overview Card -->
-        <div class="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
-            <div class="bg-slate-50 border-b border-slate-200 px-6 py-4 flex justify-between items-center">
-                <h3 class="text-xs font-bold text-slate-500 uppercase tracking-widest">Trip Overview</h3>
-            </div>
-            <div class="p-6 space-y-8">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <div>
-                        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">Vehicle</span>
-                        <div class="text-lg font-bold">
-                            <a href="{% url 'vehicle-detail' trip.vehicle.pk %}" class="text-emerald-600 hover:text-emerald-700 underline decoration-emerald-200 underline-offset-4">
-                                {{ trip.vehicle.registration_plate }}
-                            </a>
-                        </div>
-                    </div>
-                    <div>
-                        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">Party</span>
-                        <div class="text-lg font-bold text-slate-900">
-                            {% if trip.party %}{{ trip.party.name }}{% else %}<span class="text-slate-400 italic">None</span>{% endif %}
-                        </div>
-                    </div>
-                </div>
-
-                <div class="pt-6 border-t border-slate-100">
-                    <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-3">Route</span>
-                    <div class="flex flex-col md:flex-row md:items-center bg-slate-50 p-4 rounded-lg border border-slate-200">
-                        <div class="flex-1 text-center md:text-left">
-                            <p class="text-xs text-slate-500 uppercase font-bold mb-1 tracking-tighter">Origin</p>
-                            <p class="font-bold text-slate-900">{% if trip.pickup_location %}{{ trip.pickup_location }}{% else %}Not specified{% endif %}</p>
-                        </div>
-                        <div class="my-4 md:my-0 md:mx-8 flex justify-center">
-                            <i class="fa-solid fa-arrow-right text-slate-300 text-xl hidden md:block"></i>
-                            <i class="fa-solid fa-arrow-down text-slate-300 text-xl md:hidden"></i>
-                        </div>
-                        <div class="flex-1 text-center md:text-right">
-                            <p class="text-xs text-slate-500 uppercase font-bold mb-1 tracking-tighter">Destination</p>
-                            <p class="font-bold text-slate-900">{% if trip.delivery_location %}{{ trip.delivery_location }}{% else %}Not specified{% endif %}</p>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-8 pt-6 border-t border-slate-100">
-                    <div>
-                        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">Driver</span>
-                        <div class="font-bold text-slate-800">
-                            {% if trip.driver %}
-                            <a href="{% url 'driver-detail' trip.driver.pk %}" class="hover:text-emerald-600">
-                                <i class="fa-solid fa-user-circle text-slate-400 mr-2"></i>{{ trip.driver }}
-                            </a>
-                            {% else %}
-                            <span class="text-slate-400 italic">Unassigned</span>
-                            {% endif %}
-                        </div>
-                    </div>
-                    <div>
-                        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">Odometer History</span>
-                        <div class="font-mono text-slate-600 bg-slate-50 px-3 py-1 rounded inline-block text-sm">
-                            {{ trip.start_odometer|default:"-" }} <i class="fa-solid fa-chevron-right text-[10px] mx-2 text-slate-300"></i> {{ trip.end_odometer|default:"-" }}
-                        </div>
-                    </div>
-                </div>
+<div class="max-w-6xl mx-auto space-y-6">
+    <!-- Main Info Grid -->
+    <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+        <div class="bg-slate-800 px-4 sm:px-6 py-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+            <h2 class="text-white font-bold flex items-center uppercase tracking-wider text-[10px] sm:text-xs">
+                <i class="fa-solid fa-truck-moving mr-2 opacity-70"></i>
+                Operational & Financial Summary
+            </h2>
+            <div class="flex gap-2">
+                <span class="px-2 py-0.5 rounded text-[9px] sm:text-[10px] font-black uppercase tracking-widest
+                    {% if trip.annotated_status == 'Paid' %}bg-emerald-500 text-white
+                    {% elif trip.annotated_status == 'Partially Paid' %}bg-amber-500 text-white
+                    {% else %}bg-slate-500 text-white{% endif %}">
+                    {{ trip.annotated_status }}
+                </span>
+                {% if trip.annotated_is_billed %}
+                <span class="px-2 py-0.5 rounded text-[9px] sm:text-[10px] font-black uppercase tracking-widest bg-blue-500 text-white">Billed</span>
+                {% endif %}
             </div>
         </div>
 
-        <!-- Notes -->
-        {% if trip.notes %}
-        <div class="bg-blue-50 border-l-4 border-blue-500 rounded-r-lg p-5">
-            <div class="flex items-center space-x-2 mb-2 text-blue-700">
-                <i class="fa-solid fa-circle-info"></i>
-                <h4 class="text-xs font-bold uppercase tracking-wider">Trip Notes</h4>
-            </div>
-            <div class="text-sm text-blue-800 leading-relaxed">{{ trip.notes|linebreaks }}</div>
-        </div>
-        {% endif %}
+        <div class="p-4 sm:p-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-12 gap-y-8">
+                <!-- Operational Details -->
+                <div class="space-y-4">
+                    <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest border-b pb-2">Trip Info</h3>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <tr class="border-b border-slate-50">
+                                <td class="py-2 text-slate-500 font-medium whitespace-nowrap pr-4">Trip Date</td>
+                                <td class="py-2 text-slate-900 font-bold">{{ trip.date|date:"d M Y, H:i" }}</td>
+                            </tr>
+                            <tr class="border-b border-slate-50">
+                                <td class="py-2 text-slate-500 font-medium whitespace-nowrap pr-4">LR Number</td>
+                                <td class="py-2 text-slate-900 font-bold">{{ trip.lr_no|default:"-" }}</td>
+                            </tr>
+                            <tr class="border-b border-slate-50">
+                                <td class="py-2 text-slate-500 font-medium whitespace-nowrap pr-4">Vehicle</td>
+                                <td class="py-2 text-slate-900 font-bold uppercase tracking-tight">
+                                    <a href="{% url 'vehicle-detail' trip.vehicle.pk %}" class="text-emerald-600 hover:underline">{{ trip.vehicle.registration_plate }}</a>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="py-2 text-slate-500 font-medium whitespace-nowrap pr-4">Driver</td>
+                                <td class="py-2 text-slate-900 font-bold">
+                                    {% if trip.driver %}<a href="{% url 'driver-detail' trip.driver.pk %}" class="hover:underline">{{ trip.driver }}</a>{% else %}-{% endif %}
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
 
-        <!-- Metadata Card -->
-        <div class="bg-white border border-slate-200 rounded-lg p-4 flex flex-col md:flex-row justify-between items-center text-[10px] text-slate-500 uppercase font-bold tracking-widest">
-            <div>
-                Created <span class="text-slate-900">{{ trip.created_at|date:"M d, Y H:i" }}</span> by <span class="text-slate-900">{{ trip.created_by.username|default:"System" }}</span>
+                <!-- Journey & Party -->
+                <div class="space-y-4">
+                    <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest border-b pb-2">Journey Details</h3>
+                    <div class="bg-slate-50 p-3 rounded-lg border border-slate-100 mb-2">
+                        <p class="text-[10px] font-bold text-slate-400 uppercase mb-1">Party / Client</p>
+                        <p class="text-sm font-black text-slate-900 truncate">{{ trip.party.name|default:"Unlinked" }}</p>
+                    </div>
+                    <div class="space-y-2 px-1">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></div>
+                            <span class="text-xs font-bold text-slate-700 uppercase">{{ trip.pickup_location|default:"-" }}</span>
+                        </div>
+                        <div class="ml-1 border-l-2 border-dashed border-slate-200 h-6"></div>
+                        <div class="flex items-center space-x-3">
+                            <div class="w-2 h-2 rounded-full bg-rose-500 shrink-0"></div>
+                            <span class="text-xs font-bold text-slate-700 uppercase">{{ trip.delivery_location|default:"-" }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Financial Summary -->
+                <div class="space-y-4">
+                    <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest border-b pb-2">Financials</h3>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <tr class="border-b border-slate-50">
+                                <td class="py-2 text-slate-500 font-medium whitespace-nowrap pr-4">Weight / Rate</td>
+                                <td class="py-2 text-slate-900 font-bold">{{ trip.weight }} MT @ ₹{{ trip.rate_per_ton }}</td>
+                            </tr>
+                            <tr class="border-b border-slate-50">
+                                <td class="py-2 text-slate-500 font-medium whitespace-nowrap pr-4">Revenue (Sub)</td>
+                                <td class="py-2 text-slate-900 font-bold">₹{{ trip.revenue|floatformat:2 }}</td>
+                            </tr>
+                            <tr class="border-b border-slate-50">
+                                <td class="py-2 text-slate-500 font-medium whitespace-nowrap pr-4">GST Amount</td>
+                                <td class="py-2 text-emerald-600 font-bold">₹{{ trip.gst_amount|floatformat:2 }}</td>
+                            </tr>
+                            <tr>
+                                <td class="py-2 text-slate-700 font-black uppercase text-[10px]">Total Revenue</td>
+                                <td class="py-2 text-emerald-700 font-black text-lg">₹{{ trip.total_revenue|floatformat:2 }}</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
             </div>
-            {% if trip.actual_completion_datetime %}
-            <div class="mt-2 md:mt-0">
-                Completed <span class="text-emerald-600">{{ trip.actual_completion_datetime|date:"M d, Y H:i" }}</span>
+
+            {% if trip.notes %}
+            <div class="mt-8 pt-6 border-t border-slate-100">
+                <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Remarks / Notes</h3>
+                <p class="text-sm text-slate-600 bg-slate-50 p-4 rounded-lg italic border border-slate-100">"{{ trip.notes }}"</p>
             </div>
             {% endif %}
         </div>
+    </div>
 
-        <!-- Fuel & Mileage Section -->
-        <div class="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
-            <div class="bg-slate-50 border-b border-slate-200 px-6 py-4 flex justify-between items-center">
-                <h3 class="text-xs font-bold text-slate-500 uppercase tracking-widest">Fuel & Mileage</h3>
-                <div class="flex items-center space-x-2">
-                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Avg:</span>
-                    <span class="text-sm font-black text-emerald-600">{{ trip.diesel_average|floatformat:2 }} KM/L</span>
+    <!-- Secondary Grid: Invoices & Payments -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Invoices -->
+        <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+            <div class="bg-slate-50 px-4 sm:px-6 py-3 border-b border-slate-200 flex justify-between items-center">
+                <h3 class="text-[10px] sm:text-xs font-bold text-slate-600 uppercase tracking-widest">Invoices</h3>
+                {% if trip.annotated_is_billed %}
+                <i class="fa-solid fa-circle-check text-emerald-500"></i>
+                {% endif %}
+            </div>
+            <div class="p-4">
+                {% if trip.bills.exists %}
+                    <div class="space-y-2">
+                        {% for bill in trip.bills.all %}
+                        <a href="{% url 'bill-detail' bill.pk %}" class="flex items-center justify-between p-3 rounded-lg border border-slate-100 hover:border-emerald-500 hover:bg-emerald-50 transition-all group">
+                            <div class="flex items-center space-x-3 overflow-hidden">
+                                <i class="fa-solid fa-file-invoice-dollar text-slate-400 group-hover:text-emerald-600 shrink-0"></i>
+                                <span class="text-sm font-bold text-slate-700 group-hover:text-emerald-900 truncate">{{ bill.bill_number|default:"Draft Invoice" }}</span>
+                            </div>
+                            <span class="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase shrink-0">{{ bill.date|date:"d M Y" }}</span>
+                        </a>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p class="text-center py-4 text-xs text-slate-400 italic">No invoices linked to this trip.</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Ledger History -->
+        <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+            <div class="bg-slate-50 px-4 sm:px-6 py-3 border-b border-slate-200 flex justify-between items-center">
+                <h3 class="text-[10px] sm:text-xs font-bold text-slate-600 uppercase tracking-widest">Payment Ledger</h3>
+                <div class="flex items-center gap-2 sm:gap-4">
+                    <span class="text-[9px] sm:text-[10px] font-black uppercase text-slate-400">Bal: <span class="{% if trip.outstanding_balance > 0 %}text-rose-600{% else %}text-emerald-600{% endif %}">₹{{ trip.outstanding_balance|floatformat:2 }}</span></span>
+                    {% if trip.party %}
+                    <a href="{% url 'financialrecord-create' %}?party={{ trip.party.pk }}&associated_trip={{ trip.pk }}" class="text-emerald-600 hover:text-emerald-700">
+                        <i class="fa-solid fa-plus-circle"></i>
+                    </a>
+                    {% endif %}
                 </div>
             </div>
-            <div class="p-6">
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                    <div class="bg-slate-50 p-4 rounded-lg border border-slate-100">
-                        <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Total Distance</span>
-                        <div class="text-xl font-black text-slate-900">{{ trip.distance_covered }} <span class="text-xs font-normal text-slate-500">KM</span></div>
-                    </div>
-                    <div class="bg-slate-50 p-4 rounded-lg border border-slate-100">
-                        <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Diesel Used</span>
-                        <div class="text-xl font-black text-slate-900">{{ trip.diesel_liters|default:0|floatformat:2 }} <span class="text-xs font-normal text-slate-500">Ltrs</span></div>
-                    </div>
-                    <div class="bg-slate-50 p-4 rounded-lg border border-slate-100">
-                        <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Fuel Cost</span>
-                        <div class="text-xl font-black text-slate-900">₹{{ trip.diesel_total_cost|default:0|floatformat:2 }}</div>
-                    </div>
-                </div>
-
-                <!-- Fuel Entry Form -->
-                {% if perms.trips.change_trip %}
-                <div class="mt-4 pt-6 border-t border-slate-100">
-                    <h4 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">Update Fuel Data</h4>
-                    <form action="{% url 'trip-fuel-update' trip.pk %}" method="post" class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-                        {% csrf_token %}
-                        <div>
-                            <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1 block">Total Liters</label>
-                            <input type="number" id="id_diesel_liters" name="diesel_liters" step="0.01" value="{{ trip.diesel_liters|default:'' }}" class="block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white">
+            <div class="p-4">
+                {% if trip.payment_allocations.all or trip.financial_records.all %}
+                    <div class="space-y-2 max-h-[250px] overflow-y-auto pr-2">
+                        {% for record in trip.financial_records.all %}
+                            {% if not record.record_type == 'Invoice' %}
+                            <div class="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100">
+                                <div class="overflow-hidden">
+                                    <p class="text-[10px] font-black text-emerald-700 uppercase tracking-tight truncate">{{ record.category.name }}</p>
+                                    <p class="text-[9px] text-slate-400">{{ record.date|date:"d M Y" }}</p>
+                                </div>
+                                <span class="text-sm font-black text-emerald-600 shrink-0">+₹{{ record.amount|floatformat:2 }}</span>
+                            </div>
+                            {% endif %}
+                        {% endfor %}
+                        {% for allocation in trip.payment_allocations.all %}
+                        <div class="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100">
+                            <div>
+                                <p class="text-[10px] font-black text-blue-700 uppercase tracking-tight">Allocated</p>
+                                <p class="text-[9px] text-slate-400">{{ allocation.financial_record.date|date:"d M Y" }}</p>
+                            </div>
+                            <span class="text-sm font-black text-blue-600 shrink-0">+₹{{ allocation.amount|floatformat:2 }}</span>
                         </div>
-                        <div>
-                            <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1 block">Rate (₹/Ltr)</label>
-                            <input type="number" id="id_diesel_rate" name="diesel_rate" step="0.01" value="{{ trip.diesel_rate|default:'' }}" class="block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white">
-                        </div>
-                        <div>
-                            <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1 block">Total Fuel Cost (₹)</label>
-                            <input type="number" id="id_diesel_total_cost" name="diesel_total_cost" step="0.01" value="{{ trip.diesel_total_cost|default:'' }}" class="block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white">
-                        </div>
-                        <button type="submit" class="bg-emerald-600 text-white px-4 py-2 rounded-md text-sm font-bold hover:bg-emerald-700 transition-colors shadow-sm h-[38px]">
-                            Save Fuel Data
-                        </button>
-                    </form>
-                </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p class="text-center py-4 text-xs text-slate-400 italic">No payment history found.</p>
                 {% endif %}
             </div>
         </div>
     </div>
 
-    <!-- Right Col: Financial Data -->
-    <div class="space-y-6">
-        <!-- Financial Overview Card -->
-        <div class="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
-            <div class="bg-slate-50 border-b border-slate-200 px-6 py-4 flex justify-between items-center">
-                <h3 class="text-xs font-bold text-slate-500 uppercase tracking-widest">Financials</h3>
-            </div>
-            <div class="divide-y divide-slate-100">
-                <div class="px-6 py-4 space-y-3">
-                    <div class="flex justify-between text-sm">
-                        <span class="text-slate-500 font-medium">Weight</span>
-                        <span class="font-bold text-slate-900">{{ trip.weight|default:"-" }} tons</span>
-                    </div>
-                    <div class="flex justify-between text-sm">
-                        <span class="text-slate-500 font-medium">Rate / Ton</span>
-                        <span class="font-bold text-slate-900">₹{{ trip.rate_per_ton|default:"0.00" }}</span>
-                    </div>
-                    {% if trip.gst_amount > 0 %}
-                    <div class="flex justify-between text-sm italic">
-                        <span class="text-slate-500 font-medium">Freight Revenue</span>
-                        <span class="font-bold text-slate-900">₹{{ trip.revenue|floatformat:2 }}</span>
-                    </div>
-                    <div class="flex justify-between text-sm text-emerald-700">
-                        <span class="font-medium italic">GST Component</span>
-                        <span class="font-bold">₹{{ trip.gst_amount|floatformat:2 }}</span>
-                    </div>
-                    {% endif %}
-                    <div class="flex justify-between pt-2">
-                        <span class="text-sm font-bold text-slate-900">Total Revenue</span>
-                        <span class="text-2xl font-black text-emerald-600">₹{{ trip.total_revenue|floatformat:2 }}</span>
-                    </div>
-                </div>
-
-                <!-- Expenses Summary -->
-                <div class="px-6 py-4 bg-slate-50/50">
-                    <div class="flex justify-between items-center mb-4">
-                        <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Expenses</span>
-                        {% if perms.trips.change_trip %}
-                        <a href="{% url 'trip-expenses-manage' trip.pk %}" class="text-[10px] font-bold text-emerald-600 hover:text-emerald-700 uppercase tracking-widest underline decoration-emerald-200">Manage</a>
-                        {% endif %}
-                    </div>
-                    
-                    <div class="space-y-2">
-                        {% if trip.custom_expenses.all %}
-                        {% for expense in trip.custom_expenses.all %}
-                        <div class="flex justify-between text-[11px]">
-                            <span class="text-slate-500">{{ expense.name }}</span>
-                            <span class="font-medium text-slate-700">₹{{ expense.amount|floatformat:2 }}</span>
-                        </div>
-                        {% endfor %}
-                        {% else %}
-                        <p class="text-[11px] text-slate-400 italic">No operational expenses logged.</p>
-                        {% endif %}
-                    </div>
-                    
-                    <div class="flex justify-between pt-4 mt-4 border-t border-slate-200">
-                        <span class="text-[10px] font-bold text-red-600 uppercase tracking-widest">Total Cost</span>
-                        <span class="text-sm font-bold text-red-600">₹{{ trip.total_cost|floatformat:2 }}</span>
-                    </div>
-                </div>
-
-                <!-- Estimated Net Profit -->
-                <div class="px-6 py-6 bg-slate-900 text-white space-y-4">
-                    <div class="flex justify-between items-center border-b border-slate-800 pb-4">
-                        <div class="flex flex-col">
-                            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Profit (Excl. GST)</span>
-                            <span class="text-[9px] text-slate-500 italic">Net Operational Earnings</span>
-                        </div>
-                        <span class="text-2xl font-black {% if trip.net_profit_excl_gst < 0 %}text-red-400{% else %}text-emerald-400{% endif %}">
-                            ₹{{ trip.net_profit_excl_gst|floatformat:2 }}
-                        </span>
-                    </div>
-                    <div class="flex justify-between items-center pt-2">
-                        <div class="flex flex-col">
-                            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Profit (Incl. GST)</span>
-                            <span class="text-[9px] text-slate-500 italic">Total Final Settlement</span>
-                        </div>
-                        <span class="text-3xl font-black {% if trip.net_profit_incl_gst < 0 %}text-red-400{% else %}text-emerald-400{% endif %}">
-                            ₹{{ trip.net_profit_incl_gst|floatformat:2 }}
-                        </span>
-                    </div>
-                </div>
-            </div>
+    <!-- Metadata Footer -->
+    <div class="flex items-center justify-between px-2 text-[10px] text-slate-400 uppercase font-bold tracking-widest pt-4">
+        <div class="flex items-center gap-2">
+            <i class="fa-solid fa-clock-rotate-left"></i>
+            Created {{ trip.created_at|date:"M d, Y H:i" }}
         </div>
-
-        <!-- Payment Status Card -->
-        <div class="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
-            <div class="bg-slate-50 border-b border-slate-200 px-6 py-4 flex justify-between items-center">
-                <h3 class="text-xs font-bold text-slate-500 uppercase tracking-widest">Payments</h3>
-                {% if trip.party %}
-                <a href="{% url 'financialrecord-create' %}?party={{ trip.party.pk }}&associated_trip={{ trip.pk }}"
-                    class="w-6 h-6 bg-emerald-600 text-white rounded-full flex items-center justify-center hover:bg-emerald-700 transition-colors shadow-sm" title="Add Payment">
-                    <i class="fa-solid fa-plus text-[10px]"></i>
-                </a>
-                {% endif %}
-            </div>
-            <div class="p-6">
-                <div class="text-center pb-6">
-                    <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Outstanding Balance</p>
-                    <div class="text-4xl font-black {% if trip.outstanding_balance > 0 %}text-red-600{% else %}text-emerald-600{% endif %} mb-3">
-                        ₹{{ trip.outstanding_balance|floatformat:0 }}
-                    </div>
-                    <span class="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest
-                        {% if trip.payment_status == 'Paid' %}bg-emerald-100 text-emerald-800
-                        {% elif trip.payment_status == 'Partially Paid' %}bg-orange-100 text-orange-800
-                        {% else %}bg-red-100 text-red-800{% endif %}">
-                        {{ trip.payment_status }}
-                    </span>
-                </div>
-
-                {% if trip.payment_allocations.all or trip.financial_records.all %}
-                <div class="space-y-2 mt-4">
-                    <h4 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Transaction History</h4>
-                    <div class="space-y-2">
-                        {% for allocation in trip.payment_allocations.all %}
-                        <div class="flex justify-between items-center p-3 bg-slate-50 rounded-md border border-slate-100">
-                            <div>
-                                <a href="{% url 'financialrecord-detail' allocation.financial_record.pk %}" class="text-[11px] font-bold text-emerald-700 uppercase tracking-tighter hover:underline">
-                                    Received (Bulk)
-                                </a>
-                                <p class="text-[9px] text-slate-400">{{ allocation.financial_record.date|date:"d M, Y" }}</p>
-                            </div>
-                            <span class="text-sm font-bold text-emerald-600">+₹{{ allocation.amount|floatformat:0 }}</span>
-                        </div>
-                        {% endfor %}
-                        {% for record in trip.financial_records.all %}
-                        <div class="flex justify-between items-center p-3 bg-slate-50 rounded-md border border-slate-100">
-                            <div>
-                                <a href="{% url 'financialrecord-detail' record.pk %}" class="text-[11px] font-bold {% if record.is_invoice %}text-blue-700{% else %}text-emerald-700{% endif %} uppercase tracking-tighter hover:underline">
-                                    {% if record.is_invoice %}Invoice{% else %}Direct Payment{% endif %}
-                                </a>
-                                <p class="text-[9px] text-slate-400">{{ record.date|date:"d M, Y" }}</p>
-                            </div>
-                            <span class="text-sm font-bold {% if record.is_invoice %}text-blue-600{% else %}text-emerald-600{% endif %}">+₹{{ record.amount|floatformat:0 }}</span>
-                        </div>
-                        {% endfor %}
-                    </div>
-                </div>
-                {% endif %}
-            </div>
-        </div>
+        {% if trip.created_by %}
+        <div>By {{ trip.created_by.username }}</div>
+        {% endif %}
     </div>
 </div>
-{% endblock %}
-
-{% block extra_js %}
-<script>
-    $(document).ready(function() {
-        const $liters = $('#id_diesel_liters');
-        const $rate = $('#id_diesel_rate');
-        const $total = $('#id_diesel_total_cost');
-
-        function updateFromRate() {
-            const liters = parseFloat($liters.val()) || 0;
-            const rate = parseFloat($rate.val()) || 0;
-            if (liters > 0 && rate > 0) {
-                $total.val((liters * rate).toFixed(2));
-            }
-        }
-
-        function updateFromTotal() {
-            const liters = parseFloat($liters.val()) || 0;
-            const total = parseFloat($total.val()) || 0;
-            if (liters > 0 && total > 0) {
-                $rate.val((total / liters).toFixed(2));
-            }
-        }
-
-        $liters.on('input', updateFromRate);
-        $rate.on('input', updateFromRate);
-        $total.on('input', updateFromTotal);
-    });
-</script>
 {% endblock %}

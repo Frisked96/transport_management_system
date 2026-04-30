@@ -5,26 +5,25 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
 from django.core.exceptions import ValidationError
-from django.db.models.signals import post_delete
-from django.dispatch import receiver
 from django.db.models import Sum, Case, When, Value, F, DecimalField, OuterRef, Subquery
 from django.db.models.functions import Coalesce
 from fleet.models import Vehicle
 import re
-
-
-from django.db.models import Sum, Case, When, Value, F, DecimalField
 
 class TripQuerySet(models.QuerySet):
     def with_payment_info(self):
         """Annotate queryset with payment information for filtering and sorting"""
         from ledger.models import FinancialRecord, TripAllocation, TransactionCategory
         
-        # Subquery for direct payments (Income types)
+        # Subquery for direct payments (Income types or Deductions)
         direct_payments = FinancialRecord.objects.filter(
-            associated_trip=OuterRef('pk'),
-            category__type=TransactionCategory.TYPE_INCOME
-        ).exclude(record_type=FinancialRecord.RECORD_TYPE_INVOICE).values('associated_trip').annotate(
+            associated_trip=OuterRef('pk')
+        ).exclude(
+            record_type=FinancialRecord.RECORD_TYPE_INVOICE
+        ).filter(
+            models.Q(category__type=TransactionCategory.TYPE_INCOME) | 
+            models.Q(category__name='Deductions')
+        ).values('associated_trip').annotate(
             total=Sum('amount')
         ).values('total')
 
@@ -74,27 +73,50 @@ class TripManager(models.Manager):
     def with_billing_info(self):
         return self.get_queryset().with_billing_info()
 
-class Trip(models.Model):
-    # ... (rest of model) ...
-    objects = TripManager()
+class Route(models.Model):
+    """
+    Pre-defined routes with pickup and delivery locations.
+    Also defines if the route is local (GST) or intra/interstate (IGST).
+    """
+    pickup_location = models.CharField(
+        max_length=300,
+        verbose_name='Pickup Location'
+    )
+    delivery_location = models.CharField(
+        max_length=300,
+        verbose_name='Delivery Location'
+    )
+    
+    ROUTE_TYPE_LOCAL = 'local'
+    ROUTE_TYPE_INTRA = 'intra'
+    ROUTE_TYPE_CHOICES = [
+        (ROUTE_TYPE_LOCAL, 'Local (GST)'),
+        (ROUTE_TYPE_INTRA, 'Intra/Interstate (IGST)'),
+    ]
+    route_type = models.CharField(
+        max_length=10, 
+        choices=ROUTE_TYPE_CHOICES, 
+        default=ROUTE_TYPE_LOCAL,
+        verbose_name='Route Type'
+    )
 
+    class Meta:
+        verbose_name = 'Route'
+        verbose_name_plural = 'Routes'
+        unique_together = ['pickup_location', 'delivery_location', 'route_type']
+
+    def __str__(self):
+        return f"{self.pickup_location} to {self.delivery_location} ({self.get_route_type_display()})"
+
+class Trip(models.Model):
     """
     Trip model to manage transport operations.
-    Refactored to single-leg structure.
+    Simplified: No operational expenses, fuel, odometer, or manual status.
+    Status is derived from payment.
     """
-    
-    # Status choices
-    STATUS_IN_PROGRESS = 'In Progress'
-    STATUS_COMPLETED = 'Completed'
-    STATUS_CANCELLED = 'Cancelled'
-    
-    STATUS_CHOICES = [
-        (STATUS_IN_PROGRESS, 'In Progress'),
-        (STATUS_COMPLETED, 'Completed'),
-        (STATUS_CANCELLED, 'Cancelled'),
-    ]
-    
-    # Payment Status
+    objects = TripManager()
+
+    # Payment Status (for legacy reference/labels)
     PAYMENT_STATUS_UNPAID = 'Unpaid'
     PAYMENT_STATUS_PARTIAL = 'Partially Paid'
     PAYMENT_STATUS_PAID = 'Paid'
@@ -120,6 +142,14 @@ class Trip(models.Model):
         unique=True,
         verbose_name='Trip Number',
         blank=True
+    )
+
+    # LR Number
+    lr_no = models.CharField(
+        max_length=100,
+        verbose_name='LR No',
+        blank=True,
+        null=True
     )
     
     # Revenue type
@@ -148,43 +178,7 @@ class Trip(models.Model):
         verbose_name='Assigned Vehicle'
     )
     
-    start_odometer = models.PositiveIntegerField(
-        null=True,
-        blank=True,
-        verbose_name='Start Odometer'
-    )
-
-    end_odometer = models.PositiveIntegerField(
-        null=True,
-        blank=True,
-        verbose_name='End Odometer'
-    )
-
-    diesel_liters = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        null=True,
-        blank=True,
-        verbose_name='Diesel Liters'
-    )
-
-    diesel_total_cost = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        null=True,
-        blank=True,
-        verbose_name='Diesel Total Cost'
-    )
-
-    diesel_rate = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        null=True,
-        blank=True,
-        verbose_name='Diesel Rate (Price/Ltr)'
-    )
-
-    # Date of the trip (replaces date from TripLeg)
+    # Date of the trip
     date = models.DateTimeField(
         verbose_name='Trip Date',
         default=timezone.now
@@ -197,6 +191,22 @@ class Trip(models.Model):
         verbose_name='Party',
         null=True,
         blank=True
+    )
+
+    route = models.ForeignKey(
+        Route,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name='Route'
+    )
+
+    # Snapshot Fields (Ensure historical integrity)
+    gst_type_snapshot = models.CharField(
+        max_length=10,
+        blank=True,
+        verbose_name='GST Type (Snapshot)',
+        help_text='IGST or GST. Snapshotted from Route at creation.'
     )
 
     pickup_location = models.CharField(
@@ -231,25 +241,16 @@ class Trip(models.Model):
         default=0
     )
 
-    # Actual completion tracking
-    actual_completion_datetime = models.DateTimeField(
-        null=True,
-        blank=True,
-        verbose_name='Actual Completion Date & Time'
-    )
-    
-    # Status with choices
-    status = models.CharField(
-        max_length=20,
-        choices=STATUS_CHOICES,
-        default=STATUS_IN_PROGRESS,
-        verbose_name='Trip Status'
-    )
-    
     # Additional notes
     notes = models.TextField(
         blank=True,
         verbose_name='Trip Notes'
+    )
+
+    can_be_grouped = models.BooleanField(
+        default=True,
+        verbose_name='Can be Grouped',
+        help_text='Whether this trip can be grouped with others in a bill'
     )
     
     # Audit fields
@@ -270,9 +271,14 @@ class Trip(models.Model):
         verbose_name = 'Trip'
         verbose_name_plural = 'Trips'
         ordering = ['-date', '-created_at']
+        indexes = [
+            models.Index(fields=['date', 'created_at']),
+            models.Index(fields=['vehicle', 'date']),
+            models.Index(fields=['party', 'date']),
+            models.Index(fields=['driver', 'date']),
+        ]
         permissions = [
             ('can_view_all_trips', 'Can view all trips'),
-            ('can_update_trip_status', 'Can update trip status'),
             ('can_view_driver_dashboard', 'Can access driver dashboard'),
             ('can_view_manager_dashboard', 'Can access manager dashboard'),
         ]
@@ -281,137 +287,54 @@ class Trip(models.Model):
         party_name = self.party.name if self.party else "Unknown"
         return f"{self.trip_number} - {party_name} ({self.vehicle.registration_plate})"
     
-    def clean(self):
-        """
-        Validate trip logic
-        """
-        # Check if we are adding a new trip or changing the vehicle of an existing trip
-        check_vehicle = False
-        if self._state.adding:
-            check_vehicle = True
-        else:
-            try:
-                old_instance = Trip.objects.get(pk=self.pk)
-                if old_instance.vehicle != self.vehicle:
-                    check_vehicle = True
-            except Trip.DoesNotExist:
-                check_vehicle = True
-                
-        if check_vehicle and self.vehicle:
-            # Check if there are any uncompleted trips for this vehicle
-            uncompleted_trips = Trip.objects.filter(
-                vehicle=self.vehicle
-            ).exclude(status=self.STATUS_COMPLETED)
-            
-            if not self._state.adding:
-                uncompleted_trips = uncompleted_trips.exclude(pk=self.pk)
-            
-            if uncompleted_trips.exists():
-                latest_uncompleted = uncompleted_trips.order_by('-date').first()
-                trip_num = latest_uncompleted.trip_number or "Unknown"
-                raise ValidationError(
-                    f"Cannot create or assign a trip to vehicle {self.vehicle.registration_plate} "
-                    f"because it has an uncompleted trip ({trip_num}). "
-                    "Please mark the old trip as completed first."
-                )
-
-        if self.start_odometer is not None and self.end_odometer is not None:
-            if self.end_odometer < self.start_odometer:
-                # Raising as a non-field error (string) to prevent ValueError 
-                # in forms that don't include both odometer fields.
-                raise ValidationError(
-                    f"End Odometer ({self.end_odometer}) cannot be less than Start Odometer ({self.start_odometer}). "
-                    "Did you enter the distance covered instead of the actual odometer reading? "
-                    "Please correct the odometer readings in the 'Edit Trip' page."
-                )
-
     def sync_ledger_invoice(self):
         """
-        Synchronize Trip Payment to FinancialRecord as an Invoice.
-        If the trip is part of a finalized Bill, the individual trip record is removed
-        in favor of the consolidated Bill record.
+        Manage accrual-based revenue for this trip.
+        - If NOT billed: Create/Update a 'Trip Payment' invoice record in the ledger.
+        - If Billed: Delete the individual trip record (Bill handles the consolidated accrual).
         """
-        from ledger.models import FinancialRecord, TransactionCategory
+        from ledger.models import FinancialRecord, TransactionCategory, CompanyAccount
 
-        # 1. Check if we have Revenue info
-        has_revenue = self.weight is not None and self.rate_per_ton is not None
-
-        # 2. Check if already part of a bill (any status)
-        is_billed = self.bills.exists()
-
-        # 3. Find existing invoice record
-        invoice_qs = FinancialRecord.objects.filter(
-            associated_trip=self,
-            record_type=FinancialRecord.RECORD_TYPE_INVOICE
-        )
-
-        # If it's part of a bill, we DON'T want an individual trip invoice
-        # because the Bill (Invoice) will have its own record.
-        if is_billed or not has_revenue:
-            if invoice_qs.exists():
-                invoice_qs.delete()
+        # If trip is billed, individual trip accruals should be removed
+        if self.is_billed:
+            FinancialRecord.objects.filter(
+                associated_trip=self,
+                record_type=FinancialRecord.RECORD_TYPE_INVOICE
+            ).delete()
             return
 
-        # Otherwise, maintain individual record
-        amount = self.revenue
-        cat, _ = TransactionCategory.objects.get_or_create(
-            name="Trip Payment",
-            defaults={'type': TransactionCategory.TYPE_INCOME, 'description': 'Auto-generated revenue from trips'}
+        # If no revenue or no party, no accrual
+        if not self.revenue or not self.party:
+            FinancialRecord.objects.filter(
+                associated_trip=self,
+                record_type=FinancialRecord.RECORD_TYPE_INVOICE
+            ).delete()
+            return
+
+        # Get default category
+        category, _ = TransactionCategory.objects.get_or_create(
+            name='Trip Payment',
+            type=TransactionCategory.TYPE_INCOME
         )
-        if invoice_qs.exists():
-            # Update existing
-            record = invoice_qs.first()
-            # Update fields if changed
-            should_save = False
-            if record.amount != amount:
-                record.amount = amount
-                should_save = True
-            if record.party != self.party:
-                record.party = self.party
-                should_save = True
-            if record.driver != self.driver:
-                record.driver = self.driver
-                should_save = True
-            if record.date != self.date.date():
-                record.date = self.date.date()
-                should_save = True
 
-            if should_save:
-                record.save()
-        else:
-            # Create new
-            if amount >= 0:
-                FinancialRecord.objects.create(
-                    associated_trip=self,
-                    party=self.party,
-                    driver=self.driver,
-                    date=self.date.date(),
-                    category=cat,
-                    amount=amount,
-                    record_type=FinancialRecord.RECORD_TYPE_INVOICE,
-                    description=f"Invoice for Trip {self.trip_number}"
-                )
+        # Get default company account (issuer)
+        account = CompanyAccount.objects.first()
+        if not account:
+             return
 
-    def sync_fuel_log(self):
-        """Synchronize diesel fields to fleet.FuelLog"""
-        from fleet.models import FuelLog
-        
-        # Check if we have enough data to create a fuel log
-        if self.diesel_liters and self.diesel_total_cost and self.diesel_liters > 0:
-            FuelLog.objects.update_or_create(
-                trip=self,
-                defaults={
-                    'vehicle': self.vehicle,
-                    'date': self.date.date(),
-                    'liters': self.diesel_liters,
-                    'rate': self.diesel_rate or 0,
-                    'total_cost': self.diesel_total_cost,
-                    'odometer': self.start_odometer or self.vehicle.current_odometer or 0
-                }
-            )
-        else:
-            # If data is missing or zeroed out, remove any existing fuel log for this trip
-            FuelLog.objects.filter(trip=self).delete()
+        # Find or create individual trip invoice record
+        FinancialRecord.objects.update_or_create(
+            associated_trip=self,
+            record_type=FinancialRecord.RECORD_TYPE_INVOICE,
+            defaults={
+                'date': self.date,
+                'account': account,
+                'party': self.party,
+                'category': category,
+                'amount': self.revenue, # Subtotal only for unbilled
+                'description': f"Accrual for Trip {self.trip_number}",
+            }
+        )
 
     def save(self, *args, **kwargs):
         """
@@ -422,42 +345,32 @@ class Trip(models.Model):
         if not is_new:
             old_instance = Trip.objects.get(pk=self.pk)
 
-        # 1. Start Odometer Logic: Default to vehicle's current odometer on creation
-        if is_new and not self.start_odometer:
-            self.start_odometer = self.vehicle.current_odometer
-
-        # 2. Status logic: Handle completion datetime
-        if self.status == self.STATUS_COMPLETED and not self.actual_completion_datetime:
-            self.actual_completion_datetime = timezone.now()
-        elif self.status != self.STATUS_COMPLETED:
-            self.actual_completion_datetime = None
-
-        # 3. Diesel Calculation Logic
-        if self.diesel_liters:
-            from decimal import Decimal
-            liters = Decimal(str(self.diesel_liters))
-            
-            if self.diesel_rate and not self.diesel_total_cost:
-                self.diesel_total_cost = liters * Decimal(str(self.diesel_rate))
-            elif self.diesel_total_cost and not self.diesel_rate:
-                if liters > 0:
-                    self.diesel_rate = Decimal(str(self.diesel_total_cost)) / liters
+        # Sync locations from route if provided
+        if self.route:
+            self.pickup_location = self.route.pickup_location
+            self.delivery_location = self.route.delivery_location
+            if not self.gst_type_snapshot:
+                from ledger.models import Bill
+                if self.route.route_type == Route.ROUTE_TYPE_INTRA:
+                    self.gst_type_snapshot = Bill.GST_TYPE_IGST
+                else:
+                    self.gst_type_snapshot = Bill.GST_TYPE_GST
 
         # Handle Trip Number generation and regeneration
         reg_plate = self.vehicle.registration_plate
         
         # If trip exists, check if vehicle changed
-        if not is_new:
-            if old_instance.vehicle != self.vehicle:
-                # Vehicle changed, clear trip_number to trigger regeneration
-                self.trip_number = ""
+        vehicle_changed = False
+        if not is_new and old_instance.vehicle != self.vehicle:
+            vehicle_changed = True
+            self.trip_number = "" # Clear to trigger regeneration
 
         # Generate Trip Number if not present or cleared
         if not self.trip_number:
             from ledger.models import Sequence
 
             # Use created_at if available (for re-numbering), else current time
-            ref_date = self.created_at or timezone.now()
+            ref_date = self.date or timezone.now()
             
             # Using Sequences for robust atomic numbering
             total_count = Sequence.next_value(f"trip_total_{self.vehicle.pk}")
@@ -479,68 +392,63 @@ class Trip(models.Model):
         # Perform the actual save
         super().save(*args, **kwargs)
 
-        # 3. Post-save logic: Update Vehicle Odometer and Tyre KM
-        if self.end_odometer:
-            # Update vehicle's current odometer if this is the most recent trip or has highest odo
-            if self.end_odometer > self.vehicle.current_odometer:
-                self.vehicle.current_odometer = self.end_odometer
-                self.vehicle.save(update_fields=['current_odometer'])
-
-        if self.status == self.STATUS_COMPLETED and self.end_odometer:
-            # Update Tyres total_km
-            if self.start_odometer and self.end_odometer > self.start_odometer:
-                distance = self.end_odometer - self.start_odometer
-                
-                # Check if we should update (avoid double counting if already completed)
-                should_update_tyres = False
-                if is_new:
-                    should_update_tyres = True
-                elif old_instance.status != self.STATUS_COMPLETED:
-                    should_update_tyres = True
-                elif old_instance.end_odometer != self.end_odometer or old_instance.start_odometer != self.start_odometer:
-                    # If odo changed, we need to adjust the difference
-                    old_distance = (old_instance.end_odometer or 0) - (old_instance.start_odometer or 0)
-                    distance_diff = distance - old_distance
-                    for tyre in self.vehicle.tyres.all():
-                        tyre.total_km += distance_diff
-                        tyre.save(update_fields=['total_km'])
-                
-                if should_update_tyres:
-                    for tyre in self.vehicle.tyres.all():
-                        tyre.total_km += distance
-                        tyre.save(update_fields=['total_km'])
-
-        # 4. Chain Update: If end_odometer changed, update the next trip's start_odometer
-        if not is_new and old_instance.end_odometer != self.end_odometer:
-            next_trip = Trip.objects.filter(
-                vehicle=self.vehicle,
-                date__gt=self.date
-            ).order_by('date').first()
-            
-            if next_trip:
-                next_trip.start_odometer = self.end_odometer
-                next_trip.save(update_fields=['start_odometer'])
+        # If vehicle changed, recalculate for the OLD vehicle
+        if vehicle_changed:
+            Trip.recalculate_vehicle_trip_numbers(old_instance.vehicle)
 
         # Sync to Ledger
         self.sync_ledger_invoice()
 
-        # Sync Fuel Log
-        update_fields = kwargs.get('update_fields')
-        if update_fields is None or any(f in update_fields for f in ['diesel_liters', 'diesel_total_cost', 'diesel_rate', 'date', 'vehicle', 'start_odometer']):
-            self.sync_fuel_log()
+    @classmethod
+    def recalculate_vehicle_trip_numbers(cls, vehicle):
+        """
+        Recalculate and update all trip numbers for a specific vehicle to ensure gap-less sequencing.
+        """
+        from ledger.models import Sequence
+        
+        # Order by date first, then by created_at to maintain chronological order
+        trips = cls.objects.filter(vehicle=vehicle).order_by('date', 'created_at')
+        reg_plate = vehicle.registration_plate
+        
+        # Track counts
+        total_count = 0
+        monthly_counts = {} # Key: (year, month)
+        yearly_counts = {}  # Key: year
+        
+        for trip in trips:
+            total_count += 1
+            
+            # Use trip date
+            ref_date = trip.date
+            year, month = ref_date.year, ref_date.month
+            
+            monthly_key = (year, month)
+            monthly_counts[monthly_key] = monthly_counts.get(monthly_key, 0) + 1
+            yearly_counts[year] = yearly_counts.get(year, 0) + 1
+            
+            new_number = f"{reg_plate}-{total_count}/{monthly_counts[monthly_key]}/{yearly_counts[year]}"
+            
+            if trip.trip_number != new_number:
+                cls.objects.filter(pk=trip.pk).update(trip_number=new_number)
+        
+        # Update sequences to match the new state so future trips continue correctly
+        Sequence.objects.filter(key=f"trip_total_{vehicle.pk}").update(value=total_count)
+        for (year, month), val in monthly_counts.items():
+            Sequence.objects.filter(key=f"trip_month_{vehicle.pk}_{year}_{month}").update(value=val)
+        for year, val in yearly_counts.items():
+            Sequence.objects.filter(key=f"trip_year_{vehicle.pk}_{year}").update(value=val)
 
-        if is_new:
-            # Create default TripExpense entries using update_or_create to avoid duplicates 
-            # if multiple saves happen in a transaction (like in unified views)
-            TripExpense.objects.update_or_create(trip=self, name='Diesel', defaults={'amount': self.diesel_total_cost or 0})
-            TripExpense.objects.update_or_create(trip=self, name='Toll', defaults={'amount': 0})
-        else:
-            # Update Diesel expense if total_cost changed
-            TripExpense.objects.update_or_create(
-                trip=self, name='Diesel', 
-                defaults={'amount': self.diesel_total_cost or 0}
-            )
-    
+    @property
+    def gst_type(self):
+        """Returns GST type based on Snapshot, falling back to Route"""
+        if self.gst_type_snapshot:
+            return self.gst_type_snapshot
+            
+        from ledger.models import Bill
+        if self.route and self.route.route_type == Route.ROUTE_TYPE_INTRA:
+            return Bill.GST_TYPE_IGST
+        return Bill.GST_TYPE_GST
+
     @property
     def start_date(self):
         """Alias for date, for backward compatibility"""
@@ -575,14 +483,9 @@ class Trip(models.Model):
         If no bill exists or GST rate is 0, returns 0.
         """
         bill = self.associated_bill
-        if not bill or bill.gst_rate == 0:
+        if not bill or not bill.gst_rate:
             return 0
         
-        # Only apply GST if the bill is FINALized
-        from ledger.models import Bill
-        if bill.status != Bill.STATUS_FINAL:
-            return 0
-
         from decimal import Decimal
         return self.revenue * (Decimal(bill.gst_rate) / Decimal(100))
 
@@ -596,8 +499,9 @@ class Trip(models.Model):
         """Calculate total received (Payments + Deductions) from direct links and allocations"""
         from ledger.models import FinancialRecord, TransactionCategory, Bill
         # 1. Direct links (Records with type='Income' OR category='Deductions')
-        direct = self.financial_records.filter(
-            record_type=FinancialRecord.RECORD_TYPE_TRANSACTION
+        # Exclude Invoice type as they are debits
+        direct = self.financial_records.exclude(
+            record_type=FinancialRecord.RECORD_TYPE_INVOICE
         ).filter(
             models.Q(category__type=TransactionCategory.TYPE_INCOME) | models.Q(category__name='Deductions')
         ).aggregate(total=models.Sum('amount'))['total'] or 0
@@ -617,39 +521,6 @@ class Trip(models.Model):
             return billed_received
 
         return direct + allocated
-
-    def check_and_close_trip(self):
-        """
-        Check if trip should be automatically closed.
-        Conditions:
-        1. Total Revenue > 0
-        2. Fully Paid (Total Received >= Total Revenue OR associated Bill is PAID)
-        3. Trip Date has passed
-        """
-        if self.status == self.STATUS_COMPLETED:
-            return
-
-        # 1. Total Revenue (Incl GST if applicable)
-        total_rev = self.total_revenue
-        if total_rev <= 0:
-            return
-
-        # 2. Date Check (Must be in past)
-        if self.date > timezone.now():
-            return
-
-        # 3. Paid Amount
-        received = self.amount_received
-        
-        from ledger.models import Bill
-        bill = self.associated_bill
-        is_bill_paid = bill and bill.payment_status == Bill.PAYMENT_STATUS_PAID
-
-        if received >= total_rev or is_bill_paid:
-            self.status = self.STATUS_COMPLETED
-            if not self.actual_completion_datetime:
-                self.actual_completion_datetime = timezone.now()
-            self.save(update_fields=['status', 'actual_completion_datetime'])
 
     @property
     def payment_status(self):
@@ -672,108 +543,30 @@ class Trip(models.Model):
         """Calculate outstanding balance dynamically based on Total Revenue (incl GST)"""
         return self.total_revenue - self.amount_received
 
-    @property
-    def total_cost(self):
-        """Calculate total cost (from TripExpense)"""
-        return self.custom_expenses.aggregate(total=models.Sum('amount'))['total'] or 0
 
-    @property
-    def net_profit_excl_gst(self):
-        """Calculate net profit for this trip (Revenue Excl. GST - Total Cost)"""
-        return self.revenue - self.total_cost
-
-    @property
-    def net_profit_incl_gst(self):
-        """Calculate net profit for this trip (Revenue Incl. GST - Total Cost)"""
-        return self.total_revenue - self.total_cost
-
-    @property
-    def net_profit(self):
-        """Alias for backward compatibility"""
-        return self.net_profit_excl_gst
-
-    @property
-    def total_diesel_liters(self):
-        """Total liters used in trip"""
-        return self.diesel_liters or 0
-
-    @property
-    def total_fuel_cost(self):
-        """Total cost of fuel for this trip"""
-        return self.diesel_total_cost or 0
-
-    @property
-    def distance_covered(self):
-        """Distance covered in KM"""
-        if self.start_odometer is not None and self.end_odometer is not None:
-            return max(0, self.end_odometer - self.start_odometer)
-        return 0
-
-    @property
-    def diesel_average(self):
-        """Diesel average (mileage) in KM/L"""
-        liters = self.total_diesel_liters
-        distance = self.distance_covered
-        if liters > 0 and distance > 0:
-            return distance / liters
-        return 0
-
-
-class TripExpense(models.Model):
-    """
-    Custom expenses associated with a trip
-    """
-    trip = models.ForeignKey(
-        Trip,
-        on_delete=models.CASCADE,
-        related_name='custom_expenses',
-        verbose_name='Trip'
-    )
-    
-    name = models.CharField(
-        max_length=200,
-        verbose_name='Expense Name'
-    )
-    
-    amount = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        verbose_name='Amount'
-    )
-    
-    notes = models.TextField(
-        blank=True,
-        verbose_name='Notes'
-    )
-    
-    created_at = models.DateTimeField(
-        auto_now_add=True,
-        verbose_name='Created At'
-    )
-    
-    class Meta:
-        verbose_name = 'Trip Expense'
-        verbose_name_plural = 'Trip Expenses'
-        ordering = ['created_at']
-        unique_together = ('trip', 'name')
-    
-    def __str__(self):
-        return f"{self.name} - {self.amount}"
-
-    def save(self, *args, **kwargs):
-        """Sync diesel expense back to Trip model fields if it matches 'Diesel'"""
-        super().save(*args, **kwargs)
-        if self.name == 'Diesel' and self.trip:
-            # Only update if the value has actually changed to avoid infinite recursion
-            if self.trip.diesel_total_cost != self.amount:
-                self.trip.diesel_total_cost = self.amount
-                # We use save(update_fields) to trigger the Trip.save logic 
-                # but only for this field.
-                self.trip.save(update_fields=['diesel_total_cost'])
+# --- Signals ---
+from django.db.models.signals import post_save, post_delete
+from django.dispatch import receiver
 
 @receiver(post_delete, sender=Trip)
-def delete_related_fuel_log(sender, instance, **kwargs):
-    """Ensure FuelLog is deleted when Trip is deleted"""
-    from fleet.models import FuelLog
-    FuelLog.objects.filter(trip=instance).delete()
+def recalculate_on_trip_delete(sender, instance, **kwargs):
+    """
+    Trigger recalculation of trip numbers for a vehicle when a trip is deleted.
+    """
+    # Use a small delay or ensure we don't trigger recursively if it were save
+    # But for delete it's straightforward.
+    Trip.recalculate_vehicle_trip_numbers(instance.vehicle)
 
+@receiver(post_save, sender=Trip)
+def recalculate_on_trip_update(sender, instance, created, **kwargs):
+    """
+    Trigger recalculation if date was changed (affecting sequence).
+    Vehicle change is already handled in save() override.
+    """
+    if not created:
+        # Check if date changed
+        # Since we don't have easy access to 'old' instance here without another query
+        # and trip numbers are chronological, any update might justify a sync.
+        # However, to be efficient, we only do it if the number would actually change.
+        # For simplicity and robust sequencing, we'll run it.
+        Trip.recalculate_vehicle_trip_numbers(instance.vehicle)

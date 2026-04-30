@@ -79,7 +79,7 @@ class Document(models.Model):
     class Meta:
         verbose_name = 'Document'
         verbose_name_plural = 'Documents'
-        ordering = ['expiry_date']
+        ordering = ['expiry_date', '-created_at']
 
     def __str__(self):
         return f"{self.document_type} - {self.document_number}"
@@ -96,3 +96,33 @@ class Document(models.Model):
             return None
         delta = self.expiry_date - timezone.now().date()
         return delta.days
+
+
+# --- Signals ---
+from django.db.models.signals import post_delete, pre_save
+from django.dispatch import receiver
+
+@receiver(pre_save, sender=Document)
+def delete_old_document_file_on_change(sender, instance, **kwargs):
+    """
+    Deletes the old scanned copy from storage when a new one is uploaded.
+    """
+    if not instance.pk:
+        return False
+
+    try:
+        old_file = Document.objects.get(pk=instance.pk).scanned_copy
+    except Document.DoesNotExist:
+        return False
+
+    new_file = instance.scanned_copy
+    if old_file and old_file != new_file:
+        old_file.delete(save=False)
+
+@receiver(post_delete, sender=Document)
+def delete_document_file_on_delete(sender, instance, **kwargs):
+    """
+    Deletes the document's scanned copy from storage when the Document instance is deleted.
+    """
+    if instance.scanned_copy:
+        instance.scanned_copy.delete(save=False)

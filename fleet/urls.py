@@ -12,17 +12,13 @@ urlpatterns = [
     path('vehicle/<int:pk>/update/', views.VehicleUpdateView.as_view(), name='vehicle-update'),
     path('vehicle/<int:pk>/delete/', views.VehicleDeleteView.as_view(), name='vehicle-delete'),
     
-    # Maintenance Log URLs
-    path('maintenance/', views.MaintenanceLogListView.as_view(), name='maintenance-log-list'),
-    path('maintenance/<int:pk>/', views.MaintenanceLogDetailView.as_view(), name='maintenance-log-detail'),
-    path('maintenance/create/', views.MaintenanceLogCreateView.as_view(), name='maintenance-log-create'),
-    path('maintenance/<int:pk>/update/', views.MaintenanceLogUpdateView.as_view(), name='maintenance-log-update'),
-
-    # Maintenance Task URLs
-    path('tasks/', views.MaintenanceTaskListView.as_view(), name='maintenance-task-list'),
-    path('tasks/create/', views.MaintenanceTaskCreateView.as_view(), name='maintenance-task-create'),
-    path('tasks/<int:pk>/update/', views.MaintenanceTaskUpdateView.as_view(), name='maintenance-task-update'),
-    path('tasks/<int:pk>/delete/', views.MaintenanceTaskDeleteView.as_view(), name='maintenance-task-delete'),
+    # Maintenance Record URLs
+    path('maintenance/', views.MaintenanceListView.as_view(), name='maintenance-list'),
+    path('maintenance/<int:pk>/', views.MaintenanceRecordDetailView.as_view(), name='maintenance-detail'),
+    path('maintenance/create/', views.MaintenanceRecordCreateView.as_view(), name='maintenance-create'),
+    path('maintenance/<int:pk>/update/', views.MaintenanceRecordUpdateView.as_view(), name='maintenance-update'),
+    path('maintenance/<int:pk>/delete/', views.MaintenanceRecordDeleteView.as_view(), name='maintenance-delete'),
+    path('maintenance/<int:pk>/complete/', views.maintenance_record_complete, name='maintenance-complete'),
 
     # Tyre URLs
     path('tyres/', views.TyreListView.as_view(), name='tyre-list'),

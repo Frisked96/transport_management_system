@@ -75,26 +75,26 @@
     </div>
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div class="bg-emerald-600 rounded-lg p-6 shadow-md text-white">
-            <h3 class="text-xs font-bold text-emerald-100 uppercase tracking-widest mb-3 opacity-80">Income</h3>
+            <h3 class="text-xs font-bold text-emerald-100 uppercase tracking-widest mb-3 opacity-80">Total Debit (In)</h3>
             <div class="text-3xl font-extrabold mb-1">₹{{ income_this_month|floatformat:2 }}</div>
-            <p class="text-xs text-emerald-100 italic opacity-75">Freight Income</p>
+            <p class="text-xs text-emerald-100 italic opacity-75">Cash/Bank Inflow</p>
         </div>
         
         <div class="bg-red-600 rounded-lg p-6 shadow-md text-white">
-            <h3 class="text-xs font-bold text-red-100 uppercase tracking-widest mb-3 opacity-80">Expenses</h3>
+            <h3 class="text-xs font-bold text-red-100 uppercase tracking-widest mb-3 opacity-80">Total Credit (Out)</h3>
             <div class="text-3xl font-extrabold mb-1">₹{{ expenses_this_month|floatformat:2 }}</div>
-            <p class="text-xs text-red-100 italic opacity-75">Operational Costs</p>
+            <p class="text-xs text-red-100 italic opacity-75">Operational Outflow</p>
         </div>
         
         <div class="bg-white border border-slate-200 rounded-lg p-6 shadow-sm flex flex-col justify-center space-y-4">
             <div>
-                <h3 class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Profit (Excl. GST)</h3>
+                <h3 class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Net Balance (Excl. GST)</h3>
                 <div class="text-2xl font-extrabold {% if net_profit_excl_gst >= 0 %}text-emerald-600{% else %}text-red-600{% endif %}">
                     {% if net_profit_excl_gst >= 0 %}+{% endif %}₹{{ net_profit_excl_gst|floatformat:2 }}
                 </div>
             </div>
             <div class="pt-3 border-t border-slate-100">
-                <h3 class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Profit (Incl. GST)</h3>
+                <h3 class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Net Balance (Incl. GST)</h3>
                 <div class="text-3xl font-extrabold {% if net_profit_incl_gst >= 0 %}text-emerald-600{% else %}text-red-600{% endif %}">
                     {% if net_profit_incl_gst >= 0 %}+{% endif %}₹{{ net_profit_incl_gst|floatformat:2 }}
                 </div>
@@ -118,7 +118,8 @@
                     <tr>
                         <th class="px-6 py-4">Trip Number</th>
                         <th class="px-6 py-4">Driver & Vehicle</th>
-                        <th class="px-6 py-4">Start Date</th>
+                        <th class="px-6 py-4">Date</th>
+                        <th class="px-6 py-4 text-right">Revenue</th>
                         <th class="px-6 py-4">Status</th>
                         <th class="px-6 py-4 text-right">Actions</th>
                     </tr>
@@ -142,17 +143,21 @@
                                 <div class="text-[10px] text-slate-500 uppercase font-semibold">{{ trip.vehicle.registration_plate }}</div>
                             </td>
                             <td class="px-6 py-4 text-slate-600">
-                                {{ trip.start_date|date:"M d, Y" }}
-                                <div class="text-[10px] text-slate-400">{{ trip.start_date|date:"H:i" }}</div>
+                                {{ trip.date|date:"M d, Y" }}
+                                <div class="text-[10px] text-slate-400">{{ trip.date|date:"H:i" }}</div>
+                            </td>
+                            <td class="px-6 py-4 text-right font-bold text-slate-900">
+                                ₹{{ trip.revenue|floatformat:2 }}
                             </td>
                             <td class="px-6 py-4">
                                 <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider
-                                    {% if trip.status == 'Completed' %}bg-emerald-100 text-emerald-800
-                                    {% elif trip.status == 'Cancelled' %}bg-slate-100 text-slate-800
-                                    {% else %}bg-blue-100 text-blue-800{% endif %}">
-                                    {{ trip.status }}
+                                    {% if trip.annotated_status == 'Paid' %}bg-emerald-100 text-emerald-800
+                                    {% elif trip.annotated_status == 'Partially Paid' %}bg-amber-100 text-amber-800
+                                    {% else %}bg-slate-100 text-slate-600{% endif %}">
+                                    {{ trip.annotated_status }}
                                 </span>
                             </td>
+
                             <td class="px-6 py-4 text-right">
                                 <a href="{% url 'trip-detail' trip.pk %}" class="inline-flex items-center space-x-1 px-3 py-1 border border-slate-200 rounded bg-white text-xs font-bold text-slate-600 hover:bg-slate-50 hover:text-emerald-600 transition-colors">
                                     <i class="fa-regular fa-eye"></i>

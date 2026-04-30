@@ -2,7 +2,7 @@
 Admin configuration for Fleet app
 """
 from django.contrib import admin
-from .models import Vehicle, MaintenanceLog, MaintenanceTask, Tyre, TyreLog, FuelLog
+from .models import Vehicle, MaintenanceRecord, Tyre, TyreLog
 
 
 @admin.register(Vehicle)
@@ -26,54 +26,38 @@ class VehicleAdmin(admin.ModelAdmin):
     ]
 
 
-@admin.register(MaintenanceTask)
-class MaintenanceTaskAdmin(admin.ModelAdmin):
+@admin.register(MaintenanceRecord)
+class MaintenanceRecordAdmin(admin.ModelAdmin):
     list_display = [
         'vehicle',
         'name',
-        'interval_km',
-        'interval_days',
-        'last_performed_km',
-        'last_performed_date',
-        'is_due_status',
-        'is_active'
-    ]
-    list_filter = ['is_active', 'vehicle']
-    search_fields = ['name', 'vehicle__registration_plate']
-
-    def is_due_status(self, obj):
-        return obj.is_due
-    is_due_status.boolean = True
-    is_due_status.short_description = 'Is Due?'
-
-
-@admin.register(MaintenanceLog)
-class MaintenanceLogAdmin(admin.ModelAdmin):
-    list_display = [
-        'vehicle',
-        'task',
-        'date',
-        'type',
+        'is_completed',
+        'expiry_date',
+        'expiry_km',
+        'completion_date',
         'cost',
-        'service_provider',
-        'logged_by'
+        'is_overdue_status'
     ]
     
     list_filter = [
-        'type',
-        'date',
+        'is_completed',
         'vehicle',
-        'task'
+        'expiry_date',
+        'completion_date'
     ]
     
     search_fields = [
+        'name',
         'vehicle__registration_plate',
-        'vehicle__make_model',
-        'service_provider',
-        'task__name'
+        'service_provider'
     ]
     
-    readonly_fields = ['logged_by']
+    readonly_fields = ['logged_by', 'created_at', 'updated_at']
+
+    def is_overdue_status(self, obj):
+        return obj.is_overdue
+    is_overdue_status.boolean = True
+    is_overdue_status.short_description = 'Is Overdue?'
     
     def save_model(self, request, obj, form, change):
         """Automatically set logged_by field"""
@@ -84,19 +68,12 @@ class MaintenanceLogAdmin(admin.ModelAdmin):
 
 @admin.register(Tyre)
 class TyreAdmin(admin.ModelAdmin):
-    list_display = ['serial_number', 'brand', 'size', 'status', 'current_vehicle', 'total_km']
+    list_display = ['serial_number', 'brand', 'size', 'status', 'current_vehicle']
     list_filter = ['status', 'brand']
     search_fields = ['serial_number', 'brand', 'current_vehicle__registration_plate']
 
 
 @admin.register(TyreLog)
 class TyreLogAdmin(admin.ModelAdmin):
-    list_display = ['tyre', 'action', 'vehicle', 'date', 'distance_covered']
+    list_display = ['tyre', 'action', 'vehicle', 'date']
     list_filter = ['action', 'date', 'vehicle']
-
-
-@admin.register(FuelLog)
-class FuelLogAdmin(admin.ModelAdmin):
-    list_display = ['vehicle', 'date', 'liters', 'total_cost', 'odometer']
-    list_filter = ['date', 'vehicle']
-    search_fields = ['vehicle__registration_plate']

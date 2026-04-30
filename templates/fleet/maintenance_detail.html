@@ -1,0 +1,129 @@
+{% extends 'base.html' %}
+
+{% block title %}Maintenance Detail - Transport Management System{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <!-- BEGIN: Header -->
+    <header class="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+        <div>
+            <div class="flex items-center space-x-2 text-sm text-slate-500 mb-2">
+                <a href="{% url 'maintenance-list' %}" class="hover:text-emerald-600 transition-colors">Maintenance</a>
+                <i class="fa-solid fa-chevron-right text-[10px]"></i>
+                <span>Record Details</span>
+            </div>
+            <h1 class="text-3xl font-bold text-slate-900">{{ record.name }}</h1>
+            <p class="text-sm text-slate-600 mt-1">{{ record.vehicle.registration_plate }} • {{ record.vehicle.make_model }}</p>
+        </div>
+        <div class="flex space-x-3">
+            {% if not record.is_completed and perms.fleet.change_maintenancerecord %}
+            <a href="{% url 'maintenance-complete' record.pk %}" class="flex items-center space-x-2 px-4 py-2 bg-emerald-600 text-white rounded-md text-sm font-medium hover:bg-emerald-700 shadow-sm transition-colors">
+                <i class="fa-solid fa-check"></i>
+                <span>Mark Done</span>
+            </a>
+            {% endif %}
+            {% if perms.fleet.change_maintenancerecord %}
+            <a href="{% url 'maintenance-update' record.pk %}" class="flex items-center space-x-2 px-4 py-2 border border-slate-300 bg-white text-slate-700 rounded-md text-sm font-medium hover:bg-slate-50 transition-colors">
+                <i class="fa-regular fa-pen-to-square"></i>
+                <span>Edit</span>
+            </a>
+            {% endif %}
+        </div>
+    </header>
+    <!-- END: Header -->
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <!-- Status Card -->
+        <div class="bg-white border border-slate-200 rounded-lg p-5 shadow-sm">
+            <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Record Status</h3>
+            <div class="space-y-4">
+                <div>
+                    <span class="block text-xs text-slate-500 mb-1">Current Status</span>
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider {% if record.is_completed %}bg-green-100 text-green-800{% else %}bg-amber-100 text-amber-800{% endif %}">
+                        {{ record.is_completed|yesno:"Completed,Pending" }}
+                    </span>
+                </div>
+                {% if not record.is_completed and record.is_overdue %}
+                <div class="bg-rose-50 border border-rose-200 rounded p-3">
+                    <p class="text-xs text-rose-800 font-bold flex items-center gap-2">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                        Attention: This task is overdue!
+                    </p>
+                </div>
+                {% endif %}
+                <div>
+                    <span class="block text-xs text-slate-500 mb-1">Created By</span>
+                    <p class="text-sm font-medium text-slate-800">{{ record.logged_by.get_full_name|default:record.logged_by.username|default:"System" }}</p>
+                </div>
+                <div>
+                    <span class="block text-xs text-slate-500 mb-1">Created At</span>
+                    <p class="text-sm font-medium text-slate-800">{{ record.created_at|date:"M d, Y H:i" }}</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Details Card -->
+        <div class="md:col-span-2 space-y-6">
+            <div class="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
+                <div class="px-5 py-4 border-b border-slate-100 bg-slate-50">
+                    <h3 class="text-sm font-bold text-slate-700 uppercase tracking-wider">Record Information</h3>
+                </div>
+                <div class="p-5 grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {% if record.is_completed %}
+                    <div>
+                        <span class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Completion Date</span>
+                        <p class="text-sm font-bold text-slate-900">{{ record.completion_date|date:"M d, Y" }}</p>
+                    </div>
+                    <div>
+                        <span class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Completion ODO</span>
+                        <p class="text-sm font-bold text-slate-900">{{ record.completion_km }} km</p>
+                    </div>
+                    <div>
+                        <span class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Cost</span>
+                        <p class="text-sm font-bold text-emerald-600 text-lg">₹{{ record.cost|floatformat:2 }}</p>
+                    </div>
+                    <div>
+                        <span class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Service Provider</span>
+                        <p class="text-sm font-medium text-slate-800">{{ record.service_provider|default:"-" }}</p>
+                    </div>
+                    {% else %}
+                    <div>
+                        <span class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Next Due Date</span>
+                        <p class="text-sm font-bold {% if record.is_overdue %}text-rose-600{% else %}text-slate-900{% endif %}">
+                            {{ record.expiry_date|date:"M d, Y"|default:"Not set" }}
+                        </p>
+                    </div>
+                    <div>
+                        <span class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Next Due ODO</span>
+                        <p class="text-sm font-bold {% if record.is_overdue and record.expiry_km %}text-rose-600{% else %}text-slate-900{% endif %}">
+                            {{ record.expiry_km|default:"Not set" }} {% if record.expiry_km %}km{% endif %}
+                        </p>
+                    </div>
+                    {% endif %}
+
+                    <div class="md:col-span-2 pt-4 border-t border-slate-50">
+                        <span class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Recurring Intervals</span>
+                        <div class="flex gap-4">
+                            <div class="bg-slate-100 px-3 py-1.5 rounded-md border border-slate-200">
+                                <span class="text-[10px] text-slate-500 uppercase block">By Days</span>
+                                <span class="text-sm font-bold text-slate-700">{{ record.interval_days|default:"Non-recurring" }}</span>
+                            </div>
+                            <div class="bg-slate-100 px-3 py-1.5 rounded-md border border-slate-200">
+                                <span class="text-[10px] text-slate-500 uppercase block">By Distance</span>
+                                <span class="text-sm font-bold text-slate-700">{% if record.interval_km %}{{ record.interval_km }} km{% else %}Non-recurring{% endif %}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="md:col-span-2 pt-4 border-t border-slate-50">
+                        <span class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Notes</span>
+                        <div class="bg-slate-50 p-3 rounded text-sm text-slate-700 whitespace-pre-wrap min-h-[80px] border border-slate-200">
+                            {{ record.notes|default:"No notes provided." }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

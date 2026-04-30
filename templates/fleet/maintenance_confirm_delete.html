@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+
+{% block title %}Delete Maintenance Record - Transport Management System{% endblock %}
+
+{% block content %}
+<div class="max-w-lg mx-auto py-12">
+    <div class="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
+        <div class="p-6 text-center">
+            <div class="w-16 h-16 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                <i class="fa-solid fa-trash-can text-2xl"></i>
+            </div>
+            <h1 class="text-2xl font-bold text-slate-900 mb-2">Delete Maintenance Record?</h1>
+            <p class="text-slate-600 mb-6">
+                Are you sure you want to delete the maintenance record for <strong>{{ object.name }}</strong> ({{ object.vehicle.registration_plate }})? This action cannot be undone.
+            </p>
+            
+            <form method="post">
+                {% csrf_token %}
+                <div class="flex flex-col sm:flex-row gap-3">
+                    <a href="{% url 'maintenance-list' %}" class="flex-1 px-4 py-2 border border-slate-300 text-slate-700 rounded-md text-sm font-medium hover:bg-slate-50 transition-colors">
+                        No, Keep it
+                    </a>
+                    <button type="submit" class="flex-1 px-4 py-2 bg-rose-600 text-white rounded-md text-sm font-medium hover:bg-rose-700 transition-colors shadow-sm">
+                        Yes, Delete Permanently
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -73,25 +73,38 @@
                         <div class="space-y-4">
                             <div class="flex items-center justify-between gap-4">
                                 <label class="text-sm font-semibold text-slate-700">Invoice #:</label>
-                                <div class="flex-grow max-w-[200px]">{{ form.bill_number }}</div>
+                                <div class="flex-grow max-w-[350px]">
+                                    <div class="flex items-stretch shadow-sm rounded-md overflow-hidden">
+                                        {{ form.prefix }}
+                                        {{ form.bill_no }}
+                                    </div>
+                                    <p class="mt-1 text-[10px] text-slate-500 italic">Prefix is automatic. Edit the number if needed.</p>
+                                </div>
                             </div>
                             <div class="flex items-center justify-between gap-4">
                                 <label class="text-sm font-semibold text-slate-700">Date:</label>
                                 <div class="flex-grow max-w-[200px]">{{ form.date }}</div>
                             </div>
                             <div class="flex items-center justify-between gap-4">
-                                <label class="text-sm font-semibold text-slate-700">GST Type:</label>
-                                <div class="flex-grow max-w-[200px]">{{ form.gst_type }}</div>
-                            </div>
-                            <div class="flex items-center justify-between gap-4">
                                 <label class="text-sm font-semibold text-slate-700">GST Rate (%):</label>
                                 <div class="flex-grow max-w-[200px]">{{ form.gst_rate }}</div>
                             </div>
                             <div class="flex items-center justify-between gap-4">
-                                <label class="text-sm font-semibold text-slate-700">Status:</label>
-                                <div class="flex-grow max-w-[200px]">{{ form.status }}</div>
+                                <label class="text-sm font-semibold text-slate-700">GST Type:</label>
+                                <div class="flex-grow max-w-[200px]">
+                                    {{ form.gst_type }}
+                                    <p id="gstTypeSuggestion" class="text-[9px] text-emerald-600 mt-1 font-bold hidden"></p>
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-between gap-4 py-2 border-t border-slate-100">
+                                <label class="text-sm font-semibold text-slate-700">Round Off:</label>
+                                <div class="flex items-center space-x-2">
+                                    {{ form.use_roundoff }}
+                                    <span class="text-xs text-slate-500">Auto-round to whole rupee</span>
+                                </div>
                             </div>
                         </div>
+
                     </div>
                 </div>
                 <!-- END: Header Section -->
@@ -103,16 +116,43 @@
                             <i class="fa-solid fa-file-invoice mr-2"></i>Standard Invoice Details
                         </h3>
                     </div>
-                    <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-8 bg-slate-50/30">
+                    <div class="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 bg-slate-50/30">
+                        <div class="space-y-2">
+                            <label class="block text-xs font-bold text-slate-500 uppercase">Category</label>
+                            {{ form.category }}
+                            <p class="text-[10px] text-slate-400 italic">Select category. Credit/Debit Notes have their own numbering series.</p>
+                        </div>
+                        <div id="originalBillContainer" class="space-y-2 hidden">
+                            <label class="block text-xs font-bold text-slate-500 uppercase">Against Invoice</label>
+                            {{ form.original_bill }}
+                            <p class="text-[10px] text-rose-500 italic font-bold">Select the original invoice this adjustment is for.</p>
+                        </div>
                         <div class="space-y-2">
                             <label class="block text-xs font-bold text-slate-500 uppercase">Item Description / Type</label>
                             {{ form.item_type }}
                             <p class="text-[10px] text-slate-400">e.g., Detention Charges, Loading/Unloading, etc.</p>
                         </div>
+
+                        <!-- Calculations Grid -->
                         <div class="space-y-2">
-                            <label class="block text-xs font-bold text-slate-500 uppercase">Subtotal Amount (Excl. GST)</label>
+                            <label class="block text-xs font-bold text-slate-500 uppercase">Weight (Optional)</label>
+                            {{ form.standard_weight }}
+                        </div>
+                        <div class="space-y-2">
+                            <label class="block text-xs font-bold text-slate-500 uppercase">Rate per Ton</label>
+                            {{ form.standard_rate }}
+                        </div>
+                        <div class="space-y-2">
+                            <label class="block text-xs font-bold text-slate-500 uppercase">Base Amount (Excl. GST)</label>
                             {{ form.amount_override }}
-                            <p class="text-[10px] text-slate-400">Enter the base amount. GST will be added automatically based on the rate above.</p>
+                        </div>
+                        <div class="space-y-2">
+                            <label class="block text-xs font-bold text-slate-500 uppercase">GST Amount</label>
+                            <input type="number" id="id_gst_amount_manual" step="0.01" class="block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white">
+                        </div>
+                        <div class="space-y-2">
+                            <label class="block text-xs font-bold text-slate-500 uppercase font-black text-emerald-700">Final Total Amount (Incl. GST)</label>
+                            <input type="number" id="id_total_amount_manual" step="0.01" class="block w-full px-3 py-2 border-2 border-emerald-500 rounded-md text-sm shadow-sm font-bold focus:ring-emerald-600 focus:border-emerald-600 bg-white text-emerald-900">
                         </div>
                     </div>
                 </div>
@@ -146,6 +186,7 @@
                                             <input class="trip-checkbox rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" type="checkbox" 
                                                    name="trips" value="{{ trip.pk }}" 
                                                    id="trip_{{ trip.pk }}"
+                                                   data-gst-type="{{ trip.gst_type }}"
                                                    {% if trip.pk in form.trips.value %}checked{% endif %}>
                                         </td>
                                         <td class="px-6 py-4">
@@ -174,11 +215,8 @@
                 <!-- END: Trips Selection -->
 
                 <div class="flex flex-col md:flex-row justify-end items-center gap-4 mt-8 pt-8 border-t border-slate-100">
-                    <button type="submit" id="saveAndFinalizeBtn" name="save_print" class="w-full md:w-auto px-8 py-3 bg-emerald-600 text-white rounded-md font-bold hover:bg-emerald-700 shadow-md transition-all flex items-center justify-center">
-                        <i class="fa-solid fa-cloud-arrow-up mr-2"></i> Save & View Invoice
-                    </button>
-                    <button type="submit" id="saveDraftBtn" class="w-full md:w-auto px-8 py-3 border border-slate-300 rounded-md text-slate-700 bg-white hover:bg-slate-50 font-bold transition-all">
-                        Save as Draft
+                    <button type="submit" id="saveAndFinalizeBtn" class="w-full md:w-auto px-12 py-4 bg-emerald-600 text-white rounded-md font-bold hover:bg-emerald-700 shadow-lg transition-all flex items-center justify-center text-lg">
+                        <i class="fa-solid fa-file-circle-check mr-2"></i> Generate & Save Invoice
                     </button>
                 </div>
             </form>
@@ -190,6 +228,11 @@
 {% block extra_js %}
 <script>
     $(document).ready(function() {
+        // --- 1. Global: Disable Number Scroll ---
+        $('input[type=number]').on('wheel', function(e) {
+            $(this).blur();
+        });
+
         // Initialize Select2
         $('#id_issuer, #id_party').select2({
             theme: 'bootstrap-5',
@@ -205,6 +248,102 @@
             }
         } catch (e) {
             console.error("Error parsing trips data", e);
+        }
+
+        // --- 2. Standard Invoice Calculation Logic ---
+        const weightInput = $('#id_standard_weight');
+        const rateInput = $('#id_standard_rate');
+        const baseAmountInput = $('#id_amount_override');
+        const gstRateInput = $('#id_gst_rate');
+        const gstAmountInput = $('#id_gst_amount_manual');
+        const totalAmountInput = $('#id_total_amount_manual');
+
+        function getGstRate() {
+            return parseFloat(gstRateInput.val()) || 0;
+        }
+
+        function updateFromBase() {
+            const base = parseFloat(baseAmountInput.val()) || 0;
+            const gstRate = getGstRate();
+            const gst = base * (gstRate / 100);
+            const total = base + gst;
+
+            gstAmountInput.val(gst.toFixed(2));
+            totalAmountInput.val(total.toFixed(2));
+
+            // Update Rate if Weight exists
+            const weight = parseFloat(weightInput.val()) || 0;
+            if (weight > 0) {
+                rateInput.val((base / weight).toFixed(2));
+            }
+        }
+
+        function updateFromTotal() {
+            const total = parseFloat(totalAmountInput.val()) || 0;
+            const gstRate = getGstRate();
+            
+            // total = base + (base * rate/100) = base * (1 + rate/100)
+            const base = total / (1 + (gstRate / 100));
+            const gst = total - base;
+
+            baseAmountInput.val(base.toFixed(2));
+            gstAmountInput.val(gst.toFixed(2));
+
+            // Update Rate if Weight exists
+            const weight = parseFloat(weightInput.val()) || 0;
+            if (weight > 0) {
+                rateInput.val((base / weight).toFixed(2));
+            }
+        }
+
+        function updateFromWeightRate() {
+            const weight = parseFloat(weightInput.val()) || 0;
+            const rate = parseFloat(rateInput.val()) || 0;
+            if (weight > 0 && rate > 0) {
+                baseAmountInput.val((weight * rate).toFixed(2));
+                updateFromBase();
+            }
+        }
+
+        function updateFromGst() {
+            const gst = parseFloat(gstAmountInput.val()) || 0;
+            const gstRate = getGstRate();
+            
+            if (gstRate > 0) {
+                // If rate exists, calculate base from gst
+                const base = gst / (gstRate / 100);
+                const total = base + gst;
+                
+                baseAmountInput.val(base.toFixed(2));
+                totalAmountInput.val(total.toFixed(2));
+
+                // Update Rate if Weight exists
+                const weight = parseFloat(weightInput.val()) || 0;
+                if (weight > 0) {
+                    rateInput.val((base / weight).toFixed(2));
+                }
+            } else {
+                // If rate is 0, just update total based on current base + new gst
+                const base = parseFloat(baseAmountInput.val()) || 0;
+                totalAmountInput.val((base + gst).toFixed(2));
+            }
+        }
+
+        // Event listeners for Standard Invoice fields
+        weightInput.on('input', updateFromWeightRate);
+        rateInput.on('input', updateFromWeightRate);
+        baseAmountInput.on('input', updateFromBase);
+        gstAmountInput.on('input', updateFromGst);
+        totalAmountInput.on('input', updateFromTotal);
+        gstRateInput.on('change', function() {
+            if ($('#id_bill_type').val() === 'Standard') {
+                updateFromBase();
+            }
+        });
+
+        // Initial Calc for Edit mode
+        if ($('#id_bill_type').val() === 'Standard') {
+            updateFromBase();
         }
 
         // Bill Type Toggle Logic
@@ -223,15 +362,6 @@
 
         $('#id_bill_type').on('change', updateBillTypeUI);
         updateBillTypeUI(); // Initial run
-
-        // Logic for Save as Draft vs Save & Finalize
-        $('#saveDraftBtn').on('click', function(e) {
-            $('#id_status').val('Draft');
-        });
-
-        $('#saveAndFinalizeBtn').on('click', function(e) {
-            $('#id_status').val('Final');
-        });
 
         // Function to update trips table via AJAX
         function updateTripsTable(partyId) {
@@ -256,7 +386,8 @@
                     if (data.trips.length > 0) {
                         data.trips.forEach(trip => {
                             const isChecked = tripsData.hasOwnProperty(trip.id.toString()) || (billId && {{ form.trips.value|safe|default:"[]" }}.includes(trip.id));
-                            const lrNo = tripsData[trip.id] || "";
+                            // Fallback sequence: 1. Current form session data, 2. AJAX returned LR (which includes BillTrip override), 3. Empty
+                            const lrNo = tripsData[trip.id] || trip.lr_no || "";
                             
                             const row = `
                                 <tr class="hover:bg-slate-50 transition-colors">
@@ -264,6 +395,7 @@
                                         <input class="trip-checkbox rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" type="checkbox" 
                                                name="trips" value="${trip.id}" 
                                                id="trip_${trip.id}"
+                                               data-gst-type="${trip.gst_type}"
                                                ${isChecked ? 'checked' : ''}>
                                     </td>
                                     <td class="px-6 py-4">
@@ -298,34 +430,216 @@
             });
         }
 
+        function updateInvoiceNumber(issuerId) {
+            console.log("Updating invoice number for issuer:", issuerId);
+            if (!issuerId || "{% if form.instance.pk %}true{% endif %}" === "true") {
+                console.log("Skipping: issuerId is null or editing existing record");
+                return;
+            }
+
+            // DO NOT overwrite if user has manually entered a number
+            if ($('#id_bill_no').data('manual') === true && $('#id_bill_no').val() !== "") {
+                console.log("Skipping: User has manually entered a value");
+                return;
+            }
+
+            const date = $('#id_date').val();
+            const categoryId = $('#id_category').val();
+            console.log("Params for AJAX:", {date, categoryId});
+
+            $.ajax({
+                url: "{% url 'get-next-invoice-number' %}",
+                data: { 
+                    'issuer_id': issuerId,
+                    'date': date,
+                    'category_id': categoryId
+                },
+                success: function(data) {
+                    console.log("AJAX Success Data:", data);
+                    if (data.bill_no) {
+                        // Double check manual flag again before setting
+                        if ($('#id_bill_no').data('manual') !== true || $('#id_bill_no').val() === "") {
+                            $('#id_bill_no').val(data.bill_no);
+                            $('#id_bill_no').data('manual', false); // Reset if it was empty
+                        }
+                        $('#id_prefix').val(data.prefix);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error("AJAX Error:", status, error);
+                }
+            });
+        }
+
+        // Mark bill_no as manual when user types in it
+        $('#id_bill_no').on('input change', function() {
+            if ($(this).val() !== "") {
+                $(this).data('manual', true);
+            } else {
+                $(this).data('manual', false);
+            }
+        });
+
+        function updateCategoryUI() {
+            const categoryText = $('#id_category option:selected').text();
+            if (categoryText.includes('Credit Note') || categoryText.includes('Debit Note')) {
+                $('#originalBillContainer').removeClass('hidden');
+            } else {
+                $('#originalBillContainer').addClass('hidden');
+            }
+            updateInvoiceNumber($('#id_issuer').val());
+        }
+
+        $('#id_category').on('change', updateCategoryUI);
+        updateCategoryUI(); // Initial run
+
+        function suggestGstType() {
+            const billType = $('#id_bill_type').val();
+            const gstTypeField = $('#id_gst_type');
+            const suggestionEl = $('#gstTypeSuggestion');
+            
+            if (billType === 'Standard') {
+                gstTypeField.prop('disabled', false).removeClass('bg-slate-100 cursor-not-allowed');
+                suggestionEl.addClass('hidden');
+                return;
+            }
+
+            const selectedTrips = $('.trip-checkbox:checked');
+            if (selectedTrips.length === 0) {
+                gstTypeField.prop('disabled', false).removeClass('bg-slate-100 cursor-not-allowed');
+                suggestionEl.addClass('hidden');
+                return;
+            }
+
+            let igstCount = 0;
+            let gstCount = 0;
+
+            selectedTrips.each(function() {
+                const type = $(this).data('gst-type');
+                if (type === 'IGST') igstCount++;
+                else gstCount++;
+            });
+
+            if (igstCount > 0 && gstCount === 0) {
+                suggestionEl.text('Auto-locked: IGST (Based on selected routes)').removeClass('hidden text-rose-600').addClass('text-emerald-600');
+                gstTypeField.val('IGST').trigger('change').prop('disabled', true).addClass('bg-slate-100 cursor-not-allowed');
+            } else if (gstCount > 0 && igstCount === 0) {
+                suggestionEl.text('Auto-locked: GST (Based on selected routes)').removeClass('hidden text-rose-600').addClass('text-emerald-600');
+                gstTypeField.val('GST').trigger('change').prop('disabled', true).addClass('bg-slate-100 cursor-not-allowed');
+            } else if (igstCount > 0 && gstCount > 0) {
+                suggestionEl.text('Mixed Route Types Selected! Invoicing blocked.').removeClass('hidden text-emerald-600').addClass('text-rose-600');
+                gstTypeField.prop('disabled', false).removeClass('bg-slate-100 cursor-not-allowed');
+            } else {
+                suggestionEl.addClass('hidden');
+                gstTypeField.prop('disabled', false).removeClass('bg-slate-100 cursor-not-allowed');
+            }
+        }
+
         function bindTableEvents() {
-            // LR No. handling sync
-            $('.lr-input').on('input', function() {
-                const tripId = $(this).data('trip-id');
+            // Populate and Sync tripsData with the current table state
+            $('.lr-input').each(function() {
+                const tripId = $(this).data('trip-id').toString();
+                
+                // 1. If input is empty but we have a value in tripsData, fill it
+                if ($(this).val() === "" && tripsData[tripId]) {
+                    $(this).val(tripsData[tripId]);
+                }
+                
+                // 2. If input has a value, ensure it's in tripsData
+                const currentVal = $(this).val();
+                if (currentVal !== "") {
+                    tripsData[tripId] = currentVal;
+                }
+            });
+            
+            // Update the hidden input
+            tripsDataInput.value = JSON.stringify(tripsData);
+
+            // Bind live input event for future changes
+            $('.lr-input').off('input').on('input', function() {
+                const tripId = $(this).data('trip-id').toString();
                 tripsData[tripId] = $(this).val();
                 tripsDataInput.value = JSON.stringify(tripsData);
             });
 
+            // Trip selection change
+            $('.trip-checkbox').on('change', function() {
+                suggestGstType();
+            });
+
             // Re-bind select all
             const selectAll = document.getElementById('selectAllTrips');
-            const checkboxes = document.querySelectorAll('.trip-checkbox');
             if(selectAll) {
                 $(selectAll).off('change').on('change', function() {
+                    const checkboxes = document.querySelectorAll('.trip-checkbox');
                     checkboxes.forEach(cb => cb.checked = this.checked);
+                    suggestGstType();
                 });
             }
         }
 
-        // Initial bind
-        bindTableEvents();
+        $('#id_bill_type').on('change', function() {
+            updateBillTypeUI();
+            suggestGstType();
+        });
+
+        // Initial run for invoice number (for NEW invoices)
+        const initialIssuer = $('#id_issuer').val();
+        if (initialIssuer && "{% if form.instance.pk %}true{% endif %}" !== "true") {
+            updateInvoiceNumber(initialIssuer);
+        }
+
+        // Function to update original bills (Against Invoice) via AJAX
+        function updateOriginalBills(partyId) {
+            const billSelect = $('#id_original_bill');
+            if (!partyId) {
+                billSelect.empty().append('<option value="">---------</option>');
+                return;
+            }
+
+            const currentOriginalBillId = "{{ form.original_bill.value|default:'' }}";
+
+            $.ajax({
+                url: "{% url 'get-party-bills' %}",
+                data: { 'party_id': partyId },
+                success: function(data) {
+                    billSelect.empty().append('<option value="">---------</option>');
+                    if (data.bills.length > 0) {
+                        data.bills.forEach(bill => {
+                            const isSelected = bill.id.toString() === currentOriginalBillId ? 'selected' : '';
+                            billSelect.append(`<option value="${bill.id}" ${isSelected}>${bill.label}</option>`);
+                        });
+                    }
+                },
+                error: function() {
+                    console.error("Failed to fetch bills for party");
+                }
+            });
+        }
 
         // AJAX Load on Party change
         $('#id_party').on('change', function() {
-            updateTripsTable($(this).val());
+            const partyId = $(this).val();
+            updateTripsTable(partyId);
+            updateOriginalBills(partyId);
+        });
+
+        // Initial run if party is already selected
+        const initialPartyId = $('#id_party').val();
+        if (initialPartyId) {
+            updateOriginalBills(initialPartyId);
+        }
+
+        // AJAX Invoice Number on Issuer or Date change (only for NEW invoices)
+        $('#id_issuer, #id_date').on('change', function() {
+            updateInvoiceNumber($('#id_issuer').val());
         });
 
         // Final sync before submission
         $('#invoiceForm').on('submit', function() {
+            // Re-enable disabled fields so they are submitted
+            $('#id_gst_type').prop('disabled', false);
+            
             const finalData = {};
             $('.lr-input').each(function() {
                 const tripId = $(this).data('trip-id');
@@ -336,6 +650,10 @@
             });
             tripsDataInput.value = JSON.stringify(finalData);
         });
+
+        // Initial setup
+        bindTableEvents();
+        suggestGstType();
     });
 </script>
 {% endblock %}

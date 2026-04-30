@@ -1,0 +1,150 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if form.instance.pk %}Edit{% else %}Add{% endif %} Maintenance Record - Transport Management System{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto">
+    <!-- BEGIN: Header -->
+    <header class="mb-6">
+        <div class="flex items-center space-x-2 text-sm text-slate-500 mb-2">
+            <a href="{% url 'maintenance-list' %}" class="hover:text-emerald-600 transition-colors">Maintenance</a>
+            <i class="fa-solid fa-chevron-right text-[10px]"></i>
+            <span>{% if form.instance.pk %}Edit{% else %}Add{% endif %} Record</span>
+        </div>
+        <h1 class="text-3xl font-bold text-slate-900">{% if form.instance.pk %}Edit{% else %}Add{% endif %} Maintenance Record</h1>
+    </header>
+    <!-- END: Header -->
+
+    <!-- BEGIN: Form -->
+    <form method="post" class="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
+        {% csrf_token %}
+        
+        <div class="p-6 space-y-6">
+            <!-- Basic Info Section -->
+            <section>
+                <h3 class="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">Basic Information</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="md:col-span-2">
+                        <label for="{{ form.vehicle.id_for_label }}" class="block text-sm font-medium text-slate-700 mb-1">{{ form.vehicle.label }}</label>
+                        {{ form.vehicle }}
+                        {% if form.vehicle.errors %}<p class="mt-1 text-sm text-rose-600">{{ form.vehicle.errors.0 }}</p>{% endif %}
+                    </div>
+                    <div class="md:col-span-2">
+                        <label for="{{ form.name.id_for_label }}" class="block text-sm font-medium text-slate-700 mb-1">{{ form.name.label }}</label>
+                        {{ form.name }}
+                        {% if form.name.errors %}<p class="mt-1 text-sm text-rose-600">{{ form.name.errors.0 }}</p>{% endif %}
+                        <p class="mt-1 text-xs text-slate-500 italic">{{ form.name.help_text }}</p>
+                    </div>
+                </div>
+            </section>
+
+            <hr class="border-slate-100">
+
+            <!-- Status Section -->
+            <section>
+                <div class="flex items-center space-x-3 mb-4">
+                    <h3 class="text-sm font-bold text-slate-400 uppercase tracking-widest">Status</h3>
+                    <div class="flex items-center space-x-2 bg-slate-50 px-3 py-1 rounded-full border border-slate-200">
+                        {{ form.is_completed }}
+                        <label for="{{ form.is_completed.id_for_label }}" class="text-sm font-bold text-slate-700">This record is completed</label>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Due/Interval Section (Visible primarily for Pending) -->
+            <section id="due-section">
+                <h3 class="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">Scheduling (Next Due)</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="{{ form.expiry_date.id_for_label }}" class="block text-sm font-medium text-slate-700 mb-1">{{ form.expiry_date.label }}</label>
+                        {{ form.expiry_date }}
+                        {% if form.expiry_date.errors %}<p class="mt-1 text-sm text-rose-600">{{ form.expiry_date.errors.0 }}</p>{% endif %}
+                    </div>
+                    <div>
+                        <label for="{{ form.expiry_km.id_for_label }}" class="block text-sm font-medium text-slate-700 mb-1">{{ form.expiry_km.label }}</label>
+                        {{ form.expiry_km }}
+                        {% if form.expiry_km.errors %}<p class="mt-1 text-sm text-rose-600">{{ form.expiry_km.errors.0 }}</p>{% endif %}
+                    </div>
+                    <div>
+                        <label for="{{ form.interval_days.id_for_label }}" class="block text-sm font-medium text-slate-700 mb-1">{{ form.interval_days.label }}</label>
+                        {{ form.interval_days }}
+                        {% if form.interval_days.errors %}<p class="mt-1 text-sm text-rose-600">{{ form.interval_days.errors.0 }}</p>{% endif %}
+                        <p class="mt-1 text-xs text-slate-500 italic">{{ form.interval_days.help_text }}</p>
+                    </div>
+                    <div>
+                        <label for="{{ form.interval_km.id_for_label }}" class="block text-sm font-medium text-slate-700 mb-1">{{ form.interval_km.label }}</label>
+                        {{ form.interval_km }}
+                        {% if form.interval_km.errors %}<p class="mt-1 text-sm text-rose-600">{{ form.interval_km.errors.0 }}</p>{% endif %}
+                        <p class="mt-1 text-xs text-slate-500 italic">{{ form.interval_km.help_text }}</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Completion Info (Visible primarily for Completed) -->
+            <section id="completion-section" class="hidden">
+                <h3 class="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">Completion Details</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-emerald-50/30 border border-emerald-100 rounded-lg">
+                    <div>
+                        <label for="{{ form.completion_date.id_for_label }}" class="block text-sm font-medium text-slate-700 mb-1">{{ form.completion_date.label }}</label>
+                        {{ form.completion_date }}
+                        {% if form.completion_date.errors %}<p class="mt-1 text-sm text-rose-600">{{ form.completion_date.errors.0 }}</p>{% endif %}
+                    </div>
+                    <div>
+                        <label for="{{ form.completion_km.id_for_label }}" class="block text-sm font-medium text-slate-700 mb-1">{{ form.completion_km.label }}</label>
+                        {{ form.completion_km }}
+                        {% if form.completion_km.errors %}<p class="mt-1 text-sm text-rose-600">{{ form.completion_km.errors.0 }}</p>{% endif %}
+                    </div>
+                    <div>
+                        <label for="{{ form.cost.id_for_label }}" class="block text-sm font-medium text-slate-700 mb-1">{{ form.cost.label }}</label>
+                        {{ form.cost }}
+                        {% if form.cost.errors %}<p class="mt-1 text-sm text-rose-600">{{ form.cost.errors.0 }}</p>{% endif %}
+                    </div>
+                    <div>
+                        <label for="{{ form.service_provider.id_for_label }}" class="block text-sm font-medium text-slate-700 mb-1">{{ form.service_provider.label }}</label>
+                        {{ form.service_provider }}
+                        {% if form.service_provider.errors %}<p class="mt-1 text-sm text-rose-600">{{ form.service_provider.errors.0 }}</p>{% endif %}
+                    </div>
+                </div>
+            </section>
+
+            <hr class="border-slate-100">
+
+            <!-- Notes Section -->
+            <section>
+                <label for="{{ form.notes.id_for_label }}" class="block text-sm font-medium text-slate-700 mb-1">{{ form.notes.label }}</label>
+                {{ form.notes }}
+                {% if form.notes.errors %}<p class="mt-1 text-sm text-rose-600">{{ form.notes.errors.0 }}</p>{% endif %}
+            </section>
+        </div>
+
+        <div class="px-6 py-4 bg-slate-50 border-t border-slate-200 flex justify-between items-center">
+            <a href="{% url 'maintenance-list' %}" class="text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">Cancel</a>
+            <button type="submit" class="px-6 py-2 bg-emerald-600 text-white rounded-md text-sm font-bold hover:bg-emerald-700 shadow-sm transition-colors">
+                Save Record
+            </button>
+        </div>
+    </form>
+    <!-- END: Form -->
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const isCompletedCheckbox = document.getElementById('{{ form.is_completed.id_for_label }}');
+        const completionSection = document.getElementById('completion-section');
+        const dueSection = document.getElementById('due-section');
+
+        function toggleSections() {
+            if (isCompletedCheckbox.checked) {
+                completionSection.classList.remove('hidden');
+                // We keep due section visible but it represents what WAS due 
+                // or users can update it. Usually, intervals are what matters.
+            } else {
+                completionSection.classList.add('hidden');
+            }
+        }
+
+        isCompletedCheckbox.addEventListener('change', toggleSections);
+        toggleSections(); // Initial state
+    });
+</script>
+{% endblock %}

@@ -33,9 +33,22 @@ class Sequence(models.Model):
 
 class Party(models.Model):
     """
-    Party/Client model for managing business entities
+    Party/Client/Vendor model for managing business entities
     """
+    TYPE_DEBTOR = 'Debtor'
+    TYPE_CREDITOR = 'Creditor'
+    TYPE_CHOICES = [
+        (TYPE_DEBTOR, 'Customer (Debtor)'),
+        (TYPE_CREDITOR, 'Vendor/Supplier (Creditor)'),
+    ]
+
     name = models.CharField(max_length=200, unique=True, verbose_name='Party Name')
+    party_type = models.CharField(
+        max_length=20, 
+        choices=TYPE_CHOICES, 
+        default=TYPE_DEBTOR,
+        verbose_name='Party Type'
+    )
     phone_number = models.CharField(max_length=20, blank=True, verbose_name='Phone Number')
     state = models.CharField(max_length=100, blank=True, verbose_name='State')
     address = models.TextField(blank=True, verbose_name='Address')
@@ -49,6 +62,27 @@ class Party(models.Model):
     account_holder_name = models.CharField(max_length=200, blank=True, verbose_name='Account Holder Name')
     
     bank_details = models.TextField(blank=True, verbose_name='Legacy Bank Details (Text)')
+    
+    # Denormalized Balance Fields
+    total_debit_amount = models.DecimalField(
+        max_digits=12, 
+        decimal_places=2, 
+        default=0, 
+        verbose_name='Total Billed/Debit'
+    )
+    total_credit_amount = models.DecimalField(
+        max_digits=12, 
+        decimal_places=2, 
+        default=0, 
+        verbose_name='Total Received/Credit'
+    )
+    current_balance_cached = models.DecimalField(
+        max_digits=12, 
+        decimal_places=2, 
+        default=0, 
+        verbose_name='Current Balance'
+    )
+
     opening_balance = models.DecimalField(
         max_digits=12, 
         decimal_places=2, 
@@ -60,31 +94,76 @@ class Party(models.Model):
     class Meta:
         verbose_name = 'Party'
         verbose_name_plural = 'Parties'
-        ordering = ['name']
+        ordering = ['-created_at']
 
     def __str__(self):
         return self.name
 
+    def refresh_balance(self):
+        """
+        Recalculate and update the cached balance fields from scratch.
+        Used for backfilling or emergency resync.
+        """
+        self._refreshing_balance = True
+        try:
+            self.total_debit_amount = self._calculate_total_debit()
+            self.total_credit_amount = self._calculate_total_credit()
+            self.current_balance_cached = self.total_debit_amount - self.total_credit_amount
+            self.save(update_fields=['total_debit_amount', 'total_credit_amount', 'current_balance_cached'])
+        finally:
+            del self._refreshing_balance
+
+    @property
+    def total_debit(self):
+        if hasattr(self, '_refreshing_balance'):
+            return self._calculate_total_debit()
+        return self.total_debit_amount
+
+    def _calculate_total_debit(self):
+        """
+        Total Debits: Opening Balance (if positive) + Debits (Revenue/Invoices/Notes)
+        """
+        base = self.opening_balance if self.opening_balance > 0 else Decimal('0')
+        
+        # Debits are records that have a positive debit_amount from THIS party's perspective
+        records = self.financial_records.all()
+        debits = sum((r.debit_amount or Decimal('0')) for r in records)
+        
+        return base + debits
+
+    @property
+    def total_credit(self):
+        if hasattr(self, '_refreshing_balance'):
+            return self._calculate_total_credit()
+        return self.total_credit_amount
+
+    def _calculate_total_credit(self):
+        """
+        Total Credits: Opening Balance (if negative) + Credits (Payments/Notes)
+        """
+        base = abs(self.opening_balance) if self.opening_balance < 0 else Decimal('0')
+        
+        # Credits are records that have a positive credit_amount from THIS party's perspective
+        records = self.financial_records.all()
+        credits = sum((r.credit_amount or Decimal('0')) for r in records)
+        
+        return base + credits
+
+    @property
+    def current_balance_value(self):
+        return self.current_balance_cached
+
     @property
     def current_balance(self):
-        """
-        Calculate current balance: 
-        Opening Balance + Total Revenue (Invoices) - Total Received (Income + Deductions)
-        """
-        # Revenue is recorded as 'Invoice' type records
-        revenue = self.financial_records.filter(
-            record_type=FinancialRecord.RECORD_TYPE_INVOICE
-        ).aggregate(total=models.Sum('amount'))['total'] or 0
+        val = self.current_balance_value
+        if val > 0: return f"{abs(val):.2f} Dr"
+        elif val < 0: return f"{abs(val):.2f} Cr"
+        return "0.00"
 
-        # Payments received are 'Transaction' types with Income category or 'Deductions'
-        received = self.financial_records.filter(
-            record_type=FinancialRecord.RECORD_TYPE_TRANSACTION
-        ).filter(
-            models.Q(category__type=TransactionCategory.TYPE_INCOME) | 
-            models.Q(category__name__in=['Deductions', 'TDS', 'Shortage', 'Credit Note', 'Debit Note'])
-        ).aggregate(total=models.Sum('amount'))['total'] or 0
-
-        return self.opening_balance + revenue - received
+    @property
+    def total_billed(self): return self.total_debit
+    @property
+    def total_received(self): return self.total_credit
 
 class TransactionCategory(models.Model):
     """
@@ -99,11 +178,12 @@ class TransactionCategory(models.Model):
     name = models.CharField(max_length=100, unique=True)
     type = models.CharField(max_length=10, choices=TYPE_CHOICES, default=TYPE_INCOME)
     description = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
 
     class Meta:
         verbose_name = 'Transaction Category'
         verbose_name_plural = 'Transaction Categories'
-        ordering = ['name']
+        ordering = ['-created_at']
 
     def __str__(self):
         return f"{self.name} ({self.type})"
@@ -129,9 +209,19 @@ class CompanyAccount(models.Model):
     # Bill Generation Details
     authorized_signatory = models.CharField(max_length=200, blank=True, verbose_name="Authorized Signatory")
     invoice_prefix = models.CharField(max_length=50, default="INV/{YYYY}/", help_text="Prefix for invoice numbers. Use {YYYY} for year.")
+    cn_prefix = models.CharField(max_length=50, default="CN-{YYYY}/", help_text="Prefix for Credit Notes. Use {YYYY} for year.")
+    dn_prefix = models.CharField(max_length=50, default="DN-{YYYY}/", help_text="Prefix for Debit Notes. Use {YYYY} for year.")
     invoice_suffix = models.CharField(max_length=50, blank=True, help_text="Optional suffix for invoice numbers.")
     invoice_padding = models.PositiveIntegerField(default=4, help_text="Number of digits for the sequence (e.g. 4 for 0001)")
     invoice_sequence_start = models.PositiveIntegerField(default=1, help_text="Start the sequence from this number")
+
+    # Denormalized Balance Fields
+    current_balance_cached = models.DecimalField(
+        max_digits=12, 
+        decimal_places=2, 
+        default=0, 
+        verbose_name='Current Balance'
+    )
 
     opening_balance = models.DecimalField(
         max_digits=12, 
@@ -145,17 +235,31 @@ class CompanyAccount(models.Model):
     class Meta:
         verbose_name = 'Company Account'
         verbose_name_plural = 'Company Accounts'
-        ordering = ['name']
+        ordering = ['-created_at']
 
     def __str__(self):
         return self.name
 
-    @property
-    def current_balance(self):
+    def refresh_balance(self):
         """
-        Calculate current balance: Opening Balance + Total Income - Total Expenses
-        Excludes 'Invoice' type records as they are accruals, not cash flow.
-        Excludes 'Deductions' as they are non-cash revenue reductions.
+        Recalculate and update the cached balance fields from scratch.
+        """
+        self._refreshing_balance = True
+        try:
+            self.current_balance_cached = self._calculate_balance()
+            self.save(update_fields=['current_balance_cached'])
+        finally:
+            del self._refreshing_balance
+
+    @property
+    def current_balance_value(self):
+        if hasattr(self, '_refreshing_balance'):
+            return self._calculate_balance()
+        return self.current_balance_cached
+
+    def _calculate_balance(self):
+        """
+        Numeric balance: Opening (Dr) + Debits (Income) - Credits (Expenses)
         """
         income = self.financial_records.filter(
             category__type=TransactionCategory.TYPE_INCOME
@@ -172,6 +276,14 @@ class CompanyAccount(models.Model):
         ).aggregate(total=models.Sum('amount'))['total'] or 0
 
         return self.opening_balance + income - expenses
+
+    @property
+    def current_balance(self):
+        """Formatted balance with Dr/Cr"""
+        val = self.current_balance_value
+        if val > 0: return f"{abs(val):.2f} Dr"
+        elif val < 0: return f"{abs(val):.2f} Cr"
+        return "0.00"
 
 def financial_record_upload_path(instance, filename):
     """
@@ -299,24 +411,59 @@ class FinancialRecord(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='Created At')
 
+    @classmethod
+    def resequence_entry_numbers(cls):
+        """
+        Resequence all entry numbers to remove gaps.
+        """
+        from django.db import transaction
+        with transaction.atomic():
+            records = cls.objects.all().order_by('date', 'created_at')
+            for i, record in enumerate(records, start=1):
+                if record.entry_number != i:
+                    cls.objects.filter(pk=record.pk).update(entry_number=i)
+            # Update Sequence model
+            Sequence.objects.filter(key='financial_record_entry_number').update(value=records.count())
+
     def save(self, *args, **kwargs):
         if not self.entry_number:
             self.entry_number = Sequence.next_value('financial_record_entry_number')
+        
+        # Auto-populate party from trip if missing
+        if self.associated_trip and not self.party:
+            self.party = self.associated_trip.party
+            
         super().save(*args, **kwargs)
 
-        # Check trip closure if associated and this is a payment (Transaction)
-        if self.record_type == self.RECORD_TYPE_TRANSACTION:
-            if self.associated_trip:
-                self.associated_trip.check_and_close_trip()
-            elif self.associated_bill and self.associated_bill.bill_type == Bill.TYPE_TRIP:
-                # If a bill is paid (even partially), check its trips
-                for trip in self.associated_bill.trips.all():
-                    trip.check_and_close_trip()
+    def delete(self, *args, **kwargs):
+        """
+        If a ledger entry representing an Invoice is deleted, the Bill itself should be deleted.
+        """
+        if self.record_type == self.RECORD_TYPE_INVOICE and self.associated_bill:
+            # We must be careful not to recurse. super().delete() should be called 
+            # after deleting the bill if Bill doesn't CASCADE back here.
+            # But Bill DOES CASCADE back here. So deleting the bill will delete this record.
+            bill = self.associated_bill
+            # Set to None to prevent CASCADE from trying to delete an already-deleting instance
+            self.associated_bill = None 
+            bill.delete()
+        else:
+            super().delete(*args, **kwargs)
+        
+        # Resequence after deletion
+        FinancialRecord.resequence_entry_numbers()
 
     class Meta:
         verbose_name = 'Financial Record'
         verbose_name_plural = 'Financial Records'
         ordering = ['-date']
+        indexes = [
+            models.Index(fields=['date', 'created_at']),
+            models.Index(fields=['account', 'date']),
+            models.Index(fields=['party', 'date']),
+            models.Index(fields=['driver', 'date']),
+            models.Index(fields=['record_type', 'date']),
+        ]
         permissions = [
             ('can_view_financial_records', 'Can view financial records'),
             ('can_manage_financial_records', 'Can manage financial records'),
@@ -373,6 +520,98 @@ class FinancialRecord(models.Model):
         return self.record_type == self.RECORD_TYPE_INVOICE
 
     @property
+    def is_deduction(self):
+        return self.category.name == 'Deductions' if self.category else False
+
+    @property
+    def debit_amount(self):
+        """
+        Returns amount if it is a Debit for the primary entity in context.
+        """
+        # Perspective of the Party
+        if self.party:
+            # Special handling for Credit/Debit Note labels in Invoices
+            is_credit_note = (
+                self.associated_bill and 
+                self.associated_bill.category and 
+                self.associated_bill.category.name == 'Credit Note'
+            )
+            is_debit_note = (
+                self.associated_bill and 
+                self.associated_bill.category and 
+                self.associated_bill.category.name == 'Debit Note'
+            )
+            is_payment_out = self.category.name == 'Payment Out' if self.category else False
+            is_deduction = self.category.name == 'Deductions' if self.category else False
+
+            if self.party.party_type == Party.TYPE_DEBTOR:
+                # Debtors: Invoices are usually Debits (+). Credit Notes are Credits (-).
+                if self.is_invoice:
+                    if is_credit_note: return None
+                    return self.amount
+                # Expenses/Transactions:
+                if self.is_expense and not self.is_deduction:
+                    return self.amount
+            else: # CREDITOR
+                # Creditors: Payments/Income/Debit Notes are Debits (+).
+                # Liability decreases (Debit): Payment Out, Deductions, and general Income
+                if (self.is_income and not self.is_invoice) or is_deduction or is_payment_out:
+                    return self.amount
+                if self.is_invoice and (is_credit_note or is_debit_note):
+                    # Debit Note for Creditor reduces debt (Debit).
+                    if is_debit_note: return self.amount
+            return None
+
+        # Perspective of the Company Account (Asset)
+        if self.is_income and not self.is_invoice:
+            return self.amount
+        return None
+
+    @property
+    def credit_amount(self):
+        """
+        Returns amount if it is a Credit for the primary entity in context.
+        """
+        # Perspective of the Party
+        if self.party:
+            is_credit_note = (
+                self.associated_bill and 
+                self.associated_bill.category and 
+                self.associated_bill.category.name == 'Credit Note'
+            )
+            is_debit_note = (
+                self.associated_bill and 
+                self.associated_bill.category and 
+                self.associated_bill.category.name == 'Debit Note'
+            )
+            is_payment_out = self.category.name == 'Payment Out' if self.category else False
+            is_deduction = self.category.name == 'Deductions' if self.category else False
+
+            if self.party.party_type == Party.TYPE_DEBTOR:
+                # Debtors: Payments/Income/Credit Notes are Credits (-).
+                if (self.is_income and not self.is_invoice) or self.is_deduction:
+                    return self.amount
+                if self.is_invoice and is_credit_note:
+                    return self.amount
+            else: # CREDITOR
+                # Creditors: Invoices are usually Credits (-). Liability increases.
+                if self.is_invoice:
+                    if is_debit_note: return None
+                    return self.amount
+                # General Expenses (NOT payment out/deduction) increase liability (Credit)
+                if self.is_expense and not (is_deduction or is_payment_out):
+                    return self.amount
+                if self.is_invoice and is_credit_note:
+                    return self.amount
+            return None
+
+        # Perspective of the Company Account (Asset)
+        if self.is_expense or self.is_invoice:
+            return self.amount
+        return None
+
+
+    @property
     def signed_amount(self):
         if self.is_expense:
             return -abs(self.amount)
@@ -410,13 +649,6 @@ class Bill(models.Model):
     """
     Bill/Invoice Document aggregating multiple trips or standard items.
     """
-    STATUS_DRAFT = 'Draft'
-    STATUS_FINAL = 'Final'
-    STATUS_CHOICES = [
-        (STATUS_DRAFT, 'Draft'),
-        (STATUS_FINAL, 'Final'),
-    ]
-
     TYPE_TRIP = 'Trip'
     TYPE_STANDARD = 'Standard'
     TYPE_CHOICES = [
@@ -442,14 +674,15 @@ class Bill(models.Model):
         (GST_RATE_18, '18% GST'),
     ]
 
-    GST_TYPE_INTRA = 'INTRA'
-    GST_TYPE_INTER = 'INTER'
+    GST_TYPE_GST = 'GST'
+    GST_TYPE_IGST = 'IGST'
     GST_TYPE_CHOICES = [
-        (GST_TYPE_INTRA, 'Intra-state'),
-        (GST_TYPE_INTER, 'Inter-state'),
+        (GST_TYPE_GST, 'GST'),
+        (GST_TYPE_IGST, 'IGST'),
     ]
 
-    bill_number = models.CharField(max_length=50, unique=True, blank=True, null=True, verbose_name="Invoice Number")
+    bill_number = models.CharField(max_length=50, unique=True, blank=True, null=True, verbose_name="Full Invoice Number")
+    bill_no = models.PositiveIntegerField(null=True, blank=True, verbose_name="Invoice No")
     bill_type = models.CharField(max_length=10, choices=TYPE_CHOICES, default=TYPE_TRIP, verbose_name="Bill Type")
     issuer = models.ForeignKey(CompanyAccount, on_delete=models.PROTECT, related_name='bills', verbose_name="Issued From", null=True)
     party = models.ForeignKey(Party, on_delete=models.PROTECT, related_name='bills', verbose_name="Bill To")
@@ -460,11 +693,12 @@ class Bill(models.Model):
     
     # Standard bills
     item_type = models.CharField(max_length=200, blank=True, null=True, verbose_name="Item Type/Description")
+    standard_weight = models.DecimalField(max_digits=12, decimal_places=3, null=True, blank=True, verbose_name="Standard Weight")
+    standard_rate = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, verbose_name="Standard Rate")
     amount_override = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, verbose_name="Subtotal Amount (Manual)")
     
     gst_rate = models.PositiveIntegerField(choices=GST_CHOICES, default=GST_RATE_0, verbose_name="GST Rate (%)")
-    gst_type = models.CharField(max_length=10, choices=GST_TYPE_CHOICES, default=GST_TYPE_INTRA, verbose_name="GST Type")
-    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=STATUS_DRAFT)
+    gst_type = models.CharField(max_length=10, choices=GST_TYPE_CHOICES, default=GST_TYPE_GST, verbose_name="GST Type")
     
     # Snapshot fields for Company Details at time of invoice
     invoice_company_name = models.CharField(max_length=200, blank=True, verbose_name="Company Name (Snapshot)")
@@ -481,6 +715,61 @@ class Bill(models.Model):
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    category = models.ForeignKey(TransactionCategory, null=True, blank=True, on_delete=models.SET_NULL, related_name='bills', verbose_name="Bill Category")
+    original_bill = models.ForeignKey('self', null=True, blank=True, on_delete=models.SET_NULL, related_name='adjustment_bills', verbose_name="Against Invoice")
+    use_roundoff = models.BooleanField(default=True, verbose_name="Use Round Off")
+
+    @classmethod
+    def get_next_available_no(cls, issuer, date=None, category=None):
+        """Finds the next numeric invoice number (Max + 1) for the specific prefix series."""
+        if not issuer:
+            return 1
+        
+        from django.utils import timezone
+        from django.db.models import Max
+        dt = date or timezone.now()
+        year = dt.year
+        
+        # Determine prefix based on category (Credit/Debit Note)
+        if category:
+            if category.name == 'Credit Note':
+                prefix = issuer.cn_prefix.replace("{YYYY}", str(year))
+            elif category.name == 'Debit Note':
+                prefix = issuer.dn_prefix.replace("{YYYY}", str(year))
+            else:
+                prefix = issuer.invoice_prefix.replace("{YYYY}", str(year))
+        else:
+            prefix = issuer.invoice_prefix.replace("{YYYY}", str(year))
+        
+        # CRITICAL: We search for the maximum bill_no among ALL bills that share this prefix.
+        # Filtering by issuer or category here is dangerous because it can lead to 
+        # picking a number that is already used by another issuer/category using the same prefix.
+        max_no = cls.objects.filter(
+            bill_number__startswith=prefix
+        ).aggregate(max_val=Max('bill_no'))['max_val']
+        
+        if max_no is not None:
+            return max_no + 1
+        
+        # If no invoices exist yet for this series, use the start sequence
+        return issuer.invoice_sequence_start
+
+    def get_prefix(self, date=None):
+        """Returns the invoice prefix for this bill based on its issuer, date, and category."""
+        if not self.issuer:
+            return ""
+        
+        from django.utils import timezone
+        dt = date or self.date or timezone.now()
+        year = dt.year
+
+        if self.category:
+            if self.category.name == 'Credit Note':
+                return self.issuer.cn_prefix.replace("{YYYY}", str(year))
+            elif self.category.name == 'Debit Note':
+                return self.issuer.dn_prefix.replace("{YYYY}", str(year))
+        
+        return self.issuer.invoice_prefix.replace("{YYYY}", str(year))
 
     def save(self, *args, **kwargs):
         # 1. Snapshot Company Details from Issuer
@@ -495,117 +784,111 @@ class Bill(models.Model):
             self.invoice_bank_account = self.issuer.account_number
             self.invoice_bank_ifsc = self.issuer.ifsc_code
         
-        # 2. Generate Bill Number if missing
-        if not self.bill_number and self.issuer:
-            import datetime
-            now = datetime.datetime.now()
+        # 2. Handle Invoice Numbering
+        if self.issuer:
+            if not self.bill_no:
+                self.bill_no = self.get_next_available_no(self.issuer, self.date)
             
-            # Get Sequence per Issuer
-            seq_key = f"bill_sequence_{self.issuer.pk}"
-            
-            # Check if sequence exists; if not, initialize with sequence_start - 1
-            if not Sequence.objects.filter(key=seq_key).exists():
-                Sequence.objects.create(key=seq_key, value=self.issuer.invoice_sequence_start - 1)
-                
-            seq_val = Sequence.next_value(seq_key)
-            
-            # Format using new granular fields
-            prefix = self.issuer.invoice_prefix.replace("{YYYY}", str(now.year))
+            # Update the full string representation
+            prefix = self.get_prefix()
             padding = self.issuer.invoice_padding
             suffix = self.issuer.invoice_suffix
-            
-            self.bill_number = f"{prefix}{seq_val:0{padding}d}{suffix}"
+            self.bill_number = f"{prefix}{self.bill_no:0{padding}d}{suffix}"
             
         super().save(*args, **kwargs)
 
     def delete(self, *args, **kwargs):
         """
-        Custom delete to ensure associated trips are updated in the ledger.
+        Custom delete for Bill.
+        Ensure individual trip accruals are restored and the consolidated record is removed.
         """
-        # Get list of trips before deleting
-        trips = list(self.trips.all())
+        # Get list of trips before they are unlinked
+        affected_trips = list(self.trips.all())
+
+        # Delete only the consolidated invoice record associated with this bill
+        FinancialRecord.objects.filter(
+            associated_bill=self,
+            record_type=FinancialRecord.RECORD_TYPE_INVOICE
+        ).delete()
+
         super().delete(*args, **kwargs)
-        
-        # After bill is deleted, trips should have their individual revenue records restored
-        for trip in trips:
+
+        # Re-sync trips to restore their individual accruals now that they are unbilled
+        for trip in affected_trips:
             trip.sync_ledger_invoice()
 
     def sync_to_ledger(self):
         """
-        Main entry point to synchronize this invoice and its trips to the ledger.
-        Must be called AFTER ManyToMany relationships are established.
+        Main entry point to synchronize this invoice to the ledger.
         """
         self.update_ledger_records()
-        if self.bill_type == self.TYPE_TRIP:
-            self.sync_trips_to_ledger()
-
-    def sync_trips_to_ledger(self):
-        """
-        Trigger sync_ledger_invoice for all trips associated with this bill.
-        This ensures individual Trip Payment records are removed if the trip is now billed.
-        """
+        
+        # Also clean up individual trip accruals for all trips in this bill
+        # If a trip is billed, it should not have an individual accrual entry.
         for trip in self.trips.all():
             trip.sync_ledger_invoice()
 
     def update_ledger_records(self):
         """
-        Synchronize the full Invoice record to the ledger.
-        For Final bills, the amount includes GST.
+        Create/Update a single consolidated 'Invoice' type record in the ledger 
+        representing the entire bill.
         """
-        # 1. Handle Consolidated Invoice Record (Total = Subtotal + GST if Final)
-        # Create this for both Draft and Final bills to replace individual trip entries immediately.
-        should_have_invoice = True
-        inv_record = FinancialRecord.objects.filter(associated_bill=self, record_type=FinancialRecord.RECORD_TYPE_INVOICE).first()
-
-        if should_have_invoice:
-            inv_cat, _ = TransactionCategory.objects.get_or_create(
-                name="Trip Payment",
-                defaults={'type': TransactionCategory.TYPE_INCOME, 'description': 'Revenue from trips'}
+        # Determine the category: use self.category if set (Standard Invoices), 
+        # otherwise default to 'Trip Payment'
+        category = self.category
+        if not category:
+            category, _ = TransactionCategory.objects.get_or_create(
+                name='Trip Payment',
+                type=TransactionCategory.TYPE_INCOME
             )
 
-            # Use different description for Draft vs Final
-            status_tag = f" ({self.status})" if self.status == self.STATUS_DRAFT else ""
+        # Amount respects the roundoff toggle
+        total_revenue = self.rounded_total
 
-            # Use Total Amount (including GST) for Final bills, otherwise just Subtotal
-            amount = self.total_amount if self.status == self.STATUS_FINAL else self.subtotal
+        # Description varies by bill type
+        if self.bill_type == self.TYPE_TRIP:
+            description = f"Invoice {self.bill_number or 'Draft'} for {self.trips.count()} trips"
+        else:
+            description = f"{category.name} {self.bill_number or 'Draft'}: {self.item_type or ''}"
 
-            gst_note = f" (Incl. GST ₹{self.gst_amount})" if self.status == self.STATUS_FINAL and self.gst_amount > 0 else ""
-            
-            bill_desc = self.item_type if self.bill_type == self.TYPE_STANDARD else f"Trip-based Invoice"
-            description = f"Invoice {self.bill_number or 'Draft'}: {bill_desc}{status_tag}{gst_note}"
+        # Find or create consolidated invoice record
+        inv_record, created = FinancialRecord.objects.get_or_create(
+            associated_bill=self,
+            record_type=FinancialRecord.RECORD_TYPE_INVOICE,
+            defaults={
+                'date': self.date,
+                'account': self.issuer,
+                'party': self.party,
+                'category': category,
+                'amount': total_revenue,
+                'description': description,
+            }
+        )
 
-            FinancialRecord.objects.update_or_create(
-                associated_bill=self,
-                record_type=FinancialRecord.RECORD_TYPE_INVOICE,
-                defaults={
-                    'category': inv_cat,
-                    'party': self.party,
-                    'date': self.date,
-                    'amount': amount,
-                    'description': description
-                }
-            )
-        elif inv_record:
-            inv_record.delete()
+        if not created:
+            inv_record.date = self.date
+            inv_record.account = self.issuer
+            inv_record.party = self.party
+            inv_record.category = category
+            inv_record.amount = total_revenue
+            inv_record.description = description
+            inv_record.save()
 
     @property
     def amount_received(self):
         """
         Calculate total received for this bill.
         Includes:
-        1. Direct payments to this bill (Invoice Payment)
-        2. Deductions (recorded as expenses against this bill)
+        1. Direct payments to this bill (Income / Deductions)
+        2. Deductions (regardless of category name, if type is correct)
         3. For Trip-based bills: Payments allocated to individual trips
         """
-        # 1. Direct payments & deductions linked to this bill
-        direct_income = self.financial_records.filter(
-            category__type=TransactionCategory.TYPE_INCOME,
-            record_type=FinancialRecord.RECORD_TYPE_TRANSACTION
-        ).aggregate(total=Sum('amount'))['total'] or 0
-        
-        deductions = self.financial_records.filter(
-            category__name__in=['Deductions', 'TDS', 'Shortage', 'Credit Note', 'Debit Note'],
-            record_type=FinancialRecord.RECORD_TYPE_TRANSACTION
+        # 1. Direct links to this bill (Exclude Invoices as they are debits)
+        direct = self.financial_records.exclude(
+            record_type=FinancialRecord.RECORD_TYPE_INVOICE
+        ).filter(
+            models.Q(category__type=TransactionCategory.TYPE_INCOME) | 
+            models.Q(category__name="Deductions")
         ).aggregate(total=Sum('amount'))['total'] or 0
 
         # 2. Trip-based allocations
@@ -618,23 +901,36 @@ class Bill(models.Model):
             
             # Also consider direct trip payments not through allocations (if any exist)
             direct_trip_payments = FinancialRecord.objects.filter(
-                associated_trip__in=self.trips.all(),
-                category__type=TransactionCategory.TYPE_INCOME,
-                record_type=FinancialRecord.RECORD_TYPE_TRANSACTION
+                associated_trip__in=self.trips.all()
+            ).exclude(
+                record_type=FinancialRecord.RECORD_TYPE_INVOICE
+            ).filter(
+                models.Q(category__type=TransactionCategory.TYPE_INCOME) | 
+                models.Q(category__name="Deductions")
             ).aggregate(total=Sum('amount'))['total'] or 0
             
             trip_payments += direct_trip_payments
 
-        return direct_income + deductions + trip_payments
+        # 3. Adjustment Bills (Credit/Debit Notes) linked to this bill
+        adjustments = 0
+        for adj in self.adjustment_bills.all():
+            if adj.category:
+                if adj.category.name == 'Credit Note':
+                    # Credit Note reduces outstanding (acts as payment/deduction)
+                    adjustments += adj.total_amount
+                elif adj.category.name == 'Debit Note':
+                    # Debit Note increases outstanding (negative payment)
+                    adjustments -= adj.total_amount
+
+        return direct + trip_payments + adjustments
 
     @property
     def outstanding_balance(self):
-        total = self.total_amount if self.status == self.STATUS_FINAL else self.subtotal
-        return total - self.amount_received
+        return self.rounded_total - self.amount_received
 
     @property
     def payment_status(self):
-        total = self.total_amount if self.status == self.STATUS_FINAL else self.subtotal
+        total = self.rounded_total
         received = self.amount_received
         
         if total <= 0:
@@ -649,19 +945,19 @@ class Bill(models.Model):
 
     @property
     def cgst_amount(self):
-        if self.gst_rate > 0 and self.gst_type == self.GST_TYPE_INTRA:
+        if self.gst_rate > 0:
             return self.gst_amount / 2
         return 0
 
     @property
     def sgst_amount(self):
-        if self.gst_rate > 0 and self.gst_type == self.GST_TYPE_INTRA:
+        if self.gst_rate > 0:
             return self.gst_amount / 2
         return 0
 
     @property
     def igst_amount(self):
-        if self.gst_rate > 0 and self.gst_type == self.GST_TYPE_INTER:
+        if self.gst_rate > 0:
             return self.gst_amount
         return 0
 
@@ -690,16 +986,22 @@ class Bill(models.Model):
 
     @property
     def total_weight(self):
+        if self.bill_type == self.TYPE_STANDARD:
+            return self.standard_weight or 0
         return self.trips.aggregate(total=models.Sum('weight'))['total'] or 0
 
     @property
     def subtotal(self):
         if self.bill_type == self.TYPE_STANDARD:
-            return self.amount_override or 0
-        # revenue = weight * rate_per_ton
-        return self.trips.aggregate(
-            total=models.Sum(models.F('weight') * models.F('rate_per_ton'))
-        )['total'] or 0
+            # For Standard invoices, we use amount_override as the base amount.
+            # If it's missing but we have weight/rate, calculate it as a fallback.
+            if self.amount_override is not None:
+                return self.amount_override
+            if self.standard_weight and self.standard_rate:
+                return self.standard_weight * self.standard_rate
+            return 0
+        # Sum individual trip revenues correctly (handles fixed vs per-ton)
+        return sum(trip.revenue for trip in self.trips.all())
 
     @property
     def gst_amount(self):
@@ -711,11 +1013,15 @@ class Bill(models.Model):
 
     @property
     def rounded_total(self):
+        if not self.use_roundoff:
+            return self.total_amount
         # Round to nearest whole rupee
         return self.total_amount.quantize(Decimal('1'), rounding='ROUND_HALF_UP')
 
     @property
     def roundoff(self):
+        if not self.use_roundoff:
+            return Decimal('0')
         return self.rounded_total - self.total_amount
 
 class BillTrip(models.Model):
@@ -733,3 +1039,139 @@ class BillTrip(models.Model):
 
     def __str__(self):
         return f"{self.bill.bill_number} - {self.trip.trip_number} (LR: {self.lr_no or 'N/A'})"
+
+
+# --- Signals ---
+from django.db.models.signals import post_save, post_delete, pre_save
+from django.dispatch import receiver
+
+@receiver(post_save, sender=Trip)
+def update_bill_on_trip_change(sender, instance, **kwargs):
+    """
+    When a trip is updated, ensure any associated bills are synchronized.
+    This updates the consolidated FinancialRecord for the bill.
+    """
+    # Use direct query to find bills containing this trip
+    associated_bills = Bill.objects.filter(trips=instance)
+    for bill in associated_bills:
+        bill.sync_to_ledger()
+
+@receiver(post_delete, sender=Bill)
+def cleanup_financial_record_on_bill_delete(sender, instance, **kwargs):
+    """
+    Ensure the consolidated FinancialRecord is deleted when the Bill is deleted.
+    (Redundancy for the model's delete method)
+    """
+    FinancialRecord.objects.filter(
+        associated_bill_id=instance.id,
+        record_type=FinancialRecord.RECORD_TYPE_INVOICE
+    ).delete()
+
+@receiver(pre_save, sender=FinancialRecord)
+def delete_old_financial_document_on_change(sender, instance, **kwargs):
+    """
+    Deletes the old supporting document from storage when a new one is uploaded.
+    """
+    if not instance.pk:
+        return False
+
+    try:
+        old_file = FinancialRecord.objects.get(pk=instance.pk).document_ref
+    except FinancialRecord.DoesNotExist:
+        return False
+
+    new_file = instance.document_ref
+    if old_file and old_file != new_file:
+        old_file.delete(save=False)
+
+@receiver(post_delete, sender=FinancialRecord)
+def delete_financial_document_on_delete(sender, instance, **kwargs):
+    """
+    Deletes the supporting document from storage when a FinancialRecord is deleted.
+    """
+    if instance.document_ref:
+        instance.document_ref.delete(save=False)
+
+@receiver(post_save, sender=BillTrip)
+def sync_trip_ledger_on_billtrip_save(sender, instance, **kwargs):
+    """
+    When a trip is linked to a bill, its individual accrual should be deleted.
+    """
+    instance.trip.sync_ledger_invoice()
+    instance.bill.sync_to_ledger()
+
+@receiver(post_delete, sender=BillTrip)
+def sync_trip_ledger_on_billtrip_delete(sender, instance, **kwargs):
+    """
+    When a trip is unlinked from a bill, its individual accrual should be restored.
+    """
+    instance.trip.sync_ledger_invoice()
+    # Note: bill.sync_to_ledger() might fail if bill is also being deleted, 
+    # but that's handled by cascade. We just want to ensure trip is updated.
+    try:
+        instance.bill.sync_to_ledger()
+    except (Bill.DoesNotExist, Exception):
+        pass
+
+@receiver(post_save, sender=FinancialRecord)
+def update_balances_on_save(sender, instance, created, **kwargs):
+    """
+    Update Party and CompanyAccount balances when a FinancialRecord is saved.
+    Uses F() expressions for atomic updates.
+    """
+    from django.db.models import F
+    
+    # 1. Update Party Balance
+    if instance.party:
+        # Determine if it's a debit or credit
+        debit = instance.debit_amount or Decimal('0')
+        credit = instance.credit_amount or Decimal('0')
+        
+        if created:
+            # Atomic increment
+            Party.objects.filter(pk=instance.party.pk).update(
+                total_debit_amount=F('total_debit_amount') + debit,
+                total_credit_amount=F('total_credit_amount') + credit,
+                current_balance_cached=F('current_balance_cached') + (debit - credit)
+            )
+        else:
+            # For updates, we'd need to track old values. 
+            # For simplicity and reliability on update, we trigger a refresh.
+            instance.party.refresh_balance()
+
+    # 2. Update CompanyAccount Balance
+    if instance.account:
+        # Perspective of CompanyAccount: Income is Dr (+), Expense is Cr (-)
+        # Balance = Opening + Income - Expenses
+        income = instance.amount if (instance.is_income and not instance.is_invoice) else Decimal('0')
+        expense = instance.amount if (instance.is_expense and not instance.is_invoice) else Decimal('0')
+        
+        if created:
+            CompanyAccount.objects.filter(pk=instance.account.pk).update(
+                current_balance_cached=F('current_balance_cached') + (income - expense)
+            )
+        else:
+            instance.account.refresh_balance()
+
+@receiver(post_delete, sender=FinancialRecord)
+def update_balances_on_delete(sender, instance, **kwargs):
+    """
+    Update Party and CompanyAccount balances when a FinancialRecord is deleted.
+    """
+    from django.db.models import F
+    
+    if instance.party:
+        debit = instance.debit_amount or Decimal('0')
+        credit = instance.credit_amount or Decimal('0')
+        Party.objects.filter(pk=instance.party.pk).update(
+            total_debit_amount=F('total_debit_amount') - debit,
+            total_credit_amount=F('total_credit_amount') - credit,
+            current_balance_cached=F('current_balance_cached') - (debit - credit)
+        )
+
+    if instance.account:
+        income = instance.amount if (instance.is_income and not instance.is_invoice) else Decimal('0')
+        expense = instance.amount if (instance.is_expense and not instance.is_invoice) else Decimal('0')
+        CompanyAccount.objects.filter(pk=instance.account.pk).update(
+            current_balance_cached=F('current_balance_cached') - (income - expense)
+        )

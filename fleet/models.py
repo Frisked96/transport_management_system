@@ -56,10 +56,7 @@ class Vehicle(models.Model):
     class Meta:
         verbose_name = 'Vehicle'
         verbose_name_plural = 'Vehicles'
-        ordering = ['registration_plate']
-        permissions = [
-            ('can_view_all_vehicles', 'Can view all vehicles'),
-        ]
+        ordering = ['-registration_plate'] # Or -id/created_at if you want newest added. Registration plate descending might put newer ones on top if they follow a pattern. Let's use -id.
     
     def __str__(self):
         return f"{self.registration_plate} - {self.make_model}"
@@ -76,245 +73,179 @@ class Vehicle(models.Model):
     
     @property
     def next_due_maintenance(self):
-        """Get the next due maintenance date"""
-        last_log = self.last_maintenance
-        if last_log and last_log.next_service_due:
-            return last_log.next_service_due
+        """Get the next due maintenance date from pending records"""
+        next_record = self.maintenance_records.filter(
+            is_completed=False
+        ).order_by('expiry_date').first()
+        if next_record:
+            return next_record.expiry_date
         return None
     
     @property
     def total_maintenance_cost(self):
-        """Calculate total maintenance cost"""
-        return self.maintenance_logs.aggregate(
+        """Calculate total maintenance cost from completed records"""
+        return self.maintenance_records.filter(
+            is_completed=True
+        ).aggregate(
             total=models.Sum('cost')
         )['total'] or 0
 
 
-class MaintenanceLog(models.Model):
+class MaintenanceRecord(models.Model):
     """
-    Maintenance log for vehicles
+    Unified Maintenance Record for vehicles.
+    Can be a 'Pending' (Due) record or a 'Completed' (Historical) record.
     """
     
-    # Maintenance type choices
-    TYPE_ROUTINE = 'Routine Service'
-    TYPE_REPAIR = 'Repair'
-    TYPE_OIL_CHANGE = 'Oil Change'
-    TYPE_TYRE_WORK = 'Tyre Work'
-    TYPE_MAJOR_SERVICE = 'Major Service'
-    TYPE_CHECK = 'Check' # Added for simple checks (coolant, battery, etc.)
-    
-    TYPE_CHOICES = [
-        (TYPE_ROUTINE, 'Routine Service'),
-        (TYPE_OIL_CHANGE, 'Oil Change'),
-        (TYPE_TYRE_WORK, 'Tyre Work'),
-        (TYPE_MAJOR_SERVICE, 'Major Service'),
-        (TYPE_REPAIR, 'Repair'),
-        (TYPE_CHECK, 'Check'),
-    ]
-    
-    # Vehicle (ForeignKey)
     vehicle = models.ForeignKey(
         Vehicle,
         on_delete=models.CASCADE,
-        related_name='maintenance_logs',
+        related_name='maintenance_records',
         verbose_name='Vehicle'
     )
-
-    # Optional Task (FK)
-    task = models.ForeignKey(
-        'MaintenanceTask',
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='logs',
-        verbose_name='Maintenance Task'
-    )
     
-    # Date of maintenance
-    date = models.DateField(
-        verbose_name='Maintenance Date'
-    )
-    
-    # Type of maintenance
-    type = models.CharField(
-        max_length=50,
-        choices=TYPE_CHOICES,
-        default=TYPE_ROUTINE,
-        verbose_name='Maintenance Type'
-    )
-
-    odometer_reading = models.PositiveIntegerField(
-        null=True, 
-        blank=True, 
-        verbose_name='Odometer Reading'
-    )
-    
-    # Description of work done
-    description = models.TextField(
-        verbose_name='Description of Work'
-    )
-    
-    # Cost of maintenance
-    cost = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        default=0, # Made default 0 for simple checks
-        verbose_name='Cost'
-    )
-    
-    # Service provider
-    service_provider = models.CharField(
-        max_length=200,
-        blank=True, # Made optional for simple checks
-        verbose_name='Service Provider'
-    )
-    
-    # Next service due (Date and/or Odometer)
-    # These are legacy now, but kept for compatibility. 
-    # MaintenanceTask will be the primary driver for "Next Due".
-    next_service_due = models.DateField(
-        null=True,
-        blank=True,
-        verbose_name='Next Service Due (Date)'
-    )
-    next_service_odometer = models.PositiveIntegerField(
-        null=True,
-        blank=True,
-        verbose_name='Next Service Due (Odometer)'
-    )
-    
-    # Who logged this entry
-    logged_by = models.ForeignKey(
-        User,
-        on_delete=models.SET_NULL,
-        null=True,
-        related_name='logged_maintenance',
-        verbose_name='Logged By'
-    )
-    
-    class Meta:
-        verbose_name = 'Maintenance Log'
-        verbose_name_plural = 'Maintenance Logs'
-        ordering = ['-date']
-        permissions = [
-            ('can_create_maintenance_log', 'Can create maintenance log'),
-        ]
-    
-    def __str__(self):
-        return f"{self.vehicle.registration_plate} - {self.type} - {self.date}"
-
-    def save(self, *args, **kwargs):
-        # Update linked task's last performed stats
-        if self.task:
-            if not self.task.last_performed_date or self.date >= self.task.last_performed_date:
-                self.task.last_performed_date = self.date
-                if self.odometer_reading:
-                    self.task.last_performed_km = self.odometer_reading
-                self.task.save()
-        super().save(*args, **kwargs)
-    
-    @property
-    def is_overdue(self):
-        """Check if next service is overdue by date or odometer"""
-        today = timezone.now().date()
-        if self.next_service_due and self.next_service_due < today:
-            return True
-        if self.next_service_odometer and self.vehicle.current_odometer >= self.next_service_odometer:
-            return True
-        return False
-
-
-class MaintenanceTask(models.Model):
-    """
-    Recurring maintenance task for a vehicle.
-    Decouples "Requirements" (Tasks) from "Events" (Logs).
-    """
-    vehicle = models.ForeignKey(
-        Vehicle,
-        on_delete=models.CASCADE,
-        related_name='maintenance_tasks',
-        verbose_name='Vehicle'
-    )
     name = models.CharField(
         max_length=100, 
-        verbose_name='Task Name',
-        help_text='e.g., Oil Change, Coolant Check, Battery Inspection'
+        verbose_name='Maintenance Task Name',
+        help_text='e.g., Oil Change, Brake Inspection'
+    )
+    
+    # Status
+    is_completed = models.BooleanField(
+        default=False,
+        verbose_name='Is Completed?'
+    )
+    
+    # Due/Expiry info (for Pending)
+    expiry_date = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name='Next Due Date'
+    )
+    expiry_km = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name='Next Due Odometer (km)'
+    )
+    
+    # Interval info (for automatic next entry creation)
+    interval_days = models.PositiveIntegerField(
+        null=True, 
+        blank=True, 
+        verbose_name='Interval (days)',
+        help_text='Leave blank if not recurring by time.'
     )
     interval_km = models.PositiveIntegerField(
         null=True, 
         blank=True, 
         verbose_name='Interval (km)',
-        help_text='Leave blank if not distance-based.'
+        help_text='Leave blank if not recurring by distance.'
     )
-    interval_days = models.PositiveIntegerField(
-        null=True, 
-        blank=True, 
-        verbose_name='Interval (days)',
-        help_text='Leave blank if not time-based.'
+    
+    # Completion info (for Completed)
+    completion_date = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name='Date Completed'
     )
-    last_performed_km = models.PositiveIntegerField(
-        default=0, 
-        verbose_name='Last Performed Odometer (km)'
+    completion_km = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name='Odometer when Completed'
     )
-    last_performed_date = models.DateField(
-        null=True, 
-        blank=True, 
-        verbose_name='Last Performed Date'
+    cost = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        verbose_name='Cost'
     )
-    is_active = models.BooleanField(
-        default=True,
-        verbose_name='Active'
+    
+    service_provider = models.CharField(
+        max_length=200,
+        blank=True,
+        verbose_name='Service Provider'
     )
-
+    
+    notes = models.TextField(
+        blank=True,
+        verbose_name='Notes'
+    )
+    
+    # Metadata
+    logged_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='logged_maintenance_records',
+        verbose_name='Logged By'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
     class Meta:
-        verbose_name = 'Maintenance Task'
-        verbose_name_plural = 'Maintenance Tasks'
-        unique_together = ['vehicle', 'name']
-
+        verbose_name = 'Maintenance Record'
+        verbose_name_plural = 'Maintenance Records'
+        ordering = ['is_completed', 'expiry_date', '-completion_date', '-created_at']
+    
     def __str__(self):
-        return f"{self.vehicle.registration_plate} - {self.name}"
+        status = "Completed" if self.is_completed else "Pending"
+        return f"{self.vehicle.registration_plate} - {self.name} ({status})"
 
     @property
-    def is_due(self):
-        if not self.is_active:
+    def is_overdue(self):
+        """Check if pending record is overdue by date or odometer"""
+        if self.is_completed:
             return False
             
         today = timezone.now().date()
-        current_km = self.vehicle.current_odometer
-
-        # Check Distance-based (KM)
-        if self.interval_km:
-            if current_km >= (self.last_performed_km + self.interval_km):
-                return True
-
-        # Check Time-based (Days)
-        if self.interval_days:
-            # If never performed, it's due
-            if not self.last_performed_date:
-                return True
-            
-            due_date = self.last_performed_date + timezone.timedelta(days=self.interval_days)
-            if today >= due_date:
-                return True
-        
+        if self.expiry_date and self.expiry_date < today:
+            return True
+        if self.expiry_km and self.vehicle.current_odometer >= self.expiry_km:
+            return True
         return False
-
-    @property
-    def next_due_km(self):
-        if self.interval_km:
-            return self.last_performed_km + self.interval_km
-        return None
-
-    @property
-    def next_due_date(self):
-        if self.interval_days and self.last_performed_date:
-            return self.last_performed_date + timezone.timedelta(days=self.interval_days)
-        return None
+    
+    def mark_as_completed(self, date, km, cost=0, provider='', notes='', user=None):
+        """
+        Marks this record as completed and creates a new pending record 
+        if intervals are set.
+        """
+        self.is_completed = True
+        self.completion_date = date
+        self.completion_km = km
+        self.cost = cost
+        self.service_provider = provider
+        if notes:
+            self.notes = f"{self.notes}\n\nCompletion Notes: {notes}".strip()
+        if user:
+            self.logged_by = user
+        self.save()
+        
+        # Create next record if intervals exist
+        if self.interval_days or self.interval_km:
+            next_expiry_date = None
+            if self.interval_days:
+                next_expiry_date = date + timezone.timedelta(days=self.interval_days)
+            
+            next_expiry_km = None
+            if self.interval_km:
+                next_expiry_km = km + self.interval_km
+                
+            MaintenanceRecord.objects.create(
+                vehicle=self.vehicle,
+                name=self.name,
+                is_completed=False,
+                expiry_date=next_expiry_date,
+                expiry_km=next_expiry_km,
+                interval_days=self.interval_days,
+                interval_km=self.interval_km,
+                logged_by=user
+            )
 
 
 class Tyre(models.Model):
     """
-    Inventory management for individual tyres
+    Inventory management for individual tyres.
+    Simplified: No odometer tracking for tyres.
     """
     STATUS_IN_STOCK = 'In Stock'
     STATUS_MOUNTED = 'Mounted'
@@ -345,7 +276,6 @@ class Tyre(models.Model):
     current_position = models.CharField(max_length=50, blank=True, verbose_name='Position')
     
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_IN_STOCK)
-    total_km = models.PositiveIntegerField(default=0, verbose_name='Total KM')
     photo = models.ImageField(upload_to='tyres/', null=True, blank=True, verbose_name='Tyre Photo')
     notes = models.TextField(blank=True)
 
@@ -381,8 +311,6 @@ class Tyre(models.Model):
                     action=TyreLog.ACTION_MOUNT,
                     vehicle=self.current_vehicle,
                     position=self.current_position,
-                    tyre_odo=self.total_km,
-                    distance_covered=0,
                     notes="Initial mount on creation"
                 )
         else:
@@ -393,19 +321,11 @@ class Tyre(models.Model):
             if vehicle_changed:
                 # Dismount from old vehicle if it existed
                 if old_instance.current_vehicle:
-                    # Calculate distance covered since last mount/rotation on this specific vehicle
-                    last_assignment_log = self.logs.filter(
-                        vehicle=old_instance.current_vehicle
-                    ).order_by('-date', '-id').first()
-                    dist = self.total_km - (last_assignment_log.tyre_odo if last_assignment_log else 0)
-                    
                     TyreLog.objects.create(
                         tyre=self,
                         action=TyreLog.ACTION_DISMOUNT,
                         vehicle=old_instance.current_vehicle,
                         position=old_instance.current_position,
-                        tyre_odo=self.total_km,
-                        distance_covered=max(0, dist),
                         notes=f"Automatic dismount: vehicle changed to {self.current_vehicle}" if self.current_vehicle else "Automatic dismount"
                     )
                 
@@ -416,24 +336,15 @@ class Tyre(models.Model):
                         action=TyreLog.ACTION_MOUNT,
                         vehicle=self.current_vehicle,
                         position=self.current_position,
-                        tyre_odo=self.total_km,
-                        distance_covered=0,
                         notes=f"Automatic mount: vehicle changed from {old_instance.current_vehicle}" if old_instance.current_vehicle else "Automatic mount"
                     )
             elif position_changed and self.current_vehicle:
                 # Same vehicle, different position -> Rotation
-                last_assignment_log = self.logs.filter(
-                    vehicle=self.current_vehicle
-                ).order_by('-date', '-id').first()
-                dist = self.total_km - (last_assignment_log.tyre_odo if last_assignment_log else 0)
-                
                 TyreLog.objects.create(
                     tyre=self,
                     action=TyreLog.ACTION_ROTATION,
                     vehicle=self.current_vehicle,
                     position=self.current_position,
-                    tyre_odo=self.total_km,
-                    distance_covered=max(0, dist),
                     notes=f"Position changed from {old_instance.current_position} to {self.current_position}"
                 )
             
@@ -444,28 +355,26 @@ class Tyre(models.Model):
                     TyreLog.objects.create(
                         tyre=self,
                         action=TyreLog.ACTION_REPAIR,
-                        tyre_odo=self.total_km,
                         notes="Status changed to Under Repair"
                     )
                 elif self.status == self.STATUS_SCRAP:
                     TyreLog.objects.create(
                         tyre=self,
                         action=TyreLog.ACTION_SCRAP,
-                        tyre_odo=self.total_km,
                         notes="Status changed to Scrap"
                     )
                 elif self.status == self.STATUS_IN_STOCK and old_instance.status == self.STATUS_REPAIR:
                     TyreLog.objects.create(
                         tyre=self,
                         action=TyreLog.ACTION_DISMOUNT, # Using Dismount as 'Back to Stock'
-                        tyre_odo=self.total_km,
                         notes="Repair completed, moved back to stock"
                     )
 
 
 class TyreLog(models.Model):
     """
-    History of tyre movements and repairs
+    History of tyre movements and repairs.
+    Simplified: No odometer tracking for tyres.
     """
     ACTION_MOUNT = 'Mount'
     ACTION_DISMOUNT = 'Dismount'
@@ -489,8 +398,6 @@ class TyreLog(models.Model):
     
     vehicle = models.ForeignKey(Vehicle, on_delete=models.SET_NULL, null=True, blank=True)
     position = models.CharField(max_length=50, blank=True)
-    tyre_odo = models.PositiveIntegerField(null=True, blank=True, verbose_name="Tyre Odo (Total KM)")
-    distance_covered = models.PositiveIntegerField(default=0, verbose_name="Distance Covered on Vehicle")
     notes = models.TextField(blank=True)
 
     class Meta:
@@ -500,36 +407,32 @@ class TyreLog(models.Model):
         return f"{self.tyre} - {self.action} on {self.date}"
 
 
-class FuelLog(models.Model):
+# --- Signals ---
+from django.db.models.signals import post_delete, pre_save
+from django.dispatch import receiver
+
+@receiver(pre_save, sender=Tyre)
+def delete_old_tyre_photo_on_change(sender, instance, **kwargs):
     """
-    Fuel Log to track fueling events
+    Deletes the old photo from storage when a new one is uploaded.
     """
-    vehicle = models.ForeignKey(
-        Vehicle,
-        on_delete=models.CASCADE,
-        related_name='fuel_logs',
-        verbose_name='Vehicle'
-    )
-    trip = models.ForeignKey(
-        'trips.Trip',
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='fuel_logs',
-        verbose_name='Related Trip'
-    )
-    date = models.DateField(default=timezone.now, verbose_name='Date')
-    liters = models.DecimalField(max_digits=10, decimal_places=2, verbose_name='Liters')
-    rate = models.DecimalField(max_digits=10, decimal_places=2, verbose_name='Rate per Liter')
-    total_cost = models.DecimalField(max_digits=12, decimal_places=2, verbose_name='Total Cost')
-    odometer = models.PositiveIntegerField(verbose_name='Odometer Reading')
+    if not instance.pk:
+        return False
 
-    created_at = models.DateTimeField(auto_now_add=True)
+    try:
+        old_photo = Tyre.objects.get(pk=instance.pk).photo
+    except Tyre.DoesNotExist:
+        return False
 
-    class Meta:
-        verbose_name = 'Fuel Log'
-        verbose_name_plural = 'Fuel Logs'
-        ordering = ['-date', '-odometer']
+    new_photo = instance.photo
+    if old_photo and old_photo != new_photo:
+        old_photo.delete(save=False)
 
-    def __str__(self):
-        return f"{self.vehicle} - {self.liters}L - {self.date}"
+@receiver(post_delete, sender=Tyre)
+def delete_tyre_photo_on_delete(sender, instance, **kwargs):
+    """
+    Deletes the tyre's photo from storage when the Tyre instance is deleted.
+    """
+    if instance.photo:
+        # save=False prevents the model from trying to save itself after deletion
+        instance.photo.delete(save=False)

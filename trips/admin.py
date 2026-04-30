@@ -2,13 +2,13 @@
 Admin configuration for Trips app
 """
 from django.contrib import admin
-from .models import Trip, TripExpense
+from .models import Trip, Route
 
-
-class TripExpenseInline(admin.TabularInline):
-    model = TripExpense
-    extra = 1
-
+@admin.register(Route)
+class RouteAdmin(admin.ModelAdmin):
+    list_display = ('pickup_location', 'delivery_location', 'route_type')
+    list_filter = ('route_type',)
+    search_fields = ('pickup_location', 'delivery_location')
 
 @admin.register(Trip)
 class TripAdmin(admin.ModelAdmin):
@@ -17,16 +17,16 @@ class TripAdmin(admin.ModelAdmin):
         'date',
         'vehicle', 
         'party',
+        'route',
         'weight',
         'rate_per_ton',
-        'status',
         'driver'
     ]
     
     list_filter = [
-        'status',
         'vehicle',
         'party',
+        'route',
         'date',
         'created_at'
     ]
@@ -38,37 +38,22 @@ class TripAdmin(admin.ModelAdmin):
     ]
     
     readonly_fields = [
-        'created_at', 
-        'actual_completion_datetime', 
-        'payment_status', 
-        'amount_received'
+        'created_at',
+        'trip_number'
     ]
     
-    inlines = [TripExpenseInline]
-
     fieldsets = (
         ('Trip Information', {
-            'fields': ('trip_number', 'status', 'date', 'created_at')
+            'fields': ('trip_number', 'date', 'created_at')
         }),
         ('Details', {
-            'fields': ('vehicle', 'party', 'weight', 'rate_per_ton')
+            'fields': ('vehicle', 'party', 'route', 'revenue_type', 'weight', 'rate_per_ton')
         }),
         ('Driver Assignment', {
             'fields': ('driver',)
         }),
         ('Locations', {
             'fields': ('pickup_location', 'delivery_location')
-        }),
-        ('Financials', {
-            'fields': (
-                'payment_status', 
-                'amount_received', 
-                'diesel_expense', 
-                'toll_expense'
-            )
-        }),
-        ('Completion Info', {
-            'fields': ('actual_completion_datetime',)
         }),
         ('Additional Information', {
             'fields': ('notes',)

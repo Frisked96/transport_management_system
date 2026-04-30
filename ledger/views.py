@@ -14,15 +14,41 @@ from decimal import Decimal, InvalidOperation
 from datetime import datetime
 import json
 from django.http import JsonResponse, HttpResponse
-from django.template.loader import get_template
+from django.template.loader import get_template, render_to_string
 from xhtml2pdf import pisa
 from itertools import groupby
 from operator import attrgetter
 
-from .models import FinancialRecord, Party, CompanyAccount, TripAllocation, TransactionCategory, Bill
+from .models import FinancialRecord, Party, CompanyAccount, TripAllocation, TransactionCategory, Bill, BillTrip
 from .forms import FinancialRecordForm, PartyForm, CompanyAccountForm, BillForm
 from trips.models import Trip
 
+
+def format_indian_comma(amount):
+    """Formats a number into Indian style commas (e.g., 1,45,140.00)."""
+    try:
+        val = Decimal(str(amount))
+    except (ValueError, TypeError, Exception):
+        return "0.00"
+    
+    parts = f"{val:.2f}".split(".")
+    whole, decimal = parts[0], parts[1]
+    is_negative = whole.startswith("-")
+    if is_negative: whole = whole[1:]
+    
+    if len(whole) <= 3:
+        res = whole
+    else:
+        last_three = whole[-3:]
+        remaining = whole[:-3]
+        res = ""
+        while len(remaining) > 2:
+            res = "," + remaining[-2:] + res
+            remaining = remaining[:-2]
+        res = remaining + res + "," + last_three
+    
+    if is_negative: res = "-" + res
+    return res + "." + decimal
 
 class BaseLedgerPermissionMixin:
     """Base mixin for ledger permissions"""
@@ -80,7 +106,7 @@ class FinancialRecordListView(LoginRequiredMixin, BaseLedgerPermissionMixin, Lis
         if end_date:
             queryset = queryset.filter(date__lte=end_date)
         
-        return queryset.order_by('-date')
+        return queryset.order_by('-date', '-created_at')
     
     def get_context_data(self, **kwargs):
 
@@ -264,6 +290,29 @@ class FinancialRecordDeleteView(LoginRequiredMixin, PermissionRequiredMixin, Del
     template_name = 'ledger/financialrecord_confirm_delete.html'
     permission_required = 'ledger.delete_financialrecord'
     success_url = reverse_lazy('financialrecord-list')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        record = self.object
+        impact = []
+        if record.record_type == FinancialRecord.RECORD_TYPE_INVOICE and record.associated_bill:
+            bill = record.associated_bill
+            impact.append(f"The associated Bill/Invoice ({bill.bill_number or 'Draft'}) will be DELETED.")
+            impact.append(f"{bill.trips.count()} trips will become UNBILLED.")
+            payments = bill.amount_received
+            if payments > 0:
+                impact.append(f"₹{payments:,.2f} in payments made against this bill/trips will REMAIN in the system as unallocated Payments In/Deductions.")
+        elif record.allocations.exists():
+            impact.append(f"This record is allocated to {record.allocations.count()} trips. Deleting it will increase their outstanding balances.")
+        else:
+            if record.associated_trip:
+                impact.append(f"Deleting this will remove the payment/expense from Trip {record.associated_trip.trip_number}.")
+            else:
+                impact.append("Deleting this will directly adjust the party and account balances.")
+        
+        impact.append("Ledger entry numbers will be automatically re-sequenced to prevent gaps.")
+        context['impact_statements'] = impact
+        return context
     
     def delete(self, request, *args, **kwargs):
         self.object = self.get_object()
@@ -305,15 +354,13 @@ def financial_summary(request):
         date__year=current_year
     ).aggregate(total=Sum('amount'))['total'] or 0
 
-    # Calculate GST portion from Final Bills
+    # Calculate GST portion from all Bills
     from .models import Bill
     monthly_gst = sum(bill.gst_amount for bill in Bill.objects.filter(
-        status=Bill.STATUS_FINAL,
         date__month=current_month,
         date__year=current_year
     ))
     yearly_gst = sum(bill.gst_amount for bill in Bill.objects.filter(
-        status=Bill.STATUS_FINAL,
         date__year=current_year
     ))
     
@@ -374,43 +421,8 @@ class PartyListView(LoginRequiredMixin, BaseLedgerPermissionMixin, ListView):
                 Q(state__icontains=search)
             )
             
-        # Correctly calculate totals using Subquery to avoid cross-join multiplication
-        # Total Revenue = Sum of all Invoices (Trip Payment + Bill GST)
-        revenue_subquery = FinancialRecord.objects.filter(
-            party=OuterRef('pk'),
-            record_type=FinancialRecord.RECORD_TYPE_INVOICE
-        ).values('party').annotate(
-            total=Sum('amount')
-        ).values('total')
-
-        # Total Billed = Sum of Formal Bills (Records linked to a Bill or Billed Trip)
-        billed_subquery = FinancialRecord.objects.filter(
-            party=OuterRef('pk'),
-            record_type=FinancialRecord.RECORD_TYPE_INVOICE
-        ).filter(
-            Q(associated_bill__isnull=False) | Q(associated_trip__bills__isnull=False)
-        ).values('party').annotate(
-            total=Sum('amount')
-        ).values('total')
-
-        # Total Received = Sum of Income Transactions (Payments) + Deductions
-        # We include Deductions here because they reduce the Party's outstanding balance
-        received_subquery = FinancialRecord.objects.filter(
-            party=OuterRef('pk'),
-            record_type=FinancialRecord.RECORD_TYPE_TRANSACTION
-        ).filter(
-            Q(category__type=TransactionCategory.TYPE_INCOME) | Q(category__name__in=['Deductions', 'TDS', 'Shortage', 'Credit Note', 'Debit Note'])
-        ).values('party').annotate(
-            total=Sum('amount')
-        ).values('total')
-
-        queryset = queryset.annotate(
-            total_revenue=Coalesce(Subquery(revenue_subquery, output_field=DecimalField()), Value(0, output_field=DecimalField())),
-            total_billed=Coalesce(Subquery(billed_subquery, output_field=DecimalField()), Value(0, output_field=DecimalField())),
-            total_received=Coalesce(Subquery(received_subquery, output_field=DecimalField()), Value(0, output_field=DecimalField()))
-        ).annotate(
-            outstanding_balance=F('opening_balance') + F('total_revenue') - F('total_received')
-        )
+        # We'll use the model properties in the template for absolute accuracy.
+        # Annotations are kept for basic filtering/ordering if needed.
         return queryset.order_by('name')
 
 class PartyDetailView(LoginRequiredMixin, BaseLedgerPermissionMixin, DetailView):
@@ -425,42 +437,22 @@ class PartyDetailView(LoginRequiredMixin, BaseLedgerPermissionMixin, DetailView)
         context = super().get_context_data(**kwargs)
         
         # Get associated trips with annotations (Payment & Billing Info)
-        # Use Trip.objects.filter() to ensure we can use the custom Manager methods
-        all_trips = Trip.objects.filter(party=self.object).with_payment_info().with_billing_info().order_by('-date')
+        all_trips = Trip.objects.filter(party=self.object).with_payment_info().with_billing_info().order_by('-date', '-created_at')
         context['trips'] = all_trips
 
         # Get Bills
-        context['bills'] = self.object.bills.all().order_by('-date')
+        context['bills'] = self.object.bills.all().order_by('-date', '-created_at')
         
-        # Get associated financial records
-        financial_records = self.object.financial_records.all().select_related('category', 'associated_trip', 'associated_bill').order_by('-date')
+        # Get associated financial records (Including Invoices for complete history)
+        financial_records = self.object.financial_records.select_related(
+            'category', 'associated_trip', 'associated_bill'
+        ).order_by('-date', '-created_at')
         context['financial_records'] = financial_records
         
-        # Calculate Total Revenue (Sum of all Invoices: Trip Payment + Bill GST)
-        invoiced_amount = financial_records.filter(
-            record_type=FinancialRecord.RECORD_TYPE_INVOICE
-        ).aggregate(total=Sum('amount'))['total'] or 0
-        
-        total_revenue = self.object.opening_balance + invoiced_amount
-
-        # Calculate Total Billed (Sum of Formal Bills: Linked to a Bill or Billed Trip)
-        total_billed = financial_records.filter(
-            record_type=FinancialRecord.RECORD_TYPE_INVOICE
-        ).filter(
-            Q(associated_bill__isnull=False) | Q(associated_trip__bills__isnull=False)
-        ).distinct().aggregate(total=Sum('amount'))['total'] or 0
-
-        # Calculate Total Received (Payments from Party + Deductions)
-        total_received = financial_records.filter(
-            record_type=FinancialRecord.RECORD_TYPE_TRANSACTION
-        ).filter(
-            Q(category__type=TransactionCategory.TYPE_INCOME) | Q(category__name__in=['Deductions', 'TDS', 'Shortage', 'Credit Note', 'Debit Note'])
-        ).aggregate(total=Sum('amount'))['total'] or 0
-        
-        context['total_revenue'] = total_revenue
-        context['total_billed'] = total_billed
-        context['total_received'] = total_received
-        context['balance'] = total_revenue - total_received # Total Outstanding
+        # Use model properties for accurate totals (They are more inclusive of manual entries)
+        context['total_revenue'] = self.object.total_billed
+        context['total_received'] = self.object.total_received
+        context['balance'] = self.object.current_balance
         
         return context
 
@@ -591,7 +583,7 @@ class CompanyAccountDetailView(LoginRequiredMixin, BaseLedgerPermissionMixin, De
         if end_date:
             records = records.filter(date__lte=end_date)
             
-        context['financial_records'] = records.order_by('-date')
+        context['financial_records'] = records.order_by('-date', '-created_at')
         return context
 
 
@@ -634,7 +626,7 @@ def get_bill_balance(request):
         bill = get_object_or_404(Bill, pk=bill_id)
         return JsonResponse({
             'balance': float(bill.outstanding_balance),
-            'total': float(bill.total_amount if bill.status == Bill.STATUS_FINAL else bill.subtotal),
+            'total': float(bill.rounded_total),
             'received': float(bill.amount_received)
         })
     except Exception as e:
@@ -653,7 +645,7 @@ def get_party_unbilled_trips(request):
     
     try:
         # Show trips for this party
-        qs = Trip.objects.filter(party_id=party_id).exclude(status='Cancelled')
+        qs = Trip.objects.filter(party_id=party_id)
         
         if bill_id:
             # Include currently selected trips for this bill + unbilled ones
@@ -661,18 +653,30 @@ def get_party_unbilled_trips(request):
         else:
             qs = qs.filter(bills__isnull=True)
             
-        trips = qs.distinct().order_by('-date')
+        trips = qs.distinct().order_by('-date', '-created_at')
         
-        data = [{
-            'id': trip.id,
-            'date': trip.date.strftime('%d %b %Y'),
-            'vehicle': trip.vehicle.registration_plate,
-            'pickup': trip.pickup_location,
-            'delivery': trip.delivery_location,
-            'weight': float(trip.weight or 0),
-            'rate': float(trip.rate_per_ton or 0),
-            'revenue': float(trip.revenue or 0),
-        } for trip in trips]
+        data = []
+        for trip in trips:
+            lr_no = trip.lr_no or ''
+            
+            # If editing a bill, get the specific LR No saved for this bill
+            if bill_id:
+                bill_trip = BillTrip.objects.filter(bill_id=bill_id, trip=trip).first()
+                if bill_trip:
+                    lr_no = bill_trip.lr_no or ''
+
+            data.append({
+                'id': trip.id,
+                'date': trip.date.strftime('%d %b %Y'),
+                'vehicle': trip.vehicle.registration_plate,
+                'pickup': trip.pickup_location,
+                'delivery': trip.delivery_location,
+                'weight': float(trip.weight or 0),
+                'rate': float(trip.rate_per_ton or 0),
+                'revenue': float(trip.revenue or 0),
+                'gst_type': trip.gst_type, # IGST or GST
+                'lr_no': lr_no,
+            })
         
         return JsonResponse({'trips': data})
     except Exception as e:
@@ -690,7 +694,38 @@ class BillListView(LoginRequiredMixin, BaseLedgerPermissionMixin, ListView):
     def get_queryset(self):
         if self.has_driver_permission():
             return Bill.objects.none()
-        return Bill.objects.all().select_related('party').order_by('-date', '-created_at')
+            
+        queryset = Bill.objects.all().select_related('party', 'issuer').order_by('-date', '-created_at')
+        
+        # Filter by Issuer (Company Account)
+        issuer_id = self.request.GET.get('issuer')
+        if issuer_id:
+            queryset = queryset.filter(issuer_id=issuer_id)
+            
+        # Filter by Party
+        party_id = self.request.GET.get('party')
+        if party_id:
+            queryset = queryset.filter(party_id=party_id)
+            
+        # Filter by Date Range
+        start_date = self.request.GET.get('start_date')
+        end_date = self.request.GET.get('end_date')
+        if start_date:
+            queryset = queryset.filter(date__gte=start_date)
+        if end_date:
+            queryset = queryset.filter(date__lte=end_date)
+            
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['issuers'] = CompanyAccount.objects.all().order_by('name')
+        context['parties'] = Party.objects.all().order_by('name')
+        context['current_issuer'] = self.request.GET.get('issuer', '')
+        context['current_party'] = self.request.GET.get('party', '')
+        context['start_date'] = self.request.GET.get('start_date', '')
+        context['end_date'] = self.request.GET.get('end_date', '')
+        return context
 
 class BillCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
     model = Bill
@@ -730,10 +765,9 @@ class BillUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
     form_class = BillForm
     template_name = 'ledger/bill_form.html'
     permission_required = 'ledger.change_financialrecord'
-    
-    def get_success_url(self):
-        return reverse_lazy('bill-list')
 
+    def get_success_url(self):
+        return reverse_lazy('bill-detail', kwargs={'pk': self.object.pk})
     def form_valid(self, form):
         response = super().form_valid(form)
         # sync_to_ledger is already called in BillForm.save()
@@ -750,6 +784,21 @@ class BillDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
     template_name = 'ledger/bill_confirm_delete.html'
     permission_required = 'ledger.delete_financialrecord'
     success_url = reverse_lazy('bill-list')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        bill = self.object
+        impact = []
+        impact.append(f"The consolidated Ledger Entry (Invoice) for ₹{bill.rounded_total:,.2f} will be DELETED.")
+        impact.append(f"{bill.trips.count()} trips will become UNBILLED.")
+        
+        payments = bill.amount_received
+        if payments > 0:
+            impact.append(f"₹{payments:,.2f} in payments made against these trips will REMAIN in the system as Payments In/Deductions, protecting your cash balance.")
+            
+        impact.append("Ledger entry numbers will be automatically re-sequenced to prevent gaps.")
+        context['impact_statements'] = impact
+        return context
 
 class BillDetailView(LoginRequiredMixin, BaseLedgerPermissionMixin, DetailView):
     model = Bill
@@ -876,45 +925,80 @@ def party_statement_pdf(request, pk):
         except ValueError:
             end_date = timezone.now().date()
 
+    def format_indian_comma(amount):
+        """Formats a number into Indian style commas (e.g., 1,45,140.00)."""
+        try:
+            val = Decimal(str(amount))
+        except (ValueError, TypeError, DecimalException):
+            return "0.00"
+        
+        parts = f"{val:.2f}".split(".")
+        whole, decimal = parts[0], parts[1]
+        is_negative = whole.startswith("-")
+        if is_negative: whole = whole[1:]
+        
+        if len(whole) <= 3:
+            res = whole
+        else:
+            last_three = whole[-3:]
+            remaining = whole[:-3]
+            res = ""
+            while len(remaining) > 2:
+                res = "," + remaining[-2:] + res
+                remaining = remaining[:-2]
+            res = remaining + res + "," + last_three
+        
+        if is_negative: res = "-" + res
+        return res + "." + decimal
+
+    def format_balance(val):
+        formatted_val = format_indian_comma(abs(val))
+        if party.party_type == Party.TYPE_DEBTOR:
+            if val > 0: return f"{formatted_val}\u00A0Dr"
+            elif val < 0: return f"{formatted_val}\u00A0Cr"
+        else:
+            if val > 0: return f"{formatted_val}\u00A0Cr"
+            elif val < 0: return f"{formatted_val}\u00A0Dr"
+        return "0.00"
+
     # 1. Calculate Opening Balance (before start_date)
     opening_bal = party.opening_balance
     
-    # Add all transactions before start_date
-    pre_records = FinancialRecord.objects.filter(
+    # Efficiently aggregate totals before the start date
+    pre_totals = FinancialRecord.objects.filter(
         party=party,
         date__lt=start_date
     ).select_related('category')
     
-    for rec in pre_records:
-        if rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE:
-            opening_bal += rec.amount
-        elif rec.is_income or (rec.category and rec.category.name in ['Deductions', 'TDS', 'Shortage', 'Credit Note', 'Debit Note']):
-            opening_bal -= rec.amount
+    for rec in pre_totals:
+        debit = rec.debit_amount or Decimal('0')
+        credit = rec.credit_amount or Decimal('0')
+        opening_bal += (debit - credit)
 
     # 2. Get records in range
     records = FinancialRecord.objects.filter(
         party=party,
         date__range=[start_date, end_date]
-    ).select_related('category', 'associated_trip', 'associated_bill').order_by('date', 'created_at')
+    ).select_related('category', 'associated_trip', 'associated_bill', 'party').order_by('date', 'created_at')
 
     # 3. Build statement rows with running balance
     statement_rows = []
     current_running_bal = opening_bal
+    total_period_debit = Decimal('0')
+    total_period_credit = Decimal('0')
     
     for rec in records:
-        debit = 0
-        credit = 0
+        # Use model properties for debit/credit from the perspective of the record's primary entity
+        debit = rec.debit_amount or Decimal('0')
+        credit = rec.credit_amount or Decimal('0')
         
-        # In a typical ledger: 
-        # DEBIT = Increases Asset/Decreases Liability (For us: Revenue/Invoice increases what they owe us)
-        # CREDIT = Decreases Asset/Increases Liability (For us: Payment decreases what they owe us)
-        
-        if rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE:
-            debit = rec.amount
-            current_running_bal += debit
-        elif rec.is_income or (rec.category and rec.category.name in ['Deductions', 'TDS', 'Shortage', 'Credit Note', 'Debit Note']):
-            credit = rec.amount
-            current_running_bal -= credit
+        # Skip records that have neither debit nor credit for the primary party
+        if debit == 0 and credit == 0:
+            continue
+
+        current_running_bal += (debit - credit)
+        total_period_debit += debit
+        total_period_credit += credit
             
         # Get reference string
         ref = "-"
@@ -933,39 +1017,34 @@ def party_statement_pdf(request, pk):
             'reference': ref,
             'debit': debit,
             'credit': credit,
-            'balance': current_running_bal
+            'balance': current_running_bal,
+            'balance_formatted': format_balance(current_running_bal)
         })
 
     # 4. Render to PDF
     context = {
         'party': party,
-        'recipient_name': party.name,
-        'recipient_address': party.address,
-        'recipient_gstin': party.gstin,
-        'recipient_phone': party.phone_number,
-        'title': f"Statement of Account - {party.name}",
         'start_date': start_date,
         'end_date': end_date,
         'opening_balance': opening_bal,
+        'opening_balance_formatted': format_balance(opening_bal),
         'statement_rows': statement_rows,
+        'total_debit': total_period_debit,
+        'total_credit': total_period_credit,
         'closing_balance': current_running_bal,
+        'closing_balance_formatted': format_balance(current_running_bal),
         'generated_at': timezone.now(),
-        'company': CompanyAccount.objects.first(), # Header info
+        'company': CompanyAccount.objects.first(),
+        'title': f"Statement of Account - {party.name}",
     }
     
-    template = get_template('ledger/statement_pdf.html')
-    html = template.render(context)
-    
+    html = render_to_string('ledger/party_statement_pdf.html', context)
     response = HttpResponse(content_type='application/pdf')
-    # Use inline for testing, attachment for production
     response['Content-Disposition'] = f'inline; filename="Statement_{party.name.replace(" ", "_")}_{start_date}.pdf"'
     
-    # Create PDF
     pisa_status = pisa.CreatePDF(html, dest=response)
-    
     if pisa_status.err:
         return HttpResponse('Error generating PDF', status=500)
-        
     return response
 
 
@@ -997,6 +1076,12 @@ def account_statement_pdf(request, pk):
         except ValueError:
             end_date = timezone.now().date()
 
+    def format_balance(val):
+        formatted_val = format_indian_comma(abs(val))
+        if val > 0: return f"{formatted_val} Dr"
+        elif val < 0: return f"{formatted_val} Cr"
+        return "0.00"
+
     # 1. Calculate Opening Balance (before start_date)
     opening_bal = account.opening_balance
     
@@ -1006,9 +1091,11 @@ def account_statement_pdf(request, pk):
     ).select_related('category')
     
     for rec in pre_records:
-        if rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE or (rec.category and rec.category.name in ['Deductions', 'TDS', 'Shortage', 'Credit Note', 'Debit Note']):
-            pass # Invoices and deductions don't affect cash balance
-        elif rec.is_income:
+        if rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE:
+            continue # Skip accruals for cash statements
+        
+        # For Company Account (Asset): Income=Debit (+), Expense=Credit (-)
+        if rec.is_income:
             opening_bal += rec.amount
         elif rec.is_expense:
             opening_bal -= rec.amount
@@ -1022,19 +1109,19 @@ def account_statement_pdf(request, pk):
     # 3. Build statement rows
     statement_rows = []
     current_running_bal = opening_bal
+    total_period_debit = Decimal('0')
+    total_period_credit = Decimal('0')
     
     for rec in records:
-        debit = 0
-        credit = 0
-        
-        if rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE or (rec.category and rec.category.name in ['Deductions', 'TDS', 'Shortage', 'Credit Note', 'Debit Note']):
-            pass # Display them but they don't affect running balance
-        elif rec.is_income:
-            debit = rec.amount
-            current_running_bal += debit
-        elif rec.is_expense:
-            credit = rec.amount
-            current_running_bal -= credit
+        if rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE:
+            continue # Skip accruals
+            
+        debit = rec.debit_amount or Decimal('0')
+        credit = rec.credit_amount or Decimal('0')
+            
+        current_running_bal += (debit - credit)
+        total_period_debit += debit
+        total_period_credit += credit
             
         # Get reference string
         ref = "-"
@@ -1054,11 +1141,13 @@ def account_statement_pdf(request, pk):
             'reference': ref,
             'debit': debit,
             'credit': credit,
-            'balance': current_running_bal
+            'balance': current_running_bal,
+            'balance_formatted': format_balance(current_running_bal)
         })
 
     # 4. Render to PDF
     context = {
+        'party': account, # Reusing template variable name for simplicity
         'recipient_name': account.name,
         'recipient_label': 'ACCOUNT',
         'recipient_address': account.address,
@@ -1069,15 +1158,17 @@ def account_statement_pdf(request, pk):
         'start_date': start_date,
         'end_date': end_date,
         'opening_balance': opening_bal,
+        'opening_balance_formatted': format_balance(opening_bal),
         'statement_rows': statement_rows,
+        'total_debit': total_period_debit,
+        'total_credit': total_period_credit,
         'closing_balance': current_running_bal,
+        'closing_balance_formatted': format_balance(current_running_bal),
         'generated_at': timezone.now(),
-        'company': account, # This account is the company
+        'company': account, 
     }
     
-    template = get_template('ledger/statement_pdf.html')
-    html = template.render(context)
-    
+    html = render_to_string('ledger/party_statement_pdf.html', context)
     response = HttpResponse(content_type='application/pdf')
     response['Content-Disposition'] = f'inline; filename="Account_Statement_{account.name.replace(" ", "_")}.pdf"'
     
@@ -1113,6 +1204,12 @@ def unified_ledger_pdf(request):
         except ValueError:
             end_date = timezone.now().date()
 
+    def format_balance(val):
+        formatted_val = format_indian_comma(abs(val))
+        if val > 0: return f"{formatted_val} Dr"
+        elif val < 0: return f"{formatted_val} Cr"
+        return "0.00"
+
     # 1. Calculate Combined Opening Balance
     opening_bal = CompanyAccount.objects.aggregate(total=Sum('opening_balance'))['total'] or Decimal('0')
     
@@ -1121,9 +1218,10 @@ def unified_ledger_pdf(request):
     ).select_related('category')
     
     for rec in pre_records:
-        if rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE or (rec.category and rec.category.name in ['Deductions', 'TDS', 'Shortage', 'Credit Note', 'Debit Note']):
-            pass # Invoices and deductions don't affect cash balance
-        elif rec.is_income:
+        if rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE:
+            continue # Skip accruals for cash statements
+        
+        if rec.is_income:
             opening_bal += rec.amount
         elif rec.is_expense:
             opening_bal -= rec.amount
@@ -1136,19 +1234,19 @@ def unified_ledger_pdf(request):
     # 3. Build statement rows
     statement_rows = []
     current_running_bal = opening_bal
+    total_period_debit = Decimal('0')
+    total_period_credit = Decimal('0')
     
     for rec in records:
-        debit = 0
-        credit = 0
-        
-        if rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE or (rec.category and rec.category.name in ['Deductions', 'TDS', 'Shortage', 'Credit Note', 'Debit Note']):
-            pass # Display them but they don't affect running balance
-        elif rec.is_income:
-            debit = rec.amount
-            current_running_bal += debit
-        elif rec.is_expense:
-            credit = rec.amount
-            current_running_bal -= credit
+        if rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE:
+            continue # Skip accruals
+            
+        debit = rec.debit_amount or Decimal('0')
+        credit = rec.credit_amount or Decimal('0')
+            
+        current_running_bal += (debit - credit)
+        total_period_debit += debit
+        total_period_credit += credit
             
         # Get reference string
         ref = "-"
@@ -1174,12 +1272,14 @@ def unified_ledger_pdf(request):
             'reference': ref,
             'debit': debit,
             'credit': credit,
-            'balance': current_running_bal
+            'balance': current_running_bal,
+            'balance_formatted': format_balance(current_running_bal)
         })
 
     # 4. Render to PDF
     company_main = CompanyAccount.objects.first()
     context = {
+        'party': company_main, # Template placeholder
         'recipient_name': "All Company Accounts",
         'recipient_label': 'CONSOLIDATED',
         'recipient_address': "Multi-firm Consolidated Ledger",
@@ -1187,15 +1287,17 @@ def unified_ledger_pdf(request):
         'start_date': start_date,
         'end_date': end_date,
         'opening_balance': opening_bal,
+        'opening_balance_formatted': format_balance(opening_bal),
         'statement_rows': statement_rows,
+        'total_debit': total_period_debit,
+        'total_credit': total_period_credit,
         'closing_balance': current_running_bal,
+        'closing_balance_formatted': format_balance(current_running_bal),
         'generated_at': timezone.now(),
         'company': company_main,
     }
     
-    template = get_template('ledger/statement_pdf.html')
-    html = template.render(context)
-    
+    html = render_to_string('ledger/party_statement_pdf.html', context)
     response = HttpResponse(content_type='application/pdf')
     response['Content-Disposition'] = f'inline; filename="Unified_Ledger_{start_date}.pdf"'
     
@@ -1203,3 +1305,94 @@ def unified_ledger_pdf(request):
     if pisa_status.err:
         return HttpResponse('Error generating PDF', status=500)
     return response
+
+
+@login_required
+def get_party_bills(request):
+    """
+    AJAX endpoint to get bills for a party (excluding adjustment notes)
+    """
+    party_id = request.GET.get('party_id')
+    unpaid_only = request.GET.get('unpaid_only') == 'true'
+
+    if not party_id:
+        return JsonResponse({'bills': []})
+
+    try:
+        from .models import Bill
+        bills_qs = Bill.objects.filter(
+            party_id=party_id
+        ).exclude(
+            category__name__in=['Credit Note', 'Debit Note']
+        ).order_by('-date', '-created_at')
+
+        if unpaid_only:
+            # We must filter in Python as payment_status is a property
+            unpaid_bill_ids = [b.id for b in bills_qs if b.payment_status != Bill.PAYMENT_STATUS_PAID]
+            bills = Bill.objects.filter(id__in=unpaid_bill_ids).order_by('-date', '-created_at')
+        else:
+            bills = bills_qs
+
+        data = [{
+            'id': bill.id,
+            'label': f"{bill.bill_number} - {bill.date.strftime('%d/%m/%Y')} (Total: ₹{bill.rounded_total:.2f})"
+        } for bill in bills]
+
+        return JsonResponse({'bills': data})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+@login_required
+def get_next_invoice_number(request):
+    """
+    Returns the next available invoice number for a given issuer via AJAX.
+    """
+    issuer_id = request.GET.get('issuer_id')
+    date_str = request.GET.get('date')
+    category_id = request.GET.get('category_id')
+    
+    if not issuer_id:
+        return JsonResponse({'error': 'No issuer ID provided'}, status=400)
+    
+    from .models import CompanyAccount, Bill, TransactionCategory
+    import datetime
+    
+    issuer = CompanyAccount.objects.filter(pk=issuer_id).first()
+    if not issuer:
+        return JsonResponse({'error': 'Issuer not found'}, status=404)
+    
+    # Parse date if provided
+    date_obj = None
+    if date_str:
+        try:
+            date_obj = datetime.datetime.strptime(date_str, '%Y-%m-%d')
+        except ValueError:
+            pass
+
+    category = None
+    if category_id:
+        category = TransactionCategory.objects.filter(pk=category_id).first()
+
+    # Use the gap-filling logic
+    next_no = Bill.get_next_available_no(issuer, date_obj, category)
+    
+    # Get current prefix based on date_obj or now
+    from django.utils import timezone
+    dt = date_obj or timezone.now()
+    year = dt.year
+    
+    if category:
+        if category.name == 'Credit Note':
+            prefix = issuer.cn_prefix.replace("{YYYY}", str(year))
+        elif category.name == 'Debit Note':
+            prefix = issuer.dn_prefix.replace("{YYYY}", str(year))
+        else:
+            prefix = issuer.invoice_prefix.replace("{YYYY}", str(year))
+    else:
+        prefix = issuer.invoice_prefix.replace("{YYYY}", str(year))
+    
+    return JsonResponse({
+        'bill_no': next_no,
+        'prefix': prefix
+    })
+

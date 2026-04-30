@@ -1,0 +1,99 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if object %}Edit Route{% else %}Add Route{% endif %} - Transport Management System{% endblock %}
+
+{% block content %}
+<header class="mb-6">
+    <div class="flex items-center space-x-3 mb-2">
+        <a href="{% url 'route-list' %}" class="text-slate-400 hover:text-emerald-600 transition-colors">
+            <i class="fa-solid fa-arrow-left"></i>
+        </a>
+        <h1 class="text-3xl font-bold text-slate-900">
+            {% if object %}Edit Route{% else %}New Route{% endif %}
+        </h1>
+    </div>
+    <p class="text-sm text-slate-600 ml-7">
+        {% if object %}Update the details for this route.{% else %}Create a new predefined route for trips.{% endif %}
+    </p>
+</header>
+
+<div class="bg-white rounded-lg shadow-sm border border-slate-200 p-6 md:p-8 max-w-3xl">
+    <form method="post" novalidate>
+        {% csrf_token %}
+        
+        {% if form.non_field_errors %}
+        <div class="mb-6 bg-rose-50 border-l-4 border-rose-500 p-4 rounded-md">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    <i class="fa-solid fa-circle-exclamation text-rose-500"></i>
+                </div>
+                <div class="ml-3">
+                    <h3 class="text-sm font-medium text-rose-800">Please correct the following errors:</h3>
+                    <ul class="mt-1 text-sm text-rose-700 list-disc list-inside">
+                        {% for error in form.non_field_errors %}
+                            <li>{{ error }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="space-y-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Pickup -->
+                <div>
+                    <label for="{{ form.pickup_location.id_for_label }}" class="block text-sm font-medium text-slate-700 mb-1">
+                        {{ form.pickup_location.label }}
+                        {% if form.pickup_location.field.required %}<span class="text-rose-500">*</span>{% endif %}
+                    </label>
+                    {{ form.pickup_location }}
+                    {% if form.pickup_location.help_text %}
+                        <p class="mt-1 text-xs text-slate-500">{{ form.pickup_location.help_text }}</p>
+                    {% endif %}
+                    {% if form.pickup_location.errors %}
+                        <p class="mt-1 text-sm text-rose-600">{{ form.pickup_location.errors.0 }}</p>
+                    {% endif %}
+                </div>
+
+                <!-- Delivery -->
+                <div>
+                    <label for="{{ form.delivery_location.id_for_label }}" class="block text-sm font-medium text-slate-700 mb-1">
+                        {{ form.delivery_location.label }}
+                        {% if form.delivery_location.field.required %}<span class="text-rose-500">*</span>{% endif %}
+                    </label>
+                    {{ form.delivery_location }}
+                    {% if form.delivery_location.help_text %}
+                        <p class="mt-1 text-xs text-slate-500">{{ form.delivery_location.help_text }}</p>
+                    {% endif %}
+                    {% if form.delivery_location.errors %}
+                        <p class="mt-1 text-sm text-rose-600">{{ form.delivery_location.errors.0 }}</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Route Type -->
+            <div>
+                <label for="{{ form.route_type.id_for_label }}" class="block text-sm font-medium text-slate-700 mb-1">
+                    {{ form.route_type.label }}
+                    {% if form.route_type.field.required %}<span class="text-rose-500">*</span>{% endif %}
+                </label>
+                {{ form.route_type }}
+                <p class="mt-1 text-xs text-slate-500">Local sets GST, Intra/Interstate sets IGST for billing.</p>
+                {% if form.route_type.errors %}
+                    <p class="mt-1 text-sm text-rose-600">{{ form.route_type.errors.0 }}</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="mt-8 pt-5 border-t border-slate-200 flex justify-end space-x-3">
+            <a href="{% url 'route-list' %}" class="px-4 py-2 border border-slate-300 rounded-md shadow-sm text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 transition-colors">
+                Cancel
+            </a>
+            <button type="submit" class="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500">
+                {% if object %}Save Changes{% else %}Create Route{% endif %}
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

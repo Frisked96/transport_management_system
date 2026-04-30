@@ -39,7 +39,7 @@
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
                     <span class="text-sm font-semibold text-slate-500 uppercase tracking-wider">Amount</span>
                     <div class="md:col-span-2 text-3xl font-bold {% if record.is_income %}text-emerald-600{% else %}text-red-600{% endif %}">
-                        {% if record.is_income %}+{% else %}-{% endif %}${{ record.amount|floatformat:2 }}
+                        ₹{{ record.amount|floatformat:2 }} {% if record.is_income %}Dr{% else %}Cr{% endif %}
                     </div>
                 </div>
                 
@@ -141,7 +141,7 @@
                                         </a>
                                     </td>
                                     <td class="px-4 py-3 text-right font-bold text-emerald-600">
-                                        ${{ allocation.amount|floatformat:2 }}
+                                        ₹{{ allocation.amount|floatformat:2 }}
                                     </td>
                                 </tr>
                                 {% endfor %}
@@ -149,7 +149,7 @@
                             <tfoot class="bg-slate-50 font-bold">
                                 <tr>
                                     <td class="px-4 py-3 text-slate-700">Total Distributed</td>
-                                    <td class="px-4 py-3 text-right text-slate-900">${{ record.amount|floatformat:2 }}</td>
+                                    <td class="px-4 py-3 text-right text-slate-900">₹{{ record.amount|floatformat:2 }}</td>
                                 </tr>
                             </tfoot>
                         </table>
