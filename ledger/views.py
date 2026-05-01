@@ -599,6 +599,40 @@ class CompanyAccountDetailView(LoginRequiredMixin, BaseLedgerPermissionMixin, De
 
 
 @login_required
+def global_resync(request):
+    """
+    Manually triggers a full refresh of all denormalized balances.
+    Only accessible by superusers or managers.
+    """
+    if not (request.user.is_superuser or request.user.groups.filter(name='manager').exists()):
+        messages.error(request, "You do not have permission to perform this action.")
+        return redirect('financialrecord-list')
+
+    # 1. Parties
+    parties = Party.objects.all()
+    for party in parties:
+        party.refresh_balance()
+        
+    # 2. Company Accounts
+    accounts = CompanyAccount.objects.all()
+    for account in accounts:
+        account.refresh_balance()
+        
+    # 3. Drivers
+    from drivers.models import Driver
+    drivers = Driver.objects.all()
+    for driver in drivers:
+        driver.refresh_balance()
+        
+    messages.success(request, "All balances (Parties, Accounts, and Drivers) have been successfully resynced.")
+    
+    # Redirect to referer if available, else financial summary
+    referer = request.META.get('HTTP_REFERER')
+    if referer:
+        return redirect(referer)
+    return redirect('financial-summary')
+
+@login_required
 def get_party_unpaid_trips(request):
     """
     AJAX endpoint to get unpaid/partial trips for a party

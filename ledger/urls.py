@@ -27,6 +27,8 @@ urlpatterns = [
     path('ajax/get-party-bills/', views.get_party_bills, name='get-party-bills'),
     path('ajax/get-bill-balance/', views.get_bill_balance, name='get-bill-balance'),
     path('ajax/get-next-invoice-number/', views.get_next_invoice_number, name='get-next-invoice-number'),
+    path('global-resync/', views.global_resync, name='global-resync'),
+
 
     # Account URLs
     path('accounts/', views.CompanyAccountListView.as_view(), name='account-list'),
