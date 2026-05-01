@@ -235,6 +235,7 @@
                                 <th class="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider">Date</th>
                                 <th class="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider">Category</th>
                                 <th class="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider">Reference</th>
+                                <th class="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider">Description</th>
                                 <th class="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider text-right">Debit (Dr)</th>
                                 <th class="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider text-right">Credit (Cr)</th>
                                 <th class="px-6 py-3"></th>
@@ -257,6 +258,9 @@
                                     {% elif record.linked_trip %}
                                     <a href="{% url 'trip-detail' record.linked_trip.pk %}" class="text-xs font-bold text-emerald-600 hover:underline uppercase">{{ record.linked_trip.trip_number }}</a>
                                     {% else %}-{% endif %}
+                                </td>
+                                <td class="px-6 py-3 text-[10px] text-slate-500 font-medium">
+                                    {{ record.description|default:"-"|truncatechars:30 }}
                                 </td>
                                 <td class="px-6 py-3 text-sm text-right font-black text-blue-600">
                                     {% if record.debit_amount %}₹{{ record.debit_amount|floatformat:2 }}{% else %}-{% endif %}

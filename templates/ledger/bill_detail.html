@@ -39,7 +39,9 @@
     <div class="bg-white max-w-[900px] mx-auto shadow-2xl p-6 md:p-12 text-slate-900 border border-slate-900 min-w-[750px]">
         <!-- Header -->
         <div class="text-center border-b-2 border-slate-900 pb-4 mb-8">
-            <h1 class="text-3xl font-black uppercase tracking-widest text-slate-900">Tax Invoice</h1>
+            <h1 class="text-3xl font-black uppercase tracking-widest text-slate-900">
+                {% if bill.category.name == 'Debit Note' %}Debit Note{% elif bill.category.name == 'Credit Note' %}Credit Note{% elif bill.category.name == 'Halting' %}Halting Invoice{% else %}Tax Invoice{% endif %}
+            </h1>
         </div>
         
         <!-- Company Section -->
@@ -79,6 +81,16 @@
                         <span class="font-bold uppercase text-slate-400">Date:</span>
                         <span class="font-black text-slate-900">{{ bill.date|date:"d M, Y" }}</span>
                     </div>
+                    {% if bill.original_bill %}
+                    <div class="flex justify-between text-xs pt-1 border-t border-slate-100 mt-1">
+                        <span class="font-bold uppercase text-slate-400">Against Inv:</span>
+                        <span class="font-black text-slate-900">{{ bill.original_bill.bill_number }}</span>
+                    </div>
+                    <div class="flex justify-between text-xs">
+                        <span class="font-bold uppercase text-slate-400">Inv Date:</span>
+                        <span class="font-black text-slate-900">{{ bill.original_bill.date|date:"d M, Y" }}</span>
+                    </div>
+                    {% endif %}
                     <div class="flex justify-between text-xs">
                         <span class="font-bold uppercase text-slate-400">Place of Supply:</span>
                         <span class="font-black text-slate-900">{{ bill.party.state }}</span>
