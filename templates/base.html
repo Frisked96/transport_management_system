@@ -132,7 +132,7 @@
             <div class="flex items-center">
                 <!-- Notifications Desktop -->
                 {% if user.is_authenticated and request.user.is_superuser or request.user.groups.all.0.name == 'manager' %}
-                <div class="hidden lg:flex relative dropdown-container mr-2">
+                <div class="hidden lg:block relative dropdown-container mr-2">
                     <button class="flex items-center justify-center w-8 h-8 rounded-full text-slate-300 hover:text-white hover:bg-slate-700 focus:outline-none dropdown-toggle relative">
                         <i class="fa-solid fa-bell"></i>
                         {% if total_alerts > 0 %}
@@ -141,7 +141,7 @@
                         </span>
                         {% endif %}
                     </button>
-                    <div class="absolute right-0 mt-1 w-80 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5 hidden dropdown-menu z-50">
+                    <div class="absolute right-0 mt-2 w-80 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5 hidden dropdown-menu z-50">
                         <div class="px-4 py-2 font-semibold text-slate-700 border-b border-slate-100 flex justify-between items-center">
                             <span>Alerts</span>
                             {% if total_alerts > 0 %}

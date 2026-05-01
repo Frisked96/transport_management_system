@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load ledger_extras %}
 
 {% block title %}Parties - Transport Management System{% endblock %}
 
@@ -57,7 +58,7 @@
 <div class="space-y-4">
     {% for party in parties %}
     <!-- Party Card -->
-    <div class="bg-white border border-slate-200 rounded-lg overflow-hidden hover:shadow-md transition-shadow">
+    <div class="bg-white border border-slate-200 rounded-lg hover:shadow-md transition-shadow">
         <div class="p-4 md:p-5">
             <div class="flex items-center justify-between mb-4 md:mb-0">
                 <div class="flex-1 min-w-0">
@@ -87,18 +88,18 @@
             <div class="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 mt-4 md:mt-0 md:flex md:items-center">
                 <div class="md:flex-1">
                     <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Total Debit (Dr)</span>
-                    <p class="text-sm text-blue-600 font-medium">₹{{ party.total_debit|floatformat:2 }}</p>
+                    <p class="text-sm text-blue-600 font-medium">₹{{ party.total_debit|indian_comma }}</p>
                 </div>
                 
                 <div class="md:flex-1">
                     <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Total Credit (Cr)</span>
-                    <p class="text-sm text-emerald-600 font-medium">₹{{ party.total_credit|floatformat:2 }}</p>
+                    <p class="text-sm text-emerald-600 font-medium">₹{{ party.total_credit|indian_comma }}</p>
                 </div>
                 
                 <div class="md:flex-1">
                     <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Balance</span>
                     <p class="text-sm font-bold {% if party.current_balance_value > 0 %}text-red-600{% elif party.current_balance_value < 0 %}text-emerald-600{% else %}text-slate-600{% endif %}">
-                        ₹{{ party.current_balance }}
+                        ₹{{ party.current_balance_value|abs_val|indian_comma }} {% if party.current_balance_value > 0 %}Dr{% elif party.current_balance_value < 0 %}Cr{% endif %}
                     </p>
                 </div>
 
