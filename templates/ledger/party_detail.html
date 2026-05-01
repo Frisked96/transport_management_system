@@ -160,9 +160,9 @@
                                         {% if trip.lr_no %}<span class="text-[10px] font-bold text-slate-400">LR: {{ trip.lr_no }}</span>{% endif %}
                                     </td>
                                     <td class="px-6 py-3 text-xs font-black text-slate-700 uppercase">{{ trip.vehicle.registration_plate }}</td>
-                                    <td class="px-6 py-3 text-sm text-slate-900 text-right font-black">₹{{ trip.revenue|floatformat:2 }}</td>
+                                    <td class="px-6 py-3 text-sm text-slate-900 text-right font-black">₹{{ trip.revenue|indian_comma }}</td>
                                     <td class="px-6 py-3 text-sm text-right font-black {% if trip.outstanding_balance > 0 %}text-rose-600{% else %}text-emerald-600{% endif %}">
-                                        ₹{{ trip.outstanding_balance|floatformat:2 }}
+                                        ₹{{ trip.outstanding_balance|indian_comma }}
                                     </td>
                                     <td class="px-6 py-3 text-center">
                                         <span class="inline-flex px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-tight 
@@ -206,9 +206,9 @@
                                 <td class="px-6 py-3 text-center">
                                     <span class="bg-blue-50 text-blue-700 text-[10px] font-black px-2 py-0.5 rounded border border-blue-100 uppercase">{{ bill.trips.count }} TRP</span>
                                 </td>
-                                <td class="px-6 py-3 text-sm font-black text-slate-900 text-right">₹{{ bill.rounded_total|floatformat:2 }}</td>
+                                <td class="px-6 py-3 text-sm font-black text-slate-900 text-right">₹{{ bill.rounded_total|indian_comma }}</td>
                                 <td class="px-6 py-3 text-sm font-black text-right {% if bill.outstanding_balance > 0 %}text-rose-600{% else %}text-emerald-600{% endif %}">
-                                    ₹{{ bill.outstanding_balance|floatformat:2 }}
+                                    ₹{{ bill.outstanding_balance|indian_comma }}
                                 </td>
                                 <td class="px-6 py-3 text-right">
                                     <div class="flex items-center justify-end space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -263,10 +263,10 @@
                                     {{ record.description|default:"-"|truncatechars:30 }}
                                 </td>
                                 <td class="px-6 py-3 text-sm text-right font-black text-blue-600">
-                                    {% if record.debit_amount %}₹{{ record.debit_amount|floatformat:2 }}{% else %}-{% endif %}
+                                    {% if record.debit_amount %}₹{{ record.debit_amount|indian_comma }}{% else %}-{% endif %}
                                 </td>
                                 <td class="px-6 py-3 text-sm text-right font-black text-emerald-600">
-                                    {% if record.credit_amount %}₹{{ record.credit_amount|floatformat:2 }}{% else %}-{% endif %}
+                                    {% if record.credit_amount %}₹{{ record.credit_amount|indian_comma }}{% else %}-{% endif %}
                                 </td>
                                 <td class="px-6 py-3 text-right">
                                     <div class="flex items-center justify-end space-x-3">
