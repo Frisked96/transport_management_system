@@ -126,35 +126,71 @@
 
 {% block extra_js %}
 <style>
-    @media (max-width: 768px) {
-        /* Force Select2 dropdown upwards on mobile */
-        .select2-container--open .select2-dropdown {
-            top: auto !important;
-            bottom: 100% !important;
-            border-radius: 0.375rem 0.375rem 0 0 !important;
-            border-bottom: 1px solid #cbd5e1 !important;
-            border-top: 1px solid #cbd5e1 !important;
-            margin-top: -1px !important;
+    /* No max-height and no overflow on the dropdown – it grows fully, no internal scrollbar */
+    .select2-dropdown {
+        max-height: none !important;
+        overflow-y: visible !important;
+        border-radius: 0.375rem !important;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.1) !important;
+        z-index: 9999;
+    }
+
+    /* Larger search field for easy tapping */
+    .select2-search__field {
+        height: 40px !important;
+        font-size: 16px !important;  /* prevents iOS zoom on focus */
+    }
+
+    .select2-container--bootstrap-5 .select2-selection {
+        min-height: 38px;
+        display: flex;
+        align-items: center;
+    }
+
+    /* Keep full width on phones */
+    @media (max-width: 640px) {
+        .select2-container {
+            width: 100% !important;
         }
-        /* Remove bottom border-radius from selection when open upwards */
-        .select2-container--open .select2-selection {
-            border-radius: 0 0 0.375rem 0.375rem !important;
+        .select2-selection__rendered {
+            font-size: 14px;
         }
     }
 </style>
+
 <script>
 $(document).ready(function() {
-    // Initialize Select2 with select2-parent as dropdownParent for exact positioning
+    // Initialize Select2 with dropdown attached to body for correct viewport positioning
     $('#id_vehicle, #id_driver, #id_party, #id_route').each(function() {
-        const $select = $(this);
-        const $parent = $select.closest('.select2-parent');
-        $select.select2({
+        $(this).select2({
             theme: 'bootstrap-5',
             width: '100%',
-            dropdownParent: $parent
+            dropdownParent: $('body'),
+            dropdownAutoWidth: false,
+        });
+
+        // Scroll the field into a comfortable position when the dropdown opens
+        // This ensures the dropdown + search box appear above the keyboard on mobile.
+        $(this).on('select2:open', function(e) {
+            var $select = $(this);
+            // Small delay to allow the dropdown to render so its height is known
+            setTimeout(function() {
+                // Get the position of the select container relative to the viewport
+                var rect = $select[0].getBoundingClientRect();
+                var viewHeight = window.innerHeight;
+                // Approximate keyboard height on mobile (half the viewport is usually safe)
+                var keyboardSpace = viewHeight * 0.5;
+
+                // If the bottom of the select is near or below the keyboard zone, scroll up
+                if (rect.bottom > keyboardSpace) {
+                    // Scroll the window so that the select is about 60px from the top of the viewport
+                    window.scrollBy(0, rect.bottom - keyboardSpace + 60);
+                }
+            }, 50);
         });
     });
 
+    // Revenue logic (unchanged)
     const $revenueType = $('#id_revenue_type');
     const $weight = $('#id_weight');
     const $rate = $('#id_rate_per_ton');
