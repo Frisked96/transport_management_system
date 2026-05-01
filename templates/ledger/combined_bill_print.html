@@ -317,6 +317,23 @@
                             <td class="text-right">{% if bill.standard_rate %}{{ bill.standard_rate|indian_comma }}{% else %}-{% endif %}</td>
                             <td class="text-right font-bold">{{ bill.amount_override|indian_comma }}</td>
                         </tr>
+                        {% elif bill_trips.count <= 3 %}
+                        {% for bt in bill_trips %}
+                        <tr>
+                            <td class="text-center">{{ forloop.counter }}</td>
+                            <td>
+                                <strong>Freight Charges: {{ bt.trip.vehicle.registration_plate }}</strong><br>
+                                <span style="font-size: 10px; color: #666;">
+                                    {{ bt.trip.pickup_location }} to {{ bt.trip.delivery_location }} | {{ bt.trip.date|date:"d/m/y" }}
+                                    {% if bt.lr_no %}| LR: {{ bt.lr_no }}{% elif bt.trip.lr_no %}| LR: {{ bt.trip.lr_no }}{% endif %}
+                                </span>
+                            </td>
+                            <td class="text-center">{{ bill.hsn_code }}</td>
+                            <td class="text-right">{{ bt.trip.weight|indian_comma }}</td>
+                            <td class="text-right">{{ bt.trip.rate_per_ton|indian_comma }}</td>
+                            <td class="text-right font-bold">{{ bt.trip.revenue|indian_comma }}</td>
+                        </tr>
+                        {% endfor %}
                         {% else %}
                         {% for item in invoice_items %}
                         <tr>
@@ -456,7 +473,7 @@
     </div>
 
     <!-- PAGE 2: ANNEXURE (DETAILS) -->
-    {% if bill.bill_type != 'Standard' %}
+    {% if bill.bill_type != 'Standard' and bill_trips.count > 3 %}
     <div class="page">
         <div class="page-border">
             <div class="annexure-title">Annexure to Invoice #{{ bill.bill_number }}</div>

@@ -124,13 +124,30 @@
                         </td>
                         <td class="border border-slate-900 p-3 text-xs text-center text-slate-600">{{ bill.hsn_code }}</td>
                         <td class="border border-slate-900 p-3 text-xs text-center text-slate-900 font-bold">
-                            {% if bill.standard_weight %}{{ bill.standard_weight|floatformat:2 }}{% else %}-{% endif %}
+                            {% if bill.standard_weight %}{{ bill.standard_weight|indian_comma }}{% else %}-{% endif %}
                         </td>
                         <td class="border border-slate-900 p-3 text-xs text-right text-slate-600">
-                            {% if bill.standard_rate %}₹{{ bill.standard_rate|floatformat:2 }}{% else %}-{% endif %}
+                            {% if bill.standard_rate %}₹{{ bill.standard_rate|indian_comma }}{% else %}-{% endif %}
                         </td>
-                        <td class="border border-slate-900 p-3 text-xs text-right text-slate-900 font-black">₹{{ bill.subtotal|floatformat:2 }}</td>
+                        <td class="border border-slate-900 p-3 text-xs text-right text-slate-900 font-black">₹{{ bill.subtotal|indian_comma }}</td>
                     </tr>
+                    {% elif bill_trips.count <= 3 %}
+                        {% for bt in bill_trips %}
+                        <tr>
+                            <td class="border border-slate-900 p-3 text-xs text-center text-slate-500">{{ forloop.counter }}</td>
+                            <td class="border border-slate-900 p-3 text-xs">
+                                <div class="font-black text-slate-900 uppercase">Freight Charges: {{ bt.trip.vehicle.registration_plate }}</div>
+                                <div class="text-[10px] text-slate-400 mt-1 font-bold italic">
+                                    {{ bt.trip.pickup_location }} to {{ bt.trip.delivery_location }} | {{ bt.trip.date|date:"d/m/y" }}
+                                    {% if bt.lr_no %}| LR: {{ bt.lr_no }}{% elif bt.trip.lr_no %}| LR: {{ bt.trip.lr_no }}{% endif %}
+                                </div>
+                            </td>
+                            <td class="border border-slate-900 p-3 text-xs text-center text-slate-600">{{ bill.hsn_code }}</td>
+                            <td class="border border-slate-900 p-3 text-xs text-center text-slate-900 font-bold">{{ bt.trip.weight|indian_comma }}</td>
+                            <td class="border border-slate-900 p-3 text-xs text-right text-slate-600">₹{{ bt.trip.rate_per_ton|indian_comma }}</td>
+                            <td class="border border-slate-900 p-3 text-xs text-right text-slate-900 font-black">₹{{ bt.trip.revenue|indian_comma }}</td>
+                        </tr>
+                        {% endfor %}
                     {% else %}
                         {% for item in invoice_items %}
                         <tr>
@@ -140,17 +157,17 @@
                                 <div class="text-[10px] text-slate-400 mt-1 font-bold italic">Consolidated charges for {{ item.count }} trip(s)</div>
                             </td>
                             <td class="border border-slate-900 p-3 text-xs text-center text-slate-600">{{ bill.hsn_code }}</td>
-                            <td class="border border-slate-900 p-3 text-xs text-center text-slate-900 font-bold">{{ item.weight|floatformat:2 }}</td>
-                            <td class="border border-slate-900 p-3 text-xs text-right text-slate-600">₹{{ item.rate|floatformat:2 }}</td>
-                            <td class="border border-slate-900 p-3 text-xs text-right text-slate-900 font-black">₹{{ item.amount|floatformat:2 }}</td>
+                            <td class="border border-slate-900 p-3 text-xs text-center text-slate-900 font-bold">{{ item.weight|indian_comma }}</td>
+                            <td class="border border-slate-900 p-3 text-xs text-right text-slate-600">₹{{ item.rate|indian_comma }}</td>
+                            <td class="border border-slate-900 p-3 text-xs text-right text-slate-900 font-black">₹{{ item.amount|indian_comma }}</td>
                         </tr>
                         {% endfor %}
                     {% endif %}
                     <tr class="bg-slate-50 font-black">
                         <td colspan="3" class="border border-slate-900 p-3 text-[10px] text-right uppercase tracking-widest text-slate-400">Total</td>
-                        <td class="border border-slate-900 p-3 text-xs text-center">{% if bill.total_weight %}{{ bill.total_weight|floatformat:2 }}{% else %}-{% endif %}</td>
+                        <td class="border border-slate-900 p-3 text-xs text-center">{% if bill.total_weight %}{{ bill.total_weight|indian_comma }}{% else %}-{% endif %}</td>
                         <td class="border border-slate-900 p-3"></td>
-                        <td class="border border-slate-900 p-3 text-sm text-right">₹{{ bill.subtotal|floatformat:2 }}</td>
+                        <td class="border border-slate-900 p-3 text-sm text-right">₹{{ bill.subtotal|indian_comma }}</td>
                     </tr>
                 </tbody>
             </table>
@@ -248,7 +265,7 @@
     </div>
 
     <!-- Annexure Preview (Detailed Breakdown) -->
-    {% if bill.bill_type == 'Trip' %}
+    {% if bill.bill_type == 'Trip' and bill_trips.count > 3 %}
     <div class="bg-white max-w-[900px] mx-auto shadow-2xl p-6 md:p-12 text-slate-900 border border-slate-900 min-w-[750px] mt-10">
         <div class="text-center border-b border-slate-900 pb-4 mb-6">
             <h2 class="text-xl font-black uppercase tracking-widest text-slate-900">Annexure</h2>
@@ -283,11 +300,11 @@
                     </td>
                     <td class="border border-slate-900 p-2 text-[10px] text-center">{{ bt.lr_no|default:bt.trip.lr_no|default:"-" }}</td>
                     <td class="border border-slate-900 p-2 text-[10px] uppercase truncate max-w-[150px]">{{ bt.trip.pickup_location }} - {{ bt.trip.delivery_location }}</td>
-                    <td class="border border-slate-900 p-2 text-[10px] text-center">{{ bt.trip.weight|floatformat:2 }}</td>
-                    <td class="border border-slate-900 p-2 text-[10px] text-right font-black">₹{{ bt.trip.revenue|floatformat:2 }}</td>
+                    <td class="border border-slate-900 p-2 text-[10px] text-center">{{ bt.trip.weight|indian_comma }}</td>
+                    <td class="border border-slate-900 p-2 text-[10px] text-right font-black">₹{{ bt.trip.revenue|indian_comma }}</td>
                     {% if bill.gst_rate > 0 %}
-                    <td class="border border-slate-900 p-2 text-[10px] text-right text-slate-600">₹{{ bill|get_trip_gst:bt.trip|floatformat:2 }}</td>
-                    <td class="border border-slate-900 p-2 text-[10px] text-right font-black text-emerald-600">₹{{ bill|get_trip_total:bt.trip|floatformat:2 }}</td>
+                    <td class="border border-slate-900 p-2 text-[10px] text-right text-slate-600">₹{{ bill|get_trip_gst:bt.trip|indian_comma }}</td>
+                    <td class="border border-slate-900 p-2 text-[10px] text-right font-black text-emerald-600">₹{{ bill|get_trip_total:bt.trip|indian_comma }}</td>
                     {% endif %}
                 </tr>
                 {% endfor %}
@@ -295,11 +312,11 @@
             <tfoot>
                 <tr class="bg-slate-50 font-black">
                     <td colspan="5" class="border border-slate-900 p-2 text-[10px] text-right uppercase tracking-widest text-slate-400">Annexure Total</td>
-                    <td class="border border-slate-900 p-2 text-[10px] text-center">{{ bill.total_weight|floatformat:2 }}</td>
-                    <td class="border border-slate-900 p-2 text-[10px] text-right">₹{{ bill.subtotal|floatformat:2 }}</td>
+                    <td class="border border-slate-900 p-2 text-[10px] text-center">{{ bill.total_weight|indian_comma }}</td>
+                    <td class="border border-slate-900 p-2 text-[10px] text-right">₹{{ bill.subtotal|indian_comma }}</td>
                     {% if bill.gst_rate > 0 %}
-                    <td class="border border-slate-900 p-2 text-[10px] text-right">₹{{ bill.gst_amount|floatformat:2 }}</td>
-                    <td class="border border-slate-900 p-2 text-xs text-right">₹{{ bill.rounded_total|floatformat:2 }}</td>
+                    <td class="border border-slate-900 p-2 text-[10px] text-right">₹{{ bill.gst_amount|indian_comma }}</td>
+                    <td class="border border-slate-900 p-2 text-xs text-right">₹{{ bill.rounded_total|indian_comma }}</td>
                     {% endif %}
                 </tr>
             </tfoot>
