@@ -66,8 +66,12 @@ class Driver(models.Model):
         """
         Recalculate and update the cached balance fields from scratch.
         """
-        self.current_balance_cached = self.current_balance # uses existing property logic
-        self.save(update_fields=['current_balance_cached'])
+        self._refreshing_balance = True
+        try:
+            self.current_balance_cached = self.transactions.aggregate(balance=models.Sum('amount'))['balance'] or 0
+            self.save(update_fields=['current_balance_cached'])
+        finally:
+            del self._refreshing_balance
 
     class Meta:
         verbose_name = 'Driver'

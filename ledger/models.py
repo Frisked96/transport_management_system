@@ -1115,6 +1115,45 @@ def sync_trip_ledger_on_billtrip_delete(sender, instance, **kwargs):
     except (Bill.DoesNotExist, Exception):
         pass
 
+@receiver(pre_save, sender=Party)
+def sync_party_balance_on_opening_change(sender, instance, **kwargs):
+    """
+    If opening_balance is changed, trigger a refresh of the cached balance.
+    """
+    if instance.pk:
+        try:
+            old_instance = Party.objects.get(pk=instance.pk)
+            if old_instance.opening_balance != instance.opening_balance:
+                # We can't call refresh_balance here because it saves the model.
+                # Instead, we manually calculate and update the fields on the current instance
+                # so they are saved in the upcoming save() call.
+                instance.total_debit_amount = instance._calculate_total_debit()
+                instance.total_credit_amount = instance._calculate_total_credit()
+                instance.current_balance_cached = instance.total_debit_amount - instance.total_credit_amount
+        except Party.DoesNotExist:
+            pass
+    else:
+        # For new parties, calculate initial balance
+        instance.total_debit_amount = instance._calculate_total_debit()
+        instance.total_credit_amount = instance._calculate_total_credit()
+        instance.current_balance_cached = instance.total_debit_amount - instance.total_credit_amount
+
+@receiver(pre_save, sender=CompanyAccount)
+def sync_account_balance_on_opening_change(sender, instance, **kwargs):
+    """
+    If opening_balance is changed for a company account, trigger a refresh.
+    """
+    if instance.pk:
+        try:
+            old_instance = CompanyAccount.objects.get(pk=instance.pk)
+            if old_instance.opening_balance != instance.opening_balance:
+                instance.current_balance_cached = instance._calculate_balance()
+        except CompanyAccount.DoesNotExist:
+            pass
+    else:
+        # For new accounts
+        instance.current_balance_cached = instance._calculate_balance()
+
 @receiver(post_save, sender=FinancialRecord)
 def update_balances_on_save(sender, instance, created, **kwargs):
     """
