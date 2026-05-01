@@ -1133,9 +1133,10 @@ def sync_party_balance_on_opening_change(sender, instance, **kwargs):
         except Party.DoesNotExist:
             pass
     else:
-        # For new parties, calculate initial balance
-        instance.total_debit_amount = instance._calculate_total_debit()
-        instance.total_credit_amount = instance._calculate_total_credit()
+        # For new parties, there are no financial records yet.
+        # Initial balance is just based on the opening balance.
+        instance.total_debit_amount = instance.opening_balance if instance.opening_balance > 0 else Decimal('0')
+        instance.total_credit_amount = abs(instance.opening_balance) if instance.opening_balance < 0 else Decimal('0')
         instance.current_balance_cached = instance.total_debit_amount - instance.total_credit_amount
 
 @receiver(pre_save, sender=CompanyAccount)
@@ -1151,8 +1152,8 @@ def sync_account_balance_on_opening_change(sender, instance, **kwargs):
         except CompanyAccount.DoesNotExist:
             pass
     else:
-        # For new accounts
-        instance.current_balance_cached = instance._calculate_balance()
+        # For new accounts, initial balance is just the opening balance
+        instance.current_balance_cached = instance.opening_balance
 
 @receiver(post_save, sender=FinancialRecord)
 def update_balances_on_save(sender, instance, created, **kwargs):

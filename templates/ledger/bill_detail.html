@@ -191,10 +191,10 @@
                     <tbody>
                         <tr class="border-b border-slate-100">
                             <td class="p-2 font-bold text-slate-900">{{ bill.hsn_code }}</td>
-                            <td class="p-2 text-right font-bold text-slate-900">₹{{ bill.subtotal|floatformat:2 }}</td>
-                            <td class="p-2 text-right font-bold text-slate-900">₹{{ bill.cgst_amount|floatformat:2 }}<br/><span class="text-[8px] text-slate-400 font-black">{% widthratio bill.gst_rate 2 1 %}%</span></td>
-                            <td class="p-2 text-right font-bold text-slate-900">₹{{ bill.sgst_amount|floatformat:2 }}<br/><span class="text-[8px] text-slate-400 font-black">{% widthratio bill.gst_rate 2 1 %}%</span></td>
-                            <td class="p-2 text-right font-black text-slate-900">₹{{ bill.gst_amount|floatformat:2 }}</td>
+                            <td class="p-2 text-right font-bold text-slate-900">₹{{ bill.subtotal|indian_comma }}</td>
+                            <td class="p-2 text-right font-bold text-slate-900">₹{{ bill.cgst_amount|indian_comma }}<br/><span class="text-[8px] text-slate-400 font-black">{% widthratio bill.gst_rate 2 1 %}%</span></td>
+                            <td class="p-2 text-right font-bold text-slate-900">₹{{ bill.sgst_amount|indian_comma }}<br/><span class="text-[8px] text-slate-400 font-black">{% widthratio bill.gst_rate 2 1 %}%</span></td>
+                            <td class="p-2 text-right font-black text-slate-900">₹{{ bill.gst_amount|indian_comma }}</td>
                         </tr>
                     </tbody>
                 </table>
@@ -212,27 +212,27 @@
                 <table class="w-full text-xs border-collapse">
                     <tr class="border-b border-slate-100">
                         <td class="p-3 text-slate-500 font-bold uppercase tracking-wider">Sub Total</td>
-                        <td class="p-3 text-right font-black text-slate-900">₹{{ bill.subtotal|floatformat:2 }}</td>
+                        <td class="p-3 text-right font-black text-slate-900">₹{{ bill.subtotal|indian_comma }}</td>
                     </tr>
                     {% if bill.gst_rate > 0 %}
                         <tr class="border-b border-slate-100">
                             <td class="p-3 text-slate-500 font-bold uppercase tracking-wider">CGST</td>
-                            <td class="p-3 text-right font-black text-slate-900">₹{{ bill.cgst_amount|floatformat:2 }}</td>
+                            <td class="p-3 text-right font-black text-slate-900">₹{{ bill.cgst_amount|indian_comma }}</td>
                         </tr>
                         <tr class="border-b border-slate-100">
                             <td class="p-3 text-slate-500 font-bold uppercase tracking-wider">SGST</td>
-                            <td class="p-3 text-right font-black text-slate-900">₹{{ bill.sgst_amount|floatformat:2 }}</td>
+                            <td class="p-3 text-right font-black text-slate-900">₹{{ bill.sgst_amount|indian_comma }}</td>
                         </tr>
                     {% endif %}
                     {% if bill.use_roundoff %}
                     <tr class="border-b border-slate-100 text-slate-400">
                         <td class="p-3 font-bold uppercase tracking-wider">Round Off</td>
-                        <td class="p-3 text-right font-black">₹{{ bill.roundoff|floatformat:2 }}</td>
+                        <td class="p-3 text-right font-black">₹{{ bill.roundoff|indian_comma }}</td>
                     </tr>
                     {% endif %}
                     <tr class="bg-slate-900 text-white font-black">
                         <td class="p-4 text-sm uppercase tracking-widest">Grand Total</td>
-                        <td class="p-4 text-xl text-right">₹{{ bill.rounded_total|floatformat:2 }}</td>
+                        <td class="p-4 text-xl text-right">₹{{ bill.rounded_total|indian_comma }}</td>
                     </tr>
                 </table>
             </div>
