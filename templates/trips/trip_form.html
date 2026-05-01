@@ -22,76 +22,84 @@
             </div>
         {% endif %}
 
-        <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-            <div class="bg-slate-800 px-6 py-3">
+        <div class="bg-white border border-slate-200 rounded-xl shadow-sm">
+            <div class="bg-slate-800 px-3 sm:px-6 py-3">
                 <h2 class="text-white font-bold flex items-center uppercase tracking-wider text-xs">
                     <i class="fa-solid fa-file-pen mr-2 opacity-70"></i>
                     Trip Assignment & Cargo
                 </h2>
             </div>
             
-            <div class="p-6">
+            <div class="p-3 sm:p-6">
                 <!-- Main Grid -->
-                <div class="grid grid-cols-1 md:grid-cols-12 gap-x-6 gap-y-5">
+                <div class="grid grid-cols-1 md:grid-cols-12 gap-x-3 sm:gap-x-6 gap-y-5">
                     <!-- Row 1: Primary Identifiers -->
                     <div class="md:col-span-3">
-                        <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Date</label>
+                        <label class="block text-xs sm:text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Date</label>
                         {{ form.date }}
                         {% if form.date.errors %}<p class="text-rose-600 text-[10px] mt-1 font-bold">{{ form.date.errors.0 }}</p>{% endif %}
                     </div>
                     <div class="md:col-span-3">
-                        <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">LR Number</label>
+                        <label class="block text-xs sm:text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">LR Number</label>
                         {{ form.lr_no }}
                         {% if form.lr_no.errors %}<p class="text-rose-600 text-[10px] mt-1 font-bold">{{ form.lr_no.errors.0 }}</p>{% endif %}
                     </div>
                     <div class="md:col-span-3">
-                        <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Vehicle</label>
-                        {{ form.vehicle }}
+                        <label class="block text-xs sm:text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Vehicle</label>
+                        <div class="relative select2-parent">
+                            {{ form.vehicle }}
+                        </div>
                         {% if form.vehicle.errors %}<p class="text-rose-600 text-[10px] mt-1 font-bold">{{ form.vehicle.errors.0 }}</p>{% endif %}
                     </div>
                     <div class="md:col-span-3">
-                        <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Driver</label>
-                        {{ form.driver }}
+                        <label class="block text-xs sm:text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Driver</label>
+                        <div class="relative select2-parent">
+                            {{ form.driver }}
+                        </div>
                         {% if form.driver.errors %}<p class="text-rose-600 text-[10px] mt-1 font-bold">{{ form.driver.errors.0 }}</p>{% endif %}
                     </div>
 
                     <!-- Row 2: Billing & Route -->
                     <div class="md:col-span-6">
-                        <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Party / Client</label>
-                        {{ form.party }}
+                        <label class="block text-xs sm:text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Party / Client</label>
+                        <div class="relative select2-parent">
+                            {{ form.party }}
+                        </div>
                         {% if form.party.errors %}<p class="text-rose-600 text-[10px] mt-1 font-bold">{{ form.party.errors.0 }}</p>{% endif %}
                     </div>
                     <div class="md:col-span-6">
-                        <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Route Selection</label>
-                        {{ form.route }}
+                        <label class="block text-xs sm:text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Route Selection</label>
+                        <div class="relative select2-parent">
+                            {{ form.route }}
+                        </div>
                         {% if form.route.errors %}<p class="text-rose-600 text-[10px] mt-1 font-bold">{{ form.route.errors.0 }}</p>{% endif %}
                     </div>
 
                     <!-- Row 3: Revenue & Weight -->
                     <div class="md:col-span-3">
-                        <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Revenue Type</label>
+                        <label class="block text-xs sm:text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Revenue Type</label>
                         {{ form.revenue_type }}
                     </div>
                     <div class="md:col-span-3" id="weight-container">
-                        <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Weight (MT)</label>
+                        <label class="block text-xs sm:text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Weight (MT)</label>
                         {{ form.weight }}
                         {% if form.weight.errors %}<p class="text-rose-600 text-[10px] mt-1 font-bold">{{ form.weight.errors.0 }}</p>{% endif %}
                     </div>
                     <div class="md:col-span-3">
-                        <label id="rate-label" class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Rate</label>
+                        <label id="rate-label" class="block text-xs sm:text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Rate</label>
                         {{ form.rate_per_ton }}
                         {% if form.rate_per_ton.errors %}<p class="text-rose-600 text-[10px] mt-1 font-bold">{{ form.rate_per_ton.errors.0 }}</p>{% endif %}
                     </div>
                     <div class="md:col-span-3">
-                        <label class="block text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1.5">Est. Revenue</label>
-                        <div id="est-revenue" class="bg-emerald-50 border border-emerald-100 rounded-md px-3 py-2 text-sm font-black text-emerald-700 h-[38px] flex items-center shadow-inner">
+                        <label class="block text-xs sm:text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1.5">Est. Revenue</label>
+                        <div id="est-revenue" class="bg-emerald-50 border border-emerald-100 rounded-md px-3 py-2 text-xs sm:text-sm font-black text-emerald-700 min-h-[38px] flex items-center shadow-inner">
                             ₹ 0.00
                         </div>
                     </div>
 
                     <!-- Row 4: Notes -->
                     <div class="md:col-span-12">
-                        <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Remarks / Notes</label>
+                        <label class="block text-xs sm:text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Remarks / Notes</label>
                         {{ form.notes }}
                     </div>
                 </div>
@@ -102,11 +110,11 @@
             </div>
 
             <!-- Footer Actions -->
-            <div class="bg-slate-50 px-6 py-4 border-t border-slate-200 flex items-center justify-between">
-                <a href="{% if object %}{% url 'trip-detail' object.pk %}{% else %}{% url 'trip-list' %}{% endif %}" class="text-sm font-bold text-slate-400 hover:text-slate-600 transition-colors">
+            <div class="bg-slate-50 px-3 sm:px-6 py-4 border-t border-slate-200 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-0">
+                <a href="{% if object %}{% url 'trip-detail' object.pk %}{% else %}{% url 'trip-list' %}{% endif %}" class="text-xs sm:text-sm font-bold text-slate-400 hover:text-slate-600 transition-colors text-center sm:text-left py-2 sm:py-0">
                     <i class="fa-solid fa-xmark mr-1"></i> Discard Changes
                 </a>
-                <button type="submit" class="flex items-center space-x-2 px-8 py-2.5 bg-emerald-600 text-white rounded-lg text-sm font-black hover:bg-emerald-700 shadow-lg shadow-emerald-100 transition-all active:scale-95 uppercase tracking-widest">
+                <button type="submit" class="flex items-center justify-center space-x-2 px-6 sm:px-8 py-2.5 bg-emerald-600 text-white rounded-lg text-xs sm:text-sm font-black hover:bg-emerald-700 shadow-lg shadow-emerald-100 transition-all active:scale-95 uppercase tracking-widest">
                     <i class="fa-solid fa-circle-check"></i>
                     <span>{% if object %}Update Trip Record{% else %}Save New Trip{% endif %}</span>
                 </button>
@@ -136,14 +144,14 @@
 </style>
 <script>
 $(document).ready(function() {
-    // Initialize Select2 with parent as dropdownParent for better mobile positioning
+    // Initialize Select2 with select2-parent as dropdownParent for exact positioning
     $('#id_vehicle, #id_driver, #id_party, #id_route').each(function() {
         const $select = $(this);
-        $select.parent().addClass('relative'); // Ensure parent is relative for dropdown positioning
+        const $parent = $select.closest('.select2-parent');
         $select.select2({
             theme: 'bootstrap-5',
             width: '100%',
-            dropdownParent: $select.parent()
+            dropdownParent: $parent
         });
     });
 
