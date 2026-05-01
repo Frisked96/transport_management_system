@@ -117,12 +117,34 @@
 {% endblock %}
 
 {% block extra_js %}
+<style>
+    @media (max-width: 768px) {
+        /* Force Select2 dropdown upwards on mobile */
+        .select2-container--open .select2-dropdown {
+            top: auto !important;
+            bottom: 100% !important;
+            border-radius: 0.375rem 0.375rem 0 0 !important;
+            border-bottom: 1px solid #cbd5e1 !important;
+            border-top: 1px solid #cbd5e1 !important;
+            margin-top: -1px !important;
+        }
+        /* Remove bottom border-radius from selection when open upwards */
+        .select2-container--open .select2-selection {
+            border-radius: 0 0 0.375rem 0.375rem !important;
+        }
+    }
+</style>
 <script>
 $(document).ready(function() {
-    // Initialize Select2
-    $('#id_vehicle, #id_driver, #id_party, #id_route').select2({
-        theme: 'bootstrap-5',
-        width: '100%'
+    // Initialize Select2 with parent as dropdownParent for better mobile positioning
+    $('#id_vehicle, #id_driver, #id_party, #id_route').each(function() {
+        const $select = $(this);
+        $select.parent().addClass('relative'); // Ensure parent is relative for dropdown positioning
+        $select.select2({
+            theme: 'bootstrap-5',
+            width: '100%',
+            dropdownParent: $select.parent()
+        });
     });
 
     const $revenueType = $('#id_revenue_type');
