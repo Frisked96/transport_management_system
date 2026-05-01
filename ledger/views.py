@@ -444,10 +444,21 @@ class PartyDetailView(LoginRequiredMixin, BaseLedgerPermissionMixin, DetailView)
         context['bills'] = self.object.bills.all().order_by('-date', '-created_at')
         
         # Get associated financial records (Including Invoices for complete history)
-        financial_records = self.object.financial_records.select_related(
+        # We fetch chronological order to calculate running balance
+        records = self.object.financial_records.select_related(
             'category', 'associated_trip', 'associated_bill'
-        ).order_by('-date', '-created_at')
-        context['financial_records'] = financial_records
+        ).order_by('date', 'created_at')
+        
+        # Calculate running balance
+        running_bal = self.object.opening_balance
+        for rec in records:
+            debit = rec.debit_amount or Decimal('0')
+            credit = rec.credit_amount or Decimal('0')
+            running_bal += (debit - credit)
+            rec.running_balance = running_bal
+            
+        # Reverse to newest first for the UI
+        context['financial_records'] = sorted(records, key=attrgetter('date', 'created_at'), reverse=True)
         
         # Use model properties for accurate totals (They are more inclusive of manual entries)
         context['total_revenue'] = self.object.total_billed

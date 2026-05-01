@@ -240,6 +240,7 @@
                                 <th class="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider">Description</th>
                                 <th class="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider text-right">Debit (Dr)</th>
                                 <th class="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider text-right">Credit (Cr)</th>
+                                <th class="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider text-right">Balance</th>
                                 <th class="px-6 py-3"></th>
                             </tr>
                         </thead>
@@ -269,6 +270,12 @@
                                 </td>
                                 <td class="px-6 py-3 text-sm text-right font-black text-emerald-600">
                                     {% if record.credit_amount %}₹{{ record.credit_amount|indian_comma }}{% else %}-{% endif %}
+                                </td>
+                                <td class="px-6 py-3 text-sm text-right font-black text-slate-900 whitespace-nowrap">
+                                    ₹{{ record.running_balance|abs_val|indian_comma }} 
+                                    <span class="text-[10px] font-bold {% if record.running_balance > 0 %}text-rose-600{% elif record.running_balance < 0 %}text-emerald-600{% else %}text-slate-400{% endif %}">
+                                        {% if record.running_balance > 0 %}Dr{% elif record.running_balance < 0 %}Cr{% endif %}
+                                    </span>
                                 </td>
                                 <td class="px-6 py-3 text-right">
                                     <div class="flex items-center justify-end space-x-3">
