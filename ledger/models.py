@@ -676,9 +676,11 @@ class Bill(models.Model):
 
     GST_TYPE_GST = 'GST'
     GST_TYPE_IGST = 'IGST'
+    GST_TYPE_NONE = 'NONE'
     GST_TYPE_CHOICES = [
         (GST_TYPE_GST, 'GST'),
         (GST_TYPE_IGST, 'IGST'),
+        (GST_TYPE_NONE, 'Non-GST'),
     ]
 
     bill_number = models.CharField(max_length=50, unique=True, blank=True, null=True, verbose_name="Full Invoice Number")

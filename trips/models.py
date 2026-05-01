@@ -89,9 +89,11 @@ class Route(models.Model):
     
     ROUTE_TYPE_LOCAL = 'local'
     ROUTE_TYPE_INTRA = 'intra'
+    ROUTE_TYPE_NONE = 'none'
     ROUTE_TYPE_CHOICES = [
         (ROUTE_TYPE_LOCAL, 'Local (GST)'),
         (ROUTE_TYPE_INTRA, 'Intra/Interstate (IGST)'),
+        (ROUTE_TYPE_NONE, 'Non-GST'),
     ]
     route_type = models.CharField(
         max_length=10, 
@@ -353,6 +355,8 @@ class Trip(models.Model):
                 from ledger.models import Bill
                 if self.route.route_type == Route.ROUTE_TYPE_INTRA:
                     self.gst_type_snapshot = Bill.GST_TYPE_IGST
+                elif self.route.route_type == Route.ROUTE_TYPE_NONE:
+                    self.gst_type_snapshot = Bill.GST_TYPE_NONE
                 else:
                     self.gst_type_snapshot = Bill.GST_TYPE_GST
 
@@ -445,8 +449,11 @@ class Trip(models.Model):
             return self.gst_type_snapshot
             
         from ledger.models import Bill
-        if self.route and self.route.route_type == Route.ROUTE_TYPE_INTRA:
-            return Bill.GST_TYPE_IGST
+        if self.route:
+            if self.route.route_type == Route.ROUTE_TYPE_INTRA:
+                return Bill.GST_TYPE_IGST
+            elif self.route.route_type == Route.ROUTE_TYPE_NONE:
+                return Bill.GST_TYPE_NONE
         return Bill.GST_TYPE_GST
 
     @property

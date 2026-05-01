@@ -5,7 +5,7 @@
 <head>
     <meta charset="utf-8">
     <title>
-        {% if bill.category.name == 'Debit Note' %}Debit Note{% elif bill.category.name == 'Credit Note' %}Credit Note{% elif bill.category.name == 'Halting' %}Halting Invoice{% else %}Tax Invoice{% endif %} {{ bill.bill_number }}
+        {% if bill.category.name == 'Debit Note' %}Debit Note{% elif bill.category.name == 'Credit Note' %}Credit Note{% elif bill.category.name == 'Halting' %}Halting Invoice{% elif bill.gst_type == 'NONE' %}Commercial Invoice{% else %}Tax Invoice{% endif %} {{ bill.bill_number }}
     </title>
     <style>
         /* Global Reset */
@@ -253,7 +253,7 @@
     <div class="page">
         <div class="page-border">
             <div class="header-title">
-                {% if bill.category.name == 'Debit Note' %}Debit Note{% elif bill.category.name == 'Credit Note' %}Credit Note{% elif bill.category.name == 'Halting' %}Halting Charges{% else %}Tax Invoice{% endif %}
+                {% if bill.category.name == 'Debit Note' %}Debit Note{% elif bill.category.name == 'Credit Note' %}Credit Note{% elif bill.category.name == 'Halting' %}Halting Charges{% elif bill.gst_type == 'NONE' %}Commercial Invoice{% else %}Tax Invoice{% endif %}
             </div>
             
             <div class="company-section">
@@ -378,6 +378,7 @@
             <div class="summary-row">
                 <div class="tax-summary">
                     <div class="section-header">Tax Breakdown</div>
+                    {% if bill.gst_type != 'NONE' and bill.gst_rate > 0 %}
                     <table>
                         <thead>
                             <tr>
@@ -406,6 +407,11 @@
                             </tr>
                         </tbody>
                     </table>
+                    {% else %}
+                    <div style="padding: 10px; font-style: italic; color: #666;">
+                        No GST applied to this invoice.
+                    </div>
+                    {% endif %}
                     <div style="padding: 10px; border-top: 1px solid #000;">
                         <span style="font-size: 9px; color: #666; text-transform: uppercase; display: block;">Total Amount in Words:</span>
                         <strong style="font-size: 11px;">{{ bill.rounded_total|num2words|title }} Rupees Only</strong>
@@ -417,20 +423,22 @@
                             <td>Taxable Amount</td>
                             <td class="text-right">Rs. {{ bill.subtotal|indian_comma }}</td>
                         </tr>
-                        {% if bill.gst_type == 'IGST' %}
-                        <tr>
-                            <td>Add: IGST</td>
-                            <td class="text-right">Rs. {{ bill.igst_amount|indian_comma }}</td>
-                        </tr>
-                        {% else %}
-                        <tr>
-                            <td>Add: CGST</td>
-                            <td class="text-right">Rs. {{ bill.cgst_amount|indian_comma }}</td>
-                        </tr>
-                        <tr>
-                            <td>Add: SGST</td>
-                            <td class="text-right">Rs. {{ bill.sgst_amount|indian_comma }}</td>
-                        </tr>
+                        {% if bill.gst_type != 'NONE' and bill.gst_rate > 0 %}
+                            {% if bill.gst_type == 'IGST' %}
+                            <tr>
+                                <td>Add: IGST</td>
+                                <td class="text-right">Rs. {{ bill.igst_amount|indian_comma }}</td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td>Add: CGST</td>
+                                <td class="text-right">Rs. {{ bill.cgst_amount|indian_comma }}</td>
+                            </tr>
+                            <tr>
+                                <td>Add: SGST</td>
+                                <td class="text-right">Rs. {{ bill.sgst_amount|indian_comma }}</td>
+                            </tr>
+                            {% endif %}
                         {% endif %}
                         {% if bill.use_roundoff %}
                         <tr>
@@ -494,7 +502,7 @@
                             <th width="22%">From - To</th>
                             <th width="8%">Weight</th>
                             <th width="12%">Revenue</th>
-                            {% if bill.gst_rate > 0 %}
+                            {% if bill.gst_type != 'NONE' and bill.gst_rate > 0 %}
                             <th width="10%">GST ({{ bill.gst_rate }}%)</th>
                             <th width="10%">Total</th>
                             {% endif %}
@@ -510,7 +518,7 @@
                             <td>{{ bt.trip.pickup_location }} - {{ bt.trip.delivery_location }}</td>
                             <td class="text-right">{{ bt.trip.weight|indian_comma }}</td>
                             <td class="text-right font-bold">{{ bt.trip.revenue|indian_comma }}</td>
-                            {% if bill.gst_rate > 0 %}
+                            {% if bill.gst_type != 'NONE' and bill.gst_rate > 0 %}
                             <td class="text-right">{{ bill|get_trip_gst:bt.trip|indian_comma }}</td>
                             <td class="text-right font-bold">{{ bill|get_trip_total:bt.trip|indian_comma }}</td>
                             {% endif %}
@@ -522,7 +530,7 @@
                             <td colspan="5" class="text-right">Total for Annexure</td>
                             <td class="text-right">{{ bill.total_weight|indian_comma }}</td>
                             <td class="text-right">Rs. {{ bill.subtotal|indian_comma }}</td>
-                            {% if bill.gst_rate > 0 %}
+                            {% if bill.gst_type != 'NONE' and bill.gst_rate > 0 %}
                             <td class="text-right">Rs. {{ bill.gst_amount|indian_comma }}</td>
                             <td class="text-right">Rs. {{ bill.rounded_total|indian_comma }}</td>
                             {% endif %}

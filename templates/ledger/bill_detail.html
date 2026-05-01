@@ -40,7 +40,7 @@
         <!-- Header -->
         <div class="text-center border-b-2 border-slate-900 pb-4 mb-8">
             <h1 class="text-3xl font-black uppercase tracking-widest text-slate-900">
-                {% if bill.category.name == 'Debit Note' %}Debit Note{% elif bill.category.name == 'Credit Note' %}Credit Note{% elif bill.category.name == 'Halting' %}Halting Invoice{% else %}Tax Invoice{% endif %}
+                {% if bill.category.name == 'Debit Note' %}Debit Note{% elif bill.category.name == 'Credit Note' %}Credit Note{% elif bill.category.name == 'Halting' %}Halting Invoice{% elif bill.gst_type == 'NONE' %}Commercial Invoice{% else %}Tax Invoice{% endif %}
             </h1>
         </div>
         
@@ -177,14 +177,18 @@
         <div class="grid grid-cols-12 border-b border-slate-900">
             <div class="col-span-7 p-6 border-r border-slate-900">
                 <span class="text-[10px] font-black uppercase tracking-widest text-slate-400 border border-slate-200 px-2 py-0.5 bg-slate-50 inline-block mb-4">Tax Breakdown</span>
-                {% if bill.gst_rate > 0 %}
+                {% if bill.gst_type != 'NONE' and bill.gst_rate > 0 %}
                 <table class="w-full text-[10px] border-collapse mb-6">
                     <thead>
                         <tr class="bg-slate-50 border-b border-slate-200">
                             <th class="p-2 text-left font-black text-slate-500 uppercase tracking-wider">HSN</th>
                             <th class="p-2 text-right font-black text-slate-500 uppercase tracking-wider">Taxable</th>
+                            {% if bill.gst_type == 'IGST' %}
+                            <th class="p-2 text-right font-black text-slate-500 uppercase tracking-wider">IGST</th>
+                            {% else %}
                             <th class="p-2 text-right font-black text-slate-500 uppercase tracking-wider">CGST</th>
                             <th class="p-2 text-right font-black text-slate-500 uppercase tracking-wider">SGST</th>
+                            {% endif %}
                             <th class="p-2 text-right font-black text-slate-500 uppercase tracking-wider">Total Tax</th>
                         </tr>
                     </thead>
@@ -192,8 +196,12 @@
                         <tr class="border-b border-slate-100">
                             <td class="p-2 font-bold text-slate-900">{{ bill.hsn_code }}</td>
                             <td class="p-2 text-right font-bold text-slate-900">₹{{ bill.subtotal|indian_comma }}</td>
+                            {% if bill.gst_type == 'IGST' %}
+                            <td class="p-2 text-right font-bold text-slate-900">₹{{ bill.igst_amount|indian_comma }}<br/><span class="text-[8px] text-slate-400 font-black">{{ bill.gst_rate }}%</span></td>
+                            {% else %}
                             <td class="p-2 text-right font-bold text-slate-900">₹{{ bill.cgst_amount|indian_comma }}<br/><span class="text-[8px] text-slate-400 font-black">{% widthratio bill.gst_rate 2 1 %}%</span></td>
                             <td class="p-2 text-right font-bold text-slate-900">₹{{ bill.sgst_amount|indian_comma }}<br/><span class="text-[8px] text-slate-400 font-black">{% widthratio bill.gst_rate 2 1 %}%</span></td>
+                            {% endif %}
                             <td class="p-2 text-right font-black text-slate-900">₹{{ bill.gst_amount|indian_comma }}</td>
                         </tr>
                     </tbody>
@@ -214,7 +222,13 @@
                         <td class="p-3 text-slate-500 font-bold uppercase tracking-wider">Sub Total</td>
                         <td class="p-3 text-right font-black text-slate-900">₹{{ bill.subtotal|indian_comma }}</td>
                     </tr>
-                    {% if bill.gst_rate > 0 %}
+                    {% if bill.gst_type != 'NONE' and bill.gst_rate > 0 %}
+                        {% if bill.gst_type == 'IGST' %}
+                        <tr class="border-b border-slate-100">
+                            <td class="p-3 text-slate-500 font-bold uppercase tracking-wider">IGST</td>
+                            <td class="p-3 text-right font-black text-slate-900">₹{{ bill.igst_amount|indian_comma }}</td>
+                        </tr>
+                        {% else %}
                         <tr class="border-b border-slate-100">
                             <td class="p-3 text-slate-500 font-bold uppercase tracking-wider">CGST</td>
                             <td class="p-3 text-right font-black text-slate-900">₹{{ bill.cgst_amount|indian_comma }}</td>
@@ -223,6 +237,7 @@
                             <td class="p-3 text-slate-500 font-bold uppercase tracking-wider">SGST</td>
                             <td class="p-3 text-right font-black text-slate-900">₹{{ bill.sgst_amount|indian_comma }}</td>
                         </tr>
+                        {% endif %}
                     {% endif %}
                     {% if bill.use_roundoff %}
                     <tr class="border-b border-slate-100 text-slate-400">
@@ -282,7 +297,7 @@
                     <th class="border border-slate-900 p-2 text-[10px] font-black uppercase tracking-wider text-left">Route</th>
                     <th class="border border-slate-900 p-2 text-[10px] font-black uppercase tracking-wider text-center w-20">Weight</th>
                     <th class="border border-slate-900 p-2 text-[10px] font-black uppercase tracking-wider text-right w-24">Revenue</th>
-                    {% if bill.gst_rate > 0 %}
+                    {% if bill.gst_type != 'NONE' and bill.gst_rate > 0 %}
                     <th class="border border-slate-900 p-2 text-[10px] font-black uppercase tracking-wider text-right w-24">GST ({{ bill.gst_rate }}%)</th>
                     <th class="border border-slate-900 p-2 text-[10px] font-black uppercase tracking-wider text-right w-28">Total</th>
                     {% endif %}
@@ -302,7 +317,7 @@
                     <td class="border border-slate-900 p-2 text-[10px] uppercase truncate max-w-[150px]">{{ bt.trip.pickup_location }} - {{ bt.trip.delivery_location }}</td>
                     <td class="border border-slate-900 p-2 text-[10px] text-center">{{ bt.trip.weight|indian_comma }}</td>
                     <td class="border border-slate-900 p-2 text-[10px] text-right font-black">₹{{ bt.trip.revenue|indian_comma }}</td>
-                    {% if bill.gst_rate > 0 %}
+                    {% if bill.gst_type != 'NONE' and bill.gst_rate > 0 %}
                     <td class="border border-slate-900 p-2 text-[10px] text-right text-slate-600">₹{{ bill|get_trip_gst:bt.trip|indian_comma }}</td>
                     <td class="border border-slate-900 p-2 text-[10px] text-right font-black text-emerald-600">₹{{ bill|get_trip_total:bt.trip|indian_comma }}</td>
                     {% endif %}
@@ -314,7 +329,7 @@
                     <td colspan="5" class="border border-slate-900 p-2 text-[10px] text-right uppercase tracking-widest text-slate-400">Annexure Total</td>
                     <td class="border border-slate-900 p-2 text-[10px] text-center">{{ bill.total_weight|indian_comma }}</td>
                     <td class="border border-slate-900 p-2 text-[10px] text-right">₹{{ bill.subtotal|indian_comma }}</td>
-                    {% if bill.gst_rate > 0 %}
+                    {% if bill.gst_type != 'NONE' and bill.gst_rate > 0 %}
                     <td class="border border-slate-900 p-2 text-[10px] text-right">₹{{ bill.gst_amount|indian_comma }}</td>
                     <td class="border border-slate-900 p-2 text-xs text-right">₹{{ bill.rounded_total|indian_comma }}</td>
                     {% endif %}

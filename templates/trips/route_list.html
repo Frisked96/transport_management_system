@@ -63,7 +63,7 @@
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap">
                         <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
-                            {% if route.route_type == 'local' %}bg-blue-100 text-blue-800{% else %}bg-purple-100 text-purple-800{% endif %}">
+                            {% if route.route_type == 'local' %}bg-blue-100 text-blue-800{% elif route.route_type == 'intra' %}bg-purple-100 text-purple-800{% else %}bg-slate-100 text-slate-800{% endif %}">
                             {{ route.get_route_type_display }}
                         </span>
                     </td>
