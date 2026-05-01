@@ -52,19 +52,19 @@
                 <div class="lg:col-span-8 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                     <div class="bg-slate-50 p-4 rounded-xl border border-slate-100">
                         <p class="text-[10px] font-bold text-slate-400 uppercase mb-1">Opening</p>
-                        <p class="text-base sm:text-lg font-bold text-slate-700">₹{{ party.opening_balance|floatformat:2 }}</p>
+                        <p class="text-base sm:text-lg font-bold text-slate-700">₹{{ party.opening_balance|indian_comma }}</p>
                     </div>
                     <div class="bg-blue-50 p-4 rounded-xl border border-blue-100">
                         <p class="text-[10px] font-bold text-blue-400 uppercase mb-1">Total Debit</p>
-                        <p class="text-base sm:text-lg font-bold text-blue-700">₹{{ party.total_debit|floatformat:2 }}</p>
+                        <p class="text-base sm:text-lg font-bold text-blue-700">₹{{ party.total_debit|indian_comma }}</p>
                     </div>
                     <div class="bg-emerald-50 p-4 rounded-xl border border-emerald-100">
                         <p class="text-[10px] font-bold text-emerald-400 uppercase mb-1">Total Credit</p>
-                        <p class="text-base sm:text-lg font-bold text-emerald-700">₹{{ party.total_credit|floatformat:2 }}</p>
+                        <p class="text-base sm:text-lg font-bold text-emerald-700">₹{{ party.total_credit|indian_comma }}</p>
                     </div>
                     <div class="p-4 rounded-xl border {% if party.current_balance_value > 0 %}bg-rose-50 border-rose-100 text-rose-900{% elif party.current_balance_value < 0 %}bg-emerald-50 border-emerald-100 text-emerald-900{% else %}bg-slate-50 border-slate-100 text-slate-900{% endif %}">
                         <p class="text-[10px] font-black uppercase mb-1 opacity-60">Closing Bal</p>
-                        <p class="text-base sm:text-lg font-black">₹{{ party.current_balance }}</p>
+                        <p class="text-base sm:text-lg font-black">₹{{ party.current_balance_value|abs_val|indian_comma }} {% if party.current_balance_value > 0 %}Dr{% elif party.current_balance_value < 0 %}Cr{% endif %}</p>
                     </div>
                 </div>
 
