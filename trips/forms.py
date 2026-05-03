@@ -16,8 +16,11 @@ class RouteForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         tailwind_classes = "block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white"
+        # Special styling for default_rate to accommodate the '₹' icon
+        self.fields['default_rate'].widget.attrs.update({'class': tailwind_classes + " pl-7"})
         for field_name, field in self.fields.items():
-            field.widget.attrs.update({'class': tailwind_classes})
+            if field_name != 'default_rate':
+                field.widget.attrs.update({'class': tailwind_classes})
 
 
 class TripForm(forms.ModelForm):
