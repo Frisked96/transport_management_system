@@ -47,7 +47,7 @@
                         <tr>
                             <td class="py-3 text-slate-500 font-medium">Amount</td>
                             <td class="py-3 font-black text-lg {% if object.is_income %}text-emerald-600{% else %}text-rose-600{% endif %}">
-                                ₹{{ object.amount|floatformat:2 }}
+                                ₹{{ object.amount|indian_comma }}
                             </td>
                         </tr>
                     </table>

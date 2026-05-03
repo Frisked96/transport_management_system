@@ -92,7 +92,7 @@
                 <td width="40%" class="text-right" style="vertical-align: bottom;">
                     <table align="right">
                         <tr><td class="info-label">Period:</td><td class="text-right">{{ start_date|date:"d/m/Y" }} to {{ end_date|date:"d/m/Y" }}</td></tr>
-                        <tr><td class="info-label">Closing Bal:</td><td class="text-right font-bold" style="font-size: 11pt;">{{ closing_balance|floatformat:2 }}</td></tr>
+                        <tr><td class="info-label">Closing Bal:</td><td class="text-right font-bold" style="font-size: 11pt;">{{ closing_balance|indian_comma }}</td></tr>
                     </table>
                 </td>
             </tr>
@@ -113,9 +113,9 @@
                 <tr class="opening-row">
                     <td>{{ start_date|date:"d/m/Y" }}</td>
                     <td colspan="2">OPENING BALANCE</td>
-                    <td class="text-right">{% if opening_balance > 0 %}{{ opening_balance|abs_val|floatformat:2 }}{% else %}-{% endif %}</td>
-                    <td class="text-right">{% if opening_balance < 0 %}{{ opening_balance|abs_val|floatformat:2 }}{% else %}-{% endif %}</td>
-                    <td class="text-right">{{ opening_balance|floatformat:2 }}</td>
+                    <td class="text-right">{% if opening_balance > 0 %}{{ opening_balance|abs_val|indian_comma }}{% else %}-{% endif %}</td>
+                    <td class="text-right">{% if opening_balance < 0 %}{{ opening_balance|abs_val|indian_comma }}{% else %}-{% endif %}</td>
+                    <td class="text-right">{{ opening_balance|indian_comma }}</td>
                 </tr>
                 
                 {% for row in statement_rows %}
@@ -123,9 +123,9 @@
                     <td>{{ row.date|date:"d/m/Y" }}</td>
                     <td>{{ row.description }}</td>
                     <td class="text-center">{{ row.reference }}</td>
-                    <td class="text-right debit">{% if row.debit > 0 %}{{ row.debit|floatformat:2 }}{% else %}-{% endif %}</td>
-                    <td class="text-right credit">{% if row.credit > 0 %}{{ row.credit|floatformat:2 }}{% else %}-{% endif %}</td>
-                    <td class="text-right font-bold">{{ row.balance|floatformat:2 }}</td>
+                    <td class="text-right debit">{% if row.debit > 0 %}{{ row.debit|indian_comma }}{% else %}-{% endif %}</td>
+                    <td class="text-right credit">{% if row.credit > 0 %}{{ row.credit|indian_comma }}{% else %}-{% endif %}</td>
+                    <td class="text-right font-bold">{{ row.balance|indian_comma }}</td>
                 </tr>
                 {% endfor %}
                 
@@ -133,15 +133,15 @@
                     <td colspan="3" class="text-right text-xs">TOTALS / CLOSING</td>
                     <td class="text-right">
                         {% with total_debit=statement_rows|sum_list:"debit" %}
-                            {{ total_debit|floatformat:2 }}
+                            {{ total_debit|indian_comma }}
                         {% endwith %}
                     </td>
                     <td class="text-right">
                         {% with total_credit=statement_rows|sum_list:"credit" %}
-                            {{ total_credit|floatformat:2 }}
+                            {{ total_credit|indian_comma }}
                         {% endwith %}
                     </td>
-                    <td class="text-right" style="background-color: #e2e8f0; font-size: 11pt;">{{ closing_balance|floatformat:2 }}</td>
+                    <td class="text-right" style="background-color: #e2e8f0; font-size: 11pt;">{{ closing_balance|indian_comma }}</td>
                 </tr>
             </tbody>
         </table>

@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load ledger_extras %}
 
 {% block title %}Trips - Transport Management System{% endblock %}
 
@@ -254,7 +255,7 @@
 <!-- BEGIN: Summary Footer -->
 <div class="mt-6 bg-slate-100 border border-slate-200 rounded-xl p-4 flex justify-between items-center px-6">
     <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Aggregate Weight</span>
-    <span class="font-black text-lg text-slate-900">{{ total_weight|floatformat:2 }} MT</span>
+    <span class="font-black text-lg text-slate-900">{{ total_weight|indian_comma }} MT</span>
 </div>
 <!-- END: Summary Footer -->
 

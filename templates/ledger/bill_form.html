@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% load static %}
+{% load ledger_extras %}
 
 {% block title %}{% if form.instance.pk %}Edit Invoice{% else %}Create Invoice{% endif %} - TMS{% endblock %}
 
@@ -198,9 +199,9 @@
                                         <td class="px-6 py-4 text-[10px] text-slate-500 uppercase leading-tight">
                                             {{ trip.pickup_location }} <br/> <i class="fa-solid fa-arrow-down my-0.5 ml-2 opacity-30"></i> <br/> {{ trip.delivery_location }}
                                         </td>
-                                        <td class="px-6 py-4 text-xs text-right font-bold text-slate-900">{{ trip.weight }}</td>
-                                        <td class="px-6 py-4 text-xs text-right text-slate-600">₹{{ trip.rate_per_ton }}</td>
-                                        <td class="px-6 py-4 text-xs text-right font-black text-emerald-600">₹{{ trip.revenue|floatformat:2 }}</td>
+                                        <td class="px-6 py-4 text-xs text-right font-bold text-slate-900">{{ trip.weight|indian_comma }}</td>
+                                        <td class="px-6 py-4 text-xs text-right text-slate-600">₹{{ trip.rate_per_ton|indian_comma }}</td>
+                                        <td class="px-6 py-4 text-xs text-right font-black text-emerald-600">₹{{ trip.revenue|indian_comma }}</td>
                                     </tr>
                                     {% endfor %}
                                 </tbody>

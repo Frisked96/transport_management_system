@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load ledger_extras %}
 
 {% block title %}Trip Details: {{ trip.trip_number }} - TMS{% endblock %}
 
@@ -114,17 +115,18 @@
                             </tr>
                             <tr class="border-b border-slate-50">
                                 <td class="py-2 text-slate-500 font-medium whitespace-nowrap pr-4">Revenue (Sub)</td>
-                                <td class="py-2 text-slate-900 font-bold">₹{{ trip.revenue|floatformat:2 }}</td>
+                                <td class="py-2 text-slate-900 font-bold">₹{{ trip.revenue|indian_comma }}</td>
                             </tr>
                             <tr class="border-b border-slate-50">
                                 <td class="py-2 text-slate-500 font-medium whitespace-nowrap pr-4">GST Amount</td>
-                                <td class="py-2 text-emerald-600 font-bold">₹{{ trip.gst_amount|floatformat:2 }}</td>
+                                <td class="py-2 text-emerald-600 font-bold">₹{{ trip.gst_amount|indian_comma }}</td>
                             </tr>
                             <tr>
                                 <td class="py-2 text-slate-700 font-black uppercase text-[10px]">Total Revenue</td>
-                                <td class="py-2 text-emerald-700 font-black text-lg">₹{{ trip.total_revenue|floatformat:2 }}</td>
+                                <td class="py-2 text-emerald-700 font-black text-lg">₹{{ trip.total_revenue|indian_comma }}</td>
                             </tr>
                         </table>
+
                     </div>
                 </div>
             </div>
@@ -172,7 +174,7 @@
             <div class="bg-slate-50 px-4 sm:px-6 py-3 border-b border-slate-200 flex justify-between items-center">
                 <h3 class="text-[10px] sm:text-xs font-bold text-slate-600 uppercase tracking-widest">Payment Ledger</h3>
                 <div class="flex items-center gap-2 sm:gap-4">
-                    <span class="text-[9px] sm:text-[10px] font-black uppercase text-slate-400">Bal: <span class="{% if trip.outstanding_balance > 0 %}text-rose-600{% else %}text-emerald-600{% endif %}">₹{{ trip.outstanding_balance|floatformat:2 }}</span></span>
+                    <span class="text-[9px] sm:text-[10px] font-black uppercase text-slate-400">Bal: <span class="{% if trip.outstanding_balance > 0 %}text-rose-600{% else %}text-emerald-600{% endif %}">₹{{ trip.outstanding_balance|indian_comma }}</span></span>
                     {% if trip.party %}
                     <a href="{% url 'financialrecord-create' %}?party={{ trip.party.pk }}&associated_trip={{ trip.pk }}" class="text-emerald-600 hover:text-emerald-700">
                         <i class="fa-solid fa-plus-circle"></i>
@@ -190,7 +192,7 @@
                                     <p class="text-[10px] font-black text-emerald-700 uppercase tracking-tight truncate">{{ record.category.name }}</p>
                                     <p class="text-[9px] text-slate-400">{{ record.date|date:"d M Y" }}</p>
                                 </div>
-                                <span class="text-sm font-black text-emerald-600 shrink-0">+₹{{ record.amount|floatformat:2 }}</span>
+                                <span class="text-sm font-black text-emerald-600 shrink-0">+₹{{ record.amount|indian_comma }}</span>
                             </div>
                             {% endif %}
                         {% endfor %}
@@ -200,7 +202,7 @@
                                 <p class="text-[10px] font-black text-blue-700 uppercase tracking-tight">Allocated</p>
                                 <p class="text-[9px] text-slate-400">{{ allocation.financial_record.date|date:"d M Y" }}</p>
                             </div>
-                            <span class="text-sm font-black text-blue-600 shrink-0">+₹{{ allocation.amount|floatformat:2 }}</span>
+                            <span class="text-sm font-black text-blue-600 shrink-0">+₹{{ allocation.amount|indian_comma }}</span>
                         </div>
                         {% endfor %}
                     </div>

@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load ledger_extras %}
 
 {% block title %}Manager Dashboard - Transport Management System{% endblock %}
 
@@ -76,13 +77,13 @@
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div class="bg-emerald-600 rounded-lg p-6 shadow-md text-white">
             <h3 class="text-xs font-bold text-emerald-100 uppercase tracking-widest mb-3 opacity-80">Total Debit (In)</h3>
-            <div class="text-3xl font-extrabold mb-1">₹{{ income_this_month|floatformat:2 }}</div>
+            <div class="text-3xl font-extrabold mb-1">₹{{ income_this_month|indian_comma }}</div>
             <p class="text-xs text-emerald-100 italic opacity-75">Cash/Bank Inflow</p>
         </div>
         
         <div class="bg-red-600 rounded-lg p-6 shadow-md text-white">
             <h3 class="text-xs font-bold text-red-100 uppercase tracking-widest mb-3 opacity-80">Total Credit (Out)</h3>
-            <div class="text-3xl font-extrabold mb-1">₹{{ expenses_this_month|floatformat:2 }}</div>
+            <div class="text-3xl font-extrabold mb-1">₹{{ expenses_this_month|indian_comma }}</div>
             <p class="text-xs text-red-100 italic opacity-75">Operational Outflow</p>
         </div>
         
@@ -90,13 +91,13 @@
             <div>
                 <h3 class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Net Balance (Excl. GST)</h3>
                 <div class="text-2xl font-extrabold {% if net_profit_excl_gst >= 0 %}text-emerald-600{% else %}text-red-600{% endif %}">
-                    {% if net_profit_excl_gst >= 0 %}+{% endif %}₹{{ net_profit_excl_gst|floatformat:2 }}
+                    {% if net_profit_excl_gst >= 0 %}+{% endif %}₹{{ net_profit_excl_gst|indian_comma }}
                 </div>
             </div>
             <div class="pt-3 border-t border-slate-100">
                 <h3 class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Net Balance (Incl. GST)</h3>
                 <div class="text-3xl font-extrabold {% if net_profit_incl_gst >= 0 %}text-emerald-600{% else %}text-red-600{% endif %}">
-                    {% if net_profit_incl_gst >= 0 %}+{% endif %}₹{{ net_profit_incl_gst|floatformat:2 }}
+                    {% if net_profit_incl_gst >= 0 %}+{% endif %}₹{{ net_profit_incl_gst|indian_comma }}
                 </div>
                 <p class="text-[9px] text-slate-400 italic font-medium uppercase tracking-tighter mt-1">Settlement Estimate</p>
             </div>
@@ -147,7 +148,7 @@
                                 <div class="text-[10px] text-slate-400">{{ trip.date|date:"H:i" }}</div>
                             </td>
                             <td class="px-6 py-4 text-right font-bold text-slate-900">
-                                ₹{{ trip.revenue|floatformat:2 }}
+                                ₹{{ trip.revenue|indian_comma }}
                             </td>
                             <td class="px-6 py-4">
                                 <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider

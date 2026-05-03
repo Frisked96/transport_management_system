@@ -297,7 +297,8 @@
                     <thead>
                         <tr>
                             <th width="5%">S.N.</th>
-                            <th width="55%">Description of Services</th>
+                            <th width="45%">Description of Services</th>
+                            <th width="10%">LR No.</th>
                             <th width="10%">HSN/SAC</th>
                             <th width="10%">Qty (MT)</th>
                             <th width="10%">Rate</th>
@@ -312,6 +313,7 @@
                                 <strong>{{ bill.item_type|default:bill.category.name }}</strong><br>
                                 <span style="font-size: 10px; color: #666;">{{ bill.description }}</span>
                             </td>
+                            <td class="text-center">-</td>
                             <td class="text-center">{{ bill.hsn_code }}</td>
                             <td class="text-right">{% if bill.standard_weight %}{{ bill.standard_weight|indian_comma }}{% else %}-{% endif %}</td>
                             <td class="text-right">{% if bill.standard_rate %}{{ bill.standard_rate|indian_comma }}{% else %}-{% endif %}</td>
@@ -325,8 +327,10 @@
                                 <strong>Freight Charges: {{ bt.trip.vehicle.registration_plate }}</strong><br>
                                 <span style="font-size: 10px; color: #666;">
                                     {{ bt.trip.pickup_location }} to {{ bt.trip.delivery_location }} | {{ bt.trip.date|date:"d/m/y" }}
-                                    {% if bt.lr_no %}| LR: {{ bt.lr_no }}{% elif bt.trip.lr_no %}| LR: {{ bt.trip.lr_no }}{% endif %}
                                 </span>
+                            </td>
+                            <td class="text-center font-bold">
+                                {{ bt.lr_no|default:bt.trip.lr_no|default:"-" }}
                             </td>
                             <td class="text-center">{{ bill.hsn_code }}</td>
                             <td class="text-right">{{ bt.trip.weight|indian_comma }}</td>
@@ -342,6 +346,7 @@
                                 <strong>{{ item.description }}</strong><br>
                                 <span style="font-size: 10px; color: #666;">Consolidated charges for {{ item.count }} trip(s)</span>
                             </td>
+                            <td class="text-center">-</td>
                             <td class="text-center">{{ bill.hsn_code }}</td>
                             <td class="text-right">{{ item.weight|indian_comma }}</td>
                             <td class="text-right">{{ item.rate|indian_comma }}</td>
@@ -360,13 +365,14 @@
                             <td style="border-bottom: none;">&nbsp;</td>
                             <td style="border-bottom: none;">&nbsp;</td>
                             <td style="border-bottom: none;">&nbsp;</td>
+                            <td style="border-bottom: none;">&nbsp;</td>
                         </tr>
                         {% endfor %}
                         {% endwith %}
                     </tbody>
                     <tfoot>
                         <tr class="font-bold" style="background-color: #f8f9fa;">
-                            <td colspan="3" class="text-right">Total</td>
+                            <td colspan="4" class="text-right">Total</td>
                             <td class="text-right">{{ bill.total_weight|indian_comma }}</td>
                             <td></td>
                             <td class="text-right"><span class="rupee-symbol">Rs.</span> {{ bill.subtotal|indian_comma }}</td>

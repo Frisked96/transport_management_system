@@ -72,7 +72,7 @@
                 
                 <div class="md:w-32">
                     <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Opening Bal</span>
-                    <p class="text-sm text-slate-800 font-medium">₹{{ account.opening_balance|floatformat:2 }}</p>
+                    <p class="text-sm text-slate-800 font-medium">₹{{ account.opening_balance|indian_comma }}</p>
                 </div>
 
                 <div class="md:w-40 md:text-right">

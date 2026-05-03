@@ -106,6 +106,7 @@
                     <tr class="bg-slate-50">
                         <th class="border border-slate-900 p-2 text-[10px] font-black uppercase tracking-wider text-center w-10">#</th>
                         <th class="border border-slate-900 p-2 text-[10px] font-black uppercase tracking-wider text-left">Description of Services</th>
+                        <th class="border border-slate-900 p-2 text-[10px] font-black uppercase tracking-wider text-center w-24">LR No.</th>
                         <th class="border border-slate-900 p-2 text-[10px] font-black uppercase tracking-wider text-center w-24">HSN/SAC</th>
                         <th class="border border-slate-900 p-2 text-[10px] font-black uppercase tracking-wider text-center w-24">Qty (MT)</th>
                         <th class="border border-slate-900 p-2 text-[10px] font-black uppercase tracking-wider text-right w-24">Rate</th>
@@ -122,6 +123,7 @@
                             <div class="text-[10px] text-slate-400 mt-1 font-bold italic">{{ bill.description }}</div>
                             {% endif %}
                         </td>
+                        <td class="border border-slate-900 p-3 text-xs text-center text-slate-600">-</td>
                         <td class="border border-slate-900 p-3 text-xs text-center text-slate-600">{{ bill.hsn_code }}</td>
                         <td class="border border-slate-900 p-3 text-xs text-center text-slate-900 font-bold">
                             {% if bill.standard_weight %}{{ bill.standard_weight|indian_comma }}{% else %}-{% endif %}
@@ -139,8 +141,10 @@
                                 <div class="font-black text-slate-900 uppercase">Freight Charges: {{ bt.trip.vehicle.registration_plate }}</div>
                                 <div class="text-[10px] text-slate-400 mt-1 font-bold italic">
                                     {{ bt.trip.pickup_location }} to {{ bt.trip.delivery_location }} | {{ bt.trip.date|date:"d/m/y" }}
-                                    {% if bt.lr_no %}| LR: {{ bt.lr_no }}{% elif bt.trip.lr_no %}| LR: {{ bt.trip.lr_no }}{% endif %}
                                 </div>
+                            </td>
+                            <td class="border border-slate-900 p-3 text-xs text-center text-slate-900 font-bold">
+                                {{ bt.lr_no|default:bt.trip.lr_no|default:"-" }}
                             </td>
                             <td class="border border-slate-900 p-3 text-xs text-center text-slate-600">{{ bill.hsn_code }}</td>
                             <td class="border border-slate-900 p-3 text-xs text-center text-slate-900 font-bold">{{ bt.trip.weight|indian_comma }}</td>
@@ -156,6 +160,7 @@
                                 <div class="font-black text-slate-900 uppercase">{{ item.description }}</div>
                                 <div class="text-[10px] text-slate-400 mt-1 font-bold italic">Consolidated charges for {{ item.count }} trip(s)</div>
                             </td>
+                            <td class="border border-slate-900 p-3 text-xs text-center text-slate-600">-</td>
                             <td class="border border-slate-900 p-3 text-xs text-center text-slate-600">{{ bill.hsn_code }}</td>
                             <td class="border border-slate-900 p-3 text-xs text-center text-slate-900 font-bold">{{ item.weight|indian_comma }}</td>
                             <td class="border border-slate-900 p-3 text-xs text-right text-slate-600">₹{{ item.rate|indian_comma }}</td>
@@ -164,7 +169,7 @@
                         {% endfor %}
                     {% endif %}
                     <tr class="bg-slate-50 font-black">
-                        <td colspan="3" class="border border-slate-900 p-3 text-[10px] text-right uppercase tracking-widest text-slate-400">Total</td>
+                        <td colspan="4" class="border border-slate-900 p-3 text-[10px] text-right uppercase tracking-widest text-slate-400">Total</td>
                         <td class="border border-slate-900 p-3 text-xs text-center">{% if bill.total_weight %}{{ bill.total_weight|indian_comma }}{% else %}-{% endif %}</td>
                         <td class="border border-slate-900 p-3"></td>
                         <td class="border border-slate-900 p-3 text-sm text-right">₹{{ bill.subtotal|indian_comma }}</td>
