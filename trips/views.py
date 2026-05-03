@@ -22,7 +22,7 @@ except ImportError:
 from .models import Trip, Route
 from .forms import TripForm, RouteForm
 from fleet.models import Vehicle, MaintenanceRecord, Tyre
-from ledger.models import FinancialRecord, TransactionCategory, Bill, BillTrip
+from ledger.models import FinancialRecord, TransactionCategory, Bill, BillTrip, CompanyAccount
 
 
 class BaseTripPermissionMixin:
@@ -410,17 +410,19 @@ class RouteDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
 @login_required
 def trip_export_excel(request):
     """
-    Generates an Excel sheet for billed trips with vehicle selection.
+    Generates an Excel sheet for billed trips with vehicle and firm selection.
     """
     if not openpyxl:
         messages.error(request, "Excel export is not available. Please install 'openpyxl'.")
         return redirect('trip-list')
 
-    # Get available vehicles for selection
+    # Get available vehicles and company accounts (issuers) for selection
     vehicles = Vehicle.objects.all().order_by('registration_plate')
+    issuers = CompanyAccount.objects.all().order_by('name')
     
     if request.method == 'POST':
         selected_vehicles = request.POST.getlist('vehicles')
+        selected_issuers = request.POST.getlist('issuers')
         start_date = request.POST.get('start_date')
         end_date = request.POST.get('end_date')
 
@@ -433,6 +435,10 @@ def trip_export_excel(request):
             annotated_is_billed=True,
             vehicle_id__in=selected_vehicles
         ).select_related('vehicle', 'party').prefetch_related('bills')
+
+        # Filter by selected issuers (firms) if provided
+        if selected_issuers:
+            trips = trips.filter(bills__issuer_id__in=selected_issuers).distinct()
 
         if start_date:
             trips = trips.filter(date__date__gte=start_date)
@@ -517,4 +523,7 @@ def trip_export_excel(request):
         wb.save(response)
         return response
 
-    return render(request, 'trips/trip_export_form.html', {'vehicles': vehicles})
+    return render(request, 'trips/trip_export_form.html', {
+        'vehicles': vehicles,
+        'issuers': issuers
+    })

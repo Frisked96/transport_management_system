@@ -425,6 +425,8 @@ class PartyListView(LoginRequiredMixin, BaseLedgerPermissionMixin, ListView):
         # Annotations are kept for basic filtering/ordering if needed.
         return queryset.order_by('name')
 
+from django.core.paginator import Paginator
+
 class PartyDetailView(LoginRequiredMixin, BaseLedgerPermissionMixin, DetailView):
     """
     Detail view for a party
@@ -437,17 +439,31 @@ class PartyDetailView(LoginRequiredMixin, BaseLedgerPermissionMixin, DetailView)
         context = super().get_context_data(**kwargs)
         
         # Get associated trips with annotations (Payment & Billing Info)
-        all_trips = Trip.objects.filter(party=self.object).with_payment_info().with_billing_info().order_by('-date', '-created_at')
-        context['trips'] = all_trips
+        trips_qs = Trip.objects.filter(party=self.object).with_payment_info().with_billing_info().order_by('-date', '-created_at')
+        
+        # Filter for unbilled if requested
+        billed_filter = self.request.GET.get('billed')
+        if billed_filter == 'unbilled':
+            trips_qs = trips_qs.filter(annotated_is_billed=False)
+        elif billed_filter == 'billed':
+            trips_qs = trips_qs.filter(annotated_is_billed=True)
+            
+        # Pagination for trips
+        paginator = Paginator(trips_qs, 25) # 25 trips per page
+        page_number = self.request.GET.get('page')
+        trips_page = paginator.get_page(page_number)
+        
+        context['trips'] = trips_page
+        context['billed_filter'] = billed_filter
 
         # Get Bills
         context['bills'] = self.object.bills.all().order_by('-date', '-created_at')
         
         # Get associated financial records (Including Invoices for complete history)
         # We fetch chronological order to calculate running balance
-        records = self.object.financial_records.select_related(
+        records = list(self.object.financial_records.select_related(
             'category', 'associated_trip', 'associated_bill'
-        ).order_by('date', 'created_at')
+        ).order_by('date', 'created_at'))
         
         # Calculate running balance
         running_bal = self.object.opening_balance

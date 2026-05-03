@@ -127,8 +127,15 @@
             <div id="content-trips" class="tab-pane">
                 <form method="GET" action="{% url 'bill-create' %}" id="create-bill-form">
                     <input type="hidden" name="party" value="{{ party.pk }}">
-                    <div class="bg-emerald-50 px-6 py-2 border-b border-emerald-100 flex justify-between items-center">
-                        <p class="text-[10px] font-black text-emerald-700 uppercase">Select Unbilled Trips to Issue Invoice</p>
+                    <div class="bg-emerald-50 px-6 py-2 border-b border-emerald-100 flex flex-col sm:flex-row justify-between items-center gap-4">
+                        <div class="flex items-center gap-4">
+                            <p class="text-[10px] font-black text-emerald-700 uppercase whitespace-nowrap">Trips View:</p>
+                            <div class="flex bg-white border border-emerald-200 rounded-md p-0.5">
+                                <a href="?billed=unbilled" class="px-3 py-1 text-[9px] font-black uppercase rounded {% if billed_filter == 'unbilled' %}bg-emerald-600 text-white{% else %}text-emerald-600 hover:bg-emerald-50{% endif %} transition-all">Unbilled</a>
+                                <a href="?billed=billed" class="px-3 py-1 text-[9px] font-black uppercase rounded {% if billed_filter == 'billed' %}bg-emerald-600 text-white{% else %}text-emerald-600 hover:bg-emerald-50{% endif %} transition-all">Billed</a>
+                                <a href="?" class="px-3 py-1 text-[9px] font-black uppercase rounded {% if not billed_filter %}bg-emerald-600 text-white{% else %}text-emerald-600 hover:bg-emerald-50{% endif %} transition-all">All</a>
+                            </div>
+                        </div>
                         <button type="submit" id="btn-create-invoice" disabled class="bg-emerald-600 text-white text-[10px] font-black uppercase px-4 py-1.5 rounded-lg hover:bg-emerald-700 disabled:opacity-30 disabled:grayscale transition-all shadow-sm">
                             <i class="fa-solid fa-plus-circle mr-1.5"></i>Generate Invoice
                         </button>
@@ -182,6 +189,26 @@
                         </table>
                     </div>
                 </form>
+
+                <!-- TRIP PAGINATION -->
+                {% if trips.has_other_pages %}
+                <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                        Showing {{ trips.start_index }} to {{ trips.end_index }} of {{ trips.paginator.count }} Trips
+                    </p>
+                    <div class="flex items-center gap-1">
+                        {% if trips.has_previous %}
+                        <a href="?page={{ trips.previous_page_number }}{% if billed_filter %}&billed={{ billed_filter }}{% endif %}" class="px-3 py-1 border border-slate-200 bg-white text-slate-600 rounded-md text-[10px] font-black hover:bg-slate-50 transition-colors uppercase">Previous</a>
+                        {% endif %}
+                        
+                        <span class="px-3 py-1 bg-emerald-600 text-white rounded-md text-[10px] font-black uppercase">{{ trips.number }} / {{ trips.paginator.num_pages }}</span>
+                        
+                        {% if trips.has_next %}
+                        <a href="?page={{ trips.next_page_number }}{% if billed_filter %}&billed={{ billed_filter }}{% endif %}" class="px-3 py-1 border border-slate-200 bg-white text-slate-600 rounded-md text-[10px] font-black hover:bg-slate-50 transition-colors uppercase">Next</a>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
             </div>
 
             <!-- INVOICES TAB -->
