@@ -445,7 +445,8 @@ def trip_export_excel(request):
         if end_date:
             trips = trips.filter(date__date__lte=end_date)
 
-        trips = trips.order_by('date')
+        # Sort by invoice number (numeric part) primarily, then by date
+        trips = trips.order_by('bills__bill_no', 'date').distinct()
 
         # Create Workbook
         wb = openpyxl.Workbook()
