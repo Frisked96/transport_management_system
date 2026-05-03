@@ -102,6 +102,14 @@ class Route(models.Model):
         verbose_name='Route Type'
     )
 
+    default_rate = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        verbose_name='Default Rate',
+        help_text='Suggested rate for trips on this route'
+    )
+
     class Meta:
         verbose_name = 'Route'
         verbose_name_plural = 'Routes'
@@ -190,9 +198,7 @@ class Trip(models.Model):
     party = models.ForeignKey(
         'ledger.Party',
         on_delete=models.PROTECT,
-        verbose_name='Party',
-        null=True,
-        blank=True
+        verbose_name='Party'
     )
 
     route = models.ForeignKey(

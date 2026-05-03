@@ -11,7 +11,7 @@ class RouteForm(forms.ModelForm):
     """
     class Meta:
         model = Route
-        fields = ['pickup_location', 'delivery_location', 'route_type']
+        fields = ['pickup_location', 'delivery_location', 'route_type', 'default_rate']
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -61,8 +61,10 @@ class TripForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         
-        # Route is now the primary way to set locations
+        # Route and Party are now mandatory
         self.fields['route'].required = True
+        self.fields['party'].required = True
+        self.fields['date'].required = True
         
         # Filter vehicles to only show active ones
         self.fields['vehicle'].queryset = Vehicle.objects.filter(

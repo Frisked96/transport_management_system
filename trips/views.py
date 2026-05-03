@@ -5,7 +5,7 @@ from django.views.generic import ListView, DetailView, CreateView, UpdateView, D
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, redirect
-from django.urls import reverse_lazy
+from django.urls import reverse_lazy, reverse
 from django.contrib import messages
 from django.db.models import Q, Sum, F
 from django.utils import timezone
@@ -164,10 +164,28 @@ class TripCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
     template_name = 'trips/trip_form.html'
     permission_required = 'trips.add_trip'
     
+    def get_initial(self):
+        initial = super().get_initial()
+        
+        # Handle date from GET
+        date_str = self.request.GET.get('date')
+        if date_str:
+            try:
+                initial['date'] = datetime.strptime(date_str, '%Y-%m-%d').date()
+            except (ValueError, TypeError):
+                pass
+                
+        # Handle party from GET
+        party_id = self.request.GET.get('party')
+        if party_id:
+            initial['party'] = party_id
+            
+        return initial
+
     def form_valid(self, form):
         form.instance.created_by = self.request.user
         
-        # Set date from GET param if not provided in form
+        # Set date from GET param if not provided in form (e.g. if field was somehow omitted)
         if not form.cleaned_data.get('date'):
             date_str = self.request.GET.get('date')
             if date_str:
@@ -182,8 +200,25 @@ class TripCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
 
         response = super().form_valid(form)
         messages.success(self.request, 'Trip created successfully!')
+        
+        # Handle "Save and Add New" options
+        if '_save_new_date' in self.request.POST:
+            date_str = self.object.date.strftime('%Y-%m-%d')
+            return redirect(f"{self.request.path}?date={date_str}")
+        elif '_save_new_party' in self.request.POST:
+            party_id = self.object.party.id if self.object.party else ''
+            return redirect(f"{self.request.path}?party={party_id}")
+            
         return response
     
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # Provide route default rates for JS auto-population
+        routes = Route.objects.all().values('id', 'default_rate')
+        route_rates = {str(r['id']): float(r['default_rate']) for r in routes}
+        context['route_rates'] = route_rates
+        return context
+
     def get_success_url(self):
         return reverse_lazy('trip-list')
 
@@ -202,6 +237,14 @@ class TripUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
         messages.success(self.request, 'Trip updated successfully!')
         return response
     
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # Provide route default rates for JS auto-population
+        routes = Route.objects.all().values('id', 'default_rate')
+        route_rates = {str(r['id']): float(r['default_rate']) for r in routes}
+        context['route_rates'] = route_rates
+        return context
+
     def get_success_url(self):
         return reverse_lazy('trip-detail', kwargs={'pk': self.object.pk})
 
@@ -214,6 +257,14 @@ class TripDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
     template_name = 'trips/trip_confirm_delete.html'
     permission_required = 'trips.delete_trip'
     
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # Provide route default rates for JS auto-population
+        routes = Route.objects.all().values('id', 'default_rate')
+        route_rates = {str(r['id']): float(r['default_rate']) for r in routes}
+        context['route_rates'] = route_rates
+        return context
+
     def get_success_url(self):
         return reverse_lazy('trip-list')
     
