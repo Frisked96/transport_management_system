@@ -277,8 +277,26 @@
 
 <script>
 $(document).ready(function() {
-    const routeRates = {{ route_rates|safe }};
+    let routeRates = {};
     const DRAFT_KEY = 'bulk_trips_draft';
+
+    function loadCachedMetadata() {
+        const cached = JSON.parse(localStorage.getItem('tms_reference_data') || '{}');
+        if (cached.routes) {
+            cached.routes.forEach(r => {
+                routeRates[r.id] = parseFloat(r.default_rate) || 0;
+            });
+        }
+    }
+    
+    // Initial load
+    loadCachedMetadata();
+    
+    // Refresh if data syncs in background
+    $(document).on('tms:data-synced', function() {
+        loadCachedMetadata();
+    });
+
     
     // Auto-save drafting
     function saveDraft() {
@@ -344,11 +362,36 @@ $(document).ready(function() {
     // Init select2 for a specific row
     function initSelect2($row) {
         $row.find('select').each(function() {
-            $(this).select2({
+            const $select = $(this);
+            const name = $select.attr('name');
+            const cachedData = getCachedData();
+            
+            let data = [];
+            if (name.endsWith('-party') && cachedData.parties) {
+                data = cachedData.parties.map(p => ({ id: p.id, text: p.name }));
+            } else if (name.endsWith('-vehicle') && cachedData.vehicles) {
+                data = cachedData.vehicles.map(v => ({ id: v.id, text: `${v.registration_plate} - ${v.make_model}` }));
+            } else if (name.endsWith('-route') && cachedData.routes) {
+                data = cachedData.routes.map(r => ({ id: r.id, text: `${r.pickup_location} to ${r.delivery_location}` }));
+            } else if (name.endsWith('-driver') && cachedData.drivers) {
+                data = cachedData.drivers.map(d => ({ id: d.id, text: d.user__username }));
+            }
+
+            // Only populate if we have local data and the select is empty (or just has the placeholder)
+            if (data.length > 0 && $select.children('option').length <= 1) {
+                $select.empty().append(new Option('', '', true, true)); // Placeholder
+                data.forEach(item => {
+                    $select.append(new Option(item.text, item.id));
+                });
+            }
+
+            $select.select2({
                 theme: 'bootstrap-5',
                 width: '100%',
                 dropdownParent: $('body'),
                 dropdownAutoWidth: false,
+                placeholder: 'Select...',
+                allowClear: true
             }).on('select2:open', function(e) {
                 var $select = $(this);
                 setTimeout(function() {

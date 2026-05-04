@@ -22,4 +22,5 @@ urlpatterns = [
     # Autocomplete
     path('trip/export-excel/', views.trip_export_excel, name='trip-export-excel'),
     path('autocomplete/', views.get_autocomplete_suggestions, name='autocomplete-suggestions'),
+    path('reference-data/', views.reference_data, name='reference-data'),
 ]

@@ -28,6 +28,36 @@ from fleet.models import Vehicle, MaintenanceRecord, Tyre
 from ledger.models import FinancialRecord, TransactionCategory, Bill, BillTrip, CompanyAccount
 
 
+from django.http import JsonResponse
+from django.contrib.auth.decorators import login_required
+from ledger.models import Party
+from fleet.models import Vehicle
+from drivers.models import Driver
+from .models import Trip, Route
+
+@login_required
+def reference_data(request):
+    """
+    Returns a JSON snapshot of all reference data (Parties, Vehicles, Routes, Drivers)
+    to be cached in the browser's local storage.
+    """
+    parties = list(Party.objects.all().order_by('name').values('id', 'name'))
+    vehicles = list(Vehicle.objects.filter(status=Vehicle.STATUS_ACTIVE).order_by('registration_plate').values('id', 'registration_plate', 'make_model'))
+    routes = list(Route.objects.all().order_by('pickup_location').values('id', 'pickup_location', 'delivery_location', 'route_type', 'default_rate'))
+    drivers = list(Driver.objects.select_related('user').all().order_by('user__username').values('id', 'user__username'))
+    
+    # We can use the total count + max ID as a simple versioning key
+    version_key = f"{Party.objects.count()}-{Vehicle.objects.count()}-{Route.objects.count()}-{Driver.objects.count()}"
+    
+    return JsonResponse({
+        'parties': parties,
+        'vehicles': vehicles,
+        'routes': routes,
+        'drivers': drivers,
+        'version': version_key
+    })
+
+
 class BaseTripPermissionMixin:
     """Base mixin for trip permissions"""
     

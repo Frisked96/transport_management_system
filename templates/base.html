@@ -413,6 +413,36 @@
             });
         });
 
+        // --- Global Reference Data Caching ---
+        const CACHE_KEY = 'tms_reference_data';
+        
+        function syncReferenceData() {
+            {% if user.is_authenticated %}
+            const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || '{}');
+            
+            $.getJSON('{% url "reference-data" %}', function(data) {
+                if (data.version !== cached.version) {
+                    console.log('TMS: Reference data updated to version', data.version);
+                    localStorage.setItem(CACHE_KEY, JSON.stringify(data));
+                    // Trigger a custom event in case pages are waiting for this data
+                    $(document).trigger('tms:data-synced', [data]);
+                } else {
+                    console.log('TMS: Reference data is up to date.');
+                }
+            }).fail(function() {
+                console.error('TMS: Failed to sync reference data.');
+            });
+            {% endif %}
+        }
+
+        // Sync on load
+        $(document).ready(syncReferenceData);
+
+        // Global Helper: Get Cached Reference Data
+        function getCachedData() {
+            return JSON.parse(localStorage.getItem(CACHE_KEY) || '{}');
+        }
+
         // Universal Fix: Disable scroll from changing numeric input values
         $(document).on('wheel', 'input[type=number]', function(e) {
             if (this === document.activeElement) {
