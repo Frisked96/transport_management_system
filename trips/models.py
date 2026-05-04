@@ -5,7 +5,7 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
 from django.core.exceptions import ValidationError
-from django.db.models import Sum, Case, When, Value, F, DecimalField, OuterRef, Subquery
+from django.db.models import Sum, Case, When, Value, F, DecimalField, OuterRef, Subquery, ExpressionWrapper
 from django.db.models.functions import Coalesce
 from fleet.models import Vehicle
 import re
@@ -13,7 +13,7 @@ import re
 class TripQuerySet(models.QuerySet):
     def with_payment_info(self):
         """Annotate queryset with payment information for filtering and sorting"""
-        from ledger.models import FinancialRecord, TripAllocation, TransactionCategory
+        from ledger.models import FinancialRecord, TripAllocation, TransactionCategory, Bill
         
         # Subquery for direct payments (Income types or Deductions)
         direct_payments = FinancialRecord.objects.filter(
@@ -34,17 +34,32 @@ class TripQuerySet(models.QuerySet):
             total=Sum('amount')
         ).values('total')
 
-        return self.annotate(
-            annotated_received = Coalesce(Subquery(direct_payments), Value(0), output_field=DecimalField()) + 
-                                 Coalesce(Subquery(allocations), Value(0), output_field=DecimalField()),
+        # Subquery for associated bill's GST rate
+        bill_gst_rate = Bill.objects.filter(trips=OuterRef('pk')).values('gst_rate')[:1]
+
+        # Basic revenue and received amount
+        qs = self.annotate(
+            annotated_received = Coalesce(Subquery(direct_payments), Value(0, output_field=DecimalField()), output_field=DecimalField()) + 
+                                 Coalesce(Subquery(allocations), Value(0, output_field=DecimalField()), output_field=DecimalField()),
             annotated_revenue = Case(
                 When(revenue_type='fixed', then=F('rate_per_ton')),
                 default=F('weight') * F('rate_per_ton'),
                 output_field=DecimalField()
-            )
-        ).annotate(
+            ),
+            annotated_gst_rate = Coalesce(Subquery(bill_gst_rate), Value(0, output_field=DecimalField()), output_field=DecimalField())
+        )
+
+        # Calculate GST and Total Revenue
+        qs = qs.annotate(
+            annotated_gst_amount = ExpressionWrapper(F('annotated_revenue') * F('annotated_gst_rate') / Value(100), output_field=DecimalField()),
+            annotated_total_revenue = ExpressionWrapper(F('annotated_revenue') + (F('annotated_revenue') * F('annotated_gst_rate') / Value(100)), output_field=DecimalField())
+        )
+
+        # Calculate Outstanding and Status
+        return qs.annotate(
+            annotated_outstanding = F('annotated_total_revenue') - F('annotated_received'),
             annotated_status = Case(
-                When(annotated_received__gte=F('annotated_revenue'), annotated_revenue__gt=0, then=Value('Paid')),
+                When(annotated_received__gte=F('annotated_total_revenue'), annotated_total_revenue__gt=0, then=Value('Paid')),
                 When(annotated_received__gt=0, then=Value('Partially Paid')),
                 default=Value('Unpaid'),
                 output_field=models.CharField()
@@ -476,6 +491,9 @@ class Trip(models.Model):
     @property
     def revenue(self):
         """Calculate revenue for this trip"""
+        if hasattr(self, 'annotated_revenue'):
+            return self.annotated_revenue
+            
         if self.revenue_type == self.REVENUE_FIXED:
             return self.rate_per_ton or 0
         
@@ -501,6 +519,9 @@ class Trip(models.Model):
         Calculate GST amount for this trip based on its associated bill.
         If no bill exists or GST rate is 0, returns 0.
         """
+        if hasattr(self, 'annotated_gst_amount'):
+            return self.annotated_gst_amount
+
         bill = self.associated_bill
         if not bill or not bill.gst_rate:
             return 0
@@ -511,11 +532,16 @@ class Trip(models.Model):
     @property
     def total_revenue(self):
         """Total revenue including GST (if billed)"""
+        if hasattr(self, 'annotated_total_revenue'):
+            return self.annotated_total_revenue
         return self.revenue + self.gst_amount
 
     @property
     def amount_received(self):
         """Calculate total received (Payments + Deductions) from direct links and allocations"""
+        if hasattr(self, 'annotated_received'):
+            return self.annotated_received
+
         from ledger.models import FinancialRecord, TransactionCategory, Bill
         # 1. Direct links (Records with type='Income' OR category='Deductions')
         # Exclude Invoice type as they are debits
@@ -544,6 +570,9 @@ class Trip(models.Model):
     @property
     def payment_status(self):
         """Calculate payment status dynamically based on Total Revenue (incl GST)"""
+        if hasattr(self, 'annotated_status'):
+            return self.annotated_status
+
         received = self.amount_received
         total_rev = self.total_revenue
         
@@ -560,6 +589,8 @@ class Trip(models.Model):
     @property
     def outstanding_balance(self):
         """Calculate outstanding balance dynamically based on Total Revenue (incl GST)"""
+        if hasattr(self, 'annotated_outstanding'):
+            return self.annotated_outstanding
         return self.total_revenue - self.amount_received
 
 

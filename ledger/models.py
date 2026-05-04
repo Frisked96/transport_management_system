@@ -4,7 +4,7 @@ Models for Ledger application
 from django.db import models
 from django.contrib.auth.models import User
 from trips.models import Trip
-from django.db.models import Sum, F, DecimalField
+from django.db.models import Sum, F, DecimalField, OuterRef, Subquery, Case, When, Value, Func, ExpressionWrapper
 from django.db.models.functions import Coalesce
 from decimal import Decimal
 
@@ -102,21 +102,24 @@ class Party(models.Model):
     def refresh_balance(self):
         """
         Recalculate and update the cached balance fields from scratch.
-        Used for backfilling or emergency resync.
+        Uses select_for_update to prevent race conditions.
         """
-        self._refreshing_balance = True
-        try:
-            self.total_debit_amount = self._calculate_total_debit()
-            self.total_credit_amount = self._calculate_total_credit()
-            self.current_balance_cached = self.total_debit_amount - self.total_credit_amount
-            self.save(update_fields=['total_debit_amount', 'total_credit_amount', 'current_balance_cached'])
-        finally:
-            del self._refreshing_balance
+        from django.db import transaction
+        with transaction.atomic():
+            # Lock the party row until the end of the transaction
+            party = Party.objects.select_for_update().get(pk=self.pk)
+            party.total_debit_amount = party._calculate_total_debit()
+            party.total_credit_amount = party._calculate_total_credit()
+            party.current_balance_cached = party.total_debit_amount - party.total_credit_amount
+            party.save(update_fields=['total_debit_amount', 'total_credit_amount', 'current_balance_cached'])
+            
+            # Sync local instance fields
+            self.total_debit_amount = party.total_debit_amount
+            self.total_credit_amount = party.total_credit_amount
+            self.current_balance_cached = party.current_balance_cached
 
     @property
     def total_debit(self):
-        if hasattr(self, '_refreshing_balance'):
-            return self._calculate_total_debit()
         return self.total_debit_amount
 
     def _calculate_total_debit(self):
@@ -125,16 +128,15 @@ class Party(models.Model):
         """
         base = self.opening_balance if self.opening_balance > 0 else Decimal('0')
         
-        # Debits are records that have a positive debit_amount from THIS party's perspective
-        records = self.financial_records.all()
+        # We use Python-side summation to ensure accuracy with complex properties
+        # while using select_related to keep it efficient.
+        records = self.financial_records.select_related('category', 'associated_bill__category').all()
         debits = sum((r.debit_amount or Decimal('0')) for r in records)
         
         return base + debits
 
     @property
     def total_credit(self):
-        if hasattr(self, '_refreshing_balance'):
-            return self._calculate_total_credit()
         return self.total_credit_amount
 
     def _calculate_total_credit(self):
@@ -143,8 +145,9 @@ class Party(models.Model):
         """
         base = abs(self.opening_balance) if self.opening_balance < 0 else Decimal('0')
         
-        # Credits are records that have a positive credit_amount from THIS party's perspective
-        records = self.financial_records.all()
+        # We use Python-side summation to ensure accuracy with complex properties
+        # while using select_related to keep it efficient.
+        records = self.financial_records.select_related('category', 'associated_bill__category').all()
         credits = sum((r.credit_amount or Decimal('0')) for r in records)
         
         return base + credits
@@ -651,10 +654,90 @@ class TripAllocation(models.Model):
     def __str__(self):
         return f"{self.financial_record} -> {self.trip.trip_number}: {self.amount}"
 
+class BillQuerySet(models.QuerySet):
+    def with_payment_info(self):
+        """Annotate bill with subtotal, direct payment info, and trip-based payments"""
+        from .models import FinancialRecord, TransactionCategory, TripAllocation
+        from trips.models import Trip
+        
+        # 1. Subquery for direct payments to the bill
+        direct_payments = FinancialRecord.objects.filter(
+            associated_bill=OuterRef('pk')
+        ).exclude(
+            record_type=FinancialRecord.RECORD_TYPE_INVOICE
+        ).filter(
+            models.Q(category__type=TransactionCategory.TYPE_INCOME) | 
+            models.Q(category__name='Deductions')
+        ).values('associated_bill').annotate(
+            total=Sum('amount')
+        ).values('total')
+
+        # 2. Subquery for payments to trips that are part of this bill
+        # This includes direct trip records and allocations
+        trip_direct_payments = FinancialRecord.objects.filter(
+            associated_trip__bills=OuterRef('pk')
+        ).exclude(
+            models.Q(record_type=FinancialRecord.RECORD_TYPE_INVOICE) |
+            models.Q(associated_bill=OuterRef('pk'))
+        ).filter(
+            models.Q(category__type=TransactionCategory.TYPE_INCOME) | 
+            models.Q(category__name='Deductions')
+        ).values('associated_trip__bills').annotate(
+            total=Sum('amount')
+        ).values('total')
+
+        trip_allocations = TripAllocation.objects.filter(
+            trip__bills=OuterRef('pk')
+        ).values('trip__bills').annotate(
+            total=Sum('amount')
+        ).values('total')
+
+        # 3. Subquery for trip-based revenue (summing trips in the bill)
+        trip_revenue_sq = Trip.objects.filter(bills=OuterRef('pk')).values('bills').annotate(
+            total=Sum(
+                Case(
+                    When(revenue_type='fixed', then=F('rate_per_ton')),
+                    default=F('weight') * F('rate_per_ton'),
+                    output_field=DecimalField()
+                )
+            )
+        ).values('total')
+
+        return self.annotate(
+            annotated_received = ExpressionWrapper(
+                Coalesce(Subquery(direct_payments), Value(0, output_field=DecimalField()), output_field=DecimalField()) + 
+                Coalesce(Subquery(trip_direct_payments), Value(0, output_field=DecimalField()), output_field=DecimalField()) +
+                Coalesce(Subquery(trip_allocations), Value(0, output_field=DecimalField()), output_field=DecimalField()),
+                output_field=DecimalField()
+            ),
+            annotated_subtotal = Case(
+                When(bill_type='Standard', then=Coalesce(F('amount_override'), ExpressionWrapper(F('standard_weight') * F('standard_rate'), output_field=DecimalField()), Value(0, output_field=DecimalField()))),
+                default=Coalesce(Subquery(trip_revenue_sq), Value(0, output_field=DecimalField()), output_field=DecimalField())
+            )
+        ).annotate(
+            annotated_gst_amount = ExpressionWrapper(F('annotated_subtotal') * F('gst_rate') / Value(100), output_field=DecimalField())
+        ).annotate(
+            annotated_total_amount = ExpressionWrapper(F('annotated_subtotal') + F('annotated_gst_amount'), output_field=DecimalField())
+        ).annotate(
+            annotated_outstanding = Case(
+                When(use_roundoff=True, then=ExpressionWrapper(Func(F('annotated_total_amount'), function='ROUND') - F('annotated_received'), output_field=DecimalField())),
+                default=ExpressionWrapper(F('annotated_total_amount') - F('annotated_received'), output_field=DecimalField()),
+                output_field=DecimalField()
+            )
+        )
+
+class BillManager(models.Manager):
+    def get_queryset(self):
+        return BillQuerySet(self.model, using=self._db)
+    
+    def with_payment_info(self):
+        return self.get_queryset().with_payment_info()
+
 class Bill(models.Model):
     """
     Bill/Invoice Document aggregating multiple trips or standard items.
     """
+    objects = BillManager()
     TYPE_TRIP = 'Trip'
     TYPE_STANDARD = 'Standard'
     TYPE_CHOICES = [
@@ -804,6 +887,11 @@ class Bill(models.Model):
             self.bill_number = f"{prefix}{self.bill_no:0{padding}d}{suffix}"
             
         super().save(*args, **kwargs)
+        
+        # 3. Ensure ledger is in sync (handles date, amount, issuer changes)
+        # Note: For trip-based bills, self.trips might be empty on FIRST save 
+        # (before form.save_m2m), but subsequent saves or BillTrip signals will handle it.
+        self.sync_to_ledger()
 
     def delete(self, *args, **kwargs):
         """
@@ -889,11 +977,10 @@ class Bill(models.Model):
     def amount_received(self):
         """
         Calculate total received for this bill.
-        Includes:
-        1. Direct payments to this bill (Income / Deductions)
-        2. Deductions (regardless of category name, if type is correct)
-        3. For Trip-based bills: Payments allocated to individual trips
         """
+        if hasattr(self, 'annotated_received'):
+            return self.annotated_received
+
         # 1. Direct links to this bill (Exclude Invoices as they are debits)
         direct = self.financial_records.exclude(
             record_type=FinancialRecord.RECORD_TYPE_INVOICE
@@ -939,6 +1026,8 @@ class Bill(models.Model):
 
     @property
     def outstanding_balance(self):
+        if hasattr(self, 'annotated_outstanding'):
+            return self.annotated_outstanding
         return self.rounded_total - self.amount_received
 
     @property
@@ -1005,6 +1094,9 @@ class Bill(models.Model):
 
     @property
     def subtotal(self):
+        if hasattr(self, 'annotated_subtotal'):
+            return self.annotated_subtotal
+
         if self.bill_type == self.TYPE_STANDARD:
             # For Standard invoices, we use amount_override as the base amount.
             # If it's missing but we have weight/rate, calculate it as a fallback.
@@ -1018,10 +1110,14 @@ class Bill(models.Model):
 
     @property
     def gst_amount(self):
+        if hasattr(self, 'annotated_gst_amount'):
+            return self.annotated_gst_amount
         return self.subtotal * (Decimal(self.gst_rate) / Decimal(100))
 
     @property
     def total_amount(self):
+        if hasattr(self, 'annotated_total_amount'):
+            return self.annotated_total_amount
         return self.subtotal + self.gst_amount
 
     @property
@@ -1166,44 +1262,50 @@ def sync_account_balance_on_opening_change(sender, instance, **kwargs):
         # For new accounts, initial balance is just the opening balance
         instance.current_balance_cached = instance.opening_balance
 
+@receiver(pre_save, sender=FinancialRecord)
+def track_financial_record_changes(sender, instance, **kwargs):
+    """
+    Captures old state to handle party/account changes.
+    """
+    if instance.pk:
+        try:
+            instance._old_instance = FinancialRecord.objects.get(pk=instance.pk)
+        except FinancialRecord.DoesNotExist:
+            instance._old_instance = None
+    else:
+        instance._old_instance = None
+
 @receiver(post_save, sender=FinancialRecord)
 def update_balances_on_save(sender, instance, created, **kwargs):
     """
     Update Party and CompanyAccount balances when a FinancialRecord is saved.
-    Uses F() expressions for atomic updates.
     """
-    from django.db.models import F
-    
-    # 1. Update Party Balance
-    if instance.party:
-        # Determine if it's a debit or credit
-        debit = instance.debit_amount or Decimal('0')
-        credit = instance.credit_amount or Decimal('0')
-        
-        if created:
-            # Atomic increment
-            Party.objects.filter(pk=instance.party.pk).update(
-                total_debit_amount=F('total_debit_amount') + debit,
-                total_credit_amount=F('total_credit_amount') + credit,
-                current_balance_cached=F('current_balance_cached') + (debit - credit)
-            )
-        else:
-            # For updates, we'd need to track old values. 
-            # For simplicity and reliability on update, we trigger a refresh.
+    # 1. Update Parties
+    if created:
+        if instance.party:
+            instance.party.refresh_balance()
+    else:
+        # Check if party changed
+        old_party = getattr(instance, '_old_instance').party if getattr(instance, '_old_instance') else None
+        if old_party:
+            old_party.refresh_balance()
+        if instance.party and instance.party != old_party:
+            instance.party.refresh_balance()
+        elif instance.party:
+            # Even if party didn't change, amount or type might have
             instance.party.refresh_balance()
 
-    # 2. Update CompanyAccount Balance
-    if instance.account:
-        # Perspective of CompanyAccount: Income is Dr (+), Expense is Cr (-)
-        # Balance = Opening + Income - Expenses
-        income = instance.amount if (instance.is_income and not instance.is_invoice) else Decimal('0')
-        expense = instance.amount if (instance.is_expense and not instance.is_invoice) else Decimal('0')
-        
-        if created:
-            CompanyAccount.objects.filter(pk=instance.account.pk).update(
-                current_balance_cached=F('current_balance_cached') + (income - expense)
-            )
-        else:
+    # 2. Update CompanyAccounts
+    if created:
+        if instance.account:
+            instance.account.refresh_balance()
+    else:
+        old_account = getattr(instance, '_old_instance').account if getattr(instance, '_old_instance') else None
+        if old_account:
+            old_account.refresh_balance()
+        if instance.account and instance.account != old_account:
+            instance.account.refresh_balance()
+        elif instance.account:
             instance.account.refresh_balance()
 
 @receiver(post_delete, sender=FinancialRecord)
@@ -1211,20 +1313,8 @@ def update_balances_on_delete(sender, instance, **kwargs):
     """
     Update Party and CompanyAccount balances when a FinancialRecord is deleted.
     """
-    from django.db.models import F
-    
     if instance.party:
-        debit = instance.debit_amount or Decimal('0')
-        credit = instance.credit_amount or Decimal('0')
-        Party.objects.filter(pk=instance.party.pk).update(
-            total_debit_amount=F('total_debit_amount') - debit,
-            total_credit_amount=F('total_credit_amount') - credit,
-            current_balance_cached=F('current_balance_cached') - (debit - credit)
-        )
+        instance.party.refresh_balance()
 
     if instance.account:
-        income = instance.amount if (instance.is_income and not instance.is_invoice) else Decimal('0')
-        expense = instance.amount if (instance.is_expense and not instance.is_invoice) else Decimal('0')
-        CompanyAccount.objects.filter(pk=instance.account.pk).update(
-            current_balance_cached=F('current_balance_cached') - (income - expense)
-        )
+        instance.account.refresh_balance()
