@@ -72,6 +72,15 @@
         .select2-results__option--highlighted[aria-selected] {
             background-color: #059669 !important; /* emerald-600 */
         }
+        /* Universal Fix: Hide Numeric Spinners (Arrows) */
+        input::-webkit-outer-spin-button,
+        input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type=number] {
+            -moz-appearance: textfield;
+        }
     </style>
     {% block extra_css %}{% endblock %}
 </head>
@@ -377,7 +386,8 @@
         });
 
         // Toggle dropdown on click
-        $(document).on('click', '.dropdown-toggle', function(e) {                e.preventDefault();
+        $(document).on('click', '.dropdown-toggle', function(e) {
+                e.preventDefault();
                 e.stopPropagation();
                 
                 const $container = $(this).closest('.dropdown-container');
@@ -401,6 +411,70 @@
             $(document).on('click', '.dropdown-menu', function(e) {
                 e.stopPropagation();
             });
+        });
+
+        // Universal Fix: Disable scroll from changing numeric input values
+        $(document).on('wheel', 'input[type=number]', function(e) {
+            if (this === document.activeElement) {
+                $(this).blur();
+            }
+        });
+
+        // Universal Smart Navigation: Use arrow keys to move focus between boxes
+        $(document).on('keydown', 'input, select, textarea', function(e) {
+            const key = e.which;
+            const $this = $(this);
+            const isNumber = $this.prop('type') === 'number';
+            const isSelect = $this.is('select') || $this.hasClass('select2-hidden-accessible');
+
+            // Arrows: Left=37, Up=38, Right=39, Down=40
+            if ([37, 38, 39, 40].indexOf(key) > -1) {
+                
+                // For number inputs, block the default up/down (increment/decrement)
+                if (isNumber && (key === 38 || key === 40)) {
+                    e.preventDefault();
+                }
+
+                // If it's a select2 being edited/opened, let it handle arrows
+                if ($this.data('select2') && $('.select2-container--open').length) return;
+
+                let $next;
+                const $allFields = $('input:visible, select:visible, textarea:visible').not('[readonly], [disabled]');
+                const currentIndex = $allFields.index($this);
+
+                if (key === 38 || key === 40) { // UP or DOWN
+                    e.preventDefault();
+                    // Vertical Navigation (Grid-aware)
+                    const $row = $this.closest('.form-row, tr');
+                    if ($row.length) {
+                        const fieldIndex = $row.find('input, select, textarea').index($this);
+                        const $targetRow = (key === 38) ? $row.prev('.form-row, tr') : $row.next('.form-row, tr');
+                        if ($targetRow.length) {
+                            $next = $targetRow.find('input, select, textarea').eq(fieldIndex);
+                        }
+                    }
+                    
+                    // Fallback to simple prev/next if not in a grid or row not found
+                    if (!$next || !$next.length) {
+                        $next = (key === 38) ? $allFields.eq(currentIndex - 1) : $allFields.eq(currentIndex + 1);
+                    }
+                } 
+                else if (key === 37 || key === 39) { // LEFT or RIGHT
+                    // Only move focus if at the start/end of text or it's a number/select
+                    const isAtStart = !this.selectionStart || this.selectionStart === 0;
+                    const isAtEnd = !this.selectionEnd || this.selectionEnd === this.value.length;
+
+                    if (isNumber || isSelect || (key === 37 && isAtStart) || (key === 39 && isAtEnd)) {
+                        $next = (key === 37) ? $allFields.eq(currentIndex - 1) : $allFields.eq(currentIndex + 1);
+                        if ($next.length) e.preventDefault();
+                    }
+                }
+
+                if ($next && $next.length) {
+                    $next.focus();
+                    if ($next.is('input')) $next.select();
+                }
+            }
         });
     </script>
     {% block extra_js %}{% endblock %}
