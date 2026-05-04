@@ -425,6 +425,8 @@ class Trip(models.Model):
         monthly_counts = {} # Key: (year, month)
         yearly_counts = {}  # Key: year
         
+        trips_to_update = []
+        
         for trip in trips:
             total_count += 1
             
@@ -439,7 +441,11 @@ class Trip(models.Model):
             new_number = f"{reg_plate}-{total_count}/{monthly_counts[monthly_key]}/{yearly_counts[year]}"
             
             if trip.trip_number != new_number:
-                cls.objects.filter(pk=trip.pk).update(trip_number=new_number)
+                trip.trip_number = new_number
+                trips_to_update.append(trip)
+        
+        if trips_to_update:
+            cls.objects.bulk_update(trips_to_update, ['trip_number'])
         
         # Update sequences to match the new state so future trips continue correctly
         Sequence.objects.filter(key=f"trip_total_{vehicle.pk}").update(value=total_count)

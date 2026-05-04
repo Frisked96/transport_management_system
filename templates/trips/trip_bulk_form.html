@@ -1,0 +1,504 @@
+{% extends 'base.html' %}
+
+{% block title %}Bulk Add Trips - TMS{% endblock %}
+
+{% block content %}
+<header class="mb-6 flex items-center justify-between">
+    <div>
+        <div class="flex items-center space-x-2 text-sm text-slate-500 mb-2">
+            <a href="{% url 'trip-list' %}" class="hover:text-emerald-600 transition-colors">Trips</a>
+            <i class="fa-solid fa-chevron-right text-[10px]"></i>
+            <span>Bulk Add Trips</span>
+        </div>
+        <h1 class="text-3xl font-bold text-slate-900">Bulk Add Trips</h1>
+    </div>
+    <div></div>
+</header>
+
+<div class="mx-auto">
+    <form method="post" id="bulk-trip-form" class="space-y-4">
+        {% csrf_token %}
+        {{ form.management_form }}
+        
+        {% if form.non_form_errors %}
+            <div class="bg-rose-50 border border-rose-200 text-rose-700 p-4 rounded-lg text-sm font-medium mb-4">
+                {{ form.non_form_errors }}
+            </div>
+        {% endif %}
+
+        <div id="formset-container" class="space-y-4">
+            {% for single_form in form %}
+                <div class="form-row bg-white border border-slate-200 rounded-xl shadow-sm relative">
+                    {% if single_form.non_field_errors %}
+                        <div class="bg-rose-50 border-b border-rose-200 text-rose-700 p-3 text-sm font-medium rounded-t-xl">
+                            {{ single_form.non_field_errors }}
+                        </div>
+                    {% endif %}
+                    
+                    <div class="p-4">
+                        <div class="flex justify-between items-center mb-3">
+                            <h3 class="text-sm font-bold text-slate-700">Trip <span class="trip-counter">{{ forloop.counter }}</span></h3>
+                            <button type="button" class="remove-row-btn text-slate-400 hover:text-rose-600 transition-colors" title="Remove Trip">
+                                <i class="fa-solid fa-xmark text-lg"></i>
+                            </button>
+                        </div>
+                        
+                        <!-- Main Grid -->
+                        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-12 gap-x-3 gap-y-4">
+                            <!-- Hidden inputs like ID and locations -->
+                            {% for hidden in single_form.hidden_fields %}
+                                {{ hidden }}
+                            {% endfor %}
+
+                            <!-- Date -->
+                            <div class="xl:col-span-2">
+                                <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Date *</label>
+                                {{ single_form.date }}
+                                {% if single_form.date.errors %}<p class="text-rose-600 text-[10px] mt-1 font-bold">{{ single_form.date.errors.0 }}</p>{% endif %}
+                            </div>
+                            
+                            <!-- Party -->
+                            <div class="xl:col-span-3">
+                                <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Party *</label>
+                                <div class="relative select2-parent">{{ single_form.party }}</div>
+                                {% if single_form.party.errors %}<p class="text-rose-600 text-[10px] mt-1 font-bold">{{ single_form.party.errors.0 }}</p>{% endif %}
+                            </div>
+                            
+                            <!-- Route -->
+                            <div class="xl:col-span-3">
+                                <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Route *</label>
+                                <div class="relative select2-parent">{{ single_form.route }}</div>
+                                {% if single_form.route.errors %}<p class="text-rose-600 text-[10px] mt-1 font-bold">{{ single_form.route.errors.0 }}</p>{% endif %}
+                            </div>
+                            
+                            <!-- Vehicle -->
+                            <div class="xl:col-span-2">
+                                <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Vehicle *</label>
+                                <div class="relative select2-parent">{{ single_form.vehicle }}</div>
+                                {% if single_form.vehicle.errors %}<p class="text-rose-600 text-[10px] mt-1 font-bold">{{ single_form.vehicle.errors.0 }}</p>{% endif %}
+                            </div>
+
+                            <!-- Driver -->
+                            <div class="xl:col-span-2">
+                                <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Driver</label>
+                                <div class="relative select2-parent">{{ single_form.driver }}</div>
+                                {% if single_form.driver.errors %}<p class="text-rose-600 text-[10px] mt-1 font-bold">{{ single_form.driver.errors.0 }}</p>{% endif %}
+                            </div>
+
+                            <!-- LR No -->
+                            <div class="xl:col-span-2">
+                                <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">LR Number</label>
+                                {{ single_form.lr_no }}
+                                {% if single_form.lr_no.errors %}<p class="text-rose-600 text-[10px] mt-1 font-bold">{{ single_form.lr_no.errors.0 }}</p>{% endif %}
+                            </div>
+
+                            <!-- Revenue Type -->
+                            <div class="xl:col-span-2">
+                                <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Revenue Type</label>
+                                {{ single_form.revenue_type }}
+                            </div>
+
+                            <!-- Weight -->
+                            <div class="xl:col-span-2 weight-container">
+                                <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Weight (MT)</label>
+                                {{ single_form.weight }}
+                                {% if single_form.weight.errors %}<p class="text-rose-600 text-[10px] mt-1 font-bold">{{ single_form.weight.errors.0 }}</p>{% endif %}
+                            </div>
+
+                            <!-- Rate -->
+                            <div class="xl:col-span-2">
+                                <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1 rate-label">Rate</label>
+                                {{ single_form.rate_per_ton }}
+                                {% if single_form.rate_per_ton.errors %}<p class="text-rose-600 text-[10px] mt-1 font-bold">{{ single_form.rate_per_ton.errors.0 }}</p>{% endif %}
+                            </div>
+
+                            <!-- Est Revenue -->
+                            <div class="xl:col-span-2">
+                                <label class="block text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1">Est. Revenue</label>
+                                <div class="est-revenue bg-emerald-50 border border-emerald-100 rounded-md px-3 py-2 text-xs font-black text-emerald-700 min-h-[38px] flex items-center shadow-inner">
+                                    ₹ 0.00
+                                </div>
+                            </div>
+
+                            <!-- Notes -->
+                            <div class="xl:col-span-2 notes-container transition-all duration-300">
+                                <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Remarks / Notes</label>
+                                {{ single_form.notes }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+
+        <!-- Add New Row Button (Bottom) -->
+        <div class="flex justify-center mt-4">
+            <button type="button" id="add-trip-btn" class="flex items-center space-x-2 px-6 py-3 bg-white border-2 border-dashed border-slate-300 text-slate-500 rounded-xl text-sm font-bold hover:border-emerald-500 hover:text-emerald-600 transition-all group shadow-sm">
+                <i class="fa-solid fa-plus group-hover:scale-110 transition-transform"></i>
+                <span>Add Another Trip Row</span>
+            </button>
+        </div>
+
+        <!-- Empty form template for cloning -->
+        <div id="empty-form-template" class="hidden">
+            <div class="form-row bg-white border border-slate-200 rounded-xl shadow-sm relative">
+                <div class="p-4">
+                    <div class="flex justify-between items-center mb-3">
+                        <h3 class="text-sm font-bold text-slate-700">Trip <span class="trip-counter">__counter__</span></h3>
+                        <button type="button" class="remove-row-btn text-slate-400 hover:text-rose-600 transition-colors" title="Remove Trip">
+                            <i class="fa-solid fa-xmark text-lg"></i>
+                        </button>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-12 gap-x-3 gap-y-4">
+                        {% for hidden in form.empty_form.hidden_fields %}
+                            {{ hidden }}
+                        {% endfor %}
+
+                        <div class="xl:col-span-2">
+                            <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Date *</label>
+                            {{ form.empty_form.date }}
+                        </div>
+                        
+                        <div class="xl:col-span-3">
+                            <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Party *</label>
+                            <div class="relative select2-parent">{{ form.empty_form.party }}</div>
+                        </div>
+                        
+                        <div class="xl:col-span-3">
+                            <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Route *</label>
+                            <div class="relative select2-parent">{{ form.empty_form.route }}</div>
+                        </div>
+                        
+                        <div class="xl:col-span-2">
+                            <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Vehicle *</label>
+                            <div class="relative select2-parent">{{ form.empty_form.vehicle }}</div>
+                        </div>
+
+                        <div class="xl:col-span-2">
+                            <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Driver</label>
+                            <div class="relative select2-parent">{{ form.empty_form.driver }}</div>
+                        </div>
+
+                        <div class="xl:col-span-2">
+                            <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">LR Number</label>
+                            {{ form.empty_form.lr_no }}
+                        </div>
+
+                        <div class="xl:col-span-2">
+                            <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Revenue Type</label>
+                            {{ form.empty_form.revenue_type }}
+                        </div>
+
+                        <div class="xl:col-span-2 weight-container">
+                            <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Weight (MT)</label>
+                            {{ form.empty_form.weight }}
+                        </div>
+
+                        <div class="xl:col-span-2">
+                            <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1 rate-label">Rate</label>
+                            {{ form.empty_form.rate_per_ton }}
+                        </div>
+
+                        <div class="xl:col-span-2">
+                            <label class="block text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1">Est. Revenue</label>
+                            <div class="est-revenue bg-emerald-50 border border-emerald-100 rounded-md px-3 py-2 text-xs font-black text-emerald-700 min-h-[38px] flex items-center shadow-inner">
+                                ₹ 0.00
+                            </div>
+                        </div>
+
+                        <div class="xl:col-span-2 notes-container transition-all duration-300">
+                            <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Remarks / Notes</label>
+                            {{ form.empty_form.notes }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer Actions -->
+        <div class="bg-slate-50 px-6 py-4 border border-slate-200 rounded-xl flex flex-col sm:flex-row items-center justify-between mt-6 sticky bottom-4 z-50 shadow-lg">
+            <div class="flex items-center space-x-4 mb-4 sm:mb-0">
+                <a href="{% url 'trip-list' %}" class="text-sm font-bold text-slate-400 hover:text-slate-600 transition-colors">
+                    <i class="fa-solid fa-xmark mr-1"></i> Cancel
+                </a>
+            </div>
+            <button type="submit" class="flex items-center space-x-2 px-8 py-3 bg-emerald-600 text-white rounded-lg text-sm font-black hover:bg-emerald-700 shadow-lg shadow-emerald-100 transition-all active:scale-95 uppercase tracking-widest">
+                <i class="fa-solid fa-circle-check"></i>
+                <span>Save All Trips</span>
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<style>
+    .select2-dropdown {
+        max-height: none !important;
+        overflow-y: visible !important;
+        border-radius: 0.375rem !important;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.1) !important;
+        z-index: 9999;
+    }
+    .select2-search__field {
+        height: 40px !important;
+        font-size: 16px !important;
+    }
+    .select2-container--bootstrap-5 .select2-selection {
+        min-height: 38px;
+        display: flex;
+        align-items: center;
+    }
+    @media (max-width: 640px) {
+        .select2-container {
+            width: 100% !important;
+        }
+    }
+    
+    /* Compact Notes */
+    textarea[name$="-notes"] {
+        height: 38px !important;
+        min-height: 38px !important;
+        transition: all 0.2s ease-in-out;
+        resize: vertical;
+        border-color: #cbd5e1;
+    }
+    
+    textarea[name$="-notes"]:focus {
+        border-color: #10b981;
+        min-height: 80px !important;
+    }
+
+    .notes-container.xl\:col-span-12 textarea {
+        min-height: 80px !important;
+    }
+</style>
+
+<script>
+$(document).ready(function() {
+    const routeRates = {{ route_rates|safe }};
+    const DRAFT_KEY = 'bulk_trips_draft';
+    
+    // Auto-save drafting
+    function saveDraft() {
+        const formData = $('#bulk-trip-form').serializeArray();
+        // Ignore CSRF token to not mess with sessions
+        const draft = formData.filter(item => item.name !== 'csrfmiddlewaretoken');
+        localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+    }
+
+    function loadDraft() {
+        const draftStr = localStorage.getItem(DRAFT_KEY);
+        if (draftStr) {
+            try {
+                const draft = JSON.parse(draftStr);
+                const totalFormsField = draft.find(item => item.name === 'form-TOTAL_FORMS');
+                if (totalFormsField) {
+                    const totalForms = parseInt(totalFormsField.value, 10);
+                    const currentFormsCount = $('.form-row:not(#empty-form-template .form-row)').length;
+                    
+                    // Add rows if needed
+                    for (let i = currentFormsCount; i < totalForms; i++) {
+                        addFormRow();
+                    }
+                    
+                    // Populate data
+                    draft.forEach(item => {
+                        const $el = $(`[name="${item.name}"]`);
+                        if ($el.length) {
+                            if ($el.is(':checkbox') || $el.is(':radio')) {
+                                $el.filter(`[value="${item.value}"]`).prop('checked', true);
+                            } else {
+                                $el.val(item.value);
+                            }
+                            // Trigger change for select2 and calculations
+                            if ($el.hasClass('select2-hidden-accessible')) {
+                                $el.trigger('change.select2');
+                            }
+                        }
+                    });
+                    
+                    // Update all revenues
+                    $('.form-row:not(#empty-form-template .form-row)').each(function() {
+                        updateRevenue($(this));
+                    });
+                }
+            } catch (e) {
+                console.error('Error loading draft', e);
+            }
+        }
+    }
+
+    $('#bulk-trip-form').on('change input', 'input, select, textarea', function() {
+        saveDraft();
+    });
+
+    // Clear draft on submit. We clear it immediately because if there are validation errors,
+    // the server renders the same page with errors and the values are preserved anyway in the HTML.
+    // If it succeeds, it redirects, and the cache is safely gone.
+    $('#bulk-trip-form').on('submit', function() {
+        localStorage.removeItem(DRAFT_KEY);
+    });
+
+    // Init select2 for a specific row
+    function initSelect2($row) {
+        $row.find('select').each(function() {
+            $(this).select2({
+                theme: 'bootstrap-5',
+                width: '100%',
+                dropdownParent: $('body'),
+                dropdownAutoWidth: false,
+            }).on('select2:open', function(e) {
+                var $select = $(this);
+                setTimeout(function() {
+                    var rect = $select[0].getBoundingClientRect();
+                    var viewHeight = window.innerHeight;
+                    var keyboardSpace = viewHeight * 0.5;
+                    if (rect.bottom > keyboardSpace) {
+                        window.scrollBy(0, rect.bottom - keyboardSpace + 60);
+                    }
+                }, 50);
+            }).on('change', function() {
+                saveDraft();
+            });
+        });
+    }
+
+    // Revenue Calculation
+    function updateRevenue($row) {
+        const $revenueType = $row.find('[name$="-revenue_type"]');
+        const $weight = $row.find('[name$="-weight"]');
+        const $rate = $row.find('[name$="-rate_per_ton"]');
+        const $rateLabel = $row.find('.rate-label');
+        const $estRevenue = $row.find('.est-revenue');
+        const $weightContainer = $row.find('.weight-container');
+
+        const type = $revenueType.val();
+        const weight = parseFloat($weight.val()) || 0;
+        const rate = parseFloat($rate.val()) || 0;
+        let revenue = 0;
+
+        if (type === 'fixed') {
+            revenue = rate;
+            $rateLabel.text('Fixed Amount');
+            $weightContainer.addClass('opacity-40 grayscale pointer-events-none');
+        } else {
+            revenue = weight * rate;
+            $rateLabel.text('Rate per Ton');
+            $weightContainer.removeClass('opacity-40 grayscale pointer-events-none');
+        }
+
+        $estRevenue.text('₹ ' + revenue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+    }
+
+    // Attach event listeners to row for revenue and rate defaults
+    function attachRowListeners($row) {
+        $row.on('change', '[name$="-revenue_type"]', function() { updateRevenue($row); });
+        $row.on('input', '[name$="-weight"], [name$="-rate_per_ton"]', function() { updateRevenue($row); });
+        
+        $row.on('change', '[name$="-route"]', function() {
+            const routeId = $(this).val();
+            const $rate = $row.find('[name$="-rate_per_ton"]');
+            if (routeId && routeRates[routeId]) {
+                const defaultRate = routeRates[routeId];
+                const currentRate = parseFloat($rate.val()) || 0;
+                if (currentRate === 0 || $rate.val() === '') {
+                    $rate.val(defaultRate);
+                    updateRevenue($row);
+                    saveDraft();
+                }
+            }
+        });
+    }
+
+    function addFormRow() {
+        const totalForms = parseInt($('#id_form-TOTAL_FORMS').val(), 10);
+        const templateHtml = $('#empty-form-template').html();
+        // Replace form-__prefix__ with form-N
+        const newHtml = templateHtml.replace(/__prefix__/g, totalForms).replace(/__counter__/g, totalForms + 1);
+        
+        const $newRow = $(newHtml);
+        $('#formset-container').append($newRow);
+        
+        // Copy data from previous row
+        if (totalForms > 0) {
+            const prevPrefix = `form-${totalForms - 1}`;
+            const newPrefix = `form-${totalForms}`;
+            
+            const prevDate = $(`[name="${prevPrefix}-date"]`).val();
+            const prevParty = $(`[name="${prevPrefix}-party"]`).val();
+            const prevRoute = $(`[name="${prevPrefix}-route"]`).val();
+            const prevVehicle = $(`[name="${prevPrefix}-vehicle"]`).val();
+            
+            if (prevDate) $newRow.find(`[name="${newPrefix}-date"]`).val(prevDate);
+            if (prevParty) $newRow.find(`[name="${newPrefix}-party"]`).val(prevParty);
+            if (prevRoute) $newRow.find(`[name="${newPrefix}-route"]`).val(prevRoute);
+            if (prevVehicle) $newRow.find(`[name="${newPrefix}-vehicle"]`).val(prevVehicle);
+        }
+        
+        $('#id_form-TOTAL_FORMS').val(totalForms + 1);
+        
+        initSelect2($newRow);
+        attachRowListeners($newRow);
+        updateRevenue($newRow);
+        saveDraft();
+    }
+
+    // Initialization
+    $('#add-trip-btn').on('click', addFormRow);
+    
+    $('#formset-container').on('click', '.remove-row-btn', function() {
+        const rowCount = $('.form-row:not(#empty-form-template .form-row)').length;
+        if (rowCount > 1) {
+            $(this).closest('.form-row').remove();
+            
+            // Re-index all forms
+            let index = 0;
+            $('.form-row:not(#empty-form-template .form-row)').each(function() {
+                const $row = $(this);
+                $row.find('.trip-counter').text(index + 1);
+                
+                $row.find('input, select, textarea').each(function() {
+                    const name = $(this).attr('name');
+                    if (name) {
+                        const newName = name.replace(/form-\d+/, `form-${index}`);
+                        $(this).attr('name', newName);
+                    }
+                    const id = $(this).attr('id');
+                    if (id) {
+                        const newId = id.replace(/id_form-\d+/, `id_form-${index}`);
+                        $(this).attr('id', newId);
+                    }
+                });
+                index++;
+            });
+            $('#id_form-TOTAL_FORMS').val(index);
+            saveDraft();
+        } else {
+            alert('You must have at least one trip row.');
+        }
+    });
+
+    // Initialize initial rows
+    $('.form-row:not(#empty-form-template .form-row)').each(function() {
+        initSelect2($(this));
+        attachRowListeners($(this));
+        updateRevenue($(this));
+    });
+
+    // Load draft if no validation errors are present on page load (which means fresh page load)
+    const hasErrors = $('.bg-rose-50').length > 0;
+    if (!hasErrors) {
+        // Attempt to load draft.
+        // Wait a slight tick to let select2 init
+        setTimeout(loadDraft, 100);
+    }
+    
+    // Clear draft if successful (Django messages handle success usually)
+    // For now we add an inline script in the template if messages are present?
+    // See the block below
+});
+</script>
+
+{% endblock %}

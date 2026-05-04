@@ -376,27 +376,27 @@ class BillForm(forms.ModelForm):
 
             # Create or update BillTrip for each selected trip
             from .models import BillTrip
+            trips_to_update = []
             for trip in selected_trips:
                 lr_no = trips_extra.get(str(trip.id)) or trips_extra.get(trip.id)
                 # Fallback to trip.lr_no if not provided in extra data
                 if not lr_no:
                     lr_no = trip.lr_no
                 
-                # Sync LR No back to Trip if Trip doesn't have one
-                if lr_no and not trip.lr_no:
+                # Sync LR No back to Trip if changed
+                if lr_no and trip.lr_no != lr_no:
                     trip.lr_no = lr_no
-                    trip.save(update_fields=['lr_no'])
-                elif lr_no and trip.lr_no != lr_no:
-                    # Optional: Overwrite if different? 
-                    # User said "it should be saved into the trip", implying sync.
-                    trip.lr_no = lr_no
-                    trip.save(update_fields=['lr_no'])
+                    trips_to_update.append(trip)
 
+                # Still need to handle BillTrip per trip, but we've avoided Trip.save() in loop
                 BillTrip.objects.update_or_create(
                     bill=instance,
                     trip=trip,
                     defaults={'lr_no': lr_no}
                 )
+            
+            if trips_to_update:
+                Trip.objects.bulk_update(trips_to_update, ['lr_no'])
             
             # Sync to Ledger (After trips are established)
             instance.sync_to_ledger()

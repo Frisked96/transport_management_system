@@ -32,6 +32,10 @@
                 <i class="fa-solid fa-plus"></i>
                 <span class="hidden sm:inline">Add Trip</span>
             </a>
+            <a href="{% url 'trip-bulk-create' %}" class="flex items-center space-x-2 px-4 py-2 bg-emerald-600 text-white rounded-md text-sm font-bold hover:bg-emerald-700 shadow-sm transition-colors uppercase tracking-tight">
+                <i class="fa-solid fa-layer-group"></i>
+                <span class="hidden sm:inline">Bulk Add Trips</span>
+            </a>
             {% endif %}
         </div>
     </div>

@@ -7,8 +7,11 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, redirect
 from django.urls import reverse_lazy, reverse
 from django.contrib import messages
-from django.db.models import Q, Sum, F
+from django.db.models import Q, Sum, F, Case, When, Value, DecimalField
+from django.db import models
 from django.utils import timezone
+from django import forms
+from django.forms import modelformset_factory
 from django.http import JsonResponse, HttpResponse
 from datetime import datetime, timedelta
 from decimal import Decimal
@@ -153,6 +156,55 @@ class TripDetailView(LoginRequiredMixin, BaseTripPermissionMixin, DetailView):
     def get_queryset(self):
         """Ensure user has permission to view this trip"""
         return self.get_queryset_for_user().with_payment_info()
+
+
+from django.views.generic import FormView
+
+class TripBulkCreateView(LoginRequiredMixin, PermissionRequiredMixin, FormView):
+    """
+    Bulk create view for multiple trips.
+    """
+    template_name = 'trips/trip_bulk_form.html'
+    permission_required = 'trips.add_trip'
+    success_url = reverse_lazy('trip-list')
+    
+    def get_form_class(self):
+        return modelformset_factory(
+            Trip,
+            form=TripForm,
+            extra=1,
+            can_delete=True
+        )
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['queryset'] = Trip.objects.none()
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        routes = Route.objects.all().values('id', 'default_rate')
+        route_rates = {str(r['id']): float(r['default_rate']) for r in routes}
+        context['route_rates'] = route_rates
+        return context
+
+    def form_valid(self, form):
+        instances = form.save(commit=False)
+        for instance in instances:
+            instance.created_by = self.request.user
+            # Ensure the time portion is set if it's not present (date only)
+            if not instance.date:
+                 instance.date = timezone.now()
+            elif type(instance.date) is datetime.date:
+                 current_time = timezone.now().time()
+                 instance.date = datetime.combine(instance.date, current_time)
+            instance.save()
+        messages.success(self.request, f'{len(instances)} Trips created successfully!')
+        return super().form_valid(form)
+
+    def form_invalid(self, form):
+        messages.error(self.request, "There were errors saving the trips. Please correct the highlighted fields below.")
+        return super().form_invalid(form)
 
 
 class TripCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):

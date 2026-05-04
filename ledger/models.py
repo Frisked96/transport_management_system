@@ -419,9 +419,15 @@ class FinancialRecord(models.Model):
         from django.db import transaction
         with transaction.atomic():
             records = cls.objects.all().order_by('date', 'created_at')
+            records_to_update = []
             for i, record in enumerate(records, start=1):
                 if record.entry_number != i:
-                    cls.objects.filter(pk=record.pk).update(entry_number=i)
+                    record.entry_number = i
+                    records_to_update.append(record)
+            
+            if records_to_update:
+                cls.objects.bulk_update(records_to_update, ['entry_number'])
+                
             # Update Sequence model
             Sequence.objects.filter(key='financial_record_entry_number').update(value=records.count())
 
@@ -827,8 +833,11 @@ class Bill(models.Model):
         
         # Also clean up individual trip accruals for all trips in this bill
         # If a trip is billed, it should not have an individual accrual entry.
-        for trip in self.trips.all():
-            trip.sync_ledger_invoice()
+        # We use a bulk delete for efficiency.
+        FinancialRecord.objects.filter(
+            associated_trip__in=self.trips.all(),
+            record_type=FinancialRecord.RECORD_TYPE_INVOICE
+        ).delete()
 
     def update_ledger_records(self):
         """

@@ -10,7 +10,7 @@ from django.contrib import messages
 from django.db.models import Q, Sum, F, DecimalField, Value, Case, When, OuterRef, Subquery
 from django.db.models.functions import Coalesce
 from django.utils import timezone
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, DecimalException
 from datetime import datetime
 import json
 from django.http import JsonResponse, HttpResponse

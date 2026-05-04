@@ -9,6 +9,7 @@ urlpatterns = [
     path('', views.TripListView.as_view(), name='trip-list'),
     path('trip/<int:pk>/', views.TripDetailView.as_view(), name='trip-detail'),
     path('trip/create/', views.TripCreateView.as_view(), name='trip-create'),
+    path('trip/bulk-create/', views.TripBulkCreateView.as_view(), name='trip-bulk-create'),
     path('trip/<int:pk>/update/', views.TripUpdateView.as_view(), name='trip-update'),
     path('trip/<int:pk>/delete/', views.TripDeleteView.as_view(), name='trip-delete'),
     
