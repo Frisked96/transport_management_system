@@ -57,6 +57,8 @@ class TripForm(forms.ModelForm):
                 }
             ),
             'date': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date'}),
+            'weight': forms.NumberInput(attrs={'step': '0.01', 'inputmode': 'decimal'}),
+            'rate_per_ton': forms.NumberInput(attrs={'step': '0.01', 'inputmode': 'decimal'}),
             'pickup_location': forms.HiddenInput(),
             'delivery_location': forms.HiddenInput(),
         }

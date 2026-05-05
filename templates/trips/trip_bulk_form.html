@@ -26,25 +26,25 @@
             </div>
         {% endif %}
 
-        <div id="formset-container" class="space-y-4">
+        <div id="formset-container" class="space-y-3 md:space-y-4">
             {% for single_form in form %}
-                <div class="form-row bg-white border border-slate-200 rounded-xl shadow-sm relative">
+                <div class="form-row bg-white border border-slate-200 rounded-lg md:rounded-xl shadow-sm relative">
                     {% if single_form.non_field_errors %}
-                        <div class="bg-rose-50 border-b border-rose-200 text-rose-700 p-3 text-sm font-medium rounded-t-xl">
+                        <div class="bg-rose-50 border-b border-rose-200 text-rose-700 p-2 text-xs font-medium rounded-t-lg md:rounded-t-xl">
                             {{ single_form.non_field_errors }}
                         </div>
                     {% endif %}
                     
-                    <div class="p-4">
-                        <div class="flex justify-between items-center mb-3">
-                            <h3 class="text-sm font-bold text-slate-700">Trip <span class="trip-counter">{{ forloop.counter }}</span></h3>
+                    <div class="p-3 md:p-4">
+                        <div class="flex justify-between items-center mb-2 md:mb-3">
+                            <h3 class="text-xs md:text-sm font-bold text-slate-700">Trip <span class="trip-counter">{{ forloop.counter }}</span></h3>
                             <button type="button" class="remove-row-btn text-slate-400 hover:text-rose-600 transition-colors" title="Remove Trip">
-                                <i class="fa-solid fa-xmark text-lg"></i>
+                                <i class="fa-solid fa-xmark text-base md:text-lg"></i>
                             </button>
                         </div>
                         
                         <!-- Main Grid -->
-                        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-12 gap-x-3 gap-y-4">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-12 gap-x-2 md:gap-x-3 gap-y-3 md:gap-y-4">
                             <!-- Hidden inputs like ID and locations -->
                             {% for hidden in single_form.hidden_fields %}
                                 {{ hidden }}
