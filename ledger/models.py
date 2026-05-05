@@ -429,6 +429,16 @@ class FinancialRecord(models.Model):
                     records_to_update.append(record)
             
             if records_to_update:
+                import uuid
+                # Step 1: Temporary unique numbers (Negative to avoid collisions with any existing)
+                original_numbers = {r.pk: r.entry_number for r in records_to_update}
+                for record in records_to_update:
+                    record.entry_number = -record.pk # Use negative PK as temporary unique
+                cls.objects.bulk_update(records_to_update, ['entry_number'])
+
+                # Step 2: Final resequenced numbers
+                for record in records_to_update:
+                    record.entry_number = original_numbers[record.pk]
                 cls.objects.bulk_update(records_to_update, ['entry_number'])
                 
             # Update Sequence model
@@ -1159,7 +1169,13 @@ def update_bill_on_trip_change(sender, instance, **kwargs):
     """
     When a trip is updated, ensure any associated bills are synchronized.
     This updates the consolidated FinancialRecord for the bill.
+    Also syncs the LR number from the Trip to BillTrip context.
     """
+    # 1. Sync LR No to BillTrip context
+    # This ensures the Invoice printout reflects the latest LR No from the trip
+    BillTrip.objects.filter(trip=instance).update(lr_no=instance.lr_no)
+
+    # 2. Sync Bill totals to Ledger
     # Use direct query to find bills containing this trip
     associated_bills = Bill.objects.filter(trips=instance)
     for bill in associated_bills:

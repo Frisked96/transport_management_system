@@ -414,6 +414,11 @@ class Trip(models.Model):
                     suffix = self.trip_number[last_dash_idx+1:]
                     self.trip_number = f"{reg_plate}-{suffix}"
 
+        # Restrict changing Party if Trip is Billed
+        if not is_new and old_instance.party != self.party:
+            if self.is_billed:
+                raise ValidationError(f"Cannot change Party for Trip {self.trip_number} as it is already billed.")
+
         # Perform the actual save
         super().save(*args, **kwargs)
 
@@ -460,7 +465,20 @@ class Trip(models.Model):
                 trips_to_update.append(trip)
         
         if trips_to_update:
-            cls.objects.bulk_update(trips_to_update, ['trip_number'])
+            from django.db import transaction
+            import uuid
+            with transaction.atomic():
+                # Step 1: Set to temporary unique numbers to avoid collisions during bulk update
+                # This is necessary because SQLite checks unique constraints immediately
+                temp_nums = {t.pk: t.trip_number for t in trips_to_update}
+                for trip in trips_to_update:
+                    trip.trip_number = f"TEMP-{uuid.uuid4().hex[:8]}-{trip.pk}"
+                cls.objects.bulk_update(trips_to_update, ['trip_number'])
+                
+                # Step 2: Set to final numbers
+                for trip in trips_to_update:
+                    trip.trip_number = temp_nums[trip.pk]
+                cls.objects.bulk_update(trips_to_update, ['trip_number'])
         
         # Update sequences to match the new state so future trips continue correctly
         Sequence.objects.filter(key=f"trip_total_{vehicle.pk}").update(value=total_count)

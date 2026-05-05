@@ -473,11 +473,13 @@ $(document).ready(function() {
             const prevParty = $(`[name="${prevPrefix}-party"]`).val();
             const prevRoute = $(`[name="${prevPrefix}-route"]`).val();
             const prevVehicle = $(`[name="${prevPrefix}-vehicle"]`).val();
+            const prevRate = $(`[name="${prevPrefix}-rate_per_ton"]`).val();
             
             if (prevDate) $newRow.find(`[name="${newPrefix}-date"]`).val(prevDate);
             if (prevParty) $newRow.find(`[name="${newPrefix}-party"]`).val(prevParty);
             if (prevRoute) $newRow.find(`[name="${newPrefix}-route"]`).val(prevRoute);
             if (prevVehicle) $newRow.find(`[name="${newPrefix}-vehicle"]`).val(prevVehicle);
+            if (prevRate) $newRow.find(`[name="${newPrefix}-rate_per_ton"]`).val(prevRate);
         }
         
         $('#id_form-TOTAL_FORMS').val(totalForms + 1);
