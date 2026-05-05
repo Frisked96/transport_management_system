@@ -73,7 +73,7 @@ class FinancialRecordListView(LoginRequiredMixin, BaseLedgerPermissionMixin, Lis
     model = FinancialRecord
     template_name = 'ledger/financialrecord_list.html'
     context_object_name = 'financial_records'
-    paginate_by = 20
+    paginate_by = 25
     
     def get_queryset(self):
         """Filter financial records based on user permissions"""
@@ -404,7 +404,7 @@ class PartyListView(LoginRequiredMixin, BaseLedgerPermissionMixin, ListView):
     model = Party
     template_name = 'ledger/party_list.html'
     context_object_name = 'parties'
-    paginate_by = 20
+    paginate_by = 25
     
     def get_queryset(self):
         # Drivers have no access
@@ -537,7 +537,7 @@ class CompanyAccountListView(LoginRequiredMixin, BaseLedgerPermissionMixin, List
     model = CompanyAccount
     template_name = 'ledger/account_list.html'
     context_object_name = 'accounts'
-    paginate_by = 20
+    paginate_by = 25
     
     def get_queryset(self):
         # Drivers have no access
@@ -749,7 +749,7 @@ class BillListView(LoginRequiredMixin, BaseLedgerPermissionMixin, ListView):
     model = Bill
     template_name = 'ledger/bill_list.html'
     context_object_name = 'bills'
-    paginate_by = 20
+    paginate_by = 25
     
     def get_queryset(self):
         if self.has_driver_permission():

@@ -23,6 +23,7 @@ class DriverListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
     model = Driver
     template_name = 'drivers/driver_list.html'
     context_object_name = 'drivers'
+    paginate_by = 25
     permission_required = 'drivers.can_view_all_drivers'
 
     def get_queryset(self):

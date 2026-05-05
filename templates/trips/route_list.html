@@ -106,6 +106,34 @@
 {% endif %}
 
 {% if is_paginated %}
-<!-- Pagination logic here if needed -->
+<nav class="mt-8 flex justify-center">
+    <div class="flex space-x-1">
+        {% if page_obj.has_previous %}
+        <a href="?page=1{% if search_term %}&search={{ search_term }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
+            <i class="fa-solid fa-angles-left"></i>
+        </a>
+        <a href="?page={{ page_obj.previous_page_number }}{% if search_term %}&search={{ search_term }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
+            <i class="fa-solid fa-angle-left"></i>
+        </a>
+        {% endif %}
+
+        {% for num in page_obj.paginator.page_range %}
+            {% if page_obj.number == num %}
+            <span class="px-4 py-2 bg-emerald-600 text-white border border-emerald-600 rounded-md text-sm font-medium">{{ num }}</span>
+            {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+            <a href="?page={{ num }}{% if search_term %}&search={{ search_term }}{% endif %}" class="px-4 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">{{ num }}</a>
+            {% endif %}
+        {% endfor %}
+
+        {% if page_obj.has_next %}
+        <a href="?page={{ page_obj.next_page_number }}{% if search_term %}&search={{ search_term }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
+            <i class="fa-solid fa-angle-right"></i>
+        </a>
+        <a href="?page={{ page_obj.paginator.num_pages }}{% if search_term %}&search={{ search_term }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
+            <i class="fa-solid fa-angles-right"></i>
+        </a>
+        {% endif %}
+    </div>
+</nav>
 {% endif %}
 {% endblock %}
