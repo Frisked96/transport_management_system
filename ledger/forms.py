@@ -129,6 +129,7 @@ class FinancialRecordForm(forms.ModelForm):
             'payment_distribution',
             'category',
             'amount',
+            'tds_percentage',
             'description',
             'document_ref'
         ]
@@ -137,6 +138,14 @@ class FinancialRecordForm(forms.ModelForm):
             'date': forms.DateInput(
                 attrs={
                     'type': 'date'
+                }
+            ),
+            'tds_percentage': forms.NumberInput(
+                attrs={
+                    'step': '0.01',
+                    'min': '0',
+                    'max': '100',
+                    'placeholder': 'TDS %'
                 }
             ),
             'description': forms.Textarea(

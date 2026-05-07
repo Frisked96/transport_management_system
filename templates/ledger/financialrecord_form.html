@@ -128,6 +128,8 @@
         const categorySelect = document.getElementById('id_category');
         
         const associatedBillWrapper = document.getElementById('wrapper_id_associated_bill');
+        const tdsPercentageInput = document.getElementById('id_tds_percentage');
+        const associatedBillSelect = document.getElementById('id_associated_bill');
         
         const multiTripArea = document.getElementById('multi-trip-area');
         const unpaidTripsList = document.getElementById('unpaid-trips-list');
@@ -140,6 +142,38 @@
         let selectedTripIds = []; // Store IDs in order
 
         const recordTypeSelect = document.getElementById('id_record_type');
+
+        // --- Local Cache & Select2 Initialization ---
+        function initFormSearch() {
+            const cachedData = getCachedData();
+            
+            // 1. Populate Party from cache if empty
+            if (partySelect && cachedData.parties && partySelect.options.length <= 1) {
+                const currentValue = partySelect.value;
+                // Keep the empty option
+                partySelect.innerHTML = '<option value="">---------</option>';
+                cachedData.parties.forEach(p => {
+                    const option = new Option(p.name, p.id);
+                    if (p.id == currentValue) option.selected = true;
+                    partySelect.add(option);
+                });
+            }
+
+            // 2. Initialize Select2 for better searchability
+            $(partySelect).select2({ theme: 'bootstrap-5', width: '100%', placeholder: 'Search Party...' });
+            $(associatedBillSelect).select2({ theme: 'bootstrap-5', width: '100%', placeholder: 'Search Bill...' });
+            $('#id_associated_trip').select2({ theme: 'bootstrap-5', width: '100%', placeholder: 'Search Trip...' });
+            $('#id_account').select2({ theme: 'bootstrap-5', width: '100%' });
+            $('#id_category').select2({ theme: 'bootstrap-5', width: '100%' });
+            $('#id_driver').select2({ theme: 'bootstrap-5', width: '100%', placeholder: 'Search Driver...' });
+
+            // Ensure Select2 changes trigger our standard listeners
+            $(partySelect).on('change', function() { partySelect.dispatchEvent(new Event('change')); });
+            $(categorySelect).on('change', function() { categorySelect.dispatchEvent(new Event('change')); });
+            $(associatedBillSelect).on('change', function() { associatedBillSelect.dispatchEvent(new Event('change')); });
+        }
+
+        initFormSearch();
 
         // State Management
         function updateUIState() {
@@ -154,6 +188,8 @@
             const isTripPayment = categoryName.includes('Trip Payment');
             const isInvoicePayment = categoryName.includes('Invoice Payment');
             const isDeduction = categoryName.includes('Deductions');
+            const isTDS = categoryName.includes('TDS');
+            const isShortage = categoryName.includes('Shortage');
 
             // Handle General Type (Simplified view but keeps Party/Account)
             const isGeneral = recordType === 'General';
@@ -163,6 +199,7 @@
                 if (driverFieldWrapper) driverFieldWrapper.classList.add('hidden');
                 if (associatedTripWrapper) associatedTripWrapper.classList.add('hidden');
                 if (associatedBillWrapper) associatedBillWrapper.classList.add('hidden');
+                if (document.getElementById('wrapper_id_tds_percentage')) document.getElementById('wrapper_id_tds_percentage').classList.add('hidden');
                 multiTripArea.classList.add('hidden');
                 return; 
             } else {
@@ -196,9 +233,9 @@
                 }
             }
 
-            // 3. Handle Associated Bill (Show for Invoice Payment or Deductions)
+            // 3. Handle Associated Bill (Show for Invoice Payment, Deductions, TDS, or Shortage)
             if (associatedBillWrapper) {
-                if (isInvoicePayment || isDeduction) {
+                if (isInvoicePayment || isDeduction || isTDS || isShortage) {
                     associatedBillWrapper.classList.remove('hidden');
                 } else {
                     associatedBillWrapper.classList.add('hidden');
@@ -210,6 +247,48 @@
                 if (hasParty) driverFieldWrapper.classList.add('hidden');
                 else driverFieldWrapper.classList.remove('hidden');
             }
+
+            // 5. Handle TDS % Field
+            const tdsPercentageWrapper = document.getElementById('wrapper_id_tds_percentage');
+            if (tdsPercentageWrapper) {
+                if (isTDS) {
+                    tdsPercentageWrapper.classList.remove('hidden');
+                } else {
+                    tdsPercentageWrapper.classList.add('hidden');
+                }
+            }
+        }
+
+        function calculateTDS() {
+            if (!associatedBillSelect || !tdsPercentageInput) return;
+            
+            const billId = associatedBillSelect.value;
+            const percentage = parseFloat(tdsPercentageInput.value);
+            
+            if (billId && !isNaN(percentage)) {
+                fetch(`{% url 'get-bill-balance' %}?bill_id=${billId}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.subtotal) {
+                            const tdsAmount = (data.subtotal * percentage / 100).toFixed(2);
+                            amountInput.value = tdsAmount;
+                        }
+                    })
+                    .catch(error => console.error('Error fetching bill subtotal:', error));
+            }
+        }
+
+        if (tdsPercentageInput) {
+            tdsPercentageInput.addEventListener('input', calculateTDS);
+        }
+        
+        if (associatedBillSelect) {
+            associatedBillSelect.addEventListener('change', function() {
+                const categoryName = categorySelect.options[categorySelect.selectedIndex].text;
+                if (categoryName.includes('TDS')) {
+                    calculateTDS();
+                }
+            });
         }
 
         // Fetch Trips
@@ -217,7 +296,10 @@
             if (!partyId) {
                 if (associatedTripWrapper) {
                     const select = document.getElementById('id_associated_trip');
-                    if (select) select.innerHTML = '<option value="">---------</option>';
+                    if (select) {
+                        select.innerHTML = '<option value="">---------</option>';
+                        $(select).trigger('change');
+                    }
                 }
                 return;
             }
@@ -242,6 +324,7 @@
                                 if (trip.id == currentValue) option.selected = true;
                                 select.appendChild(option);
                             });
+                            $(select).trigger('change');
                         }
                     }
                     
@@ -261,11 +344,13 @@
 
             if (!partyId) {
                 billSelect.innerHTML = '<option value="">---------</option>';
+                $(billSelect).trigger('change');
                 return;
             }
 
             const currentBillId = billSelect.value;
             billSelect.innerHTML = '<option value="">Loading...</option>';
+            $(billSelect).trigger('change');
 
             fetch(`{% url 'get-party-bills' %}?party_id=${partyId}&unpaid_only=true`)
                 .then(response => response.json())
@@ -280,10 +365,12 @@
                             billSelect.appendChild(option);
                         });
                     }
+                    $(billSelect).trigger('change');
                 })
                 .catch(error => {
                     console.error('Error fetching bills:', error);
                     billSelect.innerHTML = '<option value="">Error loading bills</option>';
+                    $(billSelect).trigger('change');
                 });
         }
 
@@ -429,23 +516,35 @@
         }
         
         if (categorySelect) {
-            categorySelect.addEventListener('change', updateUIState);
+            categorySelect.addEventListener('change', function() {
+                updateUIState();
+                
+                // If switched to TDS, trigger calculation if possible
+                const categoryName = categorySelect.options[categorySelect.selectedIndex].text;
+                if (categoryName.includes('TDS')) {
+                    calculateTDS();
+                }
+            });
         }
 
         // Auto-fill amount from Bill balance
-        const billSelect = document.getElementById('id_associated_bill');
         if (billSelect) {
             billSelect.addEventListener('change', function() {
                 if (this.value) {
-                    fetch(`{% url 'get-bill-balance' %}?bill_id=${this.value}`)
-                        .then(response => response.json())
-                        .then(data => {
-                            if (data.balance !== undefined && amountInput) {
-                                amountInput.value = data.balance.toFixed(2);
-                                // Trigger distribution refresh if multi-trip was somehow active
-                                renderSelectedTrips();
-                            }
-                        });
+                    const categoryName = categorySelect.options[categorySelect.selectedIndex].text;
+                    if (categoryName.includes('TDS')) {
+                        calculateTDS();
+                    } else {
+                        fetch(`{% url 'get-bill-balance' %}?bill_id=${this.value}`)
+                            .then(response => response.json())
+                            .then(data => {
+                                if (data.balance !== undefined && amountInput) {
+                                    amountInput.value = data.balance.toFixed(2);
+                                    // Trigger distribution refresh if multi-trip was somehow active
+                                    renderSelectedTrips();
+                                }
+                            });
+                    }
                 }
             });
         }

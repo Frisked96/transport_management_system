@@ -696,7 +696,8 @@ def get_bill_balance(request):
         return JsonResponse({
             'balance': float(bill.outstanding_balance),
             'total': float(bill.rounded_total),
-            'received': float(bill.amount_received)
+            'received': float(bill.amount_received),
+            'subtotal': float(bill.subtotal),
         })
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)

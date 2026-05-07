@@ -405,6 +405,13 @@ class FinancialRecord(models.Model):
         blank=True,
         verbose_name='Supporting Document'
     )
+    tds_percentage = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name='TDS %'
+    )
     recorded_by = models.ForeignKey(
         User,
         on_delete=models.SET_NULL,
@@ -540,7 +547,7 @@ class FinancialRecord(models.Model):
 
     @property
     def is_deduction(self):
-        return self.category.name == 'Deductions' if self.category else False
+        return self.category.name in ['Deductions', 'TDS', 'Shortage'] if self.category else False
 
     @property
     def debit_amount(self):
@@ -561,7 +568,7 @@ class FinancialRecord(models.Model):
                 self.associated_bill.category.name == 'Debit Note'
             )
             is_payment_out = self.category.name == 'Payment Out' if self.category else False
-            is_deduction = self.category.name == 'Deductions' if self.category else False
+            is_deduction = self.is_deduction
 
             if self.party.party_type == Party.TYPE_DEBTOR:
                 # Debtors: Invoices are usually Debits (+). Credit Notes are Credits (-).
@@ -604,7 +611,7 @@ class FinancialRecord(models.Model):
                 self.associated_bill.category.name == 'Debit Note'
             )
             is_payment_out = self.category.name == 'Payment Out' if self.category else False
-            is_deduction = self.category.name == 'Deductions' if self.category else False
+            is_deduction = self.is_deduction
 
             if self.party.party_type == Party.TYPE_DEBTOR:
                 # Debtors: Payments/Income/Credit Notes are Credits (-).
@@ -677,7 +684,7 @@ class BillQuerySet(models.QuerySet):
             record_type=FinancialRecord.RECORD_TYPE_INVOICE
         ).filter(
             models.Q(category__type=TransactionCategory.TYPE_INCOME) | 
-            models.Q(category__name='Deductions')
+            models.Q(category__name__in=['Deductions', 'TDS', 'Shortage'])
         ).values('associated_bill').annotate(
             total=Sum('amount')
         ).values('total')
@@ -691,7 +698,7 @@ class BillQuerySet(models.QuerySet):
             models.Q(associated_bill=OuterRef('pk'))
         ).filter(
             models.Q(category__type=TransactionCategory.TYPE_INCOME) | 
-            models.Q(category__name='Deductions')
+            models.Q(category__name__in=['Deductions', 'TDS', 'Shortage'])
         ).values('associated_trip__bills').annotate(
             total=Sum('amount')
         ).values('total')
@@ -1001,7 +1008,7 @@ class Bill(models.Model):
             record_type=FinancialRecord.RECORD_TYPE_INVOICE
         ).filter(
             models.Q(category__type=TransactionCategory.TYPE_INCOME) | 
-            models.Q(category__name="Deductions")
+            models.Q(category__name__in=["Deductions", "TDS", "Shortage"])
         ).aggregate(total=Sum('amount'))['total'] or 0
 
         # 2. Trip-based allocations
@@ -1021,7 +1028,7 @@ class Bill(models.Model):
                 models.Q(associated_bill=self)
             ).filter(
                 models.Q(category__type=TransactionCategory.TYPE_INCOME) | 
-                models.Q(category__name="Deductions")
+                models.Q(category__name__in=["Deductions", "TDS", "Shortage"])
             ).aggregate(total=Sum('amount'))['total'] or 0
             
             trip_payments += direct_trip_payments
