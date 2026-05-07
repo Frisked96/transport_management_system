@@ -237,7 +237,11 @@
                                 </td>
                                 <td class="px-6 py-3 text-sm font-black text-slate-900 text-right">₹{{ bill.rounded_total|indian_comma }}</td>
                                 <td class="px-6 py-3 text-sm font-black text-right {% if bill.outstanding_balance > 0 %}text-rose-600{% else %}text-emerald-600{% endif %}">
+                                    {% if bill.is_adjustment %}
+                                    <span class="text-[10px] text-slate-400 font-bold uppercase italic">Applied</span>
+                                    {% else %}
                                     ₹{{ bill.outstanding_balance|indian_comma }}
+                                    {% endif %}
                                 </td>
                                 <td class="px-6 py-3 text-right">
                                     <div class="flex items-center justify-end space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -277,7 +281,11 @@
                                 <td class="px-6 py-3 text-xs font-bold text-slate-500">{{ record.date|date:"d/m/y" }}</td>
                                 <td class="px-6 py-3">
                                     {% if record.is_invoice %}
-                                    <span class="inline-flex px-2 py-0.5 rounded text-[9px] font-black uppercase bg-blue-100 text-blue-700">Invoice</span>
+                                        {% if record.associated_bill.is_adjustment %}
+                                        <span class="inline-flex px-2 py-0.5 rounded text-[9px] font-black uppercase {% if record.associated_bill.category.name == 'Credit Note' %}bg-purple-100 text-purple-700{% else %}bg-blue-100 text-blue-700{% endif %}">{{ record.associated_bill.category.name }}</span>
+                                        {% else %}
+                                        <span class="inline-flex px-2 py-0.5 rounded text-[9px] font-black uppercase bg-blue-100 text-blue-700">Invoice</span>
+                                        {% endif %}
                                     {% else %}
                                     <span class="inline-flex px-2 py-0.5 rounded text-[9px] font-black uppercase bg-slate-100 text-slate-700">{{ record.category.name }}</span>
                                     {% endif %}

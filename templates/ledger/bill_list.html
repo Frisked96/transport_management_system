@@ -68,8 +68,8 @@
     {% for bill in bills %}
     <!-- Bill Card -->
     <div class="bg-white border border-slate-200 rounded-lg p-4 md:p-5 flex flex-col md:flex-row items-start md:items-center gap-4 hover:shadow-sm transition-shadow">
-        <!-- Main Info -->
-        <div class="flex-1 min-w-[150px] w-full md:w-auto border-b md:border-b-0 pb-3 md:pb-0">
+        <!-- Invoice Identification -->
+        <div class="w-full md:w-44 border-b md:border-b-0 pb-3 md:pb-0">
             <div class="flex justify-between items-start">
                 <div>
                     <h3 class="font-bold text-lg text-slate-900 leading-tight">
@@ -77,32 +77,67 @@
                     </h3>
                     <p class="text-xs text-slate-500 mt-1">{{ bill.date|date:"M d, Y" }}</p>
                 </div>
-                <!-- Status Badge (Optional) -->
+                <!-- Status Badge (Mobile Only) -->
                 <div class="md:hidden">
+                    {% if bill.is_adjustment %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-tighter bg-indigo-100 text-indigo-800">
+                        Applied
+                    </span>
+                    {% else %}
                     <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-tighter {% if bill.outstanding_balance > 0 %}bg-amber-100 text-amber-800{% else %}bg-emerald-100 text-emerald-800{% endif %}">
                         {% if bill.outstanding_balance > 0 %}Pending{% else %}Paid{% endif %}
                     </span>
+                    {% endif %}
                 </div>
             </div>
+            <!-- Type Badge -->
+            <div class="mt-2">
+                {% if bill.category.name == 'Credit Note' %}
+                <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-tight bg-purple-50 text-purple-700 border border-purple-200">
+                    <i class="fa-solid fa-file-invoice-dollar mr-1"></i> Credit Note
+                </span>
+                {% elif bill.category.name == 'Debit Note' %}
+                <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-tight bg-blue-50 text-blue-700 border border-blue-200">
+                    <i class="fa-solid fa-file-invoice-dollar mr-1"></i> Debit Note
+                </span>
+                {% else %}
+                <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-tight bg-slate-50 text-slate-700 border border-slate-200">
+                    <i class="fa-solid fa-file-invoice mr-1"></i> Invoice
+                </span>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Issuer (Prominent) -->
+        <div class="flex-1 min-w-[150px] w-full md:w-auto">
+            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Issued From</span>
             {% if bill.issuer %}
-            <p class="text-[10px] text-slate-400 mt-1 uppercase font-bold tracking-tighter">
-                From: <a href="{% url 'account-detail' bill.issuer.pk %}" class="hover:text-emerald-600 transition-colors">{{ bill.issuer.name }}</a>
-            </p>
+            <a href="{% url 'account-detail' bill.issuer.pk %}" class="text-sm text-slate-700 font-bold hover:text-emerald-600 block leading-snug">
+                {{ bill.issuer.name }}
+            </a>
+            {% if bill.issuer.gstin %}
+            <p class="text-[10px] text-slate-400 font-medium">GSTIN: {{ bill.issuer.gstin }}</p>
+            {% endif %}
+            {% else %}
+            <span class="text-sm text-slate-400 italic">Not Assigned</span>
             {% endif %}
         </div>
         
         <!-- Party -->
-        <div class="flex-1 min-w-[200px] w-full md:w-auto">
+        <div class="flex-1 min-w-[150px] w-full md:w-auto">
             <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Bill To</span>
-            <a href="{% url 'party-detail' bill.party.pk %}" class="text-sm text-slate-700 font-bold hover:text-emerald-600">
+            <a href="{% url 'party-detail' bill.party.pk %}" class="text-sm text-slate-700 font-bold hover:text-emerald-600 block leading-snug">
                 {{ bill.party.name }}
             </a>
+            {% if bill.party.gstin %}
+            <p class="text-[10px] text-slate-400 font-medium">GSTIN: {{ bill.party.gstin }}</p>
+            {% endif %}
         </div>
         
         <!-- Stats Grid for Mobile -->
-        <div class="grid grid-cols-3 md:flex md:items-center gap-4 w-full md:w-auto">
+        <div class="grid grid-cols-3 md:flex md:items-center gap-4 w-full md:w-auto border-t md:border-t-0 pt-3 md:pt-0">
             <!-- Trips -->
-            <div class="md:w-20 md:text-center">
+            <div class="md:w-16 md:text-center">
                 <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Trips</span>
                 <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-700">
                     {{ bill.trips.count }}
@@ -117,10 +152,15 @@
 
             <!-- Outstanding -->
             <div class="md:w-32 md:text-right">
+                {% if bill.is_adjustment %}
+                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Adjustment</span>
+                <p class="text-sm font-bold text-slate-500 italic">Applied</p>
+                {% else %}
                 <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Outstanding</span>
                 <p class="text-sm font-bold {% if bill.outstanding_balance > 0 %}text-red-600{% else %}text-emerald-600{% endif %}">
                     ₹{{ bill.outstanding_balance|indian_comma }}
                 </p>
+                {% endif %}
             </div>
         </div>
         

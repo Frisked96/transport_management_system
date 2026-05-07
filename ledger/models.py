@@ -984,6 +984,11 @@ class Bill(models.Model):
             inv_record.save()
 
     @property
+    def is_adjustment(self):
+        """Returns True if the bill is a Credit Note or Debit Note adjustment."""
+        return self.category and self.category.name in ['Credit Note', 'Debit Note']
+
+    @property
     def amount_received(self):
         """
         Calculate total received for this bill.

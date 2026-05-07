@@ -60,9 +60,11 @@ htmlcov/
 .dmypy.json
 dmypy.json
 tms-storage-491804-bb8c3c501b26.json
+trips/management/commands/seed_data.py
 
 # Django migrations
 #!**/migrations/*.py
 !**/migrations/__init__.py
 .djcache
 /.djcache
+
