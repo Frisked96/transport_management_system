@@ -22,19 +22,22 @@
         </div>
 
         <div class="flex items-center gap-2">
+            {% if perms.ledger.add_bill %}
+            <a href="{% url 'bill-create' %}" class="flex items-center space-x-2 px-4 py-2 bg-emerald-600 text-white rounded-md text-sm font-bold hover:bg-emerald-700 shadow-sm transition-colors uppercase tracking-tight">
+                <i class="fa-solid fa-file-invoice"></i>
+                <span class="hidden sm:inline">Create Invoice</span>
+            </a>
+            {% endif %}
+
             <a href="{% url 'trip-export-excel' %}" class="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-bold hover:bg-blue-700 shadow-sm transition-colors uppercase tracking-tight">
                 <i class="fa-solid fa-file-excel"></i>
                 <span class="hidden sm:inline">Export</span>
             </a>
 
             {% if perms.trips.add_trip %}
-            <a href="{% url 'trip-create' %}" class="flex items-center space-x-2 px-4 py-2 bg-emerald-600 text-white rounded-md text-sm font-bold hover:bg-emerald-700 shadow-sm transition-colors uppercase tracking-tight">
+            <a href="{% url 'trip-create' %}" class="flex items-center space-x-2 px-4 py-2 bg-slate-800 text-white rounded-md text-sm font-bold hover:bg-slate-900 shadow-sm transition-colors uppercase tracking-tight">
                 <i class="fa-solid fa-plus"></i>
                 <span class="hidden sm:inline">Add Trip</span>
-            </a>
-            <a href="{% url 'trip-bulk-create' %}" class="flex items-center space-x-2 px-4 py-2 bg-emerald-600 text-white rounded-md text-sm font-bold hover:bg-emerald-700 shadow-sm transition-colors uppercase tracking-tight">
-                <i class="fa-solid fa-layer-group"></i>
-                <span class="hidden sm:inline">Bulk Add Trips</span>
             </a>
             {% endif %}
         </div>
@@ -44,10 +47,10 @@
 
 <!-- BEGIN: Search & Filter Bar -->
 <section class="bg-slate-100 p-4 rounded-xl border border-slate-200 mb-6">
-    <form method="get">
+    <form method="get" id="filter-form">
         <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
             <!-- Search -->
-            <div class="md:col-span-4 flex flex-col">
+            <div class="md:col-span-3 flex flex-col">
                 <label for="search" class="text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-widest">Search</label>
                 <div class="relative">
                     <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -57,43 +60,58 @@
                            value="{{ search_term }}" placeholder="Trip #, Vehicle, Party...">
                 </div>
             </div>
+
+            <!-- Party Filter -->
+            <div class="md:col-span-3 flex flex-col">
+                <label for="party" class="text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-widest">Filter by Party</label>
+                <select id="party" name="party" class="block w-full select2-party">
+                    <option value="">All Parties</option>
+                </select>
+            </div>
             
-            <!-- Date Range -->
+            <!-- Date Range & Quick Filters -->
             <div class="md:col-span-4 flex flex-col">
-                <label class="text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-widest">Date Range</label>
+                <div class="flex justify-between items-center mb-1.5">
+                    <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Date Range</label>
+                    <div class="flex gap-2">
+                        <a href="?date_filter=today{% if current_party %}&party={{ current_party }}{% endif %}" class="text-[9px] font-black uppercase {% if date_filter == 'today' %}text-emerald-600{% else %}text-slate-400 hover:text-slate-600{% endif %}">Today</a>
+                        <a href="?date_filter=yesterday{% if current_party %}&party={{ current_party }}{% endif %}" class="text-[9px] font-black uppercase {% if date_filter == 'yesterday' %}text-emerald-600{% else %}text-slate-400 hover:text-slate-600{% endif %}">Yesterday</a>
+                        <a href="?date_filter=last_7_days{% if current_party %}&party={{ current_party }}{% endif %}" class="text-[9px] font-black uppercase {% if date_filter == 'last_7_days' %}text-emerald-600{% else %}text-slate-400 hover:text-slate-600{% endif %}">7 Days</a>
+                    </div>
+                </div>
                 <div class="flex space-x-2">
                     <input type="date" name="start_date" class="block w-full px-2 py-2 border border-slate-300 rounded-md text-xs focus:ring-emerald-500 focus:border-emerald-500 bg-white" value="{{ start_date }}">
                     <input type="date" name="end_date" class="block w-full px-2 py-2 border border-slate-300 rounded-md text-xs focus:ring-emerald-500 focus:border-emerald-500 bg-white" value="{{ end_date }}">
                 </div>
             </div>
 
-            <!-- Status -->
-            <div class="md:col-span-2 flex flex-col">
-                <label for="status" class="text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-widest">Status</label>
-                <select id="status" name="status" class="block w-full pl-3 pr-8 py-2 border border-slate-300 rounded-md text-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white">
-                    <option value="">All Status</option>
-                    {% for value, label in status_choices %}
-                    <option value="{{ value }}" {% if current_status == value %}selected{% endif %}>{{ label }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            
             <!-- Sort By -->
             <div class="md:col-span-2 flex flex-col">
-                <label for="sort" class="text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-widest">Sort</label>
-                <div class="flex space-x-2">
-                    <select id="sort" name="sort" class="block w-full pl-3 pr-8 py-2 border border-slate-300 rounded-md text-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white flex-grow">
-                        <option value="-date" {% if current_sort == '-date' %}selected{% endif %}>Newest</option>
-                        <option value="date" {% if current_sort == 'date' %}selected{% endif %}>Oldest</option>
-                        <option value="-weight" {% if current_sort == '-weight' %}selected{% endif %}>Weight</option>
-                        <option value="-revenue" {% if current_sort == '-revenue' %}selected{% endif %}>Revenue</option>
+                <label for="sort" class="text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-widest">Status & Sort</label>
+                <div class="flex flex-col gap-2">
+                    <select id="status" name="status" class="block w-full pl-3 pr-8 py-1.5 border border-slate-300 rounded-md text-[10px] font-bold uppercase focus:ring-emerald-500 focus:border-emerald-500 bg-white">
+                        <option value="">Status: All</option>
+                        {% for value, label in status_choices %}
+                        <option value="{{ value }}" {% if current_status == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
                     </select>
-                    <button type="submit" class="bg-slate-800 text-white px-3 py-2 rounded-md hover:bg-slate-900 transition-colors">
-                        <i class="fa-solid fa-check"></i>
-                    </button>
+                    <div class="flex gap-2">
+                        <select id="sort" name="sort" class="block w-full pl-3 pr-8 py-1.5 border border-slate-300 rounded-md text-[10px] font-bold uppercase focus:ring-emerald-500 focus:border-emerald-500 bg-white flex-grow">
+                            <option value="-date" {% if current_sort == '-date' %}selected{% endif %}>Newest</option>
+                            <option value="date" {% if current_sort == 'date' %}selected{% endif %}>Oldest</option>
+                            <option value="-weight" {% if current_sort == '-weight' %}selected{% endif %}>Weight</option>
+                            <option value="-revenue" {% if current_sort == '-revenue' %}selected{% endif %}>Revenue</option>
+                        </select>
+                        <button type="submit" class="bg-slate-800 text-white px-2 py-1 rounded-md hover:bg-slate-900 transition-colors">
+                            <i class="fa-solid fa-check text-xs"></i>
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
+        {% if date_filter %}
+        <input type="hidden" name="date_filter" value="{{ date_filter }}">
+        {% endif %}
     </form>
 </section>
 <!-- END: Search & Filter Bar -->
@@ -268,10 +286,10 @@
 <nav class="mt-8 flex justify-center overflow-x-auto pb-4">
     <div class="flex space-x-1">
         {% if page_obj.has_previous %}
-        <a href="?page=1{% if search_term %}&search={{ search_term }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if current_sort %}&sort={{ current_sort }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-xs text-slate-600 hover:bg-slate-50">
+        <a href="?page=1{% if search_term %}&search={{ search_term }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if current_sort %}&sort={{ current_sort }}{% endif %}{% if current_party %}&party={{ current_party }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-xs text-slate-600 hover:bg-slate-50">
             <i class="fa-solid fa-angles-left"></i>
         </a>
-        <a href="?page={{ page_obj.previous_page_number }}{% if search_term %}&search={{ search_term }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if current_sort %}&sort={{ current_sort }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-xs text-slate-600 hover:bg-slate-50">
+        <a href="?page={{ page_obj.previous_page_number }}{% if search_term %}&search={{ search_term }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if current_sort %}&sort={{ current_sort }}{% endif %}{% if current_party %}&party={{ current_party }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-xs text-slate-600 hover:bg-slate-50">
             <i class="fa-solid fa-angle-left"></i>
         </a>
         {% endif %}
@@ -280,12 +298,12 @@
             {% if page_obj.number == num %}
             <span class="px-4 py-2 bg-emerald-600 text-white border border-emerald-600 rounded-md text-xs font-bold">{{ num }}</span>
             {% elif num > page_obj.number|add:'-2' and num < page_obj.number|add:'2' %}
-            <a href="?page={{ num }}{% if search_term %}&search={{ search_term }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if current_sort %}&sort={{ current_sort }}{% endif %}" class="px-4 py-2 bg-white border border-slate-200 rounded-md text-xs text-slate-600 hover:bg-slate-50">{{ num }}</a>
+            <a href="?page={{ num }}{% if search_term %}&search={{ search_term }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if current_sort %}&sort={{ current_sort }}{% endif %}{% if current_party %}&party={{ current_party }}{% endif %}" class="px-4 py-2 bg-white border border-slate-200 rounded-md text-xs text-slate-600 hover:bg-slate-50">{{ num }}</a>
             {% endif %}
         {% endfor %}
 
         {% if page_obj.has_next %}
-        <a href="?page={{ page_obj.next_page_number }}{% if search_term %}&search={{ search_term }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if current_sort %}&sort={{ current_sort }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-xs text-slate-600 hover:bg-slate-50">
+        <a href="?page={{ page_obj.next_page_number }}{% if search_term %}&search={{ search_term }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if current_sort %}&sort={{ current_sort }}{% endif %}{% if current_party %}&party={{ current_party }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-xs text-slate-600 hover:bg-slate-50">
             <i class="fa-solid fa-angle-right"></i>
         </a>
         {% endif %}
@@ -340,6 +358,54 @@
         // Load preference
         const savedView = localStorage.getItem('tripViewPreference') || 'list';
         setView(savedView);
+
+        // --- Cache-based Party Population ---
+        const $partySelect = $('.select2-party');
+        const currentPartyId = "{{ current_party }}";
+
+        function populatePartyFilter(data) {
+            const parties = data.parties || [];
+            // Clear existing options except the first one (All Parties)
+            $partySelect.find('option:not([value=""])').remove();
+            
+            parties.forEach(p => {
+                const isSelected = p.id.toString() === currentPartyId;
+                const option = new Option(p.name, p.id, isSelected, isSelected);
+                $partySelect.append(option);
+            });
+            
+            // Re-initialize Select2 or update it
+            $partySelect.trigger('change.select2');
+        }
+
+        // Initial population from existing cache
+        const initialData = JSON.parse(localStorage.getItem('tms_reference_data') || '{}');
+        if (initialData.parties) {
+            populatePartyFilter(initialData);
+        }
+
+        // Listen for global sync events (defined in base.html)
+        $(document).on('tms:data-synced', function(e, data) {
+            populatePartyFilter(data);
+        });
+
+        // Initialize Select2 for Party filter
+        $partySelect.select2({
+            theme: 'bootstrap-5',
+            placeholder: 'All Parties',
+            allowClear: true,
+            width: '100%'
+        }).on('select2:select', function (e) {
+            $('#filter-form').submit();
+        }).on('select2:unselect', function (e) {
+            $(this).val('').trigger('change');
+            $('#filter-form').submit();
+        });
+
+        // Submit form on status/sort change
+        $('#status, #sort').on('change', function() {
+            $('#filter-form').submit();
+        });
     });
 </script>
 {% endblock %}

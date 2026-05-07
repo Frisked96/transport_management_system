@@ -119,11 +119,26 @@ class TripListView(LoginRequiredMixin, BaseTripPermissionMixin, ListView):
                 Q(vehicle__registration_plate__icontains=search)
             ).distinct()
         
+        # Party filter
+        party_id = self.request.GET.get('party')
+        if party_id:
+            queryset = queryset.filter(party_id=party_id)
+
         # Status filter (payment-based)
         status = self.request.GET.get('status')
         if status:
             queryset = queryset.filter(annotated_status=status)
             
+        # Quick Date filter
+        date_filter = self.request.GET.get('date_filter')
+        today = timezone.now().date()
+        if date_filter == 'today':
+            queryset = queryset.filter(date__date=today)
+        elif date_filter == 'yesterday':
+            queryset = queryset.filter(date__date=today - timedelta(days=1))
+        elif date_filter == 'last_7_days':
+            queryset = queryset.filter(date__date__gte=today - timedelta(days=7))
+
         # Date range filtering
         start_date = self.request.GET.get('start_date')
         end_date = self.request.GET.get('end_date')
@@ -166,6 +181,8 @@ class TripListView(LoginRequiredMixin, BaseTripPermissionMixin, ListView):
         context['start_date'] = self.request.GET.get('start_date', '')
         context['end_date'] = self.request.GET.get('end_date', '')
         context['current_sort'] = self.request.GET.get('sort', '-date')
+        context['current_party'] = self.request.GET.get('party', '')
+        context['date_filter'] = self.request.GET.get('date_filter', '')
         
         # Summary for the filtered queryset
         queryset = self.get_queryset()
