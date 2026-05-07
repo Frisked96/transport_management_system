@@ -229,7 +229,24 @@
                             {% for bill in bills %}
                             <tr class="hover:bg-slate-50/80 transition-colors">
                                 <td class="px-6 py-3">
-                                    <a href="{% url 'bill-detail' bill.pk %}" class="text-sm font-black text-slate-900 hover:text-emerald-600 block">{{ bill.bill_number|default:"Draft" }}</a>
+                                    <div class="flex flex-col">
+                                        <a href="{% url 'bill-detail' bill.pk %}" class="text-sm font-black text-slate-900 hover:text-emerald-600 block leading-tight">{{ bill.bill_number|default:"Draft" }}</a>
+                                        <div class="mt-1">
+                                            {% if bill.category.name == 'Credit Note' %}
+                                            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-tighter bg-purple-50 text-purple-700 border border-purple-100">
+                                                CN
+                                            </span>
+                                            {% elif bill.category.name == 'Debit Note' %}
+                                            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-tighter bg-blue-50 text-blue-700 border border-blue-100">
+                                                DN
+                                            </span>
+                                            {% else %}
+                                            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-tighter bg-slate-50 text-slate-600 border border-slate-100">
+                                                INV
+                                            </span>
+                                            {% endif %}
+                                        </div>
+                                    </div>
                                 </td>
                                 <td class="px-6 py-3 text-xs font-bold text-slate-500">{{ bill.date|date:"d M Y" }}</td>
                                 <td class="px-6 py-3 text-center">
@@ -334,6 +351,26 @@
                         </tbody>
                     </table>
                 </div>
+
+                <!-- LEDGER PAGINATION -->
+                {% if financial_records.has_other_pages %}
+                <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                        Showing {{ financial_records.start_index }} to {{ financial_records.end_index }} of {{ financial_records.paginator.count }} Records
+                    </p>
+                    <div class="flex items-center gap-1">
+                        {% if financial_records.has_previous %}
+                        <a href="?ledger_page={{ financial_records.previous_page_number }}&tab=ledger" class="px-3 py-1 border border-slate-200 bg-white text-slate-600 rounded-md text-[10px] font-black hover:bg-slate-50 transition-colors uppercase">Previous</a>
+                        {% endif %}
+                        
+                        <span class="px-3 py-1 bg-emerald-600 text-white rounded-md text-[10px] font-black uppercase">{{ financial_records.number }} / {{ financial_records.paginator.num_pages }}</span>
+                        
+                        {% if financial_records.has_next %}
+                        <a href="?ledger_page={{ financial_records.next_page_number }}&tab=ledger" class="px-3 py-1 border border-slate-200 bg-white text-slate-600 rounded-md text-[10px] font-black hover:bg-slate-50 transition-colors uppercase">Next</a>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
             </div>
 
             <!-- PROFILE TAB -->
@@ -393,19 +430,41 @@ function switchTab(tabId) {
     
     document.getElementById('content-' + tabId).classList.remove('hidden');
     const activeBtn = document.getElementById('tab-' + tabId);
-    activeBtn.classList.add('border-emerald-600', 'text-emerald-700');
-    activeBtn.classList.remove('border-transparent', 'text-slate-400');
+    if (activeBtn) {
+        activeBtn.classList.add('border-emerald-600', 'text-emerald-700');
+        activeBtn.classList.remove('border-transparent', 'text-slate-400');
+    }
 
     // Show/Hide statement generator based on tab
     const statementAction = document.getElementById('statement-action');
-    if (tabId === 'ledger') {
-        statementAction.classList.remove('hidden');
-    } else {
-        statementAction.classList.add('hidden');
+    if (statementAction) {
+        if (tabId === 'ledger') {
+            statementAction.classList.remove('hidden');
+        } else {
+            statementAction.classList.add('hidden');
+        }
     }
+
+    // Update URL without reload to persist tab on refresh/pagination
+    const url = new URL(window.location);
+    url.searchParams.set('tab', tabId);
+    window.history.pushState({}, '', url);
 }
 
 document.addEventListener('DOMContentLoaded', function() {
+    // Tab persistence logic
+    const urlParams = new URLSearchParams(window.location.search);
+    const activeTab = urlParams.get('tab');
+    if (activeTab && document.getElementById('tab-' + activeTab)) {
+        switchTab(activeTab);
+    } else {
+        {% if party.party_type == 'Creditor' %}
+        switchTab('ledger');
+        {% else %}
+        switchTab('trips');
+        {% endif %}
+    }
+
     const selectAll = document.getElementById('select-all-trips');
     const checkboxes = document.querySelectorAll('.trip-checkbox');
     const createBtn = document.getElementById('btn-create-invoice');

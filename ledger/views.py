@@ -438,43 +438,52 @@ class PartyDetailView(LoginRequiredMixin, BaseLedgerPermissionMixin, DetailView)
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         
-        # Get associated trips with annotations (Payment & Billing Info)
+        # 1. Trips Pagination (Operations Tab)
         trips_qs = Trip.objects.filter(party=self.object).select_related('vehicle').with_payment_info().with_billing_info().order_by('-date', '-created_at')
 
-        # Filter for unbilled if requested
         billed_filter = self.request.GET.get('billed')
         if billed_filter == 'unbilled':
             trips_qs = trips_qs.filter(annotated_is_billed=False)
         elif billed_filter == 'billed':
             trips_qs = trips_qs.filter(annotated_is_billed=True)
 
-        # Pagination for trips
-        paginator = Paginator(trips_qs, 25) # 25 trips per page
-        page_number = self.request.GET.get('page')
-        trips_page = paginator.get_page(page_number)
-
-        context['trips'] = trips_page
+        trips_paginator = Paginator(trips_qs, 25)
+        trips_page_num = self.request.GET.get('page')
+        context['trips'] = trips_paginator.get_page(trips_page_num)
         context['billed_filter'] = billed_filter
 
-        # Get Bills with payment info annotation
-        context['bills'] = self.object.bills.with_payment_info().prefetch_related('trips').order_by('-date', '-created_at')
+        # 2. Financial Records Pagination (Ledger Tab)
+        # We need a separate page parameter for ledger
+        ledger_page_num = self.request.GET.get('ledger_page', 1)
+        ledger_page_size = 50
 
-        # Get associated financial records (Including Invoices for complete history)
-        # We fetch chronological order to calculate running balance
-        records = list(self.object.financial_records.select_related(
-            'category', 'associated_trip', 'associated_bill'
-        ).order_by('date', 'created_at'))
-        # Calculate running balance
+        # Get all records in CHRONOLOGICAL order to calculate running balance accurately
+        records_qs = self.object.financial_records.select_related(
+            'category', 'associated_trip', 'associated_bill', 'associated_bill__category'
+        ).order_by('date', 'created_at')
+
+        # We still need to calculate the running balance for ALL records up to the current page.
+        # For performance with very large ledgers, this might need optimization, 
+        # but for now, we calculate it in-memory for the current set.
+        all_records = list(records_qs)
         running_bal = self.object.opening_balance
-        for rec in records:
+        for rec in all_records:
             debit = rec.debit_amount or Decimal('0')
             credit = rec.credit_amount or Decimal('0')
             running_bal += (debit - credit)
             rec.running_balance = running_bal
-            
-        # Reverse to newest first for the UI
-        context['financial_records'] = sorted(records, key=attrgetter('date', 'created_at'), reverse=True)
-        
+
+        # Sort back to newest-first
+        all_records.reverse()
+
+        ledger_paginator = Paginator(all_records, ledger_page_size)
+        ledger_page = ledger_paginator.get_page(ledger_page_num)
+
+        context['financial_records'] = ledger_page
+        context['ledger_page_obj'] = ledger_page
+
+        # Get Bills with payment info annotation
+        context['bills'] = self.object.bills.with_payment_info().prefetch_related('trips').order_by('-date', '-created_at')        
         # Use model properties for accurate totals (They are more inclusive of manual entries)
         context['total_revenue'] = self.object.total_billed
         context['total_received'] = self.object.total_received
