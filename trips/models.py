@@ -524,11 +524,18 @@ class Trip(models.Model):
         """Check if this trip is associated with any bill"""
         if hasattr(self, 'annotated_is_billed'):
             return self.annotated_is_billed
+        
+        if hasattr(self, '_prefetched_objects_cache') and 'bills' in self._prefetched_objects_cache:
+            return len(self.bills.all()) > 0
+            
         return self.bills.exists()
 
     @property
     def associated_bill(self):
         """Returns the first associated bill (if any)"""
+        if hasattr(self, '_prefetched_objects_cache') and 'bills' in self._prefetched_objects_cache:
+            bills = self.bills.all()
+            return bills[0] if bills else None
         return self.bills.first()
 
     @property
@@ -561,27 +568,37 @@ class Trip(models.Model):
             return self.annotated_received
 
         from ledger.models import FinancialRecord, TransactionCategory, Bill
-        # 1. Direct links (Records with type='Income' OR category='Deductions')
-        # Exclude Invoice type as they are debits
-        direct = self.financial_records.exclude(
-            record_type=FinancialRecord.RECORD_TYPE_INVOICE
-        ).filter(
-            models.Q(category__type=TransactionCategory.TYPE_INCOME) | models.Q(category__name='Deductions')
-        ).aggregate(total=models.Sum('amount'))['total'] or 0
         
-        # 2. M2M Allocations (Assumed to be income or deduction adjustments by nature)
-        allocated = self.payment_allocations.aggregate(
-            total=models.Sum('amount')
-        )['total'] or 0
+        # Check for prefetch cache
+        is_records_prefetched = hasattr(self, '_prefetched_objects_cache') and 'financial_records' in self._prefetched_objects_cache
+        is_allocations_prefetched = hasattr(self, '_prefetched_objects_cache') and 'payment_allocations' in self._prefetched_objects_cache
+
+        # 1. Direct links
+        if is_records_prefetched:
+            direct = sum(
+                r.amount for r in self.financial_records.all()
+                if r.record_type != FinancialRecord.RECORD_TYPE_INVOICE and
+                (r.category.type == TransactionCategory.TYPE_INCOME or r.category.name == 'Deductions')
+            )
+        else:
+            direct = self.financial_records.exclude(
+                record_type=FinancialRecord.RECORD_TYPE_INVOICE
+            ).filter(
+                models.Q(category__type=TransactionCategory.TYPE_INCOME) | models.Q(category__name='Deductions')
+            ).aggregate(total=models.Sum('amount'))['total'] or 0
+        
+        # 2. M2M Allocations
+        if is_allocations_prefetched:
+            allocated = sum(a.amount for a in self.payment_allocations.all())
+        else:
+            allocated = self.payment_allocations.aggregate(
+                total=models.Sum('amount')
+            )['total'] or 0
         
         # 3. If part of a PAID bill, consider it fully received for the billed amount
-        billed_received = 0
         bill = self.associated_bill
         if bill and bill.payment_status == Bill.PAYMENT_STATUS_PAID:
-            # If the bill is paid, this trip's share is fully covered
-            billed_received = self.total_revenue
-            # But we must avoid double counting if it was also partially paid via allocations
-            return billed_received
+            return self.total_revenue
 
         return direct + allocated
 

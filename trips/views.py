@@ -22,18 +22,14 @@ try:
 except ImportError:
     openpyxl = None
 
-from .models import Trip, Route
-from .forms import TripForm, RouteForm
-from fleet.models import Vehicle, MaintenanceRecord, Tyre
-from ledger.models import FinancialRecord, TransactionCategory, Bill, BillTrip, CompanyAccount
-
-
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
 from django.contrib.auth.decorators import login_required
-from ledger.models import Party
-from fleet.models import Vehicle
+from ledger.models import Party, FinancialRecord, TransactionCategory, Bill, BillTrip, CompanyAccount
+from fleet.models import Vehicle, MaintenanceRecord, Tyre
 from drivers.models import Driver
 from .models import Trip, Route
+from .forms import TripForm, RouteForm
+import hashlib
 
 @login_required
 def reference_data(request):
@@ -46,8 +42,10 @@ def reference_data(request):
     routes = list(Route.objects.all().order_by('pickup_location').values('id', 'pickup_location', 'delivery_location', 'route_type', 'default_rate'))
     drivers = list(Driver.objects.select_related('user').all().order_by('user__username').values('id', 'user__username'))
     
-    # We can use the total count + max ID as a simple versioning key
-    version_key = f"{Party.objects.count()}-{Vehicle.objects.count()}-{Route.objects.count()}-{Driver.objects.count()}"
+    # Generate a robust version key based on the actual content to detect updates
+    # We use a stable string representation of the data for hashing
+    content_str = f"{parties}{vehicles}{routes}{drivers}"
+    version_key = hashlib.md5(content_str.encode()).hexdigest()
     
     return JsonResponse({
         'parties': parties,
@@ -104,7 +102,17 @@ class TripListView(LoginRequiredMixin, BaseTripPermissionMixin, ListView):
     
     def get_queryset(self):
         """Filter and sort trips based on user input and permissions"""
-        queryset = self.get_queryset_for_user().with_payment_info().with_billing_info().select_related('vehicle', 'party', 'driver', 'route')
+        queryset = self.get_queryset_for_user().with_payment_info().with_billing_info().select_related(
+            'vehicle', 'party', 'driver', 'route'
+        ).prefetch_related(
+            'bills',
+            'bills__category',
+            'bills__financial_records',
+            'bills__financial_records__category',
+            'bills__trips',
+            'bills__adjustment_bills',
+            'bills__adjustment_bills__category'
+        )
         
         # Search functionality
         search = self.request.GET.get('search')

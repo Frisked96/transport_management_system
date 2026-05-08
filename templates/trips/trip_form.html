@@ -235,8 +235,17 @@ $(document).ready(function() {
     updateRevenue();
 
     // Route default rate logic
-    const routeRates = {{ route_rates|safe }};
+    let routeRates = {{ route_rates|safe }};
     const $routeSelect = $('#id_route');
+    
+    // Refresh if data syncs in background
+    $(document).on('tms:data-synced', function(e, data) {
+        if (data.routes) {
+            data.routes.forEach(r => {
+                routeRates[r.id] = parseFloat(r.default_rate) || 0;
+            });
+        }
+    });
     
     $routeSelect.on('change', function() {
         const routeId = $(this).val();
