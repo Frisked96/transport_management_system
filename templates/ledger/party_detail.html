@@ -148,7 +148,7 @@
                                     <th class="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider">Date</th>
                                     <th class="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider">Trip Number / LR No</th>
                                     <th class="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider">Vehicle</th>
-                                    <th class="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider text-right">Revenue</th>
+                                    <th class="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider text-right">Revenue (Total)</th>
                                     <th class="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider text-right">Pending</th>
                                     <th class="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">Status</th>
                                 </tr>
@@ -169,7 +169,12 @@
                                         {% if trip.lr_no %}<span class="text-[10px] font-bold text-slate-400">LR: {{ trip.lr_no }}</span>{% endif %}
                                     </td>
                                     <td class="px-6 py-3 text-xs font-black text-slate-700 uppercase">{{ trip.vehicle.registration_plate }}</td>
-                                    <td class="px-6 py-3 text-sm text-slate-900 text-right font-black">₹{{ trip.revenue|indian_comma }}</td>
+                                    <td class="px-6 py-3 text-right">
+                                        <p class="text-sm font-black text-slate-900 leading-none">₹{{ trip.total_revenue|indian_comma }}</p>
+                                        {% if trip.gst_amount > 0 %}
+                                        <p class="text-[9px] font-bold text-slate-400 uppercase mt-0.5" title="Subtotal: ₹{{ trip.revenue|indian_comma }}">Incl. ₹{{ trip.gst_amount|floatformat:0 }} Tax</p>
+                                        {% endif %}
+                                    </td>
                                     <td class="px-6 py-3 text-sm text-right font-black {% if trip.outstanding_balance > 0 %}text-rose-600{% else %}text-emerald-600{% endif %}">
                                         ₹{{ trip.outstanding_balance|indian_comma }}
                                     </td>

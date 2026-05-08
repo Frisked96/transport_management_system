@@ -46,7 +46,15 @@ class TripQuerySet(models.QuerySet):
                 default=F('weight') * F('rate_per_ton'),
                 output_field=DecimalField()
             ),
-            annotated_gst_rate = Coalesce(Subquery(bill_gst_rate), Value(0, output_field=DecimalField()), output_field=DecimalField())
+            # Use bill rate if available, else default to 18.0 for taxable routes
+            annotated_gst_rate = Case(
+                When(bills__isnull=False, then=Coalesce(Subquery(bill_gst_rate), Value(0, output_field=DecimalField()), output_field=DecimalField())),
+                # If unbilled but route is taxable, assume 18% standard transport GST
+                When(route__route_type__in=['local', 'intra'], then=Value(18.0, output_field=DecimalField())),
+                When(gst_type_snapshot__in=['GST', 'IGST'], then=Value(18.0, output_field=DecimalField())),
+                default=Value(0, output_field=DecimalField()),
+                output_field=DecimalField()
+            )
         )
 
         # Calculate GST and Total Revenue
@@ -67,14 +75,21 @@ class TripQuerySet(models.QuerySet):
         )
 
     def with_billing_info(self):
-        """Annotate queryset with billing status"""
-        from django.db.models import Exists, OuterRef
+        """Annotate queryset with billing status and GST type"""
+        from django.db.models import Exists, OuterRef, Case, When, Value, F, CharField
         # Import internally to avoid circular dependency
         from ledger.models import Bill
 
         return self.annotate(
             annotated_is_billed=Exists(
                 Bill.objects.filter(trips=OuterRef('pk'))
+            ),
+            annotated_gst_type=Case(
+                When(gst_type_snapshot__gt='', then=F('gst_type_snapshot')),
+                When(route__route_type='intra', then=Value('IGST')),
+                When(route__route_type='none', then=Value('NONE')),
+                default=Value('GST'),
+                output_field=CharField()
             )
         )
 
@@ -541,18 +556,31 @@ class Trip(models.Model):
     @property
     def gst_amount(self):
         """
-        Calculate GST amount for this trip based on its associated bill.
-        If no bill exists or GST rate is 0, returns 0.
+        Calculate GST amount for this trip.
+        If billed: uses bill's rate.
+        If unbilled but taxable: uses 18% standard rate.
         """
         if hasattr(self, 'annotated_gst_amount'):
             return self.annotated_gst_amount
 
-        bill = self.associated_bill
-        if not bill or not bill.gst_rate:
-            return 0
-        
         from decimal import Decimal
-        return self.revenue * (Decimal(bill.gst_rate) / Decimal(100))
+        
+        # 1. Use Bill Rate if available
+        bill = self.associated_bill
+        if bill and bill.gst_rate:
+            return self.revenue * (Decimal(bill.gst_rate) / Decimal(100))
+        
+        # 2. If unbilled, check if route/snapshot is taxable
+        is_taxable = False
+        if self.gst_type_snapshot in ['GST', 'IGST']:
+            is_taxable = True
+        elif self.route and self.route.route_type in ['local', 'intra']:
+            is_taxable = True
+            
+        if is_taxable:
+            return self.revenue * (Decimal('18') / Decimal('100'))
+            
+        return Decimal('0')
 
     @property
     def total_revenue(self):

@@ -805,6 +805,15 @@ class BillListView(LoginRequiredMixin, BaseLedgerPermissionMixin, ListView):
         if party_id:
             queryset = queryset.filter(party_id=party_id)
             
+        # Filter by Category (Invoice Type)
+        cat_filter = self.request.GET.get('category')
+        if cat_filter == 'invoice':
+            queryset = queryset.exclude(category__name__in=['Credit Note', 'Debit Note'])
+        elif cat_filter == 'credit':
+            queryset = queryset.filter(category__name='Credit Note')
+        elif cat_filter == 'debit':
+            queryset = queryset.filter(category__name='Debit Note')
+
         # Filter by Date Range
         start_date = self.request.GET.get('start_date')
         end_date = self.request.GET.get('end_date')

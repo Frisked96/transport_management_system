@@ -47,6 +47,17 @@
                 </select>
             </div>
             
+            <!-- Invoice Type Filter -->
+            <div class="md:col-span-3 flex flex-col">
+                <label class="text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">Invoice Type:</label>
+                <select name="category" class="block w-full pl-3 pr-10 py-2 border border-slate-300 rounded-md text-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white">
+                    <option value="">All Types</option>
+                    <option value="invoice" {% if request.GET.category == 'invoice' %}selected{% endif %}>Standard Invoices</option>
+                    <option value="credit" {% if request.GET.category == 'credit' %}selected{% endif %}>Credit Notes</option>
+                    <option value="debit" {% if request.GET.category == 'debit' %}selected{% endif %}>Debit Notes</option>
+                </select>
+            </div>
+
             <!-- Date Range -->
             <div class="md:col-span-4 flex flex-col">
                 <label class="text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">Date Range:</label>

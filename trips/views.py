@@ -136,6 +136,13 @@ class TripListView(LoginRequiredMixin, BaseTripPermissionMixin, ListView):
         status = self.request.GET.get('status')
         if status:
             queryset = queryset.filter(annotated_status=status)
+
+        # GST Filter
+        gst_filter = self.request.GET.get('gst_filter')
+        if gst_filter == 'gst':
+            queryset = queryset.filter(annotated_gst_type__in=['GST', 'IGST'])
+        elif gst_filter == 'non_gst':
+            queryset = queryset.filter(annotated_gst_type='NONE')
             
         # Quick Date filter
         date_filter = self.request.GET.get('date_filter')
@@ -185,6 +192,7 @@ class TripListView(LoginRequiredMixin, BaseTripPermissionMixin, ListView):
         context = super().get_context_data(**kwargs)
         context['status_choices'] = Trip.PAYMENT_STATUS_CHOICES
         context['current_status'] = self.request.GET.get('status', '')
+        context['current_gst_filter'] = self.request.GET.get('gst_filter', '')
         context['search_term'] = self.request.GET.get('search', '')
         context['start_date'] = self.request.GET.get('start_date', '')
         context['end_date'] = self.request.GET.get('end_date', '')
