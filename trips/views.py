@@ -642,18 +642,17 @@ def trip_export_excel(request):
         # Data Rows
         row_num = 2
         for idx, trip in enumerate(trips, 1):
-            bill = trip.bills.first()
-            if not bill:
-                continue
-
-            # Calculations as per requirements
+            # Use smart model properties
             freight = trip.revenue or Decimal('0')
-            gst = (freight * Decimal('0.18')).quantize(Decimal('0.01'))
-            total_taxable = freight + gst
+            gst = trip.gst_amount or Decimal('0')
+            total_taxable = trip.total_revenue or Decimal('0')
 
             ws.cell(row=row_num, column=1, value=idx).border = border
-            ws.cell(row=row_num, column=2, value=bill.bill_number or 'N/A').border = border
-            ws.cell(row=row_num, column=3, value=bill.date.strftime('%d-%m-%Y') if bill.date else 'N/A').border = border
+            
+            # Get associated bill if any
+            bill = trip.associated_bill
+            ws.cell(row=row_num, column=2, value=bill.bill_number if bill else 'Unbilled').border = border
+            ws.cell(row=row_num, column=3, value=bill.date.strftime('%d-%m-%Y') if bill and bill.date else '-').border = border
             ws.cell(row=row_num, column=4, value=trip.party.name if trip.party else 'N/A').border = border
             ws.cell(row=row_num, column=5, value=trip.party.gstin if trip.party else 'N/A').border = border
             ws.cell(row=row_num, column=6, value=trip.date.strftime('%d-%m-%Y')).border = border
