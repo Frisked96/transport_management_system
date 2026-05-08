@@ -84,8 +84,8 @@
                         Applied
                     </span>
                     {% else %}
-                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-tighter {% if bill.outstanding_balance > 0 %}bg-amber-100 text-amber-800{% else %}bg-emerald-100 text-emerald-800{% endif %}">
-                        {% if bill.outstanding_balance > 0 %}Pending{% else %}Paid{% endif %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-tighter {% if bill.annotated_outstanding > 0 %}bg-amber-100 text-amber-800{% else %}bg-emerald-100 text-emerald-800{% endif %}">
+                        {% if bill.annotated_outstanding > 0 %}Pending{% else %}Paid{% endif %}
                     </span>
                     {% endif %}
                 </div>
@@ -140,14 +140,14 @@
             <div class="md:w-16 md:text-center">
                 <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Trips</span>
                 <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-700">
-                    {{ bill.trips.count }}
+                    {{ bill.trip_count }}
                 </span>
             </div>
             
             <!-- Total -->
             <div class="md:w-32 md:text-right">
                 <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Total Amount</span>
-                <p class="text-sm font-bold text-slate-900">₹{{ bill.rounded_total|indian_comma }}</p>
+                <p class="text-sm font-bold text-slate-900">₹{{ bill.annotated_total_amount|indian_comma }}</p>
             </div>
 
             <!-- Outstanding -->
@@ -157,8 +157,8 @@
                 <p class="text-sm font-bold text-slate-500 italic">Applied</p>
                 {% else %}
                 <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Outstanding</span>
-                <p class="text-sm font-bold {% if bill.outstanding_balance > 0 %}text-red-600{% else %}text-emerald-600{% endif %}">
-                    ₹{{ bill.outstanding_balance|indian_comma }}
+                <p class="text-sm font-bold {% if bill.annotated_outstanding > 0 %}text-red-600{% else %}text-emerald-600{% endif %}">
+                    ₹{{ bill.annotated_outstanding|indian_comma }}
                 </p>
                 {% endif %}
             </div>

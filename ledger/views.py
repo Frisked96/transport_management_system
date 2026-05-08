@@ -7,7 +7,7 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse_lazy
 from django.contrib import messages
-from django.db.models import Q, Sum, F, DecimalField, Value, Case, When, OuterRef, Subquery
+from django.db.models import Q, Sum, F, DecimalField, Value, Case, When, OuterRef, Subquery, Count
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 from decimal import Decimal, InvalidOperation, DecimalException
@@ -770,7 +770,9 @@ class BillListView(LoginRequiredMixin, BaseLedgerPermissionMixin, ListView):
         if self.has_driver_permission():
             return Bill.objects.none()
             
-        queryset = Bill.objects.all().select_related('party', 'issuer').order_by('-date', '-created_at')
+        queryset = Bill.objects.all().with_payment_info().annotate(
+            trip_count=Count('trips')
+        ).select_related('party', 'issuer', 'category').order_by('-date', '-created_at')
         
         # Filter by Issuer (Company Account)
         issuer_id = self.request.GET.get('issuer')
