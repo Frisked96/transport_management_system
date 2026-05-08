@@ -223,6 +223,8 @@ class BillForm(forms.ModelForm):
             'bill_type',
             'category',
             'original_bill',
+            'manual_original_bill_number',
+            'manual_original_bill_date',
             'issuer',
             'party',
             'date',
@@ -239,6 +241,7 @@ class BillForm(forms.ModelForm):
         ]
         widgets = {
             'date': forms.DateInput(attrs={'type': 'date', 'id': 'id_date'}),
+            'manual_original_bill_date': forms.DateInput(attrs={'type': 'date', 'id': 'id_manual_original_bill_date'}),
             'trips': forms.CheckboxSelectMultiple(),
             'bill_no': forms.NumberInput(attrs={
                 'id': 'id_bill_no',
@@ -366,6 +369,20 @@ class BillForm(forms.ModelForm):
                 pass
         
         # For Standard invoices, we keep the user-selected gst_type
+
+        # Validation for Credit/Debit Notes
+        category = cleaned_data.get('category')
+        if category and category.name in ['Credit Note', 'Debit Note']:
+            original_bill = cleaned_data.get('original_bill')
+            manual_bill_no = cleaned_data.get('manual_original_bill_number')
+            manual_bill_date = cleaned_data.get('manual_original_bill_date')
+            
+            if not original_bill and not manual_bill_no:
+                raise forms.ValidationError("For Credit/Debit Notes, you must either select an existing invoice or enter manual invoice details.")
+            
+            if manual_bill_no and not manual_bill_date:
+                raise forms.ValidationError("If entering a manual invoice number, you must also provide the invoice date.")
+
         return cleaned_data
 
     def save(self, commit=True):

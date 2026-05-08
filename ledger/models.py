@@ -833,6 +833,8 @@ class Bill(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     category = models.ForeignKey(TransactionCategory, null=True, blank=True, on_delete=models.SET_NULL, related_name='bills', verbose_name="Bill Category")
     original_bill = models.ForeignKey('self', null=True, blank=True, on_delete=models.SET_NULL, related_name='adjustment_bills', verbose_name="Against Invoice")
+    manual_original_bill_number = models.CharField(max_length=100, blank=True, null=True, verbose_name="Manual Against Invoice No")
+    manual_original_bill_date = models.DateField(blank=True, null=True, verbose_name="Manual Against Invoice Date")
     discount = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name="Discount")
     use_roundoff = models.BooleanField(default=True, verbose_name="Use Round Off")
 
@@ -974,7 +976,18 @@ class Bill(models.Model):
         if self.bill_type == self.TYPE_TRIP:
             description = f"Invoice {self.bill_number or 'Draft'} for {self.trips.count()} trips"
         else:
-            description = f"{category.name} {self.bill_number or 'Draft'}: {self.item_type or ''}"
+            # For Credit/Debit Notes, add "Against Invoice" info FIRST
+            against_info = ""
+            if category.name in ['Credit Note', 'Debit Note']:
+                if self.original_bill:
+                    against_info = f"Against Invoice {self.original_bill.bill_number}: "
+                elif self.manual_original_bill_number:
+                    against_info = f"Against Invoice {self.manual_original_bill_number}: "
+            
+            description = f"{against_info}{category.name} {self.bill_number or 'Draft'}"
+            
+            if self.item_type:
+                description = f"{description}: {self.item_type}"
 
         # Find or create consolidated invoice record
         inv_record, created = FinancialRecord.objects.get_or_create(

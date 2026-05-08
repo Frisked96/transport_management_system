@@ -97,12 +97,32 @@
             <div class="p-6 space-y-6">
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
                     <span class="text-sm font-semibold text-slate-500 uppercase tracking-wider">Associated Bill</span>
-                    <div class="md:col-span-2">
+                    <div class="md:col-span-2 space-y-2">
                         {% if record.associated_bill %}
-                            <a href="{% url 'bill-detail' record.associated_bill.pk %}" class="inline-flex items-center space-x-2 text-blue-600 hover:text-blue-700 font-bold">
-                                <i class="fa-solid fa-file-invoice"></i>
-                                <span>{{ record.associated_bill.bill_number|default:"Draft Bill" }}</span>
-                            </a>
+                            <div>
+                                <a href="{% url 'bill-detail' record.associated_bill.pk %}" class="inline-flex items-center space-x-2 text-blue-600 hover:text-blue-700 font-bold">
+                                    <i class="fa-solid fa-file-invoice"></i>
+                                    <span>{{ record.associated_bill.bill_number|default:"Draft Bill" }}</span>
+                                </a>
+                                {% if record.associated_bill.is_adjustment %}
+                                <span class="ml-2 inline-flex px-2 py-0.5 rounded text-[9px] font-black uppercase bg-purple-100 text-purple-700">Adjustment</span>
+                                {% endif %}
+                            </div>
+                            
+                            {% if record.associated_bill.original_bill %}
+                            <div class="flex items-center space-x-2 text-xs">
+                                <span class="text-slate-400 font-bold uppercase tracking-tight">Against:</span>
+                                <a href="{% url 'bill-detail' record.associated_bill.original_bill.pk %}" class="font-black text-slate-900 hover:text-blue-600">
+                                    {{ record.associated_bill.original_bill.bill_number }}
+                                </a>
+                            </div>
+                            {% elif record.associated_bill.manual_original_bill_number %}
+                            <div class="flex items-center space-x-2 text-xs">
+                                <span class="text-slate-400 font-bold uppercase tracking-tight">Against:</span>
+                                <span class="font-black text-slate-900">{{ record.associated_bill.manual_original_bill_number }} (Manual)</span>
+                                <span class="text-slate-400 font-bold italic">{{ record.associated_bill.manual_original_bill_date|date:"d M Y" }}</span>
+                            </div>
+                            {% endif %}
                         {% else %}
                             <span class="text-sm text-slate-400">Not linked to a specific bill</span>
                         {% endif %}

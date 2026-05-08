@@ -329,7 +329,18 @@
                                 </td>
                                 <td class="px-6 py-3">
                                     {% if record.linked_bill %}
-                                    <a href="{% url 'bill-detail' record.linked_bill.pk %}" class="text-xs font-bold text-blue-600 hover:underline uppercase">{{ record.linked_bill.bill_number|default:"Draft" }}</a>
+                                        <div class="flex flex-col">
+                                            <a href="{% url 'bill-detail' record.linked_bill.pk %}" class="text-xs font-bold text-blue-600 hover:underline uppercase">{{ record.linked_bill.bill_number|default:"Draft" }}</a>
+                                            {% if record.linked_bill.original_bill %}
+                                                <a href="{% url 'bill-detail' record.linked_bill.original_bill.pk %}" class="text-[9px] font-black text-slate-400 hover:text-blue-600 mt-0.5" title="Original Invoice">
+                                                    AGAINST: {{ record.linked_bill.original_bill.bill_number }}
+                                                </a>
+                                            {% elif record.linked_bill.manual_original_bill_number %}
+                                                <span class="text-[9px] font-black text-slate-400 mt-0.5" title="Manual Reference">
+                                                    AGAINST: {{ record.linked_bill.manual_original_bill_number }} (M)
+                                                </span>
+                                            {% endif %}
+                                        </div>
                                     {% elif record.linked_trip %}
                                     <a href="{% url 'trip-detail' record.linked_trip.pk %}" class="text-xs font-bold text-emerald-600 hover:underline uppercase">{{ record.linked_trip.trip_number }}</a>
                                     {% else %}-{% endif %}
