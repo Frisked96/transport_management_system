@@ -482,8 +482,18 @@ class PartyDetailView(LoginRequiredMixin, BaseLedgerPermissionMixin, DetailView)
         context['financial_records'] = ledger_page
         context['ledger_page_obj'] = ledger_page
 
-        # Get Bills with payment info annotation
-        bills_qs = self.object.bills.with_payment_info().prefetch_related('trips').order_by('-date', '-created_at')
+        # Get Bills with prefetching
+        bills_qs = self.object.bills.select_related('issuer', 'category').prefetch_related(
+            'trips',
+            'trips__payment_allocations',
+            'financial_records',
+            'financial_records__category',
+            'bill_trips',
+            'bill_trips__trip',
+            'adjustment_bills',
+            'adjustment_bills__category'
+        ).order_by('-date', '-created_at')
+        
         bills_page_num = self.request.GET.get('bills_page', 1)
         bills_paginator = Paginator(bills_qs, 25)
         context['bills'] = bills_paginator.get_page(bills_page_num)
@@ -770,9 +780,20 @@ class BillListView(LoginRequiredMixin, BaseLedgerPermissionMixin, ListView):
         if self.has_driver_permission():
             return Bill.objects.none()
             
-        queryset = Bill.objects.all().with_payment_info().annotate(
-            trip_count=Count('trips')
-        ).select_related('party', 'issuer', 'category').order_by('-date', '-created_at')
+        # We use prefetch_related to solve the N+1 problem without complex SQL annotations 
+        # that cause 'parser stack overflow' on some SQLite configurations.
+        queryset = Bill.objects.all().select_related(
+            'party', 'issuer', 'category'
+        ).prefetch_related(
+            'trips',
+            'trips__payment_allocations',
+            'financial_records',
+            'financial_records__category',
+            'bill_trips',
+            'bill_trips__trip',
+            'adjustment_bills',
+            'adjustment_bills__category'
+        ).order_by('-date', '-created_at')
         
         # Filter by Issuer (Company Account)
         issuer_id = self.request.GET.get('issuer')

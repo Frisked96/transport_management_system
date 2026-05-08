@@ -1008,49 +1008,90 @@ class Bill(models.Model):
     def amount_received(self):
         """
         Calculate total received for this bill.
+        Utilizes prefetch cache if available.
         """
         if hasattr(self, 'annotated_received'):
             return self.annotated_received
 
-        # 1. Direct links to this bill (Exclude Invoices as they are debits)
-        direct = self.financial_records.exclude(
-            record_type=FinancialRecord.RECORD_TYPE_INVOICE
-        ).filter(
-            models.Q(category__type=TransactionCategory.TYPE_INCOME) | 
-            models.Q(category__name__in=["Deductions", "TDS", "Shortage"])
-        ).aggregate(total=Sum('amount'))['total'] or 0
+        # Check for prefetch cache
+        is_records_prefetched = hasattr(self, '_prefetched_objects_cache') and 'financial_records' in self._prefetched_objects_cache
+        is_trips_prefetched = hasattr(self, '_prefetched_objects_cache') and 'trips' in self._prefetched_objects_cache
+        is_adjustments_prefetched = hasattr(self, '_prefetched_objects_cache') and 'adjustment_bills' in self._prefetched_objects_cache
 
-        # 2. Trip-based allocations
-        trip_payments = 0
-        if self.bill_type == self.TYPE_TRIP:
-            # We need to find all TripAllocations for trips in this bill
-            trip_payments = TripAllocation.objects.filter(
-                trip__in=self.trips.all()
-            ).aggregate(total=Sum('amount'))['total'] or 0
-            
-            # Also consider direct trip payments not through allocations (if any exist)
-            # We EXCLUDE records that are already directly associated with THIS bill to avoid double counting
-            direct_trip_payments = FinancialRecord.objects.filter(
-                associated_trip__in=self.trips.all()
-            ).exclude(
-                models.Q(record_type=FinancialRecord.RECORD_TYPE_INVOICE) |
-                models.Q(associated_bill=self)
+        # 1. Direct links to this bill
+        if is_records_prefetched:
+            direct = sum(
+                r.amount for r in self.financial_records.all()
+                if r.record_type != FinancialRecord.RECORD_TYPE_INVOICE and
+                (r.category.type == TransactionCategory.TYPE_INCOME or r.category.name in ["Deductions", "TDS", "Shortage"])
+            )
+        else:
+            direct = self.financial_records.exclude(
+                record_type=FinancialRecord.RECORD_TYPE_INVOICE
             ).filter(
                 models.Q(category__type=TransactionCategory.TYPE_INCOME) | 
                 models.Q(category__name__in=["Deductions", "TDS", "Shortage"])
             ).aggregate(total=Sum('amount'))['total'] or 0
-            
-            trip_payments += direct_trip_payments
 
-        # 3. Adjustment Bills (Credit/Debit Notes) linked to this bill
+        # 2. Trip-based allocations
+        trip_payments = 0
+        if self.bill_type == self.TYPE_TRIP:
+            if is_trips_prefetched:
+                # We need allocations prefetched on trips: .prefetch_related('trips__payment_allocations')
+                for trip in self.trips.all():
+                    # Check if allocations are prefetched on this trip
+                    if hasattr(trip, '_prefetched_objects_cache') and 'payment_allocations' in trip._prefetched_objects_cache:
+                        trip_payments += sum(a.amount for a in trip.payment_allocations.all())
+                    else:
+                        trip_payments += trip.payment_allocations.aggregate(total=Sum('amount'))['total'] or 0
+                    
+                    # Also direct trip payments (rare but possible)
+                    # This part is hard to optimize with prefetch without specialized logic, 
+                    # but usually trips don't have many direct payments if billed.
+                    if is_records_prefetched:
+                        # This would require filtering ALL records for those matching this trip
+                        # and not associated with this bill.
+                        trip_payments += sum(
+                            r.amount for r in self.financial_records.all()
+                            if r.associated_trip_id == trip.id and 
+                            r.associated_bill_id != self.id and
+                            r.record_type != FinancialRecord.RECORD_TYPE_INVOICE and
+                            (r.category.type == TransactionCategory.TYPE_INCOME or r.category.name in ["Deductions", "TDS", "Shortage"])
+                        )
+                    else:
+                        trip_payments += FinancialRecord.objects.filter(
+                            associated_trip=trip
+                        ).exclude(
+                            models.Q(record_type=FinancialRecord.RECORD_TYPE_INVOICE) |
+                            models.Q(associated_bill=self)
+                        ).filter(
+                            models.Q(category__type=TransactionCategory.TYPE_INCOME) | 
+                            models.Q(category__name__in=["Deductions", "TDS", "Shortage"])
+                        ).aggregate(total=Sum('amount'))['total'] or 0
+            else:
+                trip_payments = TripAllocation.objects.filter(
+                    trip__in=self.trips.all()
+                ).aggregate(total=Sum('amount'))['total'] or 0
+                
+                direct_trip_payments = FinancialRecord.objects.filter(
+                    associated_trip__in=self.trips.all()
+                ).exclude(
+                    models.Q(record_type=FinancialRecord.RECORD_TYPE_INVOICE) |
+                    models.Q(associated_bill=self)
+                ).filter(
+                    models.Q(category__type=TransactionCategory.TYPE_INCOME) | 
+                    models.Q(category__name__in=["Deductions", "TDS", "Shortage"])
+                ).aggregate(total=Sum('amount'))['total'] or 0
+                trip_payments += direct_trip_payments
+
+        # 3. Adjustment Bills
         adjustments = 0
-        for adj in self.adjustment_bills.all():
+        adj_list = self.adjustment_bills.all() if is_adjustments_prefetched else self.adjustment_bills.select_related('category').all()
+        for adj in adj_list:
             if adj.category:
                 if adj.category.name == 'Credit Note':
-                    # Credit Note reduces outstanding (acts as payment/deduction)
                     adjustments += adj.total_amount
                 elif adj.category.name == 'Debit Note':
-                    # Debit Note increases outstanding (negative payment)
                     adjustments -= adj.total_amount
 
         return direct + trip_payments + adjustments
@@ -1115,12 +1156,17 @@ class Bill(models.Model):
 
     @property
     def trips_count(self):
+        if hasattr(self, '_prefetched_objects_cache') and 'trips' in self._prefetched_objects_cache:
+            return len(self.trips.all())
         return self.trips.count()
 
     @property
     def total_weight(self):
         if self.bill_type == self.TYPE_STANDARD:
             return self.standard_weight or 0
+        
+        if hasattr(self, '_prefetched_objects_cache') and 'trips' in self._prefetched_objects_cache:
+            return sum((t.weight or 0) for t in self.trips.all())
         return self.trips.aggregate(total=models.Sum('weight'))['total'] or 0
 
     @property
