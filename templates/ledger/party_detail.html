@@ -198,13 +198,13 @@
                     </p>
                     <div class="flex items-center gap-1">
                         {% if trips.has_previous %}
-                        <a href="?page={{ trips.previous_page_number }}{% if billed_filter %}&billed={{ billed_filter }}{% endif %}" class="px-3 py-1 border border-slate-200 bg-white text-slate-600 rounded-md text-[10px] font-black hover:bg-slate-50 transition-colors uppercase">Previous</a>
+                        <a href="?page={{ trips.previous_page_number }}{% if billed_filter %}&billed={{ billed_filter }}{% endif %}&tab=trips" class="px-3 py-1 border border-slate-200 bg-white text-slate-600 rounded-md text-[10px] font-black hover:bg-slate-50 transition-colors uppercase">Previous</a>
                         {% endif %}
                         
                         <span class="px-3 py-1 bg-emerald-600 text-white rounded-md text-[10px] font-black uppercase">{{ trips.number }} / {{ trips.paginator.num_pages }}</span>
                         
                         {% if trips.has_next %}
-                        <a href="?page={{ trips.next_page_number }}{% if billed_filter %}&billed={{ billed_filter }}{% endif %}" class="px-3 py-1 border border-slate-200 bg-white text-slate-600 rounded-md text-[10px] font-black hover:bg-slate-50 transition-colors uppercase">Next</a>
+                        <a href="?page={{ trips.next_page_number }}{% if billed_filter %}&billed={{ billed_filter }}{% endif %}&tab=trips" class="px-3 py-1 border border-slate-200 bg-white text-slate-600 rounded-md text-[10px] font-black hover:bg-slate-50 transition-colors uppercase">Next</a>
                         {% endif %}
                     </div>
                 </div>
@@ -273,6 +273,26 @@
                         </tbody>
                     </table>
                 </div>
+
+                <!-- INVOICE PAGINATION -->
+                {% if bills.has_other_pages %}
+                <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                        Showing {{ bills.start_index }} to {{ bills.end_index }} of {{ bills.paginator.count }} Invoices
+                    </p>
+                    <div class="flex items-center gap-1">
+                        {% if bills.has_previous %}
+                        <a href="?bills_page={{ bills.previous_page_number }}&tab=invoices" class="px-3 py-1 border border-slate-200 bg-white text-slate-600 rounded-md text-[10px] font-black hover:bg-slate-50 transition-colors uppercase">Previous</a>
+                        {% endif %}
+                        
+                        <span class="px-3 py-1 bg-emerald-600 text-white rounded-md text-[10px] font-black uppercase">{{ bills.number }} / {{ bills.paginator.num_pages }}</span>
+                        
+                        {% if bills.has_next %}
+                        <a href="?bills_page={{ bills.next_page_number }}&tab=invoices" class="px-3 py-1 border border-slate-200 bg-white text-slate-600 rounded-md text-[10px] font-black hover:bg-slate-50 transition-colors uppercase">Next</a>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
             </div>
             {% endif %}
 

@@ -97,6 +97,10 @@
                                     <p id="gstTypeSuggestion" class="text-[9px] text-emerald-600 mt-1 font-bold hidden"></p>
                                 </div>
                             </div>
+                            <div class="flex items-center justify-between gap-4">
+                                <label class="text-sm font-semibold text-slate-700">General Discount:</label>
+                                <div class="flex-grow max-w-[200px]">{{ form.discount }}</div>
+                            </div>
                             <div class="flex items-center justify-between gap-4 py-2 border-t border-slate-100">
                                 <label class="text-sm font-semibold text-slate-700">Round Off:</label>
                                 <div class="flex items-center space-x-2">
@@ -177,6 +181,7 @@
                                         <th class="px-6 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500">Route</th>
                                         <th class="px-6 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 text-right">Weight</th>
                                         <th class="px-6 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 text-right">Rate</th>
+                                        <th class="px-6 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 text-right">Discount</th>
                                         <th class="px-6 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 text-right">Amount</th>
                                     </tr>
                                 </thead>
@@ -201,6 +206,10 @@
                                         </td>
                                         <td class="px-6 py-4 text-xs text-right font-bold text-slate-900">{{ trip.weight|indian_comma }}</td>
                                         <td class="px-6 py-4 text-xs text-right text-slate-600">₹{{ trip.rate_per_ton|indian_comma }}</td>
+                                        <td class="px-6 py-4">
+                                            <input type="number" step="0.01" class="discount-input block w-20 ml-auto px-2 py-1 border border-slate-300 rounded text-xs text-right focus:ring-rose-500 focus:border-rose-500 bg-white text-rose-600 font-bold" 
+                                                   data-trip-id="{{ trip.pk }}" placeholder="0.00">
+                                        </td>
                                         <td class="px-6 py-4 text-xs text-right font-black text-emerald-600">₹{{ trip.revenue|indian_comma }}</td>
                                     </tr>
                                     {% endfor %}
@@ -387,8 +396,22 @@
                     if (data.trips.length > 0) {
                         data.trips.forEach(trip => {
                             const isChecked = tripsData.hasOwnProperty(trip.id.toString()) || (billId && {{ form.trips.value|safe|default:"[]" }}.includes(trip.id));
-                            // Fallback sequence: 1. Current form session data, 2. AJAX returned LR (which includes BillTrip override), 3. Empty
-                            const lrNo = tripsData[trip.id] || trip.lr_no || "";
+                            
+                            // Get existing data from tripsData if present
+                            let lrNo = "";
+                            let discount = "0.00";
+                            
+                            if (tripsData[trip.id]) {
+                                if (typeof tripsData[trip.id] === 'object') {
+                                    lrNo = tripsData[trip.id].lr_no || "";
+                                    discount = tripsData[trip.id].discount || "0.00";
+                                } else {
+                                    lrNo = tripsData[trip.id];
+                                }
+                            } else {
+                                lrNo = trip.lr_no || "";
+                                discount = trip.discount || "0.00";
+                            }
                             
                             const row = `
                                 <tr class="hover:bg-slate-50 transition-colors">
@@ -410,6 +433,10 @@
                                     </td>
                                     <td class="px-6 py-4 text-xs text-right font-bold text-slate-900">${trip.weight}</td>
                                     <td class="px-6 py-4 text-xs text-right text-slate-600">₹${trip.rate}</td>
+                                    <td class="px-6 py-4">
+                                        <input type="number" step="0.01" class="discount-input block w-20 ml-auto px-2 py-1 border border-slate-300 rounded text-xs text-right focus:ring-rose-500 focus:border-rose-500 bg-white text-rose-600 font-bold" 
+                                               data-trip-id="${trip.id}" value="${discount}" placeholder="0.00">
+                                    </td>
                                     <td class="px-6 py-4 text-xs text-right font-black text-emerald-600">₹${trip.revenue.toFixed(2)}</td>
                                 </tr>
                             `;
@@ -540,16 +567,30 @@
             // Populate and Sync tripsData with the current table state
             $('.lr-input').each(function() {
                 const tripId = $(this).data('trip-id').toString();
+                const discountInput = $(`.discount-input[data-trip-id="${tripId}"]`);
                 
-                // 1. If input is empty but we have a value in tripsData, fill it
-                if ($(this).val() === "" && tripsData[tripId]) {
-                    $(this).val(tripsData[tripId]);
+                if (!tripsData[tripId]) {
+                    tripsData[tripId] = {
+                        'lr_no': $(this).val(),
+                        'discount': discountInput.val() || "0.00"
+                    };
+                } else if (typeof tripsData[tripId] !== 'object') {
+                    // Convert old string format to object
+                    tripsData[tripId] = {
+                        'lr_no': tripsData[tripId],
+                        'discount': discountInput.val() || "0.00"
+                    };
+                }
+
+                // If input is empty but we have a value in tripsData, fill it
+                if ($(this).val() === "" && tripsData[tripId].lr_no) {
+                    $(this).val(tripsData[tripId].lr_no);
                 }
                 
-                // 2. If input has a value, ensure it's in tripsData
-                const currentVal = $(this).val();
-                if (currentVal !== "") {
-                    tripsData[tripId] = currentVal;
+                if (discountInput.val() === "" || discountInput.val() === "0.00") {
+                    if (tripsData[tripId].discount && tripsData[tripId].discount !== "0.00") {
+                        discountInput.val(tripsData[tripId].discount);
+                    }
                 }
             });
             
@@ -557,14 +598,20 @@
             tripsDataInput.value = JSON.stringify(tripsData);
 
             // Bind live input event for future changes
-            $('.lr-input').off('input').on('input', function() {
+            $('.lr-input, .discount-input').off('input').on('input', function() {
                 const tripId = $(this).data('trip-id').toString();
-                tripsData[tripId] = $(this).val();
+                const lrInput = $(`.lr-input[data-trip-id="${tripId}"]`);
+                const discInput = $(`.discount-input[data-trip-id="${tripId}"]`);
+                
+                tripsData[tripId] = {
+                    'lr_no': lrInput.val(),
+                    'discount': discInput.val() || "0.00"
+                };
                 tripsDataInput.value = JSON.stringify(tripsData);
             });
 
             // Trip selection change
-            $('.trip-checkbox').on('change', function() {
+            $('.trip-checkbox').off('change').on('change', function() {
                 suggestGstType();
             });
 
@@ -643,10 +690,15 @@
             
             const finalData = {};
             $('.lr-input').each(function() {
-                const tripId = $(this).data('trip-id');
-                const val = $(this).val();
-                if (val) {
-                    finalData[tripId] = val;
+                const tripId = $(this).data('trip-id').toString();
+                const lrVal = $(this).val();
+                const discVal = $(`.discount-input[data-trip-id="${tripId}"]`).val() || "0.00";
+                
+                if (lrVal || (discVal && discVal !== "0.00")) {
+                    finalData[tripId] = {
+                        'lr_no': lrVal,
+                        'discount': discVal
+                    };
                 }
             });
             tripsDataInput.value = JSON.stringify(finalData);

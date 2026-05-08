@@ -483,7 +483,10 @@ class PartyDetailView(LoginRequiredMixin, BaseLedgerPermissionMixin, DetailView)
         context['ledger_page_obj'] = ledger_page
 
         # Get Bills with payment info annotation
-        context['bills'] = self.object.bills.with_payment_info().prefetch_related('trips').order_by('-date', '-created_at')        
+        bills_qs = self.object.bills.with_payment_info().prefetch_related('trips').order_by('-date', '-created_at')
+        bills_page_num = self.request.GET.get('bills_page', 1)
+        bills_paginator = Paginator(bills_qs, 25)
+        context['bills'] = bills_paginator.get_page(bills_page_num)
         # Use model properties for accurate totals (They are more inclusive of manual entries)
         context['total_revenue'] = self.object.total_billed
         context['total_received'] = self.object.total_received
@@ -728,12 +731,14 @@ def get_party_unbilled_trips(request):
         data = []
         for trip in trips:
             lr_no = trip.lr_no or ''
-            
-            # If editing a bill, get the specific LR No saved for this bill
+            discount = 0.0
+
+            # If editing a bill, get the specific LR No or Discount saved for this bill
             if bill_id:
                 bill_trip = BillTrip.objects.filter(bill_id=bill_id, trip=trip).first()
                 if bill_trip:
                     lr_no = bill_trip.lr_no or ''
+                    discount = float(bill_trip.discount or 0)
 
             data.append({
                 'id': trip.id,
@@ -746,8 +751,8 @@ def get_party_unbilled_trips(request):
                 'revenue': float(trip.revenue or 0),
                 'gst_type': trip.gst_type, # IGST or GST
                 'lr_no': lr_no,
-            })
-        
+                'discount': discount,
+            })        
         return JsonResponse({'trips': data})
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
@@ -877,12 +882,32 @@ class BillDetailView(LoginRequiredMixin, BaseLedgerPermissionMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        bill = self.object
         # Add the same summarized items used in the print view
-        context['invoice_items'] = group_trips_for_bill(self.object)
-        context['bill_trips'] = self.object.bill_trips.select_related('trip', 'trip__vehicle').order_by('trip__date')
+        invoice_items = group_trips_for_bill(bill)
+        context['invoice_items'] = invoice_items
+        
+        bill_trips = bill.bill_trips.select_related('trip', 'trip__vehicle').order_by('trip__date')
+        context['bill_trips'] = bill_trips
+
+        # Detect if we should show Discount or LR columns
+        has_discount = False
+        if bill.bill_type == 'Standard':
+            has_discount = (bill.discount or 0) > 0
+        else:
+            has_discount = any((bt.discount or 0) > 0 for bt in bill_trips)
+
+        has_lr = False
+        if bill.bill_type != 'Standard':
+            has_lr = any(bt.lr_no or (bt.trip and bt.trip.lr_no) for bt in bill_trips)
+
+        context['has_discount'] = has_discount
+        context['has_lr'] = has_lr
+        
         return context
 
 def group_trips_for_bill(bill):
+# ... rest of group_trips_for_bill ...
     """
     Groups bill_trips by (Pickup, Delivery, Rate) and returns a list of dictionaries.
     """
@@ -917,12 +942,14 @@ def group_trips_for_bill(bill):
             desc = "Transportation Charges"
 
         total_weight = sum((bt.trip.weight or 0) for bt in items)
-        total_amount = sum((bt.trip.revenue or 0) for bt in items)
+        total_discount = sum((bt.discount or 0) for bt in items)
+        total_amount = sum((bt.trip.revenue or 0) for bt in items) - total_discount
 
         grouped_items.append({
             'description': desc,
             'rate': rate,
             'weight': total_weight,
+            'discount': total_discount,
             'amount': total_amount,
             'count': len(items),
             'bill_trips': items, # Keep track of actual bill_trips in this group
@@ -957,11 +984,24 @@ def print_combined_bill(request, pk):
             'total_amount': sum(bt.trip.revenue or 0 for bt in bt_list),
         })
 
+    # Detect if we should show Discount or LR columns
+    has_discount = False
+    if bill.bill_type == 'Standard':
+        has_discount = (bill.discount or 0) > 0
+    else:
+        has_discount = any((bt.discount or 0) > 0 for bt in bill_trips)
+
+    has_lr = False
+    if bill.bill_type != 'Standard':
+        has_lr = any(bt.lr_no or (bt.trip and bt.trip.lr_no) for bt in bill_trips)
+
     context = {
         'bill': bill,
         'invoice_items': invoice_items,
         'date_groups': date_groups,
         'bill_trips': bill_trips,
+        'has_discount': has_discount,
+        'has_lr': has_lr,
     }
     return render(request, 'ledger/combined_bill_print.html', context)
 

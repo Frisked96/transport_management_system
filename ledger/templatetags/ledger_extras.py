@@ -89,14 +89,27 @@ def num2words(num):
 def sum_attribute(queryset, attr):
     """
     Sum a numeric attribute across a queryset or list.
-    Usage: {{ date_group.trips|sum_attribute:'weight' }}
+    Supports nested attributes using dot notation (e.g. 'trip.revenue').
+    Usage: {{ bill.bill_trips.all|sum_attribute:'trip.revenue' }}
     """
     total = 0
+    if not queryset:
+        return 0
+        
     for item in queryset:
-        value = getattr(item, attr, 0)
-        if value is None:
-            value = 0
-        total += value
+        # Support nested attributes
+        val = item
+        for part in attr.split('.'):
+            if val is None:
+                break
+            val = getattr(val, part, 0)
+        
+        if val is None:
+            val = 0
+        try:
+            total += Decimal(str(val))
+        except (ValueError, TypeError, Exception):
+            pass
     return total
 
 @register.filter
@@ -139,24 +152,59 @@ def sum_list(data_list, key):
     return total
 
 @register.filter
-def get_trip_gst(bill, trip):
+def subtract(value, arg):
     """
-    Calculates GST amount for a trip based on the bill's GST rate.
-    Usage: {{ bill|get_trip_gst:trip }}
+    Subtracts arg from value.
+    Usage: {{ value|subtract:arg }}
     """
-    if not trip.revenue or bill.gst_rate == 0:
-        return Decimal('0')
-    return Decimal(str(trip.revenue)) * (Decimal(bill.gst_rate) / Decimal(100))
+    try:
+        return Decimal(str(value)) - Decimal(str(arg))
+    except (ValueError, TypeError, Exception):
+        return value
 
 @register.filter
-def get_trip_total(bill, trip):
+def get_trip_gst(bill, trip_or_bt):
     """
-    Calculates Total amount (Revenue + GST) for a trip.
-    Usage: {{ bill|get_trip_total:trip }}
+    Calculates GST amount for a trip or bill_trip based on the bill's GST rate.
+    Accounts for BillTrip specific discount if a BillTrip object is passed.
+    Usage: {{ bill|get_trip_gst:bt }}
     """
-    rev = Decimal(str(trip.revenue or 0))
-    gst = get_trip_gst(bill, trip)
-    return rev + gst
+    revenue = 0
+    discount = 0
+    
+    # Check if we got a BillTrip or a Trip
+    if hasattr(trip_or_bt, 'trip'): # It's a BillTrip
+        revenue = trip_or_bt.trip.revenue or 0
+        discount = trip_or_bt.discount or 0
+    else: # It's a Trip
+        revenue = trip_or_bt.revenue or 0
+        # If it's just a trip, we don't know the bill-specific discount here 
+        # unless we were passed the BillTrip.
+    
+    taxable_value = Decimal(str(revenue)) - Decimal(str(discount))
+    if taxable_value <= 0 or bill.gst_rate == 0:
+        return Decimal('0')
+        
+    return taxable_value * (Decimal(str(bill.gst_rate)) / Decimal(100))
+
+@register.filter
+def get_trip_total(bill, trip_or_bt):
+    """
+    Calculates Total amount (Taxable Value + GST) for a trip or bill_trip.
+    Usage: {{ bill|get_trip_total:bt }}
+    """
+    revenue = 0
+    discount = 0
+    
+    if hasattr(trip_or_bt, 'trip'):
+        revenue = trip_or_bt.trip.revenue or 0
+        discount = trip_or_bt.discount or 0
+    else:
+        revenue = trip_or_bt.revenue or 0
+        
+    taxable_value = Decimal(str(revenue)) - Decimal(str(discount))
+    gst = get_trip_gst(bill, trip_or_bt)
+    return taxable_value + gst
 
 @register.filter
 def abs_val(value):

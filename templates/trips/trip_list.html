@@ -35,10 +35,16 @@
             </a>
 
             {% if perms.trips.add_trip %}
-            <a href="{% url 'trip-create' %}" class="flex items-center space-x-2 px-4 py-2 bg-slate-800 text-white rounded-md text-sm font-bold hover:bg-slate-900 shadow-sm transition-colors uppercase tracking-tight">
-                <i class="fa-solid fa-plus"></i>
-                <span class="hidden sm:inline">Add Trip</span>
-            </a>
+            <div class="flex items-center gap-1">
+                <a href="{% url 'trip-bulk-create' %}" class="flex items-center space-x-2 px-4 py-2 bg-slate-100 text-slate-700 border border-slate-300 rounded-l-md text-sm font-bold hover:bg-slate-200 shadow-sm transition-colors uppercase tracking-tight" title="Add Bulk Trips">
+                    <i class="fa-solid fa-layer-group"></i>
+                    <span class="hidden sm:inline">Bulk Add</span>
+                </a>
+                <a href="{% url 'trip-create' %}" class="flex items-center space-x-2 px-4 py-2 bg-slate-800 text-white rounded-r-md text-sm font-bold hover:bg-slate-900 shadow-sm transition-colors uppercase tracking-tight">
+                    <i class="fa-solid fa-plus"></i>
+                    <span class="hidden sm:inline">Add Trip</span>
+                </a>
+            </div>
             {% endif %}
         </div>
     </div>
@@ -320,10 +326,16 @@
     <h2 class="text-xl font-bold text-slate-900 mb-2">No trips found</h2>
     <p class="text-slate-600 mb-6 max-w-xs mx-auto text-sm">We couldn't find any trips matching your current search or filters.</p>
     {% if perms.trips.add_trip %}
-    <a href="{% url 'trip-create' %}" class="inline-flex items-center space-x-2 px-6 py-3 bg-emerald-600 text-white rounded-md font-bold text-sm hover:bg-emerald-700 shadow-sm transition-colors uppercase tracking-widest">
-        <i class="fa-solid fa-plus"></i>
-        <span>New Trip</span>
-    </a>
+    <div class="flex flex-col sm:flex-row items-center justify-center gap-3">
+        <a href="{% url 'trip-bulk-create' %}" class="inline-flex items-center space-x-2 px-6 py-3 bg-slate-100 text-slate-700 border border-slate-300 rounded-md font-bold text-sm hover:bg-slate-200 shadow-sm transition-colors uppercase tracking-widest">
+            <i class="fa-solid fa-layer-group"></i>
+            <span>Bulk Add</span>
+        </a>
+        <a href="{% url 'trip-create' %}" class="inline-flex items-center space-x-2 px-6 py-3 bg-emerald-600 text-white rounded-md font-bold text-sm hover:bg-emerald-700 shadow-sm transition-colors uppercase tracking-widest">
+            <i class="fa-solid fa-plus"></i>
+            <span>New Trip</span>
+        </a>
+    </div>
     {% endif %}
 </div>
 {% endif %}

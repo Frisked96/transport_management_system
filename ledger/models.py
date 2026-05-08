@@ -709,14 +709,16 @@ class BillQuerySet(models.QuerySet):
             total=Sum('amount')
         ).values('total')
 
-        # 3. Subquery for trip-based revenue (summing trips in the bill)
-        trip_revenue_sq = Trip.objects.filter(bills=OuterRef('pk')).values('bills').annotate(
+        # 3. Subquery for trip-based revenue (summing trips in the bill minus trip-level discounts)
+        from .models import BillTrip
+        trip_revenue_sq = BillTrip.objects.filter(bill=OuterRef('pk')).values('bill').annotate(
             total=Sum(
                 Case(
-                    When(revenue_type='fixed', then=F('rate_per_ton')),
-                    default=F('weight') * F('rate_per_ton'),
+                    When(trip__revenue_type='fixed', then=F('trip__rate_per_ton')),
+                    default=F('trip__weight') * F('trip__rate_per_ton'),
                     output_field=DecimalField()
-                )
+                ) - F('discount'),
+                output_field=DecimalField()
             )
         ).values('total')
 
@@ -728,8 +730,14 @@ class BillQuerySet(models.QuerySet):
                 output_field=DecimalField()
             ),
             annotated_subtotal = Case(
-                When(bill_type='Standard', then=Coalesce(F('amount_override'), ExpressionWrapper(F('standard_weight') * F('standard_rate'), output_field=DecimalField()), Value(0, output_field=DecimalField()))),
-                default=Coalesce(Subquery(trip_revenue_sq), Value(0, output_field=DecimalField()), output_field=DecimalField())
+                When(bill_type='Standard', then=ExpressionWrapper(
+                    Coalesce(F('amount_override'), ExpressionWrapper(F('standard_weight') * F('standard_rate'), output_field=DecimalField()), Value(0, output_field=DecimalField())) - F('discount'),
+                    output_field=DecimalField()
+                )),
+                default=ExpressionWrapper(
+                    Coalesce(Subquery(trip_revenue_sq), Value(0, output_field=DecimalField()), output_field=DecimalField()) - F('discount'),
+                    output_field=DecimalField()
+                )
             )
         ).annotate(
             annotated_gst_amount = ExpressionWrapper(F('annotated_subtotal') * F('gst_rate') / Value(100), output_field=DecimalField())
@@ -825,6 +833,7 @@ class Bill(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     category = models.ForeignKey(TransactionCategory, null=True, blank=True, on_delete=models.SET_NULL, related_name='bills', verbose_name="Bill Category")
     original_bill = models.ForeignKey('self', null=True, blank=True, on_delete=models.SET_NULL, related_name='adjustment_bills', verbose_name="Against Invoice")
+    discount = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name="Discount")
     use_roundoff = models.BooleanField(default=True, verbose_name="Use Round Off")
 
     @classmethod
@@ -1122,13 +1131,21 @@ class Bill(models.Model):
         if self.bill_type == self.TYPE_STANDARD:
             # For Standard invoices, we use amount_override as the base amount.
             # If it's missing but we have weight/rate, calculate it as a fallback.
+            base = 0
             if self.amount_override is not None:
-                return self.amount_override
-            if self.standard_weight and self.standard_rate:
-                return self.standard_weight * self.standard_rate
-            return 0
-        # Sum individual trip revenues correctly (handles fixed vs per-ton)
-        return sum(trip.revenue for trip in self.trips.all())
+                base = self.amount_override
+            elif self.standard_weight and self.standard_rate:
+                base = self.standard_weight * self.standard_rate
+            
+            return max(0, base - (self.discount or 0))
+
+        # Sum individual trip revenues minus their individual discounts
+        # We use a subtotal that subtracts per-trip discounts BEFORE bill-level discount
+        trip_subtotal = 0
+        for bt in self.bill_trips.all():
+            trip_subtotal += (bt.trip.revenue - (bt.discount or 0))
+            
+        return max(0, trip_subtotal - (self.discount or 0))
 
     @property
     def gst_amount(self):
@@ -1157,11 +1174,12 @@ class Bill(models.Model):
 
 class BillTrip(models.Model):
     """
-    Through model for Bill and Trip to store LR No for each trip in a bill context.
+    Through model for Bill and Trip to store LR No and Discount for each trip in a bill context.
     """
     bill = models.ForeignKey(Bill, on_delete=models.CASCADE, related_name='bill_trips')
     trip = models.ForeignKey(Trip, on_delete=models.CASCADE, related_name='bill_trips')
     lr_no = models.CharField(max_length=100, blank=True, null=True, verbose_name="LR No")
+    discount = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name="Discount")
     
     class Meta:
         verbose_name = 'Bill Trip'

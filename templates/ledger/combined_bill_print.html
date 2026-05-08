@@ -297,11 +297,12 @@
                     <thead>
                         <tr>
                             <th width="5%">S.N.</th>
-                            <th width="45%">Description of Services</th>
-                            <th width="10%">LR No.</th>
+                            <th width="35%">Description of Services</th>
+                            {% if has_lr %}<th width="10%">LR No.</th>{% endif %}
                             <th width="10%">HSN/SAC</th>
                             <th width="10%">Qty (MT)</th>
                             <th width="10%">Rate</th>
+                            {% if has_discount %}<th width="10%">Discount</th>{% endif %}
                             <th width="10%">Amount</th>
                         </tr>
                     </thead>
@@ -313,11 +314,12 @@
                                 <strong>{{ bill.item_type|default:bill.category.name }}</strong><br>
                                 <span style="font-size: 10px; color: #666;">{{ bill.description }}</span>
                             </td>
-                            <td class="text-center">-</td>
+                            {% if has_lr %}<td class="text-center">-</td>{% endif %}
                             <td class="text-center">{{ bill.hsn_code }}</td>
                             <td class="text-right">{% if bill.standard_weight %}{{ bill.standard_weight|indian_comma }}{% else %}-{% endif %}</td>
                             <td class="text-right">{% if bill.standard_rate %}{{ bill.standard_rate|indian_comma }}{% else %}-{% endif %}</td>
-                            <td class="text-right font-bold">{{ bill.amount_override|indian_comma }}</td>
+                            {% if has_discount %}<td class="text-right" style="color: #e11d48;">{% if bill.discount %}{{ bill.discount|indian_comma }}{% else %}-{% endif %}</td>{% endif %}
+                            <td class="text-right font-bold">{{ bill.subtotal|indian_comma }}</td>
                         </tr>
                         {% elif bill_trips.count <= 3 %}
                         {% for bt in bill_trips %}
@@ -329,13 +331,16 @@
                                     {{ bt.trip.pickup_location }} to {{ bt.trip.delivery_location }} | {{ bt.trip.date|date:"d/m/y" }}
                                 </span>
                             </td>
+                            {% if has_lr %}
                             <td class="text-center font-bold">
                                 {{ bt.lr_no|default:bt.trip.lr_no|default:"-" }}
                             </td>
+                            {% endif %}
                             <td class="text-center">{{ bill.hsn_code }}</td>
                             <td class="text-right">{{ bt.trip.weight|indian_comma }}</td>
                             <td class="text-right">{{ bt.trip.rate_per_ton|indian_comma }}</td>
-                            <td class="text-right font-bold">{{ bt.trip.revenue|indian_comma }}</td>
+                            {% if has_discount %}<td class="text-right" style="color: #e11d48;">{% if bt.discount %}{{ bt.discount|indian_comma }}{% else %}-{% endif %}</td>{% endif %}
+                            <td class="text-right font-bold">{{ bt.trip.revenue|subtract:bt.discount|indian_comma }}</td>
                         </tr>
                         {% endfor %}
                         {% else %}
@@ -346,10 +351,11 @@
                                 <strong>{{ item.description }}</strong><br>
                                 <span style="font-size: 10px; color: #666;">Consolidated charges for {{ item.count }} trip(s)</span>
                             </td>
-                            <td class="text-center">-</td>
+                            {% if has_lr %}<td class="text-center">-</td>{% endif %}
                             <td class="text-center">{{ bill.hsn_code }}</td>
                             <td class="text-right">{{ item.weight|indian_comma }}</td>
                             <td class="text-right">{{ item.rate|indian_comma }}</td>
+                            {% if has_discount %}<td class="text-right" style="color: #e11d48;">{% if item.discount %}{{ item.discount|indian_comma }}{% else %}-{% endif %}</td>{% endif %}
                             <td class="text-right font-bold">{{ item.amount|indian_comma }}</td>
                         </tr>
                         {% endfor %}
@@ -361,10 +367,11 @@
                         <tr>
                             <td style="border-bottom: none;">&nbsp;</td>
                             <td style="border-bottom: none;">&nbsp;</td>
+                            {% if has_lr %}<td style="border-bottom: none;">&nbsp;</td>{% endif %}
                             <td style="border-bottom: none;">&nbsp;</td>
                             <td style="border-bottom: none;">&nbsp;</td>
                             <td style="border-bottom: none;">&nbsp;</td>
-                            <td style="border-bottom: none;">&nbsp;</td>
+                            {% if has_discount %}<td style="border-bottom: none;">&nbsp;</td>{% endif %}
                             <td style="border-bottom: none;">&nbsp;</td>
                         </tr>
                         {% endfor %}
@@ -372,9 +379,10 @@
                     </tbody>
                     <tfoot>
                         <tr class="font-bold" style="background-color: #f8f9fa;">
-                            <td colspan="4" class="text-right">Total</td>
+                            <td colspan="{% if has_lr %}4{% else %}3{% endif %}" class="text-right">Total</td>
                             <td class="text-right">{{ bill.total_weight|indian_comma }}</td>
                             <td></td>
+                            {% if has_discount %}<td></td>{% endif %}
                             <td class="text-right"><span class="rupee-symbol">Rs.</span> {{ bill.subtotal|indian_comma }}</td>
                         </tr>
                     </tfoot>
@@ -504,10 +512,11 @@
                             <th width="4%">S.N.</th>
                             <th width="10%">Date</th>
                             <th width="12%">Vehicle No</th>
-                            <th width="12%">LR No</th>
-                            <th width="22%">From - To</th>
+                            {% if has_lr %}<th width="12%">LR No</th>{% endif %}
+                            <th width="{% if has_lr %}22%{% else %}34%{% endif %}">From - To</th>
                             <th width="8%">Weight</th>
                             <th width="12%">Revenue</th>
+                            {% if has_discount %}<th width="10%">Disc.</th>{% endif %}
                             {% if bill.gst_type != 'NONE' and bill.gst_rate > 0 %}
                             <th width="10%">GST ({{ bill.gst_rate }}%)</th>
                             <th width="10%">Total</th>
@@ -520,22 +529,24 @@
                             <td class="text-center">{{ forloop.counter }}</td>
                             <td class="text-center">{{ bt.trip.date|date:"d/m/y" }}</td>
                             <td class="text-center">{{ bt.trip.vehicle.registration_plate }}</td>
-                            <td class="text-center">{{ bt.lr_no|default:bt.trip.lr_no|default:"-" }}</td>
+                            {% if has_lr %}<td class="text-center">{{ bt.lr_no|default:bt.trip.lr_no|default:"-" }}</td>{% endif %}
                             <td>{{ bt.trip.pickup_location }} - {{ bt.trip.delivery_location }}</td>
                             <td class="text-right">{{ bt.trip.weight|indian_comma }}</td>
                             <td class="text-right font-bold">{{ bt.trip.revenue|indian_comma }}</td>
+                            {% if has_discount %}<td class="text-right" style="color: #e11d48;">{{ bt.discount|indian_comma }}</td>{% endif %}
                             {% if bill.gst_type != 'NONE' and bill.gst_rate > 0 %}
-                            <td class="text-right">{{ bill|get_trip_gst:bt.trip|indian_comma }}</td>
-                            <td class="text-right font-bold">{{ bill|get_trip_total:bt.trip|indian_comma }}</td>
+                            <td class="text-right">{{ bill|get_trip_gst:bt|indian_comma }}</td>
+                            <td class="text-right font-bold">{{ bill|get_trip_total:bt|indian_comma }}</td>
                             {% endif %}
                         </tr>
                         {% endfor %}
                     </tbody>
                     <tfoot>
                         <tr class="font-bold" style="background-color: #f8f9fa;">
-                            <td colspan="5" class="text-right">Total for Annexure</td>
+                            <td colspan="{% if has_lr %}5{% else %}4{% endif %}" class="text-right">Total for Annexure</td>
                             <td class="text-right">{{ bill.total_weight|indian_comma }}</td>
-                            <td class="text-right">Rs. {{ bill.subtotal|indian_comma }}</td>
+                            <td class="text-right">Rs. {{ bill.bill_trips.all|sum_attribute:'trip.revenue'|indian_comma }}</td>
+                            {% if has_discount %}<td class="text-right">Rs. {{ bill.bill_trips.all|sum_attribute:'discount'|indian_comma }}</td>{% endif %}
                             {% if bill.gst_type != 'NONE' and bill.gst_rate > 0 %}
                             <td class="text-right">Rs. {{ bill.gst_amount|indian_comma }}</td>
                             <td class="text-right">Rs. {{ bill.rounded_total|indian_comma }}</td>

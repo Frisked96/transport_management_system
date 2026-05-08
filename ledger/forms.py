@@ -230,6 +230,7 @@ class BillForm(forms.ModelForm):
             'standard_weight',
             'standard_rate',
             'amount_override',
+            'discount',
             'gst_rate',
             'gst_type',
             'use_roundoff',
@@ -248,6 +249,7 @@ class BillForm(forms.ModelForm):
             'standard_weight': forms.NumberInput(attrs={'step': '0.001', 'id': 'id_standard_weight'}),
             'standard_rate': forms.NumberInput(attrs={'step': '0.01', 'id': 'id_standard_rate'}),
             'amount_override': forms.NumberInput(attrs={'step': '0.01', 'id': 'id_amount_override'}),
+            'discount': forms.NumberInput(attrs={'step': '0.01', 'id': 'id_discount'}),
             'use_roundoff': forms.CheckboxInput(attrs={'id': 'id_use_roundoff', 'class': 'w-4 h-4 text-emerald-600 border-slate-300 rounded focus:ring-emerald-500'}),
         }
 
@@ -327,15 +329,15 @@ class BillForm(forms.ModelForm):
             self.fields['trips'].queryset = Trip.objects.none()
             self.fields['original_bill'].queryset = Bill.objects.none()
 
-        # If editing, populate trips_data with existing LR Nos
+        # If editing, populate trips_data with existing LR Nos and Discounts
         if self.instance and self.instance.pk:
             from .models import BillTrip
-            bt_data = {bt.trip_id: bt.lr_no for bt in self.instance.bill_trips.all()}
+            bt_data = {bt.trip_id: {'lr_no': bt.lr_no, 'discount': str(bt.discount)} for bt in self.instance.bill_trips.all()}
             self.fields['trips_data'].initial = json.dumps(bt_data)
         elif 'trips' in self.initial:
             # For new bills with pre-selected trips, pre-populate LR Nos
             trips = Trip.objects.filter(id__in=self.initial['trips'])
-            bt_data = {trip.id: trip.lr_no for trip in trips if trip.lr_no}
+            bt_data = {trip.id: {'lr_no': trip.lr_no, 'discount': '0.00'} for trip in trips if trip.lr_no}
             self.fields['trips_data'].initial = json.dumps(bt_data)
 
     def clean(self):
@@ -371,7 +373,7 @@ class BillForm(forms.ModelForm):
         if commit:
             instance.save()
             
-            # Handle BillTrip relationships with LR No
+            # Handle BillTrip relationships with LR No and Discount
             selected_trips = self.cleaned_data.get('trips', [])
             trips_data_json = self.cleaned_data.get('trips_data', '{}')
             
@@ -387,7 +389,19 @@ class BillForm(forms.ModelForm):
             from .models import BillTrip
             trips_to_update = []
             for trip in selected_trips:
-                lr_no = trips_extra.get(str(trip.id)) or trips_extra.get(trip.id)
+                extra = trips_extra.get(str(trip.id)) or trips_extra.get(trip.id)
+                
+                lr_no = None
+                discount = 0
+                
+                if isinstance(extra, dict):
+                    lr_no = extra.get('lr_no')
+                    discount = extra.get('discount') or 0
+                else:
+                    # Backward compatibility for old trips_data format (just LR No string)
+                    lr_no = extra
+                    discount = 0
+
                 # Fallback to trip.lr_no if not provided in extra data
                 if not lr_no:
                     lr_no = trip.lr_no
@@ -401,7 +415,10 @@ class BillForm(forms.ModelForm):
                 BillTrip.objects.update_or_create(
                     bill=instance,
                     trip=trip,
-                    defaults={'lr_no': lr_no}
+                    defaults={
+                        'lr_no': lr_no,
+                        'discount': discount
+                    }
                 )
             
             if trips_to_update:
