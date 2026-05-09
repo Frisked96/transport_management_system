@@ -719,16 +719,18 @@ class BillQuerySet(models.QuerySet):
             total=Sum(
                 Case(
                     # Credit Note: Reduces outstanding (+ in received)
-                    When(category__name='Credit Note', then=(
-                        (Coalesce(F('amount_override'), 0, output_field=DecimalField()) - F('discount')) * 
-                        (1 + F('gst_rate') / Value(100, output_field=DecimalField()))
+                    When(category__name='Credit Note', then=ExpressionWrapper(
+                        (Coalesce(F('amount_override'), Value(0, output_field=DecimalField())) - Coalesce(F('discount'), Value(0, output_field=DecimalField()))) * 
+                        (Value(1, output_field=DecimalField()) + F('gst_rate') / Value(100, output_field=DecimalField())),
+                        output_field=DecimalField()
                     )),
                     # Debit Note: Increases outstanding (- in received)
-                    When(category__name='Debit Note', then=-(
-                        (Coalesce(F('amount_override'), 0, output_field=DecimalField()) - F('discount')) * 
-                        (1 + F('gst_rate') / Value(100, output_field=DecimalField()))
+                    When(category__name='Debit Note', then=ExpressionWrapper(
+                        -((Coalesce(F('amount_override'), Value(0, output_field=DecimalField())) - Coalesce(F('discount'), Value(0, output_field=DecimalField()))) * 
+                        (Value(1, output_field=DecimalField()) + F('gst_rate') / Value(100, output_field=DecimalField()))),
+                        output_field=DecimalField()
                     )),
-                    default=0,
+                    default=Value(0, output_field=DecimalField()),
                     output_field=DecimalField()
                 )
             )
