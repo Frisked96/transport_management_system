@@ -751,10 +751,10 @@ class BillQuerySet(models.QuerySet):
 
         return self.annotate(
             annotated_received = ExpressionWrapper(
-                Coalesce(Subquery(direct_payments), Value(0, output_field=DecimalField()), output_field=DecimalField()) + 
-                Coalesce(Subquery(trip_direct_payments), Value(0, output_field=DecimalField()), output_field=DecimalField()) +
-                Coalesce(Subquery(trip_allocations), Value(0, output_field=DecimalField()), output_field=DecimalField()) +
-                Coalesce(Subquery(adjustments_sq), Value(0, output_field=DecimalField()), output_field=DecimalField()),
+                Coalesce(Subquery(direct_payments), Value(0, output_field=DecimalField())) + 
+                Coalesce(Subquery(trip_direct_payments), Value(0, output_field=DecimalField())) +
+                Coalesce(Subquery(trip_allocations), Value(0, output_field=DecimalField())) +
+                Coalesce(Subquery(adjustments_sq), Value(0, output_field=DecimalField())),
                 output_field=DecimalField()
             ),
             annotated_subtotal = Case(
@@ -763,12 +763,12 @@ class BillQuerySet(models.QuerySet):
                     output_field=DecimalField()
                 )),
                 default=ExpressionWrapper(
-                    Coalesce(Subquery(trip_revenue_sq), Value(0, output_field=DecimalField()), output_field=DecimalField()) - F('discount'),
+                    Coalesce(Subquery(trip_revenue_sq), Value(0, output_field=DecimalField())) - F('discount'),
                     output_field=DecimalField()
                 )
             )
         ).annotate(
-            annotated_gst_amount = ExpressionWrapper(F('annotated_subtotal') * F('gst_rate') / Value(100), output_field=DecimalField())
+            annotated_gst_amount = ExpressionWrapper(F('annotated_subtotal') * F('gst_rate') / Value(100, output_field=DecimalField()), output_field=DecimalField())
         ).annotate(
             annotated_total_amount = ExpressionWrapper(F('annotated_subtotal') + F('annotated_gst_amount'), output_field=DecimalField())
         ).annotate(

@@ -693,7 +693,9 @@ def get_party_unpaid_trips(request):
         
         return JsonResponse({'trips': data})
     except Exception as e:
-        return JsonResponse({'error': str(e)}, status=400)
+        import traceback
+        print(traceback.format_exc())
+        return JsonResponse({'error': str(e), 'detail': 'Check server logs for traceback'}, status=400)
 
 @login_required
 def get_bill_balance(request):
@@ -714,7 +716,9 @@ def get_bill_balance(request):
             'subtotal': float(bill.subtotal),
         })
     except Exception as e:
-        return JsonResponse({'error': str(e)}, status=400)
+        import traceback
+        print(traceback.format_exc())
+        return JsonResponse({'error': str(e), 'detail': 'Check server logs for traceback'}, status=400)
 
 @login_required
 def get_party_unbilled_trips(request):
@@ -766,7 +770,9 @@ def get_party_unbilled_trips(request):
             })        
         return JsonResponse({'trips': data})
     except Exception as e:
-        return JsonResponse({'error': str(e)}, status=400)
+        import traceback
+        print(traceback.format_exc())
+        return JsonResponse({'error': str(e), 'detail': 'Check server logs for traceback'}, status=400)
 
 
 # --- Bill Views ---
@@ -1491,7 +1497,9 @@ def get_party_bills(request):
 
         return JsonResponse({'bills': data})
     except Exception as e:
-        return JsonResponse({'error': str(e)}, status=400)
+        import traceback
+        print(traceback.format_exc())
+        return JsonResponse({'error': str(e), 'detail': 'Check server logs for traceback'}, status=400)
 
 @login_required
 def get_next_invoice_number(request):
