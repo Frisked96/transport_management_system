@@ -1470,6 +1470,7 @@ def unified_ledger_pdf(request):
 def get_party_bills(request):
     """
     AJAX endpoint to get bills for a party (excluding adjustment notes)
+    Uses prefetching + Python calculation to avoid SQLite parser stack overflow.
     """
     party_id = request.GET.get('party_id')
     unpaid_only = request.GET.get('unpaid_only') == 'true'
@@ -1478,22 +1479,37 @@ def get_party_bills(request):
         return JsonResponse({'bills': []})
 
     try:
-        bills_qs = Bill.objects.with_payment_info().filter(
+        from .models import Bill
+        from django.db import models
+        
+        # We use prefetch_related instead of complex annotations to avoid parser stack overflow
+        bills_qs = Bill.objects.filter(
             party_id=party_id
+        ).select_related('issuer', 'category').prefetch_related(
+            'trips',
+            'bill_trips',
+            'bill_trips__trip',
+            'financial_records',
+            'financial_records__category',
+            'trips__payment_allocations',
+            'adjustment_bills',
+            'adjustment_bills__category'
         ).filter(
-            Q(category__isnull=True) | ~Q(category__name__in=['Credit Note', 'Debit Note'])
+            models.Q(category__isnull=True) | ~models.Q(category__name__in=['Credit Note', 'Debit Note'])
         ).order_by('-date', '-created_at')
 
-        if unpaid_only:
-            # Efficiently filter using annotation
-            bills = bills_qs.exclude(annotated_outstanding__lte=0)
-        else:
-            bills = bills_qs
-
-        data = [{
-            'id': bill.id,
-            'label': f"{bill.bill_number or 'Draft'} - {bill.date.strftime('%d/%m/%Y')} (Pending: ₹{bill.outstanding_balance:,.2f})"
-        } for bill in bills]
+        data = []
+        for bill in bills_qs:
+            # Python-side calculation using optimized prefetch data
+            outstanding = bill.outstanding_balance
+            
+            if unpaid_only and outstanding <= 0:
+                continue
+                
+            data.append({
+                'id': bill.id,
+                'label': f"{bill.bill_number or 'Draft'} - {bill.date.strftime('%d/%m/%Y')} (Pending: ₹{outstanding:,.2f})"
+            })
 
         return JsonResponse({'bills': data})
     except Exception as e:
