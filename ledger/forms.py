@@ -97,8 +97,8 @@ class FinancialRecordForm(forms.ModelForm):
                 self.fields['associated_trip'].queryset = trips_qs.distinct().order_by('-date')
 
                 # Filter bills for this debtor: Exclude CN/DN and already Paid bills
-                bills_qs = Bill.objects.with_payment_info().filter(party=party).exclude(
-                    category__name__in=['Credit Note', 'Debit Note']
+                bills_qs = Bill.objects.with_payment_info().filter(party=party).filter(
+                    models.Q(category__isnull=True) | ~models.Q(category__name__in=['Credit Note', 'Debit Note'])
                 )
                 
                 # Further filter to only show unpaid bills

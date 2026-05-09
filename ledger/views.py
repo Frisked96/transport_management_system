@@ -1473,10 +1473,11 @@ def get_party_bills(request):
 
     try:
         from .models import Bill
+        from django.db import models
         bills_qs = Bill.objects.with_payment_info().filter(
             party_id=party_id
-        ).exclude(
-            category__name__in=['Credit Note', 'Debit Note']
+        ).filter(
+            models.Q(category__isnull=True) | ~models.Q(category__name__in=['Credit Note', 'Debit Note'])
         ).order_by('-date', '-created_at')
 
         if unpaid_only:
