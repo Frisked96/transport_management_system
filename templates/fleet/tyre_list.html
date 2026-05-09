@@ -141,6 +141,9 @@
                         {% if tyre.status != 'Scrap' %}
                         <a href="{% url 'tyre-action' tyre.pk 'Scrap' %}" class="block px-4 py-2 text-xs font-bold text-rose-600 hover:bg-slate-50 uppercase" onclick="return confirm('Scrap this tyre?')">Scrap</a>
                         {% endif %}
+                        {% if perms.fleet.delete_tyre %}
+                        <a href="{% url 'tyre-delete' tyre.pk %}" class="block px-4 py-2 text-xs font-bold text-rose-600 hover:bg-slate-50 uppercase">Delete</a>
+                        {% endif %}
                     </div>
                 </div>
             </div>

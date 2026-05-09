@@ -87,6 +87,24 @@ class TyreUpdateView(LoginRequiredMixin, UpdateView):
         return super().form_valid(form)
 
 
+class TyreDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
+    """
+    Delete view for Tyres.
+    Permission: Only admin and manager can delete tyres.
+    deletes the tyre, its logs, and its photo from storage.
+    """
+    model = Tyre
+    template_name = 'fleet/tyre_confirm_delete.html'
+    permission_required = 'fleet.delete_tyre'
+    success_url = reverse_lazy('tyre-list')
+
+    def delete(self, request, *args, **kwargs):
+        tyre = self.get_object()
+        serial = tyre.serial_number
+        messages.success(self.request, f'Tyre {serial} and all its history have been deleted.')
+        return super().delete(request, *args, **kwargs)
+
+
 class TyreLogCreateView(LoginRequiredMixin, CreateView):
     model = TyreLog
     form_class = TyreLogForm
