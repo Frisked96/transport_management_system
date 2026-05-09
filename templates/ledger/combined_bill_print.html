@@ -5,7 +5,7 @@
 <head>
     <meta charset="utf-8">
     <title>
-        {% if bill.category.name == 'Debit Note' %}Debit Note{% elif bill.category.name == 'Credit Note' %}Credit Note{% elif bill.category.name == 'Halting' %}Halting Invoice{% elif bill.gst_type == 'NONE' %}Commercial Invoice{% else %}Tax Invoice{% endif %} {{ bill.bill_number }}
+        {% if bill.category and bill.category.name == 'Debit Note' %}Debit Note{% elif bill.category and bill.category.name == 'Credit Note' %}Credit Note{% elif bill.category and bill.category.name == 'Halting' %}Halting Invoice{% elif bill.gst_type == 'NONE' %}Commercial Invoice{% else %}Tax Invoice{% endif %} {{ bill.bill_number }}
     </title>
     <style>
         /* Global Reset */
@@ -324,7 +324,7 @@
     <div class="page">
         <div class="page-border">
             <div class="header-title">
-                {% if bill.category.name == 'Debit Note' %}Debit Note{% elif bill.category.name == 'Credit Note' %}Credit Note{% elif bill.category.name == 'Halting' %}Halting Charges{% elif bill.gst_type == 'NONE' %}Commercial Invoice{% else %}Tax Invoice{% endif %}
+                {% if bill.category and bill.category.name == 'Debit Note' %}Debit Note{% elif bill.category and bill.category.name == 'Credit Note' %}Credit Note{% elif bill.category and bill.category.name == 'Halting' %}Halting Charges{% elif bill.gst_type == 'NONE' %}Commercial Invoice{% else %}Tax Invoice{% endif %}
             </div>
             
             <div class="company-section">
@@ -384,7 +384,7 @@
                         <tr>
                             <td class="text-center">1</td>
                             <td>
-                                <strong>{{ bill.item_type|default:bill.category.name }}</strong><br>
+                                <strong>{% if bill.item_type %}{{ bill.item_type }}{% elif bill.category %}{{ bill.category.name }}{% else %}Standard Item{% endif %}</strong><br>
                                 <span style="font-size: 10px; color: #666;">{{ bill.description }}</span>
                             </td>
                             {% if has_lr %}<td class="text-center">-</td>{% endif %}

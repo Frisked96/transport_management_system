@@ -116,11 +116,11 @@
             </div>
             <!-- Type Badge -->
             <div class="mt-2">
-                {% if bill.category.name == 'Credit Note' %}
+                {% if bill.category and bill.category.name == 'Credit Note' %}
                 <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-tight bg-purple-50 text-purple-700 border border-purple-200">
                     <i class="fa-solid fa-file-invoice-dollar mr-1"></i> Credit Note
                 </span>
-                {% elif bill.category.name == 'Debit Note' %}
+                {% elif bill.category and bill.category.name == 'Debit Note' %}
                 <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-tight bg-blue-50 text-blue-700 border border-blue-200">
                     <i class="fa-solid fa-file-invoice-dollar mr-1"></i> Debit Note
                 </span>

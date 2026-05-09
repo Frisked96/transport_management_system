@@ -237,11 +237,11 @@
                                     <div class="flex flex-col">
                                         <a href="{% url 'bill-detail' bill.pk %}" class="text-sm font-black text-slate-900 hover:text-emerald-600 block leading-tight">{{ bill.bill_number|default:"Draft" }}</a>
                                         <div class="mt-1">
-                                            {% if bill.category.name == 'Credit Note' %}
+                                            {% if bill.category and bill.category.name == 'Credit Note' %}
                                             <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-tighter bg-purple-50 text-purple-700 border border-purple-100">
                                                 CN
                                             </span>
-                                            {% elif bill.category.name == 'Debit Note' %}
+                                            {% elif bill.category and bill.category.name == 'Debit Note' %}
                                             <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-tighter bg-blue-50 text-blue-700 border border-blue-100">
                                                 DN
                                             </span>
@@ -323,13 +323,15 @@
                                 <td class="px-6 py-3 text-xs font-bold text-slate-500">{{ record.date|date:"d/m/y" }}</td>
                                 <td class="px-6 py-3">
                                     {% if record.is_invoice %}
-                                        {% if record.associated_bill.is_adjustment %}
-                                        <span class="inline-flex px-2 py-0.5 rounded text-[9px] font-black uppercase {% if record.associated_bill.category.name == 'Credit Note' %}bg-purple-100 text-purple-700{% else %}bg-blue-100 text-blue-700{% endif %}">{{ record.associated_bill.category.name }}</span>
+                                        {% if record.associated_bill and record.associated_bill.is_adjustment %}
+                                        <span class="inline-flex px-2 py-0.5 rounded text-[9px] font-black uppercase {% if record.associated_bill.category and record.associated_bill.category.name == 'Credit Note' %}bg-purple-100 text-purple-700{% else %}bg-blue-100 text-blue-700{% endif %}">
+                                            {% if record.associated_bill.category %}{{ record.associated_bill.category.name }}{% else %}Adjustment{% endif %}
+                                        </span>
                                         {% else %}
                                         <span class="inline-flex px-2 py-0.5 rounded text-[9px] font-black uppercase bg-blue-100 text-blue-700">Invoice</span>
                                         {% endif %}
                                     {% else %}
-                                    <span class="inline-flex px-2 py-0.5 rounded text-[9px] font-black uppercase bg-slate-100 text-slate-700">{{ record.category.name }}</span>
+                                    <span class="inline-flex px-2 py-0.5 rounded text-[9px] font-black uppercase bg-slate-100 text-slate-700">{% if record.category %}{{ record.category.name }}{% else %}Manual{% endif %}</span>
                                     {% endif %}
                                 </td>
                                 <td class="px-6 py-3">
