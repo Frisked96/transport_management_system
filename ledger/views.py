@@ -439,7 +439,20 @@ class PartyDetailView(LoginRequiredMixin, BaseLedgerPermissionMixin, DetailView)
         context = super().get_context_data(**kwargs)
         
         # 1. Trips Pagination (Operations Tab)
-        trips_qs = Trip.objects.filter(party=self.object).select_related('vehicle').with_payment_info().with_billing_info().order_by('-date', '-created_at')
+        # Optimized with prefetching for bills and allocations to support accurate Python-side balance calculations
+        trips_qs = Trip.objects.filter(party=self.object).select_related(
+            'vehicle', 'route'
+        ).prefetch_related(
+            'bills',
+            'bills__category',
+            'bills__adjustment_bills',
+            'bills__adjustment_bills__category',
+            'bills__financial_records',
+            'bills__financial_records__category',
+            'payment_allocations',
+            'financial_records',
+            'financial_records__category'
+        ).with_payment_info().with_billing_info().order_by('-date', '-created_at')
 
         billed_filter = self.request.GET.get('billed')
         if billed_filter == 'unbilled':
