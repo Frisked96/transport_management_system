@@ -37,19 +37,84 @@ class TripQuerySet(models.QuerySet):
         # Subquery for associated bill's GST rate
         bill_gst_rate = Bill.objects.filter(trips=OuterRef('pk')).values('gst_rate')[:1]
 
+        # Subquery for direct payments to the associated bill
+        # We'll take a proportional share of bill-level payments
+        bill_payments = FinancialRecord.objects.filter(
+            associated_bill__trips=OuterRef('pk')
+        ).exclude(
+            record_type=FinancialRecord.RECORD_TYPE_INVOICE
+        ).filter(
+            models.Q(category__type=TransactionCategory.TYPE_INCOME) | 
+            models.Q(category__name__in=['Deductions', 'TDS', 'Shortage', 'Credit Note', 'Debit Note'])
+        ).values('associated_bill').annotate(
+            total=Sum('amount')
+        ).values('total')
+
+        # Subquery for bill adjustments
+        bill_adjustments = Bill.objects.filter(
+            original_bill__trips=OuterRef('pk')
+        ).values('original_bill').annotate(
+            total=Sum(
+                Case(
+                    When(category__name='Credit Note', then=ExpressionWrapper(
+                        (Coalesce(F('amount_override'), F('standard_weight') * F('standard_rate'), Value(0, output_field=DecimalField())) - Coalesce(F('discount'), Value(0, output_field=DecimalField()))) * 
+                        (Value(1, output_field=DecimalField()) + F('gst_rate') / Value(100, output_field=DecimalField())),
+                        output_field=DecimalField()
+                    )),
+                    When(category__name='Debit Note', then=ExpressionWrapper(
+                        -((Coalesce(F('amount_override'), F('standard_weight') * F('standard_rate'), Value(0, output_field=DecimalField())) - Coalesce(F('discount'), Value(0, output_field=DecimalField()))) * 
+                        (Value(1, output_field=DecimalField()) + F('gst_rate') / Value(100, output_field=DecimalField()))),
+                        output_field=DecimalField()
+                    )),
+                    default=Value(0, output_field=DecimalField()),
+                    output_field=DecimalField()
+                )
+            )
+        ).values('total')
+
+        # Subquery for associated bill's total (to calculate proportional share)
+        from ledger.models import BillTrip
+        trip_revenue_sq = BillTrip.objects.filter(bill=OuterRef('pk')).values('bill').annotate(
+            total=Sum(
+                Case(
+                    When(trip__revenue_type='fixed', then=F('trip__rate_per_ton')),
+                    default=F('trip__weight') * F('trip__rate_per_ton'),
+                    output_field=DecimalField()
+                ) - F('discount'),
+                output_field=DecimalField()
+            )
+        ).values('total')
+
+        bill_total_approx = Bill.objects.filter(trips=OuterRef('pk')).annotate(
+            calc_subtotal = Case(
+                When(bill_type='Standard', then=ExpressionWrapper(
+                    Coalesce(F('amount_override'), F('standard_weight') * F('standard_rate'), Value(0, output_field=DecimalField())) - Coalesce(F('discount'), Value(0, output_field=DecimalField())),
+                    output_field=DecimalField()
+                )),
+                default=ExpressionWrapper(
+                    Coalesce(Subquery(trip_revenue_sq), Value(0, output_field=DecimalField())) - Coalesce(F('discount'), Value(0, output_field=DecimalField())),
+                    output_field=DecimalField()
+                )
+            )
+        ).annotate(
+            approx_total = ExpressionWrapper(F('calc_subtotal') * (Value(1, output_field=DecimalField()) + F('gst_rate') / Value(100, output_field=DecimalField())), output_field=DecimalField())
+        ).values('approx_total')[:1]
+
         # Basic revenue and received amount
         qs = self.annotate(
-            annotated_received = Coalesce(Subquery(direct_payments), Value(0, output_field=DecimalField()), output_field=DecimalField()) + 
-                                 Coalesce(Subquery(allocations), Value(0, output_field=DecimalField()), output_field=DecimalField()),
+            direct_received = Coalesce(Subquery(direct_payments), Value(0, output_field=DecimalField()), output_field=DecimalField()) + 
+                              Coalesce(Subquery(allocations), Value(0, output_field=DecimalField()), output_field=DecimalField()),
+            bill_pool = Coalesce(Subquery(bill_payments), Value(0, output_field=DecimalField()), output_field=DecimalField()) +
+                        Coalesce(Subquery(bill_adjustments), Value(0, output_field=DecimalField()), output_field=DecimalField()),
+            bill_total_ref = Coalesce(Subquery(bill_total_approx), Value(0, output_field=DecimalField()), output_field=DecimalField()),
             annotated_revenue = Case(
                 When(revenue_type='fixed', then=F('rate_per_ton')),
                 default=F('weight') * F('rate_per_ton'),
                 output_field=DecimalField()
             ),
-            # Use bill rate if available, else default to 18.0 for taxable routes
+            # Use bill rate if available
             annotated_gst_rate = Case(
                 When(bills__isnull=False, then=Coalesce(Subquery(bill_gst_rate), Value(0, output_field=DecimalField()), output_field=DecimalField())),
-                # If unbilled but route is taxable, assume 18% standard transport GST
                 When(route__route_type__in=['local', 'intra'], then=Value(18.0, output_field=DecimalField())),
                 When(gst_type_snapshot__in=['GST', 'IGST'], then=Value(18.0, output_field=DecimalField())),
                 default=Value(0, output_field=DecimalField()),
@@ -61,6 +126,20 @@ class TripQuerySet(models.QuerySet):
         qs = qs.annotate(
             annotated_gst_amount = ExpressionWrapper(F('annotated_revenue') * F('annotated_gst_rate') / Value(100), output_field=DecimalField()),
             annotated_total_revenue = ExpressionWrapper(F('annotated_revenue') + (F('annotated_revenue') * F('annotated_gst_rate') / Value(100)), output_field=DecimalField())
+        )
+
+        # Calculate Final Received (including bill share)
+        qs = qs.annotate(
+            bill_share = Case(
+                When(bill_total_ref__gt=0, then=ExpressionWrapper(
+                    (F('annotated_total_revenue') / F('bill_total_ref')) * F('bill_pool'),
+                    output_field=DecimalField()
+                )),
+                default=Value(0, output_field=DecimalField()),
+                output_field=DecimalField()
+            )
+        ).annotate(
+            annotated_received = F('direct_received') + F('bill_share')
         )
 
         # Calculate Outstanding and Status
@@ -606,13 +685,14 @@ class Trip(models.Model):
             direct = sum(
                 r.amount for r in self.financial_records.all()
                 if r.record_type != FinancialRecord.RECORD_TYPE_INVOICE and
-                (r.category.type == TransactionCategory.TYPE_INCOME or r.category.name == 'Deductions')
+                (r.category.type == TransactionCategory.TYPE_INCOME or r.category.name in ["Deductions", "TDS", "Shortage"])
             )
         else:
             direct = self.financial_records.exclude(
                 record_type=FinancialRecord.RECORD_TYPE_INVOICE
             ).filter(
-                models.Q(category__type=TransactionCategory.TYPE_INCOME) | models.Q(category__name='Deductions')
+                models.Q(category__type=TransactionCategory.TYPE_INCOME) | 
+                models.Q(category__name__in=["Deductions", "TDS", "Shortage"])
             ).aggregate(total=models.Sum('amount'))['total'] or 0
         
         # 2. M2M Allocations
@@ -623,10 +703,38 @@ class Trip(models.Model):
                 total=models.Sum('amount')
             )['total'] or 0
         
-        # 3. If part of a PAID bill, consider it fully received for the billed amount
+        # 3. Share of Bill Payments/Adjustments
         bill = self.associated_bill
-        if bill and bill.payment_status == Bill.PAYMENT_STATUS_PAID:
-            return self.total_revenue
+        if bill:
+            if bill.payment_status == Bill.PAYMENT_STATUS_PAID:
+                return self.total_revenue
+            
+            # Use Bill.amount_received logic but only for direct bill payments
+            # (Trip allocations are already counted in 'allocated' above)
+            
+            # Direct payments to bill
+            direct_bill = bill.financial_records.exclude(
+                record_type=FinancialRecord.RECORD_TYPE_INVOICE
+            ).filter(
+                models.Q(category__type=TransactionCategory.TYPE_INCOME) | 
+                models.Q(category__name__in=["Deductions", "TDS", "Shortage", "Credit Note", "Debit Note"])
+            ).aggregate(total=models.Sum('amount'))['total'] or 0
+            
+            # Adjustments
+            adjustments = 0
+            for adj in bill.adjustment_bills.select_related('category').all():
+                if adj.category:
+                    if adj.category.name == 'Credit Note':
+                        adjustments += adj.rounded_total
+                    elif adj.category.name == 'Debit Note':
+                        adjustments -= adj.rounded_total
+            
+            bill_pool = direct_bill + adjustments
+            if bill_pool > 0:
+                bill_total = bill.rounded_total
+                if bill_total > 0:
+                    share = (self.total_revenue / bill_total) * bill_pool
+                    return direct + allocated + share
 
         return direct + allocated
 

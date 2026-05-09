@@ -183,28 +183,62 @@
                 </div>
             </div>
             <div class="p-4">
-                {% if trip.payment_allocations.all or trip.financial_records.all %}
-                    <div class="space-y-2 max-h-[250px] overflow-y-auto pr-2">
+                {% if trip.payment_allocations.all or trip.financial_records.all or trip.associated_bill.financial_records.all %}
+                    <div class="space-y-2 max-h-[350px] overflow-y-auto pr-2">
+                        {# 1. Direct Payments to Trip #}
                         {% for record in trip.financial_records.all %}
                             {% if not record.record_type == 'Invoice' %}
-                            <div class="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100">
+                            <a href="{% url 'financialrecord-detail' record.pk %}" class="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100 hover:border-emerald-500 hover:bg-emerald-50 transition-all group">
                                 <div class="overflow-hidden">
-                                    <p class="text-[10px] font-black text-emerald-700 uppercase tracking-tight truncate">{{ record.category.name }}</p>
+                                    <p class="text-[10px] font-black text-emerald-700 group-hover:text-emerald-900 uppercase tracking-tight truncate">{{ record.category.name }}</p>
                                     <p class="text-[9px] text-slate-400">{{ record.date|date:"d M Y" }}</p>
                                 </div>
                                 <span class="text-sm font-black text-emerald-600 shrink-0">+₹{{ record.amount|indian_comma }}</span>
-                            </div>
+                            </a>
                             {% endif %}
                         {% endfor %}
+
+                        {# 2. Allocations to Trip #}
                         {% for allocation in trip.payment_allocations.all %}
-                        <div class="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100">
-                            <div>
-                                <p class="text-[10px] font-black text-blue-700 uppercase tracking-tight">Allocated</p>
+                        <a href="{% url 'financialrecord-detail' allocation.financial_record.pk %}" class="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100 hover:border-blue-500 hover:bg-blue-50 transition-all group">
+                            <div class="overflow-hidden">
+                                <p class="text-[10px] font-black text-blue-700 group-hover:text-blue-900 uppercase tracking-tight truncate">Allocated ({{ allocation.financial_record.category.name }})</p>
                                 <p class="text-[9px] text-slate-400">{{ allocation.financial_record.date|date:"d M Y" }}</p>
                             </div>
                             <span class="text-sm font-black text-blue-600 shrink-0">+₹{{ allocation.amount|indian_comma }}</span>
-                        </div>
+                        </a>
                         {% endfor %}
+
+                        {# 3. Payments to Associated Bill #}
+                        {% if trip.associated_bill %}
+                            {% for record in trip.associated_bill.financial_records.all %}
+                                {% if not record.record_type == 'Invoice' %}
+                                <a href="{% url 'financialrecord-detail' record.pk %}" class="flex items-center justify-between p-3 bg-emerald-50/30 rounded-lg border border-emerald-100 hover:border-emerald-500 hover:bg-emerald-50 transition-all group">
+                                    <div class="overflow-hidden">
+                                        <p class="text-[10px] font-black text-emerald-800 group-hover:text-emerald-900 uppercase tracking-tight truncate">Bill Payment ({{ record.category.name }})</p>
+                                        <p class="text-[9px] text-slate-400">{{ record.date|date:"d M Y" }} • Invoice {{ trip.associated_bill.bill_number|default:"Draft" }}</p>
+                                    </div>
+                                    <div class="text-right shrink-0">
+                                        <p class="text-xs font-black text-emerald-700 tracking-tight">Pro-rata Share</p>
+                                        <p class="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Against Bill</p>
+                                    </div>
+                                </a>
+                                {% endif %}
+                            {% endfor %}
+
+                            {# 4. Bill Adjustments #}
+                            {% for adj in trip.associated_bill.adjustment_bills.all %}
+                                <a href="{% url 'bill-detail' adj.pk %}" class="flex items-center justify-between p-3 bg-amber-50/30 rounded-lg border border-amber-100 hover:border-amber-500 hover:bg-amber-50 transition-all group">
+                                    <div class="overflow-hidden">
+                                        <p class="text-[10px] font-black text-amber-800 group-hover:text-amber-900 uppercase tracking-tight truncate">Adjustment: {{ adj.category.name }}</p>
+                                        <p class="text-[9px] text-slate-400">{{ adj.date|date:"d M Y" }} • No. {{ adj.bill_number|default:"Draft" }}</p>
+                                    </div>
+                                    <span class="text-sm font-black {% if adj.category.name == 'Credit Note' %}text-emerald-600{% else %}text-rose-600{% endif %} shrink-0">
+                                        {% if adj.category.name == 'Credit Note' %}+{% else %}-{% endif %}₹{{ adj.rounded_total|indian_comma }}
+                                    </span>
+                                </a>
+                            {% endfor %}
+                        {% endif %}
                     </div>
                 {% else %}
                     <p class="text-center py-4 text-xs text-slate-400 italic">No payment history found.</p>
