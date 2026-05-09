@@ -142,6 +142,7 @@
         let selectedTripIds = []; // Store IDs in order
         let isInitialLoad = true;
         let isManualAmount = false;
+        let isInternalChange = false;
 
         const recordTypeSelect = document.getElementById('id_record_type');
 
@@ -272,7 +273,10 @@
         function calculateTDS(force = false) {
             if (!associatedBillSelect || !tdsPercentageInput) return;
             
-            // Don't auto-calculate on initial load if we already have an amount (edit mode)
+            // Skip if this is a programmatic change during loading
+            if (isInternalChange && !force) return;
+
+            // PROTECT EDIT MODE: Never auto-calculate on initial load if we already have an amount
             if (isInitialLoad && amountInput.value && amountInput.value !== '0.00' && !force) {
                 return;
             }
@@ -289,10 +293,14 @@
                 fetch(`{% url 'get-bill-balance' %}?bill_id=${billId}`)
                     .then(response => response.json())
                     .then(data => {
+                        // Double check: if user started typing while fetch was in progress, stop.
+                        if (isManualAmount && !force) return;
+                        if (isInitialLoad && amountInput.value && amountInput.value !== '0.00' && !force) return;
+
                         if (data.subtotal) {
                             const tdsAmount = (data.subtotal * percentage / 100).toFixed(2);
                             amountInput.value = tdsAmount;
-                            isManualAmount = false; // Reset after auto-calc
+                            isManualAmount = false; // Reset because we just did a valid auto-calc
                             renderSelectedTrips();
                         }
                     })
@@ -306,6 +314,9 @@
         
         if (associatedBillSelect) {
             associatedBillSelect.addEventListener('change', function() {
+                // If this is an internal/programmatic change, do NOT force recalculation
+                if (isInternalChange) return;
+
                 const categoryName = categorySelect.options[categorySelect.selectedIndex].text;
                 if (categoryName.includes('TDS')) {
                     calculateTDS(true);
@@ -320,7 +331,9 @@
                     const select = document.getElementById('id_associated_trip');
                     if (select) {
                         select.innerHTML = '<option value="">---------</option>';
+                        isInternalChange = true;
                         $(select).trigger('change');
+                        isInternalChange = false;
                     }
                 }
                 return;
@@ -346,7 +359,9 @@
                                 if (trip.id == currentValue) option.selected = true;
                                 select.appendChild(option);
                             });
+                            isInternalChange = true;
                             $(select).trigger('change');
+                            isInternalChange = false;
                         }
                     }
                     
@@ -366,13 +381,17 @@
 
             if (!partyId) {
                 billSelect.innerHTML = '<option value="">---------</option>';
+                isInternalChange = true;
                 $(billSelect).trigger('change');
+                isInternalChange = false;
                 return;
             }
 
             const currentBillId = billSelect.value;
             billSelect.innerHTML = '<option value="">Loading...</option>';
+            isInternalChange = true;
             $(billSelect).trigger('change');
+            isInternalChange = false;
 
             fetch(`{% url 'get-party-bills' %}?party_id=${partyId}&unpaid_only=true`)
                 .then(response => response.json())
@@ -387,12 +406,16 @@
                             billSelect.appendChild(option);
                         });
                     }
+                    isInternalChange = true;
                     $(billSelect).trigger('change');
+                    isInternalChange = false;
                 })
                 .catch(error => {
                     console.error('Error fetching bills:', error);
                     billSelect.innerHTML = '<option value="">Error loading bills</option>';
+                    isInternalChange = true;
                     $(billSelect).trigger('change');
+                    isInternalChange = false;
                 });
         }
 
