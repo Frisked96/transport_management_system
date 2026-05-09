@@ -1472,12 +1472,10 @@ def get_party_bills(request):
         return JsonResponse({'bills': []})
 
     try:
-        from .models import Bill
-        from django.db import models
         bills_qs = Bill.objects.with_payment_info().filter(
             party_id=party_id
         ).filter(
-            models.Q(category__isnull=True) | ~models.Q(category__name__in=['Credit Note', 'Debit Note'])
+            Q(category__isnull=True) | ~Q(category__name__in=['Credit Note', 'Debit Note'])
         ).order_by('-date', '-created_at')
 
         if unpaid_only:

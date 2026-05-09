@@ -170,10 +170,15 @@
             $('#id_category').select2({ theme: 'bootstrap-5', width: '100%' });
             $('#id_driver').select2({ theme: 'bootstrap-5', width: '100%', placeholder: 'Search Driver...' });
 
-            // Ensure Select2 changes trigger our standard listeners
-            $(partySelect).on('change', function() { partySelect.dispatchEvent(new Event('change')); });
-            $(categorySelect).on('change', function() { categorySelect.dispatchEvent(new Event('change')); });
-            $(associatedBillSelect).on('change', function() { associatedBillSelect.dispatchEvent(new Event('change')); });
+            // Ensure Select2 changes trigger our standard native listeners without infinite loops
+            const bridgeEvent = (el) => {
+                $(el).on('select2:select select2:unselect select2:clear', function() {
+                    el.dispatchEvent(new Event('change', { bubbles: true }));
+                });
+            };
+            if (partySelect) bridgeEvent(partySelect);
+            if (categorySelect) bridgeEvent(categorySelect);
+            if (associatedBillSelect) bridgeEvent(associatedBillSelect);
         }
 
         initFormSearch();
@@ -376,46 +381,45 @@
 
         // Fetch Bills
         function fetchBills(partyId) {
-            const billSelect = document.getElementById('id_associated_bill');
-            if (!billSelect) return;
+            const $billSelect = $(associatedBillSelect);
+            if (!$billSelect.length) return;
 
             if (!partyId) {
-                billSelect.innerHTML = '<option value="">---------</option>';
-                isInternalChange = true;
-                $(billSelect).trigger('change');
-                isInternalChange = false;
+                associatedBillSelect.innerHTML = '<option value="">---------</option>';
+                $billSelect.val('').trigger('change.select2');
                 return;
             }
 
-            const currentBillId = billSelect.value;
-            billSelect.innerHTML = '<option value="">Loading...</option>';
-            isInternalChange = true;
-            $(billSelect).trigger('change');
-            isInternalChange = false;
+            const currentBillId = associatedBillSelect.value;
+            associatedBillSelect.innerHTML = '<option value="">Loading...</option>';
+            $billSelect.trigger('change.select2');
 
             fetch(`{% url 'get-party-bills' %}?party_id=${partyId}&unpaid_only=true`)
                 .then(response => response.json())
                 .then(data => {
-                    billSelect.innerHTML = '<option value="">---------</option>';
+                    associatedBillSelect.innerHTML = '<option value="">---------</option>';
+                    
                     if (data.bills && data.bills.length > 0) {
                         data.bills.forEach(bill => {
-                            const option = document.createElement('option');
-                            option.value = bill.id;
-                            option.textContent = bill.label;
+                            const option = new Option(bill.label, bill.id);
                             if (bill.id == currentBillId) option.selected = true;
-                            billSelect.appendChild(option);
+                            associatedBillSelect.add(option);
                         });
+                    } else {
+                        const option = new Option("No pending bills found", "");
+                        option.disabled = true;
+                        associatedBillSelect.add(option);
                     }
+                    
+                    // Trigger Select2 refresh
                     isInternalChange = true;
-                    $(billSelect).trigger('change');
+                    $billSelect.trigger('change.select2');
                     isInternalChange = false;
                 })
                 .catch(error => {
                     console.error('Error fetching bills:', error);
-                    billSelect.innerHTML = '<option value="">Error loading bills</option>';
-                    isInternalChange = true;
-                    $(billSelect).trigger('change');
-                    isInternalChange = false;
+                    associatedBillSelect.innerHTML = '<option value="">Error loading bills</option>';
+                    $billSelect.trigger('change.select2');
                 });
         }
 

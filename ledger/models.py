@@ -1138,8 +1138,8 @@ class Bill(models.Model):
     @property
     def outstanding_balance(self):
         if hasattr(self, 'annotated_outstanding'):
-            return self.annotated_outstanding
-        return self.rounded_total - self.amount_received
+            return self.annotated_outstanding or Decimal('0.00')
+        return (self.rounded_total or Decimal('0.00')) - (self.amount_received or Decimal('0.00'))
 
     @property
     def payment_status(self):
