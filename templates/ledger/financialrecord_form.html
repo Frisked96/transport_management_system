@@ -495,9 +495,9 @@
 
                 const row = document.createElement('tr');
                 row.innerHTML = `
-                    <td class="px-3 py-2 font-medium text-slate-900">${trip.label.split(' (Bal')[0]}</td>
-                    <td class="px-3 py-2 text-right text-slate-500">$${trip.balance.toFixed(2)}</td>
-                    <td class="px-3 py-2 text-right font-bold text-emerald-600">$${amountForThisTrip.toFixed(2)}</td>
+                    <td class="px-3 py-2 font-medium text-slate-900">${trip.label.split(' (Pending')[0]}</td>
+                    <td class="px-3 py-2 text-right text-slate-500">₹${trip.balance.toFixed(2)}</td>
+                    <td class="px-3 py-2 text-right font-bold text-emerald-600">₹${amountForThisTrip.toFixed(2)}</td>
                     <td class="px-3 py-2 text-right">
                         <button type="button" class="text-slate-400 hover:text-red-600 transition-colors" onclick="deselectTrip(${trip.id})">
                             <i class="fa-regular fa-trash-can"></i>

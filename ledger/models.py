@@ -684,7 +684,7 @@ class BillQuerySet(models.QuerySet):
             record_type=FinancialRecord.RECORD_TYPE_INVOICE
         ).filter(
             models.Q(category__type=TransactionCategory.TYPE_INCOME) | 
-            models.Q(category__name__in=['Deductions', 'TDS', 'Shortage'])
+            models.Q(category__name__in=['Deductions', 'TDS', 'Shortage', 'Credit Note', 'Debit Note'])
         ).values('associated_bill').annotate(
             total=Sum('amount')
         ).values('total')
@@ -698,7 +698,7 @@ class BillQuerySet(models.QuerySet):
             models.Q(associated_bill=OuterRef('pk'))
         ).filter(
             models.Q(category__type=TransactionCategory.TYPE_INCOME) | 
-            models.Q(category__name__in=['Deductions', 'TDS', 'Shortage'])
+            models.Q(category__name__in=['Deductions', 'TDS', 'Shortage', 'Credit Note', 'Debit Note'])
         ).values('associated_trip__bills').annotate(
             total=Sum('amount')
         ).values('total')
@@ -709,7 +709,32 @@ class BillQuerySet(models.QuerySet):
             total=Sum('amount')
         ).values('total')
 
-        # 3. Subquery for trip-based revenue (summing trips in the bill minus trip-level discounts)
+        # 3. Subquery for adjustment notes (Credit/Debit Notes created as Bills)
+        # For adjustments, we need the annotated_total_amount of those bills
+        # Since we can't easily nest with_payment_info, we approximate total as Subtotal + GST
+        # Standard adjustments use amount_override, Trip ones use trip revenue.
+        adjustments_sq = Bill.objects.filter(
+            original_bill=OuterRef('pk')
+        ).values('original_bill').annotate(
+            total=Sum(
+                Case(
+                    # Credit Note: Reduces outstanding (+ in received)
+                    When(category__name='Credit Note', then=(
+                        (Coalesce(F('amount_override'), 0, output_field=DecimalField()) - F('discount')) * 
+                        (1 + F('gst_rate') / Value(100, output_field=DecimalField()))
+                    )),
+                    # Debit Note: Increases outstanding (- in received)
+                    When(category__name='Debit Note', then=-(
+                        (Coalesce(F('amount_override'), 0, output_field=DecimalField()) - F('discount')) * 
+                        (1 + F('gst_rate') / Value(100, output_field=DecimalField()))
+                    )),
+                    default=0,
+                    output_field=DecimalField()
+                )
+            )
+        ).values('total')
+
+        # 4. Subquery for trip-based revenue (summing trips in the bill minus trip-level discounts)
         from .models import BillTrip
         trip_revenue_sq = BillTrip.objects.filter(bill=OuterRef('pk')).values('bill').annotate(
             total=Sum(
@@ -726,7 +751,8 @@ class BillQuerySet(models.QuerySet):
             annotated_received = ExpressionWrapper(
                 Coalesce(Subquery(direct_payments), Value(0, output_field=DecimalField()), output_field=DecimalField()) + 
                 Coalesce(Subquery(trip_direct_payments), Value(0, output_field=DecimalField()), output_field=DecimalField()) +
-                Coalesce(Subquery(trip_allocations), Value(0, output_field=DecimalField()), output_field=DecimalField()),
+                Coalesce(Subquery(trip_allocations), Value(0, output_field=DecimalField()), output_field=DecimalField()) +
+                Coalesce(Subquery(adjustments_sq), Value(0, output_field=DecimalField()), output_field=DecimalField()),
                 output_field=DecimalField()
             ),
             annotated_subtotal = Case(
@@ -1036,14 +1062,14 @@ class Bill(models.Model):
             direct = sum(
                 r.amount for r in self.financial_records.all()
                 if r.record_type != FinancialRecord.RECORD_TYPE_INVOICE and
-                (r.category.type == TransactionCategory.TYPE_INCOME or r.category.name in ["Deductions", "TDS", "Shortage"])
+                (r.category.type == TransactionCategory.TYPE_INCOME or r.category.name in ["Deductions", "TDS", "Shortage", "Credit Note", "Debit Note"])
             )
         else:
             direct = self.financial_records.exclude(
                 record_type=FinancialRecord.RECORD_TYPE_INVOICE
             ).filter(
                 models.Q(category__type=TransactionCategory.TYPE_INCOME) | 
-                models.Q(category__name__in=["Deductions", "TDS", "Shortage"])
+                models.Q(category__name__in=["Deductions", "TDS", "Shortage", "Credit Note", "Debit Note"])
             ).aggregate(total=Sum('amount'))['total'] or 0
 
         # 2. Trip-based allocations
@@ -1069,7 +1095,7 @@ class Bill(models.Model):
                             if r.associated_trip_id == trip.id and 
                             r.associated_bill_id != self.id and
                             r.record_type != FinancialRecord.RECORD_TYPE_INVOICE and
-                            (r.category.type == TransactionCategory.TYPE_INCOME or r.category.name in ["Deductions", "TDS", "Shortage"])
+                            (r.category.type == TransactionCategory.TYPE_INCOME or r.category.name in ["Deductions", "TDS", "Shortage", "Credit Note", "Debit Note"])
                         )
                     else:
                         trip_payments += FinancialRecord.objects.filter(
@@ -1079,7 +1105,7 @@ class Bill(models.Model):
                             models.Q(associated_bill=self)
                         ).filter(
                             models.Q(category__type=TransactionCategory.TYPE_INCOME) | 
-                            models.Q(category__name__in=["Deductions", "TDS", "Shortage"])
+                            models.Q(category__name__in=["Deductions", "TDS", "Shortage", "Credit Note", "Debit Note"])
                         ).aggregate(total=Sum('amount'))['total'] or 0
             else:
                 trip_payments = TripAllocation.objects.filter(
@@ -1093,7 +1119,7 @@ class Bill(models.Model):
                     models.Q(associated_bill=self)
                 ).filter(
                     models.Q(category__type=TransactionCategory.TYPE_INCOME) | 
-                    models.Q(category__name__in=["Deductions", "TDS", "Shortage"])
+                    models.Q(category__name__in=["Deductions", "TDS", "Shortage", "Credit Note", "Debit Note"])
                 ).aggregate(total=Sum('amount'))['total'] or 0
                 trip_payments += direct_trip_payments
 

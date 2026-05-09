@@ -6,12 +6,33 @@ from .models import FinancialRecord, Party, CompanyAccount, Bill
 from trips.models import Trip
 
 
+class TripChoiceField(forms.ModelChoiceField):
+    def label_from_instance(self, obj):
+        outstanding = getattr(obj, 'annotated_outstanding', 0)
+        return f"{obj} | Pending: ₹{outstanding:,.2f}"
+
+class BillChoiceField(forms.ModelChoiceField):
+    def label_from_instance(self, obj):
+        outstanding = getattr(obj, 'annotated_outstanding', 0)
+        return f"{obj} | Pending: ₹{outstanding:,.2f}"
+
 class FinancialRecordForm(forms.ModelForm):
     """
     Form for creating and editing financial records
     """
     # Hidden field to store JSON data for multi-trip payment distribution
     payment_distribution = forms.CharField(widget=forms.HiddenInput(), required=False)
+    
+    associated_trip = TripChoiceField(
+        queryset=Trip.objects.none(),
+        required=False,
+        label="Associated Trip"
+    )
+    associated_bill = BillChoiceField(
+        queryset=Bill.objects.none(),
+        required=False,
+        label="Associated Bill"
+    )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -76,7 +97,7 @@ class FinancialRecordForm(forms.ModelForm):
                 self.fields['associated_trip'].queryset = trips_qs.distinct().order_by('-date')
 
                 # Filter bills for this debtor: Exclude CN/DN and already Paid bills
-                bills_qs = Bill.objects.filter(party=party).exclude(
+                bills_qs = Bill.objects.with_payment_info().filter(party=party).exclude(
                     category__name__in=['Credit Note', 'Debit Note']
                 )
                 
@@ -88,7 +109,7 @@ class FinancialRecordForm(forms.ModelForm):
                     if self.instance.associated_bill.pk not in unpaid_bill_ids:
                         unpaid_bill_ids.append(self.instance.associated_bill.pk)
                 
-                self.fields['associated_bill'].queryset = Bill.objects.filter(id__in=unpaid_bill_ids).order_by('-date')
+                self.fields['associated_bill'].queryset = Bill.objects.with_payment_info().filter(id__in=unpaid_bill_ids).order_by('-date')
                 
                 # Filter categories for Debtor
                 from .models import TransactionCategory

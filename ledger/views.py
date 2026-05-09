@@ -687,7 +687,7 @@ def get_party_unpaid_trips(request):
         
         data = [{
             'id': trip.id,
-            'label': f"{trip.date.strftime('%d/%m/%Y')} - {trip.vehicle.registration_plate} (Bal: ${trip.outstanding_balance:.2f})",
+            'label': f"{trip.date.strftime('%d/%m/%Y')} - {trip.vehicle.registration_plate} (Pending: ₹{trip.outstanding_balance:,.2f})",
             'balance': float(trip.outstanding_balance)
         } for trip in trips]
         
@@ -697,6 +697,7 @@ def get_party_unpaid_trips(request):
 
 @login_required
 def get_bill_balance(request):
+# ... rest of get_bill_balance ...
     """
     AJAX endpoint to get outstanding balance for a bill
     """
@@ -1472,22 +1473,21 @@ def get_party_bills(request):
 
     try:
         from .models import Bill
-        bills_qs = Bill.objects.filter(
+        bills_qs = Bill.objects.with_payment_info().filter(
             party_id=party_id
         ).exclude(
             category__name__in=['Credit Note', 'Debit Note']
         ).order_by('-date', '-created_at')
 
         if unpaid_only:
-            # We must filter in Python as payment_status is a property
-            unpaid_bill_ids = [b.id for b in bills_qs if b.payment_status != Bill.PAYMENT_STATUS_PAID]
-            bills = Bill.objects.filter(id__in=unpaid_bill_ids).order_by('-date', '-created_at')
+            # Efficiently filter using annotation
+            bills = bills_qs.exclude(annotated_outstanding__lte=0)
         else:
             bills = bills_qs
 
         data = [{
             'id': bill.id,
-            'label': f"{bill.bill_number} - {bill.date.strftime('%d/%m/%Y')} (Total: ₹{bill.rounded_total:.2f})"
+            'label': f"{bill.bill_number or 'Draft'} - {bill.date.strftime('%d/%m/%Y')} (Pending: ₹{bill.outstanding_balance:,.2f})"
         } for bill in bills]
 
         return JsonResponse({'bills': data})
