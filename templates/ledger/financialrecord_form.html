@@ -585,8 +585,8 @@
         }
 
         // Auto-fill amount from Bill balance
-        if (billSelect) {
-            billSelect.addEventListener('change', function() {
+        if (associatedBillSelect) {
+            associatedBillSelect.addEventListener('change', function() {
                 if (this.value) {
                     const categoryName = categorySelect.options[categorySelect.selectedIndex].text;
                     if (categoryName.includes('TDS')) {

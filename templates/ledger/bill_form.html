@@ -178,11 +178,11 @@
                         </div>
                         <div class="space-y-2">
                             <label class="block text-xs font-bold text-slate-500 uppercase">GST Amount</label>
-                            <input type="number" id="id_gst_amount_manual" step="0.01" class="block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white">
+                            <input type="number" id="id_gst_amount_manual" name="gst_amount_manual" step="0.01" class="block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white">
                         </div>
                         <div class="space-y-2">
                             <label class="block text-xs font-bold text-slate-500 uppercase font-black text-emerald-700">Final Total Amount (Incl. GST)</label>
-                            <input type="number" id="id_total_amount_manual" step="0.01" class="block w-full px-3 py-2 border-2 border-emerald-500 rounded-md text-sm shadow-sm font-bold focus:ring-emerald-600 focus:border-emerald-600 bg-white text-emerald-900">
+                            <input type="number" id="id_total_amount_manual" name="total_amount_manual" step="0.01" class="block w-full px-3 py-2 border-2 border-emerald-500 rounded-md text-sm shadow-sm font-bold focus:ring-emerald-600 focus:border-emerald-600 bg-white text-emerald-900">
                         </div>
                     </div>
                 </div>
@@ -221,7 +221,7 @@
                                                    {% if trip.pk in form.trips.value %}checked{% endif %}>
                                         </td>
                                         <td class="px-6 py-4">
-                                            <input type="text" class="lr-input block w-full px-2 py-1 border border-slate-300 rounded text-xs focus:ring-emerald-500 focus:border-emerald-500 bg-white" 
+                                            <input type="text" id="lr_input_{{ trip.pk }}" name="lr_input_{{ trip.pk }}" class="lr-input block w-full px-2 py-1 border border-slate-300 rounded text-xs focus:ring-emerald-500 focus:border-emerald-500 bg-white" 
                                                    data-trip-id="{{ trip.pk }}" placeholder="LR No.">
                                         </td>
                                         <td class="px-6 py-4 text-xs font-medium text-slate-700">{{ trip.date|date:"d M Y" }}</td>
@@ -232,7 +232,7 @@
                                         <td class="px-6 py-4 text-xs text-right font-bold text-slate-900">{{ trip.weight|indian_comma }}</td>
                                         <td class="px-6 py-4 text-xs text-right text-slate-600">₹{{ trip.rate_per_ton|indian_comma }}</td>
                                         <td class="px-6 py-4">
-                                            <input type="number" step="0.01" class="discount-input block w-20 ml-auto px-2 py-1 border border-slate-300 rounded text-xs text-right focus:ring-rose-500 focus:border-rose-500 bg-white text-rose-600 font-bold" 
+                                            <input type="number" id="discount_input_{{ trip.pk }}" name="discount_input_{{ trip.pk }}" step="0.01" class="discount-input block w-20 ml-auto px-2 py-1 border border-slate-300 rounded text-xs text-right focus:ring-rose-500 focus:border-rose-500 bg-white text-rose-600 font-bold" 
                                                    data-trip-id="{{ trip.pk }}" placeholder="0.00">
                                         </td>
                                         <td class="px-6 py-4 text-xs text-right font-black text-emerald-600">₹{{ trip.revenue|indian_comma }}</td>
