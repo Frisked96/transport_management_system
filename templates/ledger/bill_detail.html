@@ -30,6 +30,12 @@
             <i class="fa-regular fa-pen-to-square mr-2"></i>Edit Invoice
         </a>
         {% endif %}
+        
+        {% if perms.ledger.delete_financialrecord %}
+        <a href="{% url 'bill-delete' bill.pk %}" class="px-4 py-2 border border-rose-200 rounded-md bg-rose-50 text-rose-700 text-sm font-bold hover:bg-rose-100 transition-colors">
+            <i class="fa-solid fa-trash-can mr-2"></i>Delete
+        </a>
+        {% endif %}
     </div>
 </div>
 <!-- END: Action Bar -->

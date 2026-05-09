@@ -140,6 +140,8 @@
 
         let unpaidTrips = []; // Store fetched trip data
         let selectedTripIds = []; // Store IDs in order
+        let isInitialLoad = true;
+        let isManualAmount = false;
 
         const recordTypeSelect = document.getElementById('id_record_type');
 
@@ -259,9 +261,27 @@
             }
         }
 
-        function calculateTDS() {
+        // Track manual amount edits
+        if (amountInput) {
+            amountInput.addEventListener('input', function() {
+                isManualAmount = true;
+                renderSelectedTrips();
+            });
+        }
+
+        function calculateTDS(force = false) {
             if (!associatedBillSelect || !tdsPercentageInput) return;
             
+            // Don't auto-calculate on initial load if we already have an amount (edit mode)
+            if (isInitialLoad && amountInput.value && amountInput.value !== '0.00' && !force) {
+                return;
+            }
+            
+            // Don't overwrite manual amount unless forced (by changing % or Bill)
+            if (isManualAmount && !force) {
+                return;
+            }
+
             const billId = associatedBillSelect.value;
             const percentage = parseFloat(tdsPercentageInput.value);
             
@@ -272,6 +292,8 @@
                         if (data.subtotal) {
                             const tdsAmount = (data.subtotal * percentage / 100).toFixed(2);
                             amountInput.value = tdsAmount;
+                            isManualAmount = false; // Reset after auto-calc
+                            renderSelectedTrips();
                         }
                     })
                     .catch(error => console.error('Error fetching bill subtotal:', error));
@@ -279,14 +301,14 @@
         }
 
         if (tdsPercentageInput) {
-            tdsPercentageInput.addEventListener('input', calculateTDS);
+            tdsPercentageInput.addEventListener('input', () => calculateTDS(true));
         }
         
         if (associatedBillSelect) {
             associatedBillSelect.addEventListener('change', function() {
                 const categoryName = categorySelect.options[categorySelect.selectedIndex].text;
                 if (categoryName.includes('TDS')) {
-                    calculateTDS();
+                    calculateTDS(true);
                 }
             });
         }
@@ -508,21 +530,29 @@
                 restoreState(); // Load saved IDs into selectedTripIds
                 fetchTrips(partySelect.value); // This will trigger render using selectedTripIds
                 fetchBills(partySelect.value);
+
+                // Allow some time for async fetches to finish before disabling initial load protection
+                setTimeout(() => { isInitialLoad = false; }, 2000);
+            } else {
+                isInitialLoad = false;
             }
         }
 
         if (amountInput) {
-            amountInput.addEventListener('input', renderSelectedTrips);
+            amountInput.addEventListener('input', function() {
+                isManualAmount = true;
+                renderSelectedTrips();
+            });
         }
-        
+
         if (categorySelect) {
             categorySelect.addEventListener('change', function() {
                 updateUIState();
-                
+
                 // If switched to TDS, trigger calculation if possible
                 const categoryName = categorySelect.options[categorySelect.selectedIndex].text;
                 if (categoryName.includes('TDS')) {
-                    calculateTDS();
+                    calculateTDS(true);
                 }
             });
         }
@@ -533,7 +563,7 @@
                 if (this.value) {
                     const categoryName = categorySelect.options[categorySelect.selectedIndex].text;
                     if (categoryName.includes('TDS')) {
-                        calculateTDS();
+                        calculateTDS(true);
                     } else {
                         fetch(`{% url 'get-bill-balance' %}?bill_id=${this.value}`)
                             .then(response => response.json())

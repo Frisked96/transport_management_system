@@ -63,20 +63,31 @@ class FinancialRecordForm(forms.ModelForm):
             else:
                 # Setup trips for debtor party using dynamic payment info
                 # Allow all trips that are not fully paid
-                self.fields['associated_trip'].queryset = Trip.objects.with_payment_info().with_billing_info().filter(
+                trips_qs = Trip.objects.with_payment_info().with_billing_info().filter(
                     party=party
                 ).exclude(
                     annotated_status=Trip.PAYMENT_STATUS_PAID
-                ).order_by('-date')
+                )
+                
+                # Include current trip if editing
+                if self.instance and self.instance.associated_trip:
+                    trips_qs = trips_qs | Trip.objects.filter(pk=self.instance.associated_trip.pk).with_payment_info().with_billing_info()
+                
+                self.fields['associated_trip'].queryset = trips_qs.distinct().order_by('-date')
 
                 # Filter bills for this debtor: Exclude CN/DN and already Paid bills
-                # We show Standard and Halting (which are part of the 'bills' queryset)
                 bills_qs = Bill.objects.filter(party=party).exclude(
                     category__name__in=['Credit Note', 'Debit Note']
-                ).order_by('-date')
+                )
                 
                 # Further filter to only show unpaid bills
                 unpaid_bill_ids = [b.id for b in bills_qs if b.payment_status != Bill.PAYMENT_STATUS_PAID]
+                
+                # Include current bill if editing
+                if self.instance and self.instance.associated_bill:
+                    if self.instance.associated_bill.pk not in unpaid_bill_ids:
+                        unpaid_bill_ids.append(self.instance.associated_bill.pk)
+                
                 self.fields['associated_bill'].queryset = Bill.objects.filter(id__in=unpaid_bill_ids).order_by('-date')
                 
                 # Filter categories for Debtor

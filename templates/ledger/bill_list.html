@@ -25,8 +25,21 @@
 <section class="bg-slate-100 p-5 rounded-lg border border-slate-200 mb-6">
     <form method="get" id="filter-form">
         <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
+            <!-- Search -->
+            <div class="md:col-span-12 lg:col-span-4 flex flex-col">
+                <label for="search" class="text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">Search:</label>
+                <div class="relative">
+                    <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">
+                        <i class="fa-solid fa-magnifying-glass text-xs"></i>
+                    </span>
+                    <input type="text" id="search" name="search" value="{{ request.GET.search }}" 
+                           placeholder="Invoice #, Party or Company..." 
+                           class="block w-full pl-9 pr-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white">
+                </div>
+            </div>
+
             <!-- Issuer Filter -->
-            <div class="md:col-span-4 flex flex-col">
+            <div class="md:col-span-6 lg:col-span-4 flex flex-col">
                 <label for="issuer" class="text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">Issued From:</label>
                 <select id="issuer" name="issuer" class="block w-full pl-3 pr-10 py-2 border border-slate-300 rounded-md text-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white">
                     <option value="">All Companies</option>
@@ -37,7 +50,7 @@
             </div>
 
             <!-- Party Filter -->
-            <div class="md:col-span-4 flex flex-col">
+            <div class="md:col-span-6 lg:col-span-4 flex flex-col">
                 <label for="party" class="text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">Bill To:</label>
                 <select id="party" name="party" class="block w-full pl-3 pr-10 py-2 border border-slate-300 rounded-md text-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white">
                     <option value="">All Parties</option>
@@ -48,7 +61,7 @@
             </div>
             
             <!-- Invoice Type Filter -->
-            <div class="md:col-span-3 flex flex-col">
+            <div class="md:col-span-4 lg:col-span-4 flex flex-col">
                 <label class="text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">Invoice Type:</label>
                 <select name="category" class="block w-full pl-3 pr-10 py-2 border border-slate-300 rounded-md text-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white">
                     <option value="">All Types</option>
@@ -59,7 +72,7 @@
             </div>
 
             <!-- Date Range -->
-            <div class="md:col-span-4 flex flex-col">
+            <div class="md:col-span-8 lg:col-span-8 flex flex-col">
                 <label class="text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">Date Range:</label>
                 <div class="flex space-x-2">
                     <input type="date" name="start_date" class="block w-full pl-3 pr-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white" 
@@ -218,10 +231,10 @@
 <nav class="mt-8 flex justify-center">
     <div class="flex space-x-1">
         {% if page_obj.has_previous %}
-        <a href="?page=1{% if current_issuer %}&issuer={{ current_issuer }}{% endif %}{% if current_party %}&party={{ current_party }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
+        <a href="?page=1{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if current_issuer %}&issuer={{ current_issuer }}{% endif %}{% if current_party %}&party={{ current_party }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
             <i class="fa-solid fa-angles-left"></i>
         </a>
-        <a href="?page={{ page_obj.previous_page_number }}{% if current_issuer %}&issuer={{ current_issuer }}{% endif %}{% if current_party %}&party={{ current_party }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
+        <a href="?page={{ page_obj.previous_page_number }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if current_issuer %}&issuer={{ current_issuer }}{% endif %}{% if current_party %}&party={{ current_party }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
             <i class="fa-solid fa-angle-left"></i>
         </a>
         {% endif %}
@@ -230,15 +243,15 @@
             {% if page_obj.number == num %}
             <span class="px-4 py-2 bg-emerald-600 text-white border border-emerald-600 rounded-md text-sm font-medium">{{ num }}</span>
             {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
-            <a href="?page={{ num }}{% if current_issuer %}&issuer={{ current_issuer }}{% endif %}{% if current_party %}&party={{ current_party }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}" class="px-4 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">{{ num }}</a>
+            <a href="?page={{ num }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if current_issuer %}&issuer={{ current_issuer }}{% endif %}{% if current_party %}&party={{ current_party }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}" class="px-4 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">{{ num }}</a>
             {% endif %}
         {% endfor %}
 
         {% if page_obj.has_next %}
-        <a href="?page={{ page_obj.next_page_number }}{% if current_issuer %}&issuer={{ current_issuer }}{% endif %}{% if current_party %}&party={{ current_party }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
+        <a href="?page={{ page_obj.next_page_number }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if current_issuer %}&issuer={{ current_issuer }}{% endif %}{% if current_party %}&party={{ current_party }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
             <i class="fa-solid fa-angle-right"></i>
         </a>
-        <a href="?page={{ page_obj.paginator.num_pages }}{% if current_issuer %}&issuer={{ current_issuer }}{% endif %}{% if current_party %}&party={{ current_party }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
+        <a href="?page={{ page_obj.paginator.num_pages }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if current_issuer %}&issuer={{ current_issuer }}{% endif %}{% if current_party %}&party={{ current_party }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
             <i class="fa-solid fa-angles-right"></i>
         </a>
         {% endif %}
@@ -253,7 +266,7 @@
 document.addEventListener('DOMContentLoaded', function() {
     const filterForm = document.getElementById('filter-form');
     if (filterForm) {
-        const inputs = filterForm.querySelectorAll('select, input[type="date"]');
+        const inputs = filterForm.querySelectorAll('select, input[type="date"], input[type="text"]');
         inputs.forEach(input => {
             input.addEventListener('change', () => {
                 filterForm.submit();

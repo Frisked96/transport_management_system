@@ -804,6 +804,15 @@ class BillListView(LoginRequiredMixin, BaseLedgerPermissionMixin, ListView):
         party_id = self.request.GET.get('party')
         if party_id:
             queryset = queryset.filter(party_id=party_id)
+
+        # Search filter
+        search = self.request.GET.get('search')
+        if search:
+            queryset = queryset.filter(
+                Q(bill_number__icontains=search) |
+                Q(party__name__icontains=search) |
+                Q(issuer__name__icontains=search)
+            )
             
         # Filter by Category (Invoice Type)
         cat_filter = self.request.GET.get('category')
@@ -830,6 +839,7 @@ class BillListView(LoginRequiredMixin, BaseLedgerPermissionMixin, ListView):
         context['parties'] = Party.objects.all().order_by('name')
         context['current_issuer'] = self.request.GET.get('issuer', '')
         context['current_party'] = self.request.GET.get('party', '')
+        context['search'] = self.request.GET.get('search', '')
         context['start_date'] = self.request.GET.get('start_date', '')
         context['end_date'] = self.request.GET.get('end_date', '')
         return context
