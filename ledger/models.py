@@ -4,7 +4,7 @@ Models for Ledger application
 from django.db import models
 from django.contrib.auth.models import User
 from trips.models import Trip
-from django.db.models import Sum, F, DecimalField, OuterRef, Subquery, Case, When, Value, Func, ExpressionWrapper
+from django.db.models import Sum, F, DecimalField, OuterRef, Subquery, Case, When, Value, Func, ExpressionWrapper, Max
 from django.db.models.functions import Coalesce
 from decimal import Decimal
 
@@ -428,28 +428,35 @@ class FinancialRecord(models.Model):
         """
         from django.db import transaction
         with transaction.atomic():
-            records = cls.objects.all().order_by('date', 'created_at')
+            records = list(cls.objects.all().order_by('date', 'created_at'))
             records_to_update = []
+            
+            # Step 1: Identify what needs to change
             for i, record in enumerate(records, start=1):
                 if record.entry_number != i:
-                    record.entry_number = i
+                    # We store the target number in a temporary attribute
+                    record._new_entry_number = i
                     records_to_update.append(record)
             
             if records_to_update:
-                import uuid
-                # Step 1: Temporary unique numbers (Negative to avoid collisions with any existing)
-                original_numbers = {r.pk: r.entry_number for r in records_to_update}
+                # To avoid unique constraint collisions during bulk update, 
+                # we use a two-step process with a large offset.
+                # PositiveIntegerField doesn't allow negative values.
+                max_val = cls.objects.aggregate(max_val=Max('entry_number'))['max_val'] or 0
+                offset = max_val + 1000
+
+                # Step A: Move to temporary high numbers
                 for record in records_to_update:
-                    record.entry_number = -record.pk # Use negative PK as temporary unique
+                    record.entry_number = offset + record.pk
                 cls.objects.bulk_update(records_to_update, ['entry_number'])
 
-                # Step 2: Final resequenced numbers
+                # Step B: Move to final resequenced numbers
                 for record in records_to_update:
-                    record.entry_number = original_numbers[record.pk]
+                    record.entry_number = record._new_entry_number
                 cls.objects.bulk_update(records_to_update, ['entry_number'])
                 
             # Update Sequence model
-            Sequence.objects.filter(key='financial_record_entry_number').update(value=records.count())
+            Sequence.objects.filter(key='financial_record_entry_number').update(value=len(records))
 
     def save(self, *args, **kwargs):
         if not self.entry_number:
