@@ -210,15 +210,34 @@ class TripListView(LoginRequiredMixin, BaseTripPermissionMixin, ListView):
 
 class TripDetailView(LoginRequiredMixin, BaseTripPermissionMixin, DetailView):
     """
-    Detail view for a single trip
+    Detail view for a single trip.
+    Uses prefetching + model properties to avoid parser stack overflow.
     """
     model = Trip
     template_name = 'trips/trip_detail.html'
     context_object_name = 'trip'
     
     def get_queryset(self):
-        """Ensure user has permission to view this trip"""
-        return self.get_queryset_for_user().with_payment_info()
+        """
+        Optimized queryset for detail view.
+        We avoid complex annotations (with_payment_info) and use prefetching instead.
+        """
+        return self.get_queryset_for_user().select_related(
+            'vehicle', 'party', 'driver', 'route'
+        ).prefetch_related(
+            'bills',
+            'bills__category',
+            'bills__financial_records',
+            'bills__financial_records__category',
+            'bills__trips',
+            'bills__adjustment_bills',
+            'bills__adjustment_bills__category',
+            'financial_records',
+            'financial_records__category',
+            'payment_allocations',
+            'payment_allocations__financial_record',
+            'payment_allocations__financial_record__category'
+        )
 
 
 from django.views.generic import FormView

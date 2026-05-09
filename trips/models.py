@@ -12,7 +12,10 @@ import re
 
 class TripQuerySet(models.QuerySet):
     def with_payment_info(self):
-        """Annotate queryset with payment information for filtering and sorting"""
+        """
+        Simplified annotation to avoid parser stack overflow.
+        Basic fields for list view filtering/sorting.
+        """
         from ledger.models import FinancialRecord, TripAllocation, TransactionCategory, Bill
         
         # Subquery for direct payments (Income types or Deductions)
@@ -22,7 +25,7 @@ class TripQuerySet(models.QuerySet):
             record_type=FinancialRecord.RECORD_TYPE_INVOICE
         ).filter(
             models.Q(category__type=TransactionCategory.TYPE_INCOME) | 
-            models.Q(category__name='Deductions')
+            models.Q(category__name__in=['Deductions', 'TDS', 'Shortage'])
         ).values('associated_trip').annotate(
             total=Sum('amount')
         ).values('total')
@@ -37,76 +40,10 @@ class TripQuerySet(models.QuerySet):
         # Subquery for associated bill's GST rate
         bill_gst_rate = Bill.objects.filter(trips=OuterRef('pk')).values('gst_rate')[:1]
 
-        # Subquery for direct payments to the associated bill
-        # We'll take a proportional share of bill-level payments
-        bill_payments = FinancialRecord.objects.filter(
-            associated_bill__trips=OuterRef('pk')
-        ).exclude(
-            record_type=FinancialRecord.RECORD_TYPE_INVOICE
-        ).filter(
-            models.Q(category__type=TransactionCategory.TYPE_INCOME) | 
-            models.Q(category__name__in=['Deductions', 'TDS', 'Shortage', 'Credit Note', 'Debit Note'])
-        ).values('associated_bill').annotate(
-            total=Sum('amount')
-        ).values('total')
-
-        # Subquery for bill adjustments
-        bill_adjustments = Bill.objects.filter(
-            original_bill__trips=OuterRef('pk')
-        ).values('original_bill').annotate(
-            total=Sum(
-                Case(
-                    When(category__name='Credit Note', then=ExpressionWrapper(
-                        (Coalesce(F('amount_override'), F('standard_weight') * F('standard_rate'), Value(0, output_field=DecimalField())) - Coalesce(F('discount'), Value(0, output_field=DecimalField()))) * 
-                        (Value(1, output_field=DecimalField()) + F('gst_rate') / Value(100, output_field=DecimalField())),
-                        output_field=DecimalField()
-                    )),
-                    When(category__name='Debit Note', then=ExpressionWrapper(
-                        -((Coalesce(F('amount_override'), F('standard_weight') * F('standard_rate'), Value(0, output_field=DecimalField())) - Coalesce(F('discount'), Value(0, output_field=DecimalField()))) * 
-                        (Value(1, output_field=DecimalField()) + F('gst_rate') / Value(100, output_field=DecimalField()))),
-                        output_field=DecimalField()
-                    )),
-                    default=Value(0, output_field=DecimalField()),
-                    output_field=DecimalField()
-                )
-            )
-        ).values('total')
-
-        # Subquery for associated bill's total (to calculate proportional share)
-        from ledger.models import BillTrip
-        trip_revenue_sq = BillTrip.objects.filter(bill=OuterRef('pk')).values('bill').annotate(
-            total=Sum(
-                Case(
-                    When(trip__revenue_type='fixed', then=F('trip__rate_per_ton')),
-                    default=F('trip__weight') * F('trip__rate_per_ton'),
-                    output_field=DecimalField()
-                ) - F('discount'),
-                output_field=DecimalField()
-            )
-        ).values('total')
-
-        bill_total_approx = Bill.objects.filter(trips=OuterRef('pk')).annotate(
-            calc_subtotal = Case(
-                When(bill_type='Standard', then=ExpressionWrapper(
-                    Coalesce(F('amount_override'), F('standard_weight') * F('standard_rate'), Value(0, output_field=DecimalField())) - Coalesce(F('discount'), Value(0, output_field=DecimalField())),
-                    output_field=DecimalField()
-                )),
-                default=ExpressionWrapper(
-                    Coalesce(Subquery(trip_revenue_sq), Value(0, output_field=DecimalField())) - Coalesce(F('discount'), Value(0, output_field=DecimalField())),
-                    output_field=DecimalField()
-                )
-            )
-        ).annotate(
-            approx_total = ExpressionWrapper(F('calc_subtotal') * (Value(1, output_field=DecimalField()) + F('gst_rate') / Value(100, output_field=DecimalField())), output_field=DecimalField())
-        ).values('approx_total')[:1]
-
         # Basic revenue and received amount
         qs = self.annotate(
             direct_received = Coalesce(Subquery(direct_payments), Value(0, output_field=DecimalField()), output_field=DecimalField()) + 
                               Coalesce(Subquery(allocations), Value(0, output_field=DecimalField()), output_field=DecimalField()),
-            bill_pool = Coalesce(Subquery(bill_payments), Value(0, output_field=DecimalField()), output_field=DecimalField()) +
-                        Coalesce(Subquery(bill_adjustments), Value(0, output_field=DecimalField()), output_field=DecimalField()),
-            bill_total_ref = Coalesce(Subquery(bill_total_approx), Value(0, output_field=DecimalField()), output_field=DecimalField()),
             annotated_revenue = Case(
                 When(revenue_type='fixed', then=F('rate_per_ton')),
                 default=F('weight') * F('rate_per_ton'),
@@ -128,26 +65,13 @@ class TripQuerySet(models.QuerySet):
             annotated_total_revenue = ExpressionWrapper(F('annotated_revenue') + (F('annotated_revenue') * F('annotated_gst_rate') / Value(100)), output_field=DecimalField())
         )
 
-        # Calculate Final Received (including bill share)
-        qs = qs.annotate(
-            bill_share = Case(
-                When(bill_total_ref__gt=0, then=ExpressionWrapper(
-                    (F('annotated_total_revenue') / F('bill_total_ref')) * F('bill_pool'),
-                    output_field=DecimalField()
-                )),
-                default=Value(0, output_field=DecimalField()),
-                output_field=DecimalField()
-            )
-        ).annotate(
-            annotated_received = F('direct_received') + F('bill_share')
-        )
-
         # Calculate Outstanding and Status
         return qs.annotate(
-            annotated_outstanding = F('annotated_total_revenue') - F('annotated_received'),
+            annotated_received = F('direct_received'), # Proportional bill logic handled in Python/Properties
+            annotated_outstanding = F('annotated_total_revenue') - F('direct_received'),
             annotated_status = Case(
-                When(annotated_received__gte=F('annotated_total_revenue'), annotated_total_revenue__gt=0, then=Value('Paid')),
-                When(annotated_received__gt=0, then=Value('Partially Paid')),
+                When(direct_received__gte=F('annotated_total_revenue'), annotated_total_revenue__gt=0, then=Value('Paid')),
+                When(direct_received__gt=0, then=Value('Partially Paid')),
                 default=Value('Unpaid'),
                 output_field=models.CharField()
             )
