@@ -1218,6 +1218,28 @@ class BillTrip(models.Model):
 from django.db.models.signals import post_save, post_delete, pre_save
 from django.dispatch import receiver
 
+@receiver(post_save, sender=Bill)
+def update_original_bill_on_adjustment(sender, instance, **kwargs):
+    """
+    When an adjustment bill (Credit/Debit Note) is saved, 
+    update the financial caches of the original bill.
+    """
+    if getattr(instance, '_updating_financial_caches', False):
+        return
+
+    if instance.original_bill:
+        # Prevent recursion if original_bill.update_financial_caches() 
+        # triggers a save that comes back here. 
+        # update_financial_caches uses update_fields so it should be safe, 
+        # but let's be explicit.
+        instance.original_bill.update_financial_caches()
+
+@receiver(post_delete, sender=Bill)
+def update_original_bill_on_adjustment_delete(sender, instance, **kwargs):
+    """Update original bill caches when an adjustment is deleted"""
+    if instance.original_bill:
+        instance.original_bill.update_financial_caches()
+
 @receiver(post_save, sender=Trip)
 def update_bill_on_trip_change(sender, instance, **kwargs):
     """
@@ -1398,10 +1420,22 @@ def update_trip_bill_caches_on_save(sender, instance, **kwargs):
     if getattr(instance, '_updating_financial_caches', False):
         return
 
+    # 1. Update current associations
     if instance.associated_trip:
         instance.associated_trip.update_financial_caches()
     if instance.associated_bill:
         instance.associated_bill.update_financial_caches()
+
+    # 2. Update OLD associations if they changed
+    # This handles cases where a record was moved from one bill/trip to another or unlinked.
+    old_instance = getattr(instance, '_old_instance', None)
+    if old_instance:
+        if old_instance.associated_trip and old_instance.associated_trip != instance.associated_trip:
+            # Re-fetch or use old_instance.associated_trip to refresh its cache
+            old_instance.associated_trip.update_financial_caches()
+        
+        if old_instance.associated_bill and old_instance.associated_bill != instance.associated_bill:
+            old_instance.associated_bill.update_financial_caches()
 
 @receiver(post_delete, sender=FinancialRecord)
 def update_trip_bill_caches_on_delete(sender, instance, **kwargs):

@@ -421,8 +421,9 @@ def manager_dashboard(request):
     current_month = current_date.month
     current_year = current_date.year
     
-    # 1. Optimized Trip Counts (Single SQL pass with annotations)
+    # 1. Overall Stats
     trip_stats = Trip.objects.with_payment_info().aggregate(
+        total_lifetime=models.Count('id'),
         active_count=models.Count('id', filter=Q(annotated_status__in=['Unpaid', 'Partially Paid'])),
         completed_month=models.Count('id', filter=Q(
             annotated_status='Paid',
@@ -447,13 +448,12 @@ def manager_dashboard(request):
     expenses_this_month = financial_totals['expenses'] or 0
 
     # 3. Optimized GST Calculation (Direct SQL aggregation from Bills)
-    # Replaces the sum(bill.gst_amount for bill in ...) Python loop
     gst_totals = Bill.objects.filter(
         date__month=current_month,
         date__year=current_year
     ).aggregate(
         total_gst=Sum(
-            (F('standard_weight') * F('standard_rate') * F('gst_rate') / 100.0),
+            (F('standard_weight') * F('standard_rate') * F('gst_rate') / Decimal('100')),
             filter=Q(bill_type='Standard'),
             output_field=DecimalField()
         )
@@ -471,13 +471,43 @@ def manager_dashboard(request):
                 When(revenue_type='fixed', then=F('rate_per_ton')),
                 default=F('weight') * F('rate_per_ton'),
                 output_field=DecimalField()
-            ) * F('bills__gst_rate') / 100.0
+            ) * F('bills__gst_rate') / Decimal('100')
         )
     )['val'] or 0
     
     gst_this_month += trip_gst
 
-    # 4. Optimized Alerts
+    # 4. Deep Vehicle Utilization & Health
+    # We want a list of all vehicles with their performance metrics
+    vehicles = Vehicle.objects.exclude(status=Vehicle.STATUS_RETIRED).annotate(
+        # Trips
+        trips_lifetime=models.Count('trips', distinct=True),
+        trips_this_month=models.Count('trips', filter=Q(
+            trips__date__month=current_month,
+            trips__date__year=current_year
+        ), distinct=True),
+        
+        # Revenue (Subtotal)
+        revenue_lifetime=Sum('trips__revenue_cached', distinct=True),
+        revenue_this_month=Sum('trips__revenue_cached', filter=Q(
+            trips__date__month=current_month,
+            trips__date__year=current_year
+        ), distinct=True),
+        
+        # Maintenance Cost (Monthly)
+        maintenance_cost_month=Sum('maintenance_records__cost', filter=Q(
+            maintenance_records__is_completed=True,
+            maintenance_records__completion_date__month=current_month,
+            maintenance_records__completion_date__year=current_year
+        ), distinct=True),
+        
+        # Next Maintenance Due
+        next_maint_date=models.Min('maintenance_records__expiry_date', filter=Q(
+            maintenance_records__is_completed=False
+        ))
+    ).order_by('registration_plate')
+
+    # 5. Global Alerts
     vehicles_due_maintenance = MaintenanceRecord.objects.filter(
         is_completed=False,
         expiry_date__lte=current_date + timedelta(days=7)
@@ -487,6 +517,8 @@ def manager_dashboard(request):
     vehicles_in_maintenance = Vehicle.objects.filter(status=Vehicle.STATUS_MAINTENANCE).count()
     
     context = {
+        'today': current_date,
+        'total_trips_lifetime': trip_stats['total_lifetime'],
         'active_trips': trip_stats['active_count'],
         'completed_this_month': trip_stats['completed_month'],
         'vehicles_due_maintenance': vehicles_due_maintenance,
@@ -496,6 +528,7 @@ def manager_dashboard(request):
         'net_profit_excl_gst': (income_this_month - gst_this_month) - expenses_this_month,
         'recent_trips': recent_trips,
         'vehicles_in_maintenance': vehicles_in_maintenance,
+        'vehicle_stats': vehicles,
     }
     
     return render(request, 'trips/manager_dashboard.html', context)

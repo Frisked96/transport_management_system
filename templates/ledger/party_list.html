@@ -26,7 +26,7 @@
     <form method="get">
         <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
             <!-- Search -->
-            <div class="md:col-span-10 flex flex-col">
+            <div class="md:col-span-7 flex flex-col">
                 <label for="search" class="text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">Search</label>
                 <div class="relative">
                     <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -36,12 +36,22 @@
                            value="{{ request.GET.search }}" placeholder="Name, Phone, State...">
                 </div>
             </div>
+
+            <!-- Sort -->
+            <div class="md:col-span-3 flex flex-col">
+                <label for="sort" class="text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">Sort By</label>
+                <select id="sort" name="sort" class="block w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white">
+                    <option value="name" {% if current_sort == 'name' %}selected{% endif %}>Alphabetical (A-Z)</option>
+                    <option value="most_outstanding" {% if current_sort == 'most_outstanding' %}selected{% endif %}>Most Outstanding (Debtors)</option>
+                    <option value="most_payable" {% if current_sort == 'most_payable' %}selected{% endif %}>Most Payable (Creditors)</option>
+                </select>
+            </div>
             
             <!-- Actions -->
             <div class="md:col-span-2 flex flex-col justify-end">
                 <div class="flex space-x-2">
                     <button type="submit" class="flex-grow bg-emerald-600 text-white px-3 py-2 rounded-md hover:bg-emerald-700 transition-colors text-sm font-medium">
-                        Search
+                        Apply
                     </button>
                     <a href="{% url 'party-list' %}" class="px-3 py-2 border border-slate-300 rounded-md bg-white text-slate-700 hover:bg-slate-50 transition-colors text-sm font-medium">
                         Clear
@@ -121,10 +131,10 @@
 <nav class="mt-8 flex justify-center">
     <div class="flex space-x-1">
         {% if page_obj.has_previous %}
-        <a href="?page=1{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
+        <a href="?page=1{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if current_sort %}&sort={{ current_sort }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
             <i class="fa-solid fa-angles-left"></i>
         </a>
-        <a href="?page={{ page_obj.previous_page_number }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
+        <a href="?page={{ page_obj.previous_page_number }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if current_sort %}&sort={{ current_sort }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
             <i class="fa-solid fa-angle-left"></i>
         </a>
         {% endif %}
@@ -133,15 +143,15 @@
             {% if page_obj.number == num %}
             <span class="px-4 py-2 bg-emerald-600 text-white border border-emerald-600 rounded-md text-sm font-medium">{{ num }}</span>
             {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
-            <a href="?page={{ num }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}" class="px-4 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">{{ num }}</a>
+            <a href="?page={{ num }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if current_sort %}&sort={{ current_sort }}{% endif %}" class="px-4 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">{{ num }}</a>
             {% endif %}
         {% endfor %}
 
         {% if page_obj.has_next %}
-        <a href="?page={{ page_obj.next_page_number }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
+        <a href="?page={{ page_obj.next_page_number }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if current_sort %}&sort={{ current_sort }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
             <i class="fa-solid fa-angle-right"></i>
         </a>
-        <a href="?page={{ page_obj.paginator.num_pages }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
+        <a href="?page={{ page_obj.paginator.num_pages }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if current_sort %}&sort={{ current_sort }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
             <i class="fa-solid fa-angles-right"></i>
         </a>
         {% endif %}

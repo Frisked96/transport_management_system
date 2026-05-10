@@ -68,7 +68,8 @@ class BaseLedgerPermissionMixin:
 
 class FinancialRecordListView(LoginRequiredMixin, BaseLedgerPermissionMixin, ListView):
     """
-    List view for financial records with permission-based filtering
+    List view for financial records with permission-based filtering.
+    Acts as a Financial Dashboard.
     """
     model = FinancialRecord
     template_name = 'ledger/financialrecord_list.html'
@@ -109,18 +110,12 @@ class FinancialRecordListView(LoginRequiredMixin, BaseLedgerPermissionMixin, Lis
         return queryset.order_by('-date', '-created_at')
     
     def get_context_data(self, **kwargs):
-
         context = super().get_context_data(**kwargs)
-
         context['category_choices'] = TransactionCategory.objects.all()
-
         context['current_category'] = self.request.GET.get('category', '')
 
-        
-
-        # Calculate totals for filtered records
+        # 1. Financial Records Totals (Filtered)
         records = self.get_queryset()
-
         total_income = records.filter(
             category__type=TransactionCategory.TYPE_INCOME
         ).exclude(record_type='Invoice').aggregate(total=Sum('amount'))['total'] or 0
@@ -129,14 +124,53 @@ class FinancialRecordListView(LoginRequiredMixin, BaseLedgerPermissionMixin, Lis
             category__type=TransactionCategory.TYPE_EXPENSE
         ).exclude(record_type='Invoice').aggregate(total=Sum('amount'))['total'] or 0
 
-        
-
         context['total_income'] = total_income
-
         context['total_expenses'] = total_expenses
-
         context['net_total'] = total_income - total_expenses
 
+        # 2. Party Outstanding Dashboard (Unfiltered by date/category)
+        # We want to see who owes money overall
+        parties = Party.objects.all()
+        party_dashboard = []
+        total_outstanding = Decimal('0')
+
+        # Define payment categories to include for "Last Payment"
+        # We exclude TDS and Adjustment Notes (Credit/Debit Notes)
+        # We only care about actual money coming in (Income)
+        payment_categories = TransactionCategory.objects.filter(
+            type=TransactionCategory.TYPE_INCOME
+        ).exclude(
+            name__in=['Credit Note', 'Debit Note', 'TDS', 'TDS Receivable', 'Opening Balance']
+        )
+
+        for p in parties:
+            bal = p.current_balance_cached
+            if p.party_type == Party.TYPE_DEBTOR:
+                total_outstanding += max(Decimal('0'), bal)
+            
+            # Find last actual payment received
+            last_payment = FinancialRecord.objects.filter(
+                party=p,
+                category__in=payment_categories
+            ).exclude(
+                record_type=FinancialRecord.RECORD_TYPE_INVOICE
+            ).order_by('-date', '-created_at').first()
+            
+            party_dashboard.append({
+                'id': p.id,
+                'name': p.name,
+                'balance': bal,
+                'party_type': p.party_type,
+                'last_payment_date': last_payment.date if last_payment else None
+            })
+
+        # Sort by absolute balance descending (most critical accounts first)
+        party_dashboard.sort(key=lambda x: abs(x['balance']), reverse=True)
+
+        context['total_outstanding'] = total_outstanding
+        context['party_dashboard'] = party_dashboard[:10] # Top 10 for dashboard
+        context['all_parties_dashboard'] = party_dashboard # Full list if needed
+        
         return context
 
 
@@ -421,9 +455,22 @@ class PartyListView(LoginRequiredMixin, BaseLedgerPermissionMixin, ListView):
                 Q(state__icontains=search)
             )
             
-        # We'll use the model properties in the template for absolute accuracy.
-        # Annotations are kept for basic filtering/ordering if needed.
-        return queryset.order_by('name')
+        sort = self.request.GET.get('sort', 'name')
+        if sort == 'most_outstanding':
+            queryset = queryset.order_by('-current_balance_cached')
+        elif sort == 'most_payable':
+            queryset = queryset.order_by('current_balance_cached')
+        elif sort == 'name':
+            queryset = queryset.order_by('name')
+        else:
+            queryset = queryset.order_by('name')
+
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['current_sort'] = self.request.GET.get('sort', 'name')
+        return context
 
 from django.core.paginator import Paginator
 
@@ -673,8 +720,19 @@ def global_resync(request):
     drivers = Driver.objects.all()
     for driver in drivers:
         driver.refresh_balance()
+
+    # 4. Bills & Trips (Financial Caches)
+    bills = Bill.objects.all()
+    for bill in bills:
+        bill.update_financial_caches()
+    
+    # Note: Trip caches are updated by bill.update_financial_caches() for billed trips,
+    # but we should also handle unbilled trips.
+    trips = Trip.objects.filter(bills__isnull=True)
+    for trip in trips:
+        trip.update_financial_caches()
         
-    messages.success(request, "All balances (Parties, Accounts, and Drivers) have been successfully resynced.")
+    messages.success(request, "All balances (Parties, Accounts, Drivers, Bills, and Trips) have been successfully resynced.")
     
     # Redirect to referer if available, else financial summary
     referer = request.META.get('HTTP_REFERER')
@@ -1487,6 +1545,7 @@ def get_party_bills(request):
     """
     party_id = request.GET.get('party_id')
     unpaid_only = request.GET.get('unpaid_only') == 'true'
+    include_bill_id = request.GET.get('include_bill_id')
 
     if not party_id:
         return JsonResponse({'bills': []})
@@ -1516,8 +1575,10 @@ def get_party_bills(request):
             # Python-side calculation using optimized prefetch data
             outstanding = bill.outstanding_balance
             
+            # Skip paid bills UNLESS specifically requested to include it (for editing)
             if unpaid_only and outstanding <= 0:
-                continue
+                if not include_bill_id or str(bill.id) != str(include_bill_id):
+                    continue
                 
             data.append({
                 'id': bill.id,

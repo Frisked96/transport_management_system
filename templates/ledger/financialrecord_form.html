@@ -394,7 +394,7 @@
             associatedBillSelect.innerHTML = '<option value="">Loading...</option>';
             $billSelect.trigger('change.select2');
 
-            fetch(`{% url 'get-party-bills' %}?party_id=${partyId}&unpaid_only=true`)
+            fetch(`{% url 'get-party-bills' %}?party_id=${partyId}&unpaid_only=true&include_bill_id=${currentBillId}`)
                 .then(response => response.json())
                 .then(data => {
                     associatedBillSelect.innerHTML = '<option value="">---------</option>';
