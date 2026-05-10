@@ -7,7 +7,7 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, redirect
 from django.urls import reverse_lazy, reverse
 from django.contrib import messages
-from django.db.models import Q, Sum, F, Case, When, Value, DecimalField
+from django.db.models import Q, Sum, F, Case, When, Value, DecimalField, ExpressionWrapper
 from django.db import models
 from django.utils import timezone
 from django import forms
@@ -453,7 +453,10 @@ def manager_dashboard(request):
         date__year=current_year
     ).aggregate(
         total_gst=Sum(
-            (F('standard_weight') * F('standard_rate') * F('gst_rate') / Decimal('100')),
+            ExpressionWrapper(
+                (F('standard_weight') * F('standard_rate') * F('gst_rate') / Decimal('100')),
+                output_field=DecimalField()
+            ),
             filter=Q(bill_type='Standard'),
             output_field=DecimalField()
         )
@@ -467,11 +470,14 @@ def manager_dashboard(request):
         bills__date__year=current_year
     ).aggregate(
         val=Sum(
-            Case(
-                When(revenue_type='fixed', then=F('rate_per_ton')),
-                default=F('weight') * F('rate_per_ton'),
+            ExpressionWrapper(
+                Case(
+                    When(revenue_type='fixed', then=F('rate_per_ton')),
+                    default=F('weight') * F('rate_per_ton'),
+                    output_field=DecimalField()
+                ) * F('bills__gst_rate') / Decimal('100'),
                 output_field=DecimalField()
-            ) * F('bills__gst_rate') / Decimal('100')
+            )
         )
     )['val'] or 0
     
