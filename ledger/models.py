@@ -680,110 +680,17 @@ class TripAllocation(models.Model):
 
 class BillQuerySet(models.QuerySet):
     def with_payment_info(self):
-        """Annotate bill with subtotal, direct payment info, and trip-based payments"""
-        from .models import FinancialRecord, TransactionCategory, TripAllocation
-        from trips.models import Trip
-        
-        # 1. Subquery for direct payments to the bill
-        direct_payments = FinancialRecord.objects.filter(
-            associated_bill=OuterRef('pk')
-        ).exclude(
-            record_type=FinancialRecord.RECORD_TYPE_INVOICE
-        ).filter(
-            models.Q(category__type=TransactionCategory.TYPE_INCOME) | 
-            models.Q(category__name__in=['Deductions', 'TDS', 'Shortage', 'Credit Note', 'Debit Note'])
-        ).values('associated_bill').annotate(
-            total=Sum('amount')
-        ).values('total')
-
-        # 2. Subquery for payments to trips that are part of this bill
-        # This includes direct trip records and allocations
-        trip_direct_payments = FinancialRecord.objects.filter(
-            associated_trip__bills=OuterRef('pk')
-        ).exclude(
-            models.Q(record_type=FinancialRecord.RECORD_TYPE_INVOICE) |
-            models.Q(associated_bill=OuterRef('pk'))
-        ).filter(
-            models.Q(category__type=TransactionCategory.TYPE_INCOME) | 
-            models.Q(category__name__in=['Deductions', 'TDS', 'Shortage', 'Credit Note', 'Debit Note'])
-        ).values('associated_trip__bills').annotate(
-            total=Sum('amount')
-        ).values('total')
-
-        trip_allocations = TripAllocation.objects.filter(
-            trip__bills=OuterRef('pk')
-        ).values('trip__bills').annotate(
-            total=Sum('amount')
-        ).values('total')
-
-        # 3. Subquery for adjustment notes (Credit/Debit Notes created as Bills)
-        # For adjustments, we need the annotated_total_amount of those bills
-        # Since we can't easily nest with_payment_info, we approximate total as Subtotal + GST
-        # Standard adjustments use amount_override, Trip ones use trip revenue.
-        adjustments_sq = Bill.objects.filter(
-            original_bill=OuterRef('pk')
-        ).values('original_bill').annotate(
-            total=Sum(
-                Case(
-                    # Credit Note: Reduces outstanding (+ in received)
-                    When(category__name='Credit Note', then=ExpressionWrapper(
-                        (Coalesce(F('amount_override'), Value(0, output_field=DecimalField())) - Coalesce(F('discount'), Value(0, output_field=DecimalField()))) * 
-                        (Value(1, output_field=DecimalField()) + F('gst_rate') / Value(100, output_field=DecimalField())),
-                        output_field=DecimalField()
-                    )),
-                    # Debit Note: Increases outstanding (- in received)
-                    When(category__name='Debit Note', then=ExpressionWrapper(
-                        -((Coalesce(F('amount_override'), Value(0, output_field=DecimalField())) - Coalesce(F('discount'), Value(0, output_field=DecimalField()))) * 
-                        (Value(1, output_field=DecimalField()) + F('gst_rate') / Value(100, output_field=DecimalField()))),
-                        output_field=DecimalField()
-                    )),
-                    default=Value(0, output_field=DecimalField()),
-                    output_field=DecimalField()
-                )
-            )
-        ).values('total')
-
-        # 4. Subquery for trip-based revenue (summing trips in the bill minus trip-level discounts)
-        from .models import BillTrip
-        trip_revenue_sq = BillTrip.objects.filter(bill=OuterRef('pk')).values('bill').annotate(
-            total=Sum(
-                Case(
-                    When(trip__revenue_type='fixed', then=F('trip__rate_per_ton')),
-                    default=F('trip__weight') * F('trip__rate_per_ton'),
-                    output_field=DecimalField()
-                ) - F('discount'),
-                output_field=DecimalField()
-            )
-        ).values('total')
-
+        """
+        Ultra-lightweight payment info using cached fields.
+        Backward compatible with previous annotation names.
+        """
         return self.annotate(
-            annotated_received = ExpressionWrapper(
-                Coalesce(Subquery(direct_payments), Value(0, output_field=DecimalField())) + 
-                Coalesce(Subquery(trip_direct_payments), Value(0, output_field=DecimalField())) +
-                Coalesce(Subquery(trip_allocations), Value(0, output_field=DecimalField())) +
-                Coalesce(Subquery(adjustments_sq), Value(0, output_field=DecimalField())),
-                output_field=DecimalField()
-            ),
-            annotated_subtotal = Case(
-                When(bill_type='Standard', then=ExpressionWrapper(
-                    Coalesce(F('amount_override'), ExpressionWrapper(F('standard_weight') * F('standard_rate'), output_field=DecimalField()), Value(0, output_field=DecimalField())) - F('discount'),
-                    output_field=DecimalField()
-                )),
-                default=ExpressionWrapper(
-                    Coalesce(Subquery(trip_revenue_sq), Value(0, output_field=DecimalField())) - F('discount'),
-                    output_field=DecimalField()
-                )
-            )
-        ).annotate(
-            annotated_gst_amount = ExpressionWrapper(F('annotated_subtotal') * F('gst_rate') / Value(100, output_field=DecimalField()), output_field=DecimalField())
-        ).annotate(
-            annotated_total_amount = ExpressionWrapper(F('annotated_subtotal') + F('annotated_gst_amount'), output_field=DecimalField())
-        ).annotate(
-            annotated_outstanding = Case(
-                When(use_roundoff=True, then=ExpressionWrapper(Func(F('annotated_total_amount'), function='ROUND') - F('annotated_received'), output_field=DecimalField())),
-                default=ExpressionWrapper(F('annotated_total_amount') - F('annotated_received'), output_field=DecimalField()),
-                output_field=DecimalField()
-            )
+            annotated_subtotal=F('subtotal_cached'),
+            annotated_gst_amount=F('gst_amount_cached'),
+            annotated_total_amount=F('total_amount_cached'),
+            annotated_received=F('amount_received_cached'),
+            annotated_outstanding=F('outstanding_balance_cached'),
+            annotated_status=F('payment_status_cached')
         )
 
 class BillManager(models.Manager):
@@ -873,6 +780,14 @@ class Bill(models.Model):
     discount = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name="Discount")
     use_roundoff = models.BooleanField(default=True, verbose_name="Use Round Off")
 
+    # Cached Financial Fields
+    subtotal_cached = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name='Subtotal (Cached)')
+    gst_amount_cached = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name='GST (Cached)')
+    total_amount_cached = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name='Total Amount (Cached)')
+    amount_received_cached = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name='Amount Received (Cached)')
+    outstanding_balance_cached = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name='Outstanding (Cached)')
+    payment_status_cached = models.CharField(max_length=20, default='Unpaid', verbose_name='Payment Status (Cached)')
+
     @classmethod
     def get_next_available_no(cls, issuer, date=None, category=None):
         """Finds the next numeric invoice number (Max + 1) for the specific prefix series."""
@@ -948,13 +863,103 @@ class Bill(models.Model):
             padding = self.issuer.invoice_padding
             suffix = self.issuer.invoice_suffix
             self.bill_number = f"{prefix}{self.bill_no:0{padding}d}{suffix}"
+        
+        # Update revenue caches before save
+        self.subtotal_cached = self.subtotal
+        self.gst_amount_cached = self.gst_amount
+        self.total_amount_cached = self.rounded_total
+        
+        is_new = self.pk is None
+        if is_new:
+             self.outstanding_balance_cached = self.total_amount_cached
+             self.payment_status_cached = self.PAYMENT_STATUS_UNPAID
             
         super().save(*args, **kwargs)
         
+        # Skip ledger sync if only updating financial caches
+        update_fields = kwargs.get('update_fields')
+        if update_fields:
+            cache_fields = {
+                'amount_received_cached', 'outstanding_balance_cached', 'payment_status_cached',
+                'subtotal_cached', 'gst_amount_cached', 'total_amount_cached'
+            }
+            if all(field in cache_fields for field in update_fields):
+                return
+                
         # 3. Ensure ledger is in sync (handles date, amount, issuer changes)
         # Note: For trip-based bills, self.trips might be empty on FIRST save 
         # (before form.save_m2m), but subsequent saves or BillTrip signals will handle it.
         self.sync_to_ledger()
+
+    def update_financial_caches(self):
+        """Recalculate and update cached received and outstanding amounts for the bill"""
+        received = self.calculate_amount_received()
+        total = self.total_amount_cached
+        
+        self.amount_received_cached = received
+        self.outstanding_balance_cached = total - received
+        
+        if total <= 0:
+            self.payment_status_cached = self.PAYMENT_STATUS_UNPAID
+        elif received >= total:
+            self.payment_status_cached = self.PAYMENT_STATUS_PAID
+        elif received > 0:
+            self.payment_status_cached = self.PAYMENT_STATUS_PARTIAL
+        else:
+            self.payment_status_cached = self.PAYMENT_STATUS_UNPAID
+            
+        self._updating_financial_caches = True
+        try:
+            self.save(update_fields=[
+                'amount_received_cached', 'outstanding_balance_cached', 'payment_status_cached'
+            ])
+        finally:
+            del self._updating_financial_caches
+        
+        # Also update all trips in this bill as their share might have changed
+        for trip in self.trips.all():
+            trip.update_financial_caches()
+
+    def calculate_amount_received(self):
+        """Helper to calculate amount received without using cached field"""
+        # 1. Direct links to this bill
+        direct = self.financial_records.exclude(
+            record_type=FinancialRecord.RECORD_TYPE_INVOICE
+        ).filter(
+            models.Q(category__type=TransactionCategory.TYPE_INCOME) | 
+            models.Q(category__name__in=["Deductions", "TDS", "Shortage", "Credit Note", "Debit Note"])
+        ).aggregate(total=Sum('amount'))['total'] or 0
+
+        # 2. Trip-based allocations/payments
+        trip_payments = 0
+        if self.bill_type == self.TYPE_TRIP:
+             # Sum allocations to trips in this bill
+             trip_payments = TripAllocation.objects.filter(
+                 trip__in=self.trips.all()
+             ).aggregate(total=Sum('amount'))['total'] or 0
+             
+             # Sum direct payments to trips in this bill (excluding those already linked to this bill)
+             direct_trip_payments = FinancialRecord.objects.filter(
+                 associated_trip__in=self.trips.all()
+             ).exclude(
+                 models.Q(record_type=FinancialRecord.RECORD_TYPE_INVOICE) |
+                 models.Q(associated_bill=self)
+             ).filter(
+                 models.Q(category__type=TransactionCategory.TYPE_INCOME) | 
+                 models.Q(category__name__in=["Deductions", "TDS", "Shortage", "Credit Note", "Debit Note"])
+             ).aggregate(total=Sum('amount'))['total'] or 0
+             trip_payments += direct_trip_payments
+
+        # 3. Adjustment Bills
+        adjustments = 0
+        for adj in self.adjustment_bills.select_related('category').all():
+            if adj.category:
+                if adj.category.name == 'Credit Note':
+                    adjustments += adj.total_amount_cached
+                elif adj.category.name == 'Debit Note':
+                    adjustments -= adj.total_amount_cached
+
+        return direct + trip_payments + adjustments
 
     def delete(self, *args, **kwargs):
         """
@@ -1053,117 +1058,85 @@ class Bill(models.Model):
         return self.category and self.category.name in ['Credit Note', 'Debit Note']
 
     @property
+    def subtotal(self):
+        """Returns subtotal, prioritizing cached value"""
+        if self.subtotal_cached:
+            return self.subtotal_cached
+            
+        if hasattr(self, 'annotated_subtotal'):
+            return self.annotated_subtotal
+
+        if self.bill_type == self.TYPE_STANDARD:
+            base = 0
+            if self.amount_override is not None:
+                base = self.amount_override
+            elif self.standard_weight and self.standard_rate:
+                base = self.standard_weight * self.standard_rate
+            return max(0, base - (self.discount or 0))
+
+        trip_subtotal = 0
+        for bt in self.bill_trips.all():
+            trip_subtotal += (bt.trip.revenue - (bt.discount or 0))
+        return max(0, trip_subtotal - (self.discount or 0))
+
+    @property
+    def gst_amount(self):
+        """Returns GST amount, prioritizing cached value"""
+        if self.gst_amount_cached:
+            return self.gst_amount_cached
+        if hasattr(self, 'annotated_gst_amount'):
+            return self.annotated_gst_amount
+        return self.subtotal * (Decimal(self.gst_rate) / Decimal(100))
+
+    @property
+    def total_amount(self):
+        """Returns total amount, prioritizing cached value"""
+        if self.total_amount_cached:
+            return self.total_amount_cached
+        if hasattr(self, 'annotated_total_amount'):
+            return self.annotated_total_amount
+        return self.subtotal + self.gst_amount
+
+    @property
+    def rounded_total(self):
+        """Returns rounded total, prioritizing cached value"""
+        if self.total_amount_cached:
+            return self.total_amount_cached # rounded_total is stored in total_amount_cached
+            
+        if not self.use_roundoff:
+            return self.total_amount
+        return self.total_amount.quantize(Decimal('1'), rounding='ROUND_HALF_UP')
+
+    @property
     def amount_received(self):
-        """
-        Calculate total received for this bill.
-        Utilizes prefetch cache if available.
-        """
+        """Returns amount received, prioritizing cached value"""
+        if self.amount_received_cached:
+            return self.amount_received_cached
         if hasattr(self, 'annotated_received'):
             return self.annotated_received
-
-        # Check for prefetch cache
-        is_records_prefetched = hasattr(self, '_prefetched_objects_cache') and 'financial_records' in self._prefetched_objects_cache
-        is_trips_prefetched = hasattr(self, '_prefetched_objects_cache') and 'trips' in self._prefetched_objects_cache
-        is_adjustments_prefetched = hasattr(self, '_prefetched_objects_cache') and 'adjustment_bills' in self._prefetched_objects_cache
-
-        # 1. Direct links to this bill
-        if is_records_prefetched:
-            direct = sum(
-                r.amount for r in self.financial_records.all()
-                if r.record_type != FinancialRecord.RECORD_TYPE_INVOICE and
-                (r.category.type == TransactionCategory.TYPE_INCOME or r.category.name in ["Deductions", "TDS", "Shortage", "Credit Note", "Debit Note"])
-            )
-        else:
-            direct = self.financial_records.exclude(
-                record_type=FinancialRecord.RECORD_TYPE_INVOICE
-            ).filter(
-                models.Q(category__type=TransactionCategory.TYPE_INCOME) | 
-                models.Q(category__name__in=["Deductions", "TDS", "Shortage", "Credit Note", "Debit Note"])
-            ).aggregate(total=Sum('amount'))['total'] or 0
-
-        # 2. Trip-based allocations
-        trip_payments = 0
-        if self.bill_type == self.TYPE_TRIP:
-            if is_trips_prefetched:
-                # We need allocations prefetched on trips: .prefetch_related('trips__payment_allocations')
-                for trip in self.trips.all():
-                    # Check if allocations are prefetched on this trip
-                    if hasattr(trip, '_prefetched_objects_cache') and 'payment_allocations' in trip._prefetched_objects_cache:
-                        trip_payments += sum(a.amount for a in trip.payment_allocations.all())
-                    else:
-                        trip_payments += trip.payment_allocations.aggregate(total=Sum('amount'))['total'] or 0
-                    
-                    # Also direct trip payments (rare but possible)
-                    # This part is hard to optimize with prefetch without specialized logic, 
-                    # but usually trips don't have many direct payments if billed.
-                    if is_records_prefetched:
-                        # This would require filtering ALL records for those matching this trip
-                        # and not associated with this bill.
-                        trip_payments += sum(
-                            r.amount for r in self.financial_records.all()
-                            if r.associated_trip_id == trip.id and 
-                            r.associated_bill_id != self.id and
-                            r.record_type != FinancialRecord.RECORD_TYPE_INVOICE and
-                            (r.category.type == TransactionCategory.TYPE_INCOME or r.category.name in ["Deductions", "TDS", "Shortage", "Credit Note", "Debit Note"])
-                        )
-                    else:
-                        trip_payments += FinancialRecord.objects.filter(
-                            associated_trip=trip
-                        ).exclude(
-                            models.Q(record_type=FinancialRecord.RECORD_TYPE_INVOICE) |
-                            models.Q(associated_bill=self)
-                        ).filter(
-                            models.Q(category__type=TransactionCategory.TYPE_INCOME) | 
-                            models.Q(category__name__in=["Deductions", "TDS", "Shortage", "Credit Note", "Debit Note"])
-                        ).aggregate(total=Sum('amount'))['total'] or 0
-            else:
-                trip_payments = TripAllocation.objects.filter(
-                    trip__in=self.trips.all()
-                ).aggregate(total=Sum('amount'))['total'] or 0
-                
-                direct_trip_payments = FinancialRecord.objects.filter(
-                    associated_trip__in=self.trips.all()
-                ).exclude(
-                    models.Q(record_type=FinancialRecord.RECORD_TYPE_INVOICE) |
-                    models.Q(associated_bill=self)
-                ).filter(
-                    models.Q(category__type=TransactionCategory.TYPE_INCOME) | 
-                    models.Q(category__name__in=["Deductions", "TDS", "Shortage", "Credit Note", "Debit Note"])
-                ).aggregate(total=Sum('amount'))['total'] or 0
-                trip_payments += direct_trip_payments
-
-        # 3. Adjustment Bills
-        adjustments = 0
-        adj_list = self.adjustment_bills.all() if is_adjustments_prefetched else self.adjustment_bills.select_related('category').all()
-        for adj in adj_list:
-            if adj.category:
-                if adj.category.name == 'Credit Note':
-                    adjustments += adj.total_amount
-                elif adj.category.name == 'Debit Note':
-                    adjustments -= adj.total_amount
-
-        return direct + trip_payments + adjustments
+        return self.calculate_amount_received()
 
     @property
     def outstanding_balance(self):
+        """Returns outstanding balance, prioritizing cached value"""
+        if self.outstanding_balance_cached:
+            return self.outstanding_balance_cached
         if hasattr(self, 'annotated_outstanding'):
             return self.annotated_outstanding or Decimal('0.00')
         return (self.rounded_total or Decimal('0.00')) - (self.amount_received or Decimal('0.00'))
 
     @property
     def payment_status(self):
+        """Returns payment status, prioritizing cached value"""
+        if self.payment_status_cached:
+            return self.payment_status_cached
+            
         total = self.rounded_total
         received = self.amount_received
-        
-        if total <= 0:
-            return self.PAYMENT_STATUS_UNPAID
-        
-        if received >= total:
-            return self.PAYMENT_STATUS_PAID
-        elif received > 0:
-            return self.PAYMENT_STATUS_PARTIAL
-        else:
-            return self.PAYMENT_STATUS_UNPAID
+        if total <= 0: return self.PAYMENT_STATUS_UNPAID
+        if received >= total: return self.PAYMENT_STATUS_PAID
+        elif received > 0: return self.PAYMENT_STATUS_PARTIAL
+        return self.PAYMENT_STATUS_UNPAID
 
     @property
     def cgst_amount(self):
@@ -1218,49 +1191,6 @@ class Bill(models.Model):
         return self.trips.aggregate(total=models.Sum('weight'))['total'] or 0
 
     @property
-    def subtotal(self):
-        if hasattr(self, 'annotated_subtotal'):
-            return self.annotated_subtotal
-
-        if self.bill_type == self.TYPE_STANDARD:
-            # For Standard invoices, we use amount_override as the base amount.
-            # If it's missing but we have weight/rate, calculate it as a fallback.
-            base = 0
-            if self.amount_override is not None:
-                base = self.amount_override
-            elif self.standard_weight and self.standard_rate:
-                base = self.standard_weight * self.standard_rate
-            
-            return max(0, base - (self.discount or 0))
-
-        # Sum individual trip revenues minus their individual discounts
-        # We use a subtotal that subtracts per-trip discounts BEFORE bill-level discount
-        trip_subtotal = 0
-        for bt in self.bill_trips.all():
-            trip_subtotal += (bt.trip.revenue - (bt.discount or 0))
-            
-        return max(0, trip_subtotal - (self.discount or 0))
-
-    @property
-    def gst_amount(self):
-        if hasattr(self, 'annotated_gst_amount'):
-            return self.annotated_gst_amount
-        return self.subtotal * (Decimal(self.gst_rate) / Decimal(100))
-
-    @property
-    def total_amount(self):
-        if hasattr(self, 'annotated_total_amount'):
-            return self.annotated_total_amount
-        return self.subtotal + self.gst_amount
-
-    @property
-    def rounded_total(self):
-        if not self.use_roundoff:
-            return self.total_amount
-        # Round to nearest whole rupee
-        return self.total_amount.quantize(Decimal('1'), rounding='ROUND_HALF_UP')
-
-    @property
     def roundoff(self):
         if not self.use_roundoff:
             return Decimal('0')
@@ -1295,6 +1225,9 @@ def update_bill_on_trip_change(sender, instance, **kwargs):
     This updates the consolidated FinancialRecord for the bill.
     Also syncs the LR number from the Trip to BillTrip context.
     """
+    if getattr(instance, '_updating_financial_caches', False):
+        return
+
     # 1. Sync LR No to BillTrip context
     # This ensures the Invoice printout reflects the latest LR No from the trip
     BillTrip.objects.filter(trip=instance).update(lr_no=instance.lr_no)
@@ -1458,3 +1391,45 @@ def update_balances_on_delete(sender, instance, **kwargs):
 
     if instance.account:
         instance.account.refresh_balance()
+
+@receiver(post_save, sender=FinancialRecord)
+def update_trip_bill_caches_on_save(sender, instance, **kwargs):
+    """Update Trip and Bill caches when a payment/deduction is recorded"""
+    if getattr(instance, '_updating_financial_caches', False):
+        return
+
+    if instance.associated_trip:
+        instance.associated_trip.update_financial_caches()
+    if instance.associated_bill:
+        instance.associated_bill.update_financial_caches()
+
+@receiver(post_delete, sender=FinancialRecord)
+def update_trip_bill_caches_on_delete(sender, instance, **kwargs):
+    """Update Trip and Bill caches when a payment/deduction is deleted"""
+    if getattr(instance, '_updating_financial_caches', False):
+        return
+
+    if instance.associated_trip:
+        instance.associated_trip.update_financial_caches()
+    if instance.associated_bill:
+        instance.associated_bill.update_financial_caches()
+
+@receiver(post_save, sender=TripAllocation)
+def update_trip_bill_caches_on_alloc_save(sender, instance, **kwargs):
+    """Update Trip and Bill caches when an allocation is created/updated"""
+    if getattr(instance, '_updating_financial_caches', False):
+        return
+
+    instance.trip.update_financial_caches()
+    if instance.trip.associated_bill:
+        instance.trip.associated_bill.update_financial_caches()
+
+@receiver(post_delete, sender=TripAllocation)
+def update_trip_bill_caches_on_alloc_delete(sender, instance, **kwargs):
+    """Update Trip and Bill caches when an allocation is deleted"""
+    if getattr(instance, '_updating_financial_caches', False):
+        return
+
+    instance.trip.update_financial_caches()
+    if instance.trip.associated_bill:
+        instance.trip.associated_bill.update_financial_caches()
