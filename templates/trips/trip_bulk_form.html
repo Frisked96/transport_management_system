@@ -222,6 +222,9 @@
                 <a href="{% url 'trip-list' %}" class="text-sm font-bold text-slate-400 hover:text-slate-600 transition-colors">
                     <i class="fa-solid fa-xmark mr-1"></i> Cancel
                 </a>
+                <button type="button" id="clear-draft-btn" class="text-sm font-bold text-rose-400 hover:text-rose-600 transition-colors">
+                    <i class="fa-solid fa-trash-can mr-1"></i> Clear Draft
+                </button>
             </div>
             <button type="submit" class="flex items-center space-x-2 px-8 py-3 bg-emerald-600 text-white rounded-lg text-sm font-black hover:bg-emerald-700 shadow-lg shadow-emerald-100 transition-all active:scale-95 uppercase tracking-widest">
                 <i class="fa-solid fa-circle-check"></i>
@@ -352,11 +355,18 @@ $(document).ready(function() {
         saveDraft();
     });
 
-    // Clear draft on submit. We clear it immediately because if there are validation errors,
-    // the server renders the same page with errors and the values are preserved anyway in the HTML.
-    // If it succeeds, it redirects, and the cache is safely gone.
+    // Clear draft on submit? 
+    // We NO LONGER clear on submit to prevent data loss if the network fails during POST.
+    // Instead, we clear it on the success page (trip-list).
     $('#bulk-trip-form').on('submit', function() {
-        localStorage.removeItem(DRAFT_KEY);
+        // localStorage.removeItem(DRAFT_KEY); // Removed for robustness
+    });
+
+    $('#clear-draft-btn').on('click', function() {
+        if (confirm('Are you sure you want to clear all entered data and start fresh?')) {
+            localStorage.removeItem(DRAFT_KEY);
+            location.reload();
+        }
     });
 
     // Init select2 for a specific row
@@ -474,12 +484,14 @@ $(document).ready(function() {
             const prevRoute = $(`[name="${prevPrefix}-route"]`).val();
             const prevVehicle = $(`[name="${prevPrefix}-vehicle"]`).val();
             const prevRate = $(`[name="${prevPrefix}-rate_per_ton"]`).val();
+            const prevRevenueType = $(`[name="${prevPrefix}-revenue_type"]`).val();
             
             if (prevDate) $newRow.find(`[name="${newPrefix}-date"]`).val(prevDate);
             if (prevParty) $newRow.find(`[name="${newPrefix}-party"]`).val(prevParty);
             if (prevRoute) $newRow.find(`[name="${newPrefix}-route"]`).val(prevRoute);
             if (prevVehicle) $newRow.find(`[name="${newPrefix}-vehicle"]`).val(prevVehicle);
             if (prevRate) $newRow.find(`[name="${newPrefix}-rate_per_ton"]`).val(prevRate);
+            if (prevRevenueType) $newRow.find(`[name="${newPrefix}-revenue_type"]`).val(prevRevenueType);
         }
         
         $('#id_form-TOTAL_FORMS').val(totalForms + 1);
