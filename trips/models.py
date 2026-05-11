@@ -445,6 +445,9 @@ class Trip(models.Model):
         Recalculate and update the cached received amount and outstanding balance.
         Triggered by payment signals.
         """
+        if not self.pk:
+            return
+
         # We must not use self.amount_received property if it's still dynamic, 
         # or we update it to use the dynamic logic for now.
         received = self.calculate_amount_received()
@@ -474,6 +477,9 @@ class Trip(models.Model):
         """Helper to calculate amount received without using cached field"""
         from ledger.models import FinancialRecord, TransactionCategory
         
+        if not self.pk:
+            return 0
+
         # 1. Direct links
         direct = self.financial_records.exclude(
             record_type=FinancialRecord.RECORD_TYPE_INVOICE
@@ -599,6 +605,9 @@ class Trip(models.Model):
     @property
     def is_billed(self):
         """Check if this trip is associated with any bill"""
+        if not self.pk:
+            return False
+            
         if hasattr(self, 'annotated_is_billed'):
             return self.annotated_is_billed
         
@@ -610,6 +619,9 @@ class Trip(models.Model):
     @property
     def associated_bill(self):
         """Returns the first associated bill (if any)"""
+        if not self.pk:
+            return None
+            
         if hasattr(self, '_prefetched_objects_cache') and 'bills' in self._prefetched_objects_cache:
             bills = self.bills.all()
             return bills[0] if bills else None
