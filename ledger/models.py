@@ -922,6 +922,9 @@ class Bill(models.Model):
 
     def calculate_amount_received(self):
         """Helper to calculate amount received without using cached field"""
+        if not self.pk:
+            return Decimal('0')
+
         # 1. Direct links to this bill
         direct = self.financial_records.exclude(
             record_type=FinancialRecord.RECORD_TYPE_INVOICE
@@ -967,6 +970,9 @@ class Bill(models.Model):
         Ensure individual trip accruals are restored and the consolidated record is removed.
         """
         # Get list of trips before they are unlinked
+        if not self.pk:
+            return super().delete(*args, **kwargs)
+
         affected_trips = list(self.trips.all())
 
         # Delete only the consolidated invoice record associated with this bill
@@ -985,6 +991,9 @@ class Bill(models.Model):
         """
         Main entry point to synchronize this invoice to the ledger.
         """
+        if not self.pk:
+            return
+
         self.update_ledger_records()
         
         # Also clean up individual trip accruals for all trips in this bill
@@ -1000,6 +1009,9 @@ class Bill(models.Model):
         Create/Update a single consolidated 'Invoice' type record in the ledger 
         representing the entire bill.
         """
+        if not self.pk:
+            return
+
         # Determine the category: use self.category if set (Standard Invoices), 
         # otherwise default to 'Trip Payment'
         category = self.category
@@ -1073,6 +1085,9 @@ class Bill(models.Model):
             elif self.standard_weight and self.standard_rate:
                 base = self.standard_weight * self.standard_rate
             return max(0, base - (self.discount or 0))
+
+        if not self.pk:
+            return Decimal('0')
 
         trip_subtotal = 0
         for bt in self.bill_trips.all():
@@ -1177,6 +1192,8 @@ class Bill(models.Model):
 
     @property
     def trips_count(self):
+        if not self.pk:
+            return 0
         if hasattr(self, '_prefetched_objects_cache') and 'trips' in self._prefetched_objects_cache:
             return len(self.trips.all())
         return self.trips.count()
@@ -1185,6 +1202,9 @@ class Bill(models.Model):
     def total_weight(self):
         if self.bill_type == self.TYPE_STANDARD:
             return self.standard_weight or 0
+        
+        if not self.pk:
+            return 0
         
         if hasattr(self, '_prefetched_objects_cache') and 'trips' in self._prefetched_objects_cache:
             return sum((t.weight or 0) for t in self.trips.all())
