@@ -1645,3 +1645,121 @@ def get_next_invoice_number(request):
         'prefix': prefix
     })
 
+
+def parse_number_range(range_str):
+    """
+    Parses a string like "1,3,5-8,12" into a list of integers [1, 3, 5, 6, 7, 8, 12].
+    """
+    if not range_str:
+        return []
+    nums = set()
+    for part in range_str.split(','):
+        part = part.strip()
+        if not part:
+            continue
+        if '-' in part:
+            try:
+                start, end = part.split('-')
+                nums.update(range(int(start), int(end) + 1))
+            except (ValueError, TypeError):
+                continue
+        else:
+            try:
+                nums.add(int(part))
+            except (ValueError, TypeError):
+                continue
+    return sorted(list(nums))
+
+def get_bulk_invoices_context(request):
+    """
+    Helper to get the context for multiple invoices based on request filters.
+    """
+    issuer_id = request.GET.get('issuer')
+    party_id = request.GET.get('party')
+    category_id = request.GET.get('category_id') 
+    category_name = request.GET.get('category') 
+    start_date_str = request.GET.get('start_date')
+    end_date_str = request.GET.get('end_date')
+    bill_numbers_str = request.GET.get('bill_numbers')
+
+    if not issuer_id:
+        return None, "Please select a Company Account."
+
+    # Logic to determine category
+    category = None
+    if category_id:
+        category = get_object_or_404(TransactionCategory, pk=category_id)
+    elif category_name:
+        if category_name == 'credit':
+            category = TransactionCategory.objects.filter(name='Credit Note').first()
+        elif category_name == 'debit':
+            category = TransactionCategory.objects.filter(name='Debit Note').first()
+
+    queryset = Bill.objects.filter(issuer_id=issuer_id)
+    
+    if party_id:
+        queryset = queryset.filter(party_id=party_id)
+    
+    if category:
+        queryset = queryset.filter(category=category)
+    elif category_name == 'invoice':
+         queryset = queryset.exclude(category__name__in=['Credit Note', 'Debit Note'])
+
+    if start_date_str:
+        queryset = queryset.filter(date__gte=start_date_str)
+    if end_date_str:
+        queryset = queryset.filter(date__lte=end_date_str)
+    
+    if bill_numbers_str:
+        bill_nos = parse_number_range(bill_numbers_str)
+        if bill_nos:
+            queryset = queryset.filter(bill_no__in=bill_nos)
+    
+    bills = queryset.select_related('party', 'issuer', 'category').prefetch_related(
+        'trips', 'bill_trips', 'bill_trips__trip', 'bill_trips__trip__vehicle'
+    ).order_by('bill_no', 'date')
+
+    if not bills.exists():
+        return None, "No invoices found matching the selected criteria."
+
+    all_bill_contexts = []
+    for bill in bills:
+        invoice_items = group_trips_for_bill(bill)
+        bill_trips = bill.bill_trips.select_related('trip', 'trip__vehicle').order_by('trip__date')
+        
+        has_discount = False
+        if bill.bill_type == 'Standard':
+            has_discount = (bill.discount or 0) > 0
+        else:
+            has_discount = any((bt.discount or 0) > 0 for bt in bill_trips)
+
+        has_lr = False
+        if bill.bill_type != 'Standard':
+            has_lr = any(bt.lr_no or (bt.trip and bt.trip.lr_no) for bt in bill_trips)
+
+        all_bill_contexts.append({
+            'bill': bill,
+            'invoice_items': invoice_items,
+            'bill_trips': bill_trips,
+            'has_discount': has_discount,
+            'has_lr': has_lr,
+        })
+
+    return {
+        'bill_contexts': all_bill_contexts,
+        'issuer_id': issuer_id,
+        'is_bulk': True,
+    }, None
+
+@login_required
+def bulk_print_invoices(request):
+    """
+    Renders an HTML page for browser printing of multiple invoices.
+    """
+    context, error = get_bulk_invoices_context(request)
+    if error:
+        messages.error(request, error)
+        return redirect('bill-list')
+    
+    return render(request, 'ledger/bulk_bill_print_html.html', context)
+

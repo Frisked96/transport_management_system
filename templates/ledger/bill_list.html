@@ -11,6 +11,10 @@
         <p class="text-sm text-slate-600 mt-1">Manage and track your billing to parties</p>
     </div>
     <div class="mt-4 md:mt-0 flex space-x-3">
+        <button type="button" onclick="openBulkDownloadModal()" class="flex items-center space-x-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-md text-sm font-medium hover:bg-slate-200 shadow-sm transition-colors border border-slate-300">
+            <i class="fa-solid fa-print"></i>
+            <span>Bulk Print</span>
+        </button>
         {% if perms.ledger.add_financialrecord %}
         <a href="{% url 'bill-create' %}" class="flex items-center space-x-2 px-4 py-2 bg-emerald-600 text-white rounded-md text-sm font-medium hover:bg-emerald-700 shadow-sm transition-colors">
             <i class="fa-solid fa-plus"></i>
@@ -20,6 +24,93 @@
     </div>
 </header>
 <!-- END: Page Header -->
+
+<!-- BEGIN: Bulk Download Modal -->
+<div id="bulk-download-modal" class="fixed inset-0 z-50 hidden overflow-y-auto">
+    <div class="flex items-center justify-center min-h-screen p-4">
+        <div class="fixed inset-0 bg-slate-900 bg-opacity-50 transition-opacity" onclick="closeBulkDownloadModal()"></div>
+        <div class="relative bg-white rounded-lg shadow-xl max-w-lg w-full p-6">
+            <div class="flex items-center justify-between mb-4 border-b pb-3">
+                <h3 class="text-xl font-bold text-slate-900">Bulk Print Invoices</h3>
+                <button type="button" onclick="closeBulkDownloadModal()" class="text-slate-400 hover:text-slate-500">
+                    <i class="fa-solid fa-xmark text-xl"></i>
+                </button>
+            </div>
+            
+            <form action="{% url 'bulk-print-invoices' %}" method="get" id="bulk-download-form" target="_blank">
+                <p class="text-sm text-slate-600 mb-4">Select the criteria to print multiple invoices at once.</p>
+                
+                <div class="space-y-4">
+                    <!-- Company Account (Mandatory) -->
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Company Account <span class="text-red-500">*</span></label>
+                        <select name="issuer" required class="block w-full border-slate-300 rounded-md shadow-sm focus:ring-emerald-500 focus:border-emerald-500 sm:text-sm">
+                            <option value="">-- Select Company --</option>
+                            {% for issuer in issuers %}
+                            <option value="{{ issuer.id }}" {% if current_issuer == issuer.id|stringformat:"s" %}selected{% endif %}>{{ issuer.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <!-- Party -->
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Bill To (Party)</label>
+                        <select name="party" class="block w-full border-slate-300 rounded-md shadow-sm focus:ring-emerald-500 focus:border-emerald-500 sm:text-sm">
+                            <option value="">-- All Parties --</option>
+                            {% for party in parties %}
+                            <option value="{{ party.id }}" {% if current_party == party.id|stringformat:"s" %}selected{% endif %}>{{ party.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <!-- Invoice Type -->
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Invoice Type</label>
+                            <select name="category" class="block w-full border-slate-300 rounded-md shadow-sm focus:ring-emerald-500 focus:border-emerald-500 sm:text-sm">
+                                <option value="">All Types</option>
+                                <option value="invoice" {% if request.GET.category == 'invoice' %}selected{% endif %}>Standard Invoices</option>
+                                <option value="credit" {% if request.GET.category == 'credit' %}selected{% endif %}>Credit Notes</option>
+                                <option value="debit" {% if request.GET.category == 'debit' %}selected{% endif %}>Debit Notes</option>
+                            </select>
+                        </div>
+                        <!-- Empty for alignment -->
+                        <div></div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <!-- Start Date -->
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 uppercase mb-1">From Date</label>
+                            <input type="date" name="start_date" value="{{ start_date }}" class="block w-full border-slate-300 rounded-md shadow-sm focus:ring-emerald-500 focus:border-emerald-500 sm:text-sm">
+                        </div>
+                        <!-- End Date -->
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 uppercase mb-1">To Date</label>
+                            <input type="date" name="end_date" value="{{ end_date }}" class="block w-full border-slate-300 rounded-md shadow-sm focus:ring-emerald-500 focus:border-emerald-500 sm:text-sm">
+                        </div>
+                    </div>
+
+                    <!-- Custom Bill Numbers -->
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Custom Numbers (Optional)</label>
+                        <input type="text" name="bill_numbers" placeholder="e.g. 1, 3, 5-8, 12" class="block w-full border-slate-300 rounded-md shadow-sm focus:ring-emerald-500 focus:border-emerald-500 sm:text-sm">
+                        <p class="mt-1 text-[10px] text-slate-500">Enter comma-separated numbers or ranges to specifically pick invoices.</p>
+                    </div>
+                </div>
+
+                <div class="mt-6 pt-4 border-t flex justify-end space-x-3">
+                    <button type="button" onclick="closeBulkDownloadModal()" class="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md shadow-sm hover:bg-slate-50">
+                        Cancel
+                    </button>
+                    <button type="submit" class="px-4 py-2 text-sm font-medium text-white bg-emerald-600 border border-transparent rounded-md shadow-sm hover:bg-emerald-700">
+                        <i class="fa-solid fa-print mr-2"></i>Print Selected Invoices
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 
 <!-- BEGIN: Filter Bar -->
 <section class="bg-slate-100 p-5 rounded-lg border border-slate-200 mb-6">
@@ -274,5 +365,15 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 });
+
+function openBulkDownloadModal() {
+    document.getElementById('bulk-download-modal').classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeBulkDownloadModal() {
+    document.getElementById('bulk-download-modal').classList.add('hidden');
+    document.body.style.overflow = 'auto';
+}
 </script>
 {% endblock %}

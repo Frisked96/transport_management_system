@@ -4,10 +4,7 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>
-        {% if bill.category and bill.category.name == 'Debit Note' %}Debit Note{% elif bill.category and bill.category.name == 'Credit Note' %}Credit Note{% elif bill.category and bill.category.name == 'Halting' %}Halting Invoice{% elif bill.gst_type == 'NONE' %}Commercial Invoice{% else %}Tax Invoice{% endif %} {{ bill.bill_number }}
-    </title>
+    <title>Bulk Print Invoices</title>
     <style>
         @page {
             size: A4;
@@ -22,24 +19,11 @@
 
         .page-container {
             width: 210mm;
-            max-width: 98%;
             margin: 20px auto;
             background: white;
             padding: 10mm;
             box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
-            box-sizing: border-box;
-        }
-
-        @media screen and (max-width: 210mm) {
-            .page-container {
-                width: 100%;
-                margin: 0;
-                padding: 5mm;
-                box-shadow: none;
-            }
-            .invoice-wrapper {
-                zoom: 0.9; /* Slight zoom out for small screens */
-            }
+            position: relative;
         }
 
         @media print {
@@ -51,6 +35,7 @@
                 margin: 0;
                 padding: 10mm;
                 box-shadow: none;
+                page-break-after: always;
             }
             .no-print {
                 display: none !important;
@@ -96,20 +81,21 @@
 <body>
 
     <div class="print-controls no-print">
-        <button onclick="window.print()" class="btn-print">Print Invoice</button>
+        <button onclick="window.print()" class="btn-print">Print All Invoices</button>
         <button onclick="window.close()" class="btn-close">Close</button>
     </div>
 
-    <div class="page-container">
-        {% include "ledger/partials/bill_content.html" %}
-    </div>
+    {% for ctx in bill_contexts %}
+        <div class="page-container {% if not forloop.first %}page-break{% endif %}">
+            {% include "ledger/partials/bill_content.html" with bill=ctx.bill invoice_items=ctx.invoice_items bill_trips=ctx.bill_trips has_discount=ctx.has_discount has_lr=ctx.has_lr %}
+        </div>
+    {% endfor %}
 
     <script>
         window.onload = function() {
             const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
             if (!isMobile) {
                 window.print();
-                window.onafterprint = function() { window.close(); };
             }
         }
     </script>
