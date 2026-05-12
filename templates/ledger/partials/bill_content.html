@@ -40,7 +40,7 @@
                     {% if bill.original_bill %}
                     Against Inv: <strong>{{ bill.original_bill.bill_number }}</strong> dated <strong>{{ bill.original_bill.date|date:"d-m-Y" }}</strong><br>
                     {% elif bill.manual_original_bill_number %}
-                    Against Inv: <strong>{{ bill.manual_original_bill_number }} (M)</strong> dated <strong>{{ bill.manual_original_bill_date|date:"d-m-Y" }}</strong><br>
+                    Against Inv: <strong>{{ bill.manual_original_bill_number }}</strong> dated <strong>{{ bill.manual_original_bill_date|date:"d-m-Y" }}</strong><br>
                     {% endif %}
                     Place of Supply: <strong>{{ bill.party.state }}</strong>
                 </div>
