@@ -124,8 +124,14 @@ class TripListView(LoginRequiredMixin, BaseTripPermissionMixin, ListView):
                 Q(delivery_location__icontains=search) |
                 Q(route__pickup_location__icontains=search) |
                 Q(route__delivery_location__icontains=search) |
-                Q(vehicle__registration_plate__icontains=search)
+                Q(vehicle__registration_plate__icontains=search) |
+                Q(lr_no__icontains=search)
             ).distinct()
+
+        # LR Number Specific Search
+        lr_search = self.request.GET.get('lr_search')
+        if lr_search:
+            queryset = queryset.filter(lr_no__icontains=lr_search)
         
         # Party filter
         party_id = self.request.GET.get('party')
@@ -194,6 +200,7 @@ class TripListView(LoginRequiredMixin, BaseTripPermissionMixin, ListView):
         context['current_status'] = self.request.GET.get('status', '')
         context['current_gst_filter'] = self.request.GET.get('gst_filter', '')
         context['search_term'] = self.request.GET.get('search', '')
+        context['current_lr_search'] = self.request.GET.get('lr_search', '')
         context['start_date'] = self.request.GET.get('start_date', '')
         context['end_date'] = self.request.GET.get('end_date', '')
         context['current_sort'] = self.request.GET.get('sort', '-date')

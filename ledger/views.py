@@ -901,6 +901,13 @@ class BillListView(LoginRequiredMixin, BaseLedgerPermissionMixin, ListView):
         elif cat_filter == 'debit':
             queryset = queryset.filter(category__name='Debit Note')
 
+        # Filter by Payment Status
+        status_filter = self.request.GET.get('payment_status')
+        if status_filter == 'pending':
+            queryset = queryset.filter(outstanding_balance_cached__gt=0)
+        elif status_filter == 'paid':
+            queryset = queryset.filter(outstanding_balance_cached__lte=0)
+
         # Filter by Date Range
         start_date = self.request.GET.get('start_date')
         end_date = self.request.GET.get('end_date')
@@ -917,6 +924,7 @@ class BillListView(LoginRequiredMixin, BaseLedgerPermissionMixin, ListView):
         context['parties'] = Party.objects.all().order_by('name')
         context['current_issuer'] = self.request.GET.get('issuer', '')
         context['current_party'] = self.request.GET.get('party', '')
+        context['current_status'] = self.request.GET.get('payment_status', '')
         context['search'] = self.request.GET.get('search', '')
         context['start_date'] = self.request.GET.get('start_date', '')
         context['end_date'] = self.request.GET.get('end_date', '')

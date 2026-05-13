@@ -56,8 +56,8 @@
     <form method="get" id="filter-form">
         <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
             <!-- Search -->
-            <div class="md:col-span-3 flex flex-col">
-                <label for="search" class="text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-widest">Search</label>
+            <div class="md:col-span-3 lg:col-span-2 flex flex-col">
+                <label for="search" class="text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-widest">General Search</label>
                 <div class="relative">
                     <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                         <i class="fa-solid fa-magnifying-glass text-slate-400"></i>
@@ -67,8 +67,20 @@
                 </div>
             </div>
 
+            <!-- LR Search -->
+            <div class="md:col-span-3 lg:col-span-2 flex flex-col">
+                <label for="lr_search" class="text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-widest">Search LR No</label>
+                <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <i class="fa-solid fa-file-contract text-slate-400"></i>
+                    </div>
+                    <input type="text" id="lr_search" name="lr_search" class="block w-full pl-9 pr-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white" 
+                           value="{{ current_lr_search }}" placeholder="Exact LR No...">
+                </div>
+            </div>
+
             <!-- Party Filter -->
-            <div class="md:col-span-3 flex flex-col">
+            <div class="md:col-span-3 lg:col-span-3 flex flex-col">
                 <label for="party" class="text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-widest">Filter by Party</label>
                 <select id="party" name="party" class="block w-full select2-party">
                     <option value="">All Parties</option>
@@ -76,13 +88,13 @@
             </div>
             
             <!-- Date Range & Quick Filters -->
-            <div class="md:col-span-4 flex flex-col">
+            <div class="md:col-span-3 lg:col-span-3 flex flex-col">
                 <div class="flex justify-between items-center mb-1.5">
                     <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Date Range</label>
                     <div class="flex gap-2">
-                        <a href="?date_filter=today{% if current_party %}&party={{ current_party }}{% endif %}" class="text-[9px] font-black uppercase {% if date_filter == 'today' %}text-emerald-600{% else %}text-slate-400 hover:text-slate-600{% endif %}">Today</a>
-                        <a href="?date_filter=yesterday{% if current_party %}&party={{ current_party }}{% endif %}" class="text-[9px] font-black uppercase {% if date_filter == 'yesterday' %}text-emerald-600{% else %}text-slate-400 hover:text-slate-600{% endif %}">Yesterday</a>
-                        <a href="?date_filter=last_7_days{% if current_party %}&party={{ current_party }}{% endif %}" class="text-[9px] font-black uppercase {% if date_filter == 'last_7_days' %}text-emerald-600{% else %}text-slate-400 hover:text-slate-600{% endif %}">7 Days</a>
+                        <a href="?date_filter=today{% if current_party %}&party={{ current_party }}{% endif %}{% if current_lr_search %}&lr_search={{ current_lr_search }}{% endif %}" class="text-[9px] font-black uppercase {% if date_filter == 'today' %}text-emerald-600{% else %}text-slate-400 hover:text-slate-600{% endif %}">Today</a>
+                        <a href="?date_filter=yesterday{% if current_party %}&party={{ current_party }}{% endif %}{% if current_lr_search %}&lr_search={{ current_lr_search }}{% endif %}" class="text-[9px] font-black uppercase {% if date_filter == 'yesterday' %}text-emerald-600{% else %}text-slate-400 hover:text-slate-600{% endif %}">Yesterday</a>
+                        <a href="?date_filter=last_7_days{% if current_party %}&party={{ current_party }}{% endif %}{% if current_lr_search %}&lr_search={{ current_lr_search }}{% endif %}" class="text-[9px] font-black uppercase {% if date_filter == 'last_7_days' %}text-emerald-600{% else %}text-slate-400 hover:text-slate-600{% endif %}">7 Days</a>
                     </div>
                 </div>
                 <div class="flex space-x-2">
@@ -92,7 +104,7 @@
             </div>
 
             <!-- Sort By -->
-            <div class="md:col-span-2 flex flex-col">
+            <div class="md:col-span-3 lg:col-span-2 flex flex-col">
                 <label for="sort" class="text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-widest">Status & Sort</label>
                 <div class="flex flex-col gap-2">
                     <select id="gst_filter" name="gst_filter" class="block w-full pl-3 pr-8 py-1.5 border border-slate-300 rounded-md text-[10px] font-bold uppercase focus:ring-emerald-500 focus:border-emerald-500 bg-white">
@@ -309,10 +321,10 @@
 <nav class="mt-8 flex justify-center overflow-x-auto pb-4">
     <div class="flex space-x-1">
         {% if page_obj.has_previous %}
-        <a href="?page=1{% if search_term %}&search={{ search_term }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}{% if current_gst_filter %}&gst_filter={{ current_gst_filter }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if current_sort %}&sort={{ current_sort }}{% endif %}{% if current_party %}&party={{ current_party }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-xs text-slate-600 hover:bg-slate-50">
+        <a href="?page=1{% if search_term %}&search={{ search_term }}{% endif %}{% if current_lr_search %}&lr_search={{ current_lr_search }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}{% if current_gst_filter %}&gst_filter={{ current_gst_filter }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if current_sort %}&sort={{ current_sort }}{% endif %}{% if current_party %}&party={{ current_party }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-xs text-slate-600 hover:bg-slate-50">
             <i class="fa-solid fa-angles-left"></i>
         </a>
-        <a href="?page={{ page_obj.previous_page_number }}{% if search_term %}&search={{ search_term }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}{% if current_gst_filter %}&gst_filter={{ current_gst_filter }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if current_sort %}&sort={{ current_sort }}{% endif %}{% if current_party %}&party={{ current_party }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-xs text-slate-600 hover:bg-slate-50">
+        <a href="?page={{ page_obj.previous_page_number }}{% if search_term %}&search={{ search_term }}{% endif %}{% if current_lr_search %}&lr_search={{ current_lr_search }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}{% if current_gst_filter %}&gst_filter={{ current_gst_filter }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if current_sort %}&sort={{ current_sort }}{% endif %}{% if current_party %}&party={{ current_party }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-xs text-slate-600 hover:bg-slate-50">
             <i class="fa-solid fa-angle-left"></i>
         </a>
         {% endif %}
@@ -321,13 +333,16 @@
             {% if page_obj.number == num %}
             <span class="px-4 py-2 bg-emerald-600 text-white border border-emerald-600 rounded-md text-xs font-bold">{{ num }}</span>
             {% elif num > page_obj.number|add:'-2' and num < page_obj.number|add:'2' %}
-            <a href="?page={{ num }}{% if search_term %}&search={{ search_term }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}{% if current_gst_filter %}&gst_filter={{ current_gst_filter }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if current_sort %}&sort={{ current_sort }}{% endif %}{% if current_party %}&party={{ current_party }}{% endif %}" class="px-4 py-2 bg-white border border-slate-200 rounded-md text-xs text-slate-600 hover:bg-slate-50">{{ num }}</a>
+            <a href="?page={{ num }}{% if search_term %}&search={{ search_term }}{% endif %}{% if current_lr_search %}&lr_search={{ current_lr_search }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}{% if current_gst_filter %}&gst_filter={{ current_gst_filter }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if current_sort %}&sort={{ current_sort }}{% endif %}{% if current_party %}&party={{ current_party }}{% endif %}" class="px-4 py-2 bg-white border border-slate-200 rounded-md text-xs text-slate-600 hover:bg-slate-50">{{ num }}</a>
             {% endif %}
         {% endfor %}
 
         {% if page_obj.has_next %}
-        <a href="?page={{ page_obj.next_page_number }}{% if search_term %}&search={{ search_term }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}{% if current_gst_filter %}&gst_filter={{ current_gst_filter }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if current_sort %}&sort={{ current_sort }}{% endif %}{% if current_party %}&party={{ current_party }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-xs text-slate-600 hover:bg-slate-50">
+        <a href="?page={{ page_obj.next_page_number }}{% if search_term %}&search={{ search_term }}{% endif %}{% if current_lr_search %}&lr_search={{ current_lr_search }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}{% if current_gst_filter %}&gst_filter={{ current_gst_filter }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if current_sort %}&sort={{ current_sort }}{% endif %}{% if current_party %}&party={{ current_party }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-xs text-slate-600 hover:bg-slate-50">
             <i class="fa-solid fa-angle-right"></i>
+        </a>
+        <a href="?page={{ page_obj.paginator.num_pages }}{% if search_term %}&search={{ search_term }}{% endif %}{% if current_lr_search %}&lr_search={{ current_lr_search }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}{% if current_gst_filter %}&gst_filter={{ current_gst_filter }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if current_sort %}&sort={{ current_sort }}{% endif %}{% if current_party %}&party={{ current_party }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-xs text-slate-600 hover:bg-slate-50">
+            <i class="fa-solid fa-angles-right"></i>
         </a>
         {% endif %}
     </div>
