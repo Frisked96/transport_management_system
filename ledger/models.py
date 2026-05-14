@@ -678,6 +678,34 @@ class TripAllocation(models.Model):
     def __str__(self):
         return f"{self.financial_record} -> {self.trip.trip_number}: {self.amount}"
 
+class BillAllocation(models.Model):
+    financial_record = models.ForeignKey(
+        FinancialRecord,
+        on_delete=models.CASCADE,
+        related_name='bill_allocations',
+        verbose_name='Financial Record'
+    )
+    bill = models.ForeignKey(
+        'Bill',
+        on_delete=models.CASCADE,
+        related_name='payment_allocations',
+        verbose_name='Bill'
+    )
+    amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        verbose_name='Allocated Amount'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Bill Allocation'
+        verbose_name_plural = 'Bill Allocations'
+        unique_together = ('financial_record', 'bill')
+
+    def __str__(self):
+        return f"{self.financial_record} -> {self.bill.bill_number}: {self.amount}"
+
 class BillQuerySet(models.QuerySet):
     def with_payment_info(self):
         """
@@ -933,6 +961,9 @@ class Bill(models.Model):
             models.Q(category__name__in=["Deductions", "TDS", "Shortage", "Credit Note", "Debit Note"])
         ).aggregate(total=Sum('amount'))['total'] or 0
 
+        # 1.5. Bill-based allocations
+        bill_allocations = self.payment_allocations.aggregate(total=Sum('amount'))['total'] or 0
+
         # 2. Trip-based allocations/payments
         trip_payments = 0
         if self.bill_type == self.TYPE_TRIP:
@@ -941,12 +972,13 @@ class Bill(models.Model):
                  trip__in=self.trips.all()
              ).aggregate(total=Sum('amount'))['total'] or 0
              
-             # Sum direct payments to trips in this bill (excluding those already linked to this bill)
+             # Sum direct payments to trips in this bill (excluding those already linked to this bill or having a specific allocation)
              direct_trip_payments = FinancialRecord.objects.filter(
                  associated_trip__in=self.trips.all()
              ).exclude(
                  models.Q(record_type=FinancialRecord.RECORD_TYPE_INVOICE) |
-                 models.Q(associated_bill=self)
+                 models.Q(associated_bill=self) |
+                 models.Q(bill_allocations__bill=self)
              ).filter(
                  models.Q(category__type=TransactionCategory.TYPE_INCOME) | 
                  models.Q(category__name__in=["Deductions", "TDS", "Shortage", "Credit Note", "Debit Note"])
@@ -962,7 +994,7 @@ class Bill(models.Model):
                 elif adj.category.name == 'Debit Note':
                     adjustments -= adj.total_amount_cached
 
-        return direct + trip_payments + adjustments
+        return direct + bill_allocations + trip_payments + adjustments
 
     def delete(self, *args, **kwargs):
         """
@@ -1487,3 +1519,13 @@ def update_trip_bill_caches_on_alloc_delete(sender, instance, **kwargs):
     instance.trip.update_financial_caches()
     if instance.trip.associated_bill:
         instance.trip.associated_bill.update_financial_caches()
+
+@receiver(post_save, sender=BillAllocation)
+def update_bill_caches_on_alloc_save(sender, instance, **kwargs):
+    """Update Bill caches when a bill allocation is created/updated"""
+    instance.bill.update_financial_caches()
+
+@receiver(post_delete, sender=BillAllocation)
+def update_bill_caches_on_alloc_delete(sender, instance, **kwargs):
+    """Update Bill caches when a bill allocation is deleted"""
+    instance.bill.update_financial_caches()

@@ -239,47 +239,78 @@ class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, Cre
 
     def form_valid(self, form):
         distribution_json = form.cleaned_data.get('payment_distribution')
+        bill_distribution_json = form.cleaned_data.get('bill_distribution')
         
-        if distribution_json:
+        if distribution_json or bill_distribution_json:
             try:
-                distribution_data = json.loads(distribution_json)
-                
                 # 1. Create the single parent FinancialRecord
                 self.object = form.save(commit=False)
                 self.object.recorded_by = self.request.user
                 self.object.save()
                 
-                total_input_amount = self.object.amount
-                total_distributed = Decimal('0')
+                # 2. Handle Trip Allocations
+                if distribution_json:
+                    distribution_data = json.loads(distribution_json)
+                    for item in distribution_data:
+                        trip_id = item.get('trip_id')
+                        try:
+                            amount = Decimal(str(item.get('amount')))
+                        except (ValueError, InvalidOperation):
+                            raise ValueError(f"Invalid amount format for trip {trip_id}")
+                        
+                        if amount > 0:
+                            trip = Trip.objects.get(pk=trip_id)
+                            TripAllocation.objects.create(
+                                financial_record=self.object,
+                                trip=trip,
+                                amount=amount
+                            )
+                    messages.success(self.request, f'Financial record created and distributed across {len(distribution_data)} trips!')
+
+                # 3. Handle Bill Allocations
+                if bill_distribution_json:
+                    from .models import BillAllocation
+                    bill_data = json.loads(bill_distribution_json)
+                    for item in bill_data:
+                        bill_id = item.get('bill_id')
+                        try:
+                            amount = Decimal(str(item.get('amount')))
+                        except (ValueError, InvalidOperation):
+                            raise ValueError(f"Invalid amount format for bill {bill_id}")
+                        
+                        if amount > 0:
+                            bill = Bill.objects.get(pk=bill_id)
+                            BillAllocation.objects.create(
+                                financial_record=self.object,
+                                bill=bill,
+                                amount=amount
+                            )
+                    messages.success(self.request, f'Financial record created and distributed across {len(bill_data)} bills!')
                 
-                # 2. Iterate and create allocations for trips
-                for item in distribution_data:
-                    trip_id = item.get('trip_id')
-                    try:
-                        amount = Decimal(str(item.get('amount')))
-                    except (ValueError, InvalidOperation):
-                        raise ValueError(f"Invalid amount format for trip {trip_id}")
+                # 4. Auto-generate description if blank
+                if not self.object.description:
+                    desc_parts = []
+                    if distribution_json:
+                        trip_nums = [a.trip.trip_number for a in self.object.allocations.select_related('trip').all()]
+                        if trip_nums:
+                            desc_parts.append(f"Paid across trips: {', '.join(trip_nums)}")
                     
-                    if amount > 0:
-                        trip = Trip.objects.get(pk=trip_id)
-                        
-                        TripAllocation.objects.create(
-                            financial_record=self.object,
-                            trip=trip,
-                            amount=amount
-                        )
-                        
-                        total_distributed += amount
-                
-                messages.success(self.request, f'Financial record created and distributed across {len(distribution_data)} trips!')
-                
-                # Redirect logic - Use redirect() not reverse_lazy()
+                    if bill_distribution_json:
+                        bill_nums = [a.bill.bill_number or 'Draft' for a in self.object.bill_allocations.select_related('bill').all()]
+                        if bill_nums:
+                            desc_parts.append(f"Paid across invoices: {', '.join(bill_nums)}")
+                    
+                    if desc_parts:
+                        self.object.description = " | ".join(desc_parts)
+                        self.object.save(update_fields=['description'])
+
+                # Redirect logic
                 if self.object.party:
                     return redirect('party-detail', pk=self.object.party.pk)
                 return redirect('financialrecord-list')
 
             except Exception as e:
-                form.add_error(None, f"Error processing payment distribution: {str(e)}")
+                form.add_error(None, f"Error processing distribution: {str(e)}")
                 return self.form_invalid(form)
         
         # Fallback to standard single record creation
@@ -306,7 +337,78 @@ class FinancialRecordUpdateView(LoginRequiredMixin, PermissionRequiredMixin, Upd
     template_name = 'ledger/financialrecord_form.html'
     permission_required = 'ledger.change_financialrecord'
     
+    def get_initial(self):
+        initial = super().get_initial()
+        # Pre-populate distributions for editing
+        if self.object.allocations.exists():
+            initial['payment_distribution'] = json.dumps([
+                {'trip_id': a.trip_id, 'amount': float(a.amount)}
+                for a in self.object.allocations.all()
+            ])
+        
+        if self.object.bill_allocations.exists():
+            initial['bill_distribution'] = json.dumps([
+                {'bill_id': a.bill_id, 'amount': float(a.amount)}
+                for a in self.object.bill_allocations.all()
+            ])
+        return initial
+
     def form_valid(self, form):
+        distribution_json = form.cleaned_data.get('payment_distribution')
+        bill_distribution_json = form.cleaned_data.get('bill_distribution')
+        
+        if distribution_json or bill_distribution_json:
+            try:
+                # 1. Update the parent FinancialRecord
+                self.object = form.save()
+                
+                # 2. Update Trip Allocations (Delete old ones first)
+                if distribution_json:
+                    distribution_data = json.loads(distribution_json)
+                    self.object.allocations.all().delete()
+                    for item in distribution_data:
+                        trip_id = item.get('trip_id')
+                        try:
+                            amount = Decimal(str(item.get('amount')))
+                        except (ValueError, InvalidOperation):
+                            raise ValueError(f"Invalid amount format for trip {trip_id}")
+                        
+                        if amount > 0:
+                            trip = Trip.objects.get(pk=trip_id)
+                            TripAllocation.objects.create(
+                                financial_record=self.object,
+                                trip=trip,
+                                amount=amount
+                            )
+                    messages.success(self.request, f'Financial record updated and redistributed across trips!')
+
+                # 3. Update Bill Allocations (Delete old ones first)
+                if bill_distribution_json:
+                    from .models import BillAllocation
+                    bill_data = json.loads(bill_distribution_json)
+                    self.object.bill_allocations.all().delete()
+                    for item in bill_data:
+                        bill_id = item.get('bill_id')
+                        try:
+                            amount = Decimal(str(item.get('amount')))
+                        except (ValueError, InvalidOperation):
+                            raise ValueError(f"Invalid amount format for bill {bill_id}")
+                        
+                        if amount > 0:
+                            bill = Bill.objects.get(pk=bill_id)
+                            BillAllocation.objects.create(
+                                financial_record=self.object,
+                                bill=bill,
+                                amount=amount
+                            )
+                    messages.success(self.request, f'Financial record updated and redistributed across bills!')
+                
+                return redirect(self.get_success_url())
+
+            except Exception as e:
+                form.add_error(None, f"Error processing distribution: {str(e)}")
+                return self.form_invalid(form)
+
         response = super().form_valid(form)
         messages.success(self.request, 'Financial record updated successfully!')
         return response

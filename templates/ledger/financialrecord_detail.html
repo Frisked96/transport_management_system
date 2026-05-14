@@ -178,6 +178,42 @@
                     </div>
                 </div>
                 {% endif %}
+
+                {% if record.bill_allocations.all %}
+                <div class="mt-8 pt-6 border-t border-slate-100">
+                    <span class="text-sm font-semibold text-slate-500 uppercase tracking-wider block mb-4">Allocated Across Invoices</span>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm">
+                            <thead class="bg-slate-50 text-slate-500 uppercase text-[10px] font-bold tracking-widest">
+                                <tr>
+                                    <th class="px-4 py-3">Invoice Number</th>
+                                    <th class="px-4 py-3 text-right">Allocated Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                {% for allocation in record.bill_allocations.all %}
+                                <tr>
+                                    <td class="px-4 py-3 font-medium text-slate-900">
+                                        <a href="{% url 'bill-detail' allocation.bill.pk %}" class="hover:text-blue-600">
+                                            <i class="fa-solid fa-file-invoice text-slate-400 mr-2"></i>{{ allocation.bill.bill_number|default:"Draft Bill" }}
+                                        </a>
+                                    </td>
+                                    <td class="px-4 py-3 text-right font-bold text-blue-600">
+                                        ₹{{ allocation.amount|indian_comma }}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                            <tfoot class="bg-slate-50 font-bold">
+                                <tr>
+                                    <td class="px-4 py-3 text-slate-700">Total Distributed</td>
+                                    <td class="px-4 py-3 text-right text-slate-900">₹{{ record.amount|indian_comma }}</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+                {% endif %}
             </div>
         </div>
     </div>

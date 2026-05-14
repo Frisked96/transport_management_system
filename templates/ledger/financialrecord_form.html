@@ -36,7 +36,7 @@
     <div class="bg-white border border-slate-200 rounded-lg p-6 shadow-sm space-y-6">
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
             {% for field in form %}
-                {% if field.name != 'payment_distribution' %}
+                {% if field.name != 'payment_distribution' and field.name != 'bill_distribution' %}
                 <div class="{% if field.name == 'description' or field.name == 'document_ref' %}md:col-span-2{% endif %}" id="wrapper_{{ field.id_for_label }}">
                     <label class="block text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider" for="{{ field.id_for_label }}">
                         {{ field.label }}
@@ -106,8 +106,61 @@
                 </div>
             </div>
         </div>
-        
+
+        <!-- Custom Multi-Bill Selection Area -->
+        <div id="multi-bill-area" class="hidden border-2 border-blue-500 rounded-lg overflow-hidden mt-8">
+            <div class="bg-blue-500 px-4 py-3">
+                <h3 class="text-sm font-bold text-white uppercase tracking-wider flex items-center">
+                    <i class="fa-solid fa-file-invoice mr-2"></i>Payment Allocation (Multi-Invoice)
+                </h3>
+            </div>
+            <div class="p-4 bg-slate-50">
+                <p class="text-xs text-slate-600 mb-4 italic">Select invoices in the order you wish to pay them. The amount will be distributed sequentially.</p>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <h4 class="text-xs font-bold text-slate-700 uppercase mb-2">Unpaid Invoices</h4>
+                        <div id="unpaid-bills-list" class="bg-white border border-slate-200 rounded-md max-h-64 overflow-y-auto divide-y divide-slate-100">
+                            <!-- Populated by JS -->
+                            <div class="text-center p-4 text-slate-400 text-sm italic">Select a party to load invoices.</div>
+                        </div>
+                    </div>
+                    <div>
+                        <h4 class="text-xs font-bold text-slate-700 uppercase mb-2">Selected for Payment</h4>
+                        <div class="bg-white border border-slate-200 rounded-md overflow-hidden">
+                            <table class="w-full text-left text-xs">
+                                <thead class="bg-slate-100 border-b border-slate-200">
+                                    <tr>
+                                        <th class="px-3 py-2 font-semibold text-slate-700">Invoice</th>
+                                        <th class="px-3 py-2 text-right font-semibold text-slate-700">Owed</th>
+                                        <th class="px-3 py-2 text-right font-semibold text-slate-700">Allocated</th>
+                                        <th class="px-3 py-2"></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="selected-bills-body" class="divide-y divide-slate-50">
+                                    <!-- Populated by JS -->
+                                </tbody>
+                                <tfoot class="bg-slate-50 border-t border-slate-200">
+                                    <tr>
+                                        <td colspan="2" class="px-3 py-2 text-right font-bold text-slate-700">Total Allocated:</td>
+                                        <td class="px-3 py-2 text-right font-bold text-blue-600" id="total-allocated-bills">0.00</td>
+                                        <td></td>
+                                    </tr>
+                                    <tr>
+                                        <td colspan="2" class="px-3 py-1 text-right text-[10px] text-slate-500">Remaining:</td>
+                                        <td class="px-3 py-1 text-right text-[10px] text-slate-500" id="remaining-amount-bills">0.00</td>
+                                        <td></td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="pt-6 border-t border-slate-100 flex items-center space-x-3">
+
             <button type="submit" class="px-6 py-2 bg-emerald-600 text-white rounded-md font-medium hover:bg-emerald-700 shadow-sm transition-colors">
                 <i class="fa-solid fa-check mr-2"></i>{% if object %}Update Record{% else %}Add Record{% endif %}
             </button>
@@ -138,8 +191,17 @@
         const remainingAmountEl = document.getElementById('remaining-amount');
         const distributionInput = document.getElementById('id_payment_distribution');
 
+        const multiBillArea = document.getElementById('multi-bill-area');
+        const unpaidBillsList = document.getElementById('unpaid-bills-list');
+        const selectedBillsBody = document.getElementById('selected-bills-body');
+        const totalAllocatedBillsEl = document.getElementById('total-allocated-bills');
+        const remainingAmountBillsEl = document.getElementById('remaining-amount-bills');
+        const billDistributionInput = document.getElementById('id_bill_distribution');
+
         let unpaidTrips = []; // Store fetched trip data
         let selectedTripIds = []; // Store IDs in order
+        let unpaidBills = []; // Store fetched bill data
+        let selectedBillIds = []; // Store IDs in order
         let isInitialLoad = true;
         let isManualAmount = false;
         let isInternalChange = false;
@@ -185,85 +247,100 @@
 
         // State Management
         function updateUIState() {
-            const hasParty = partySelect && partySelect.value;
-            const recordType = recordTypeSelect ? recordTypeSelect.value : 'Transaction';
-            
-            let categoryName = '';
-            if (categorySelect && categorySelect.selectedIndex >= 0) {
-                categoryName = categorySelect.options[categorySelect.selectedIndex].text;
-            }
-            
-            const isTripPayment = categoryName.includes('Trip Payment');
-            const isInvoicePayment = categoryName.includes('Invoice Payment');
-            const isDeduction = categoryName.includes('Deductions');
-            const isTDS = categoryName.includes('TDS');
-            const isShortage = categoryName.includes('Shortage');
+            try {
+                const hasParty = partySelect && partySelect.value;
+                const recordType = recordTypeSelect ? recordTypeSelect.value : 'Transaction';
+                
+                let categoryName = '';
+                if (categorySelect && categorySelect.selectedIndex >= 0) {
+                    categoryName = categorySelect.options[categorySelect.selectedIndex].text;
+                }
+                
+                const isTripPayment = categoryName.toLowerCase().includes('trip payment');
+                const isInvoicePayment = categoryName.toLowerCase().includes('invoice payment');
+                const isDeduction = categoryName.toLowerCase().includes('deductions');
+                const isTDS = categoryName.toLowerCase().includes('tds');
+                const isShortage = categoryName.toLowerCase().includes('shortage');
+                const isStandard = categoryName === 'Standard' || categoryName.toLowerCase().includes('standard');
 
-            // Handle General Type (Simplified view but keeps Party/Account)
-            const isGeneral = recordType === 'General';
+                // Handle General Type (Simplified view but keeps Party/Account)
+                const isGeneral = recordType === 'General';
 
-            if (isGeneral) {
-                if (partySelect) document.getElementById('wrapper_id_party').classList.remove('hidden');
-                if (driverFieldWrapper) driverFieldWrapper.classList.add('hidden');
-                if (associatedTripWrapper) associatedTripWrapper.classList.add('hidden');
-                if (associatedBillWrapper) associatedBillWrapper.classList.add('hidden');
-                if (document.getElementById('wrapper_id_tds_percentage')) document.getElementById('wrapper_id_tds_percentage').classList.add('hidden');
-                multiTripArea.classList.add('hidden');
-                return; 
-            } else {
-                // For Transactions/Invoices, follow standard logic
-                if (partySelect) document.getElementById('wrapper_id_party').classList.remove('hidden');
-            }
-            
-            // 1. Handle Multi-Trip Area (Only for Trip Payment with a Party)
-            if (hasParty && isTripPayment) {
-                multiTripArea.classList.remove('hidden');
-            } else {
-                multiTripArea.classList.add('hidden');
-                // Clear allocations if not in trip payment mode
-                if (distributionInput) distributionInput.value = '';
-            }
-
-            // 2. Handle Associated Trip
-            // ONLY show for Trip Payment (if not multi-trip) or other Income types EXCEPT Payment In
-            if (associatedTripWrapper) {
-                if (isTripPayment && hasParty) {
-                    associatedTripWrapper.classList.add('hidden'); // We use multi-trip area instead
-                } else if (isTripPayment || (categoryName.includes('Income') && !categoryName.includes('Payment In'))) {
-                    // Only show for income types if NOT specifically invoice payment
-                    if (isInvoicePayment) {
-                        associatedTripWrapper.classList.add('hidden');
+                if (isGeneral) {
+                    if (document.getElementById('wrapper_id_party')) document.getElementById('wrapper_id_party').classList.remove('hidden');
+                    if (driverFieldWrapper) driverFieldWrapper.classList.add('hidden');
+                    if (associatedTripWrapper) associatedTripWrapper.classList.add('hidden');
+                    if (associatedBillWrapper) associatedBillWrapper.classList.add('hidden');
+                    if (document.getElementById('wrapper_id_tds_percentage')) document.getElementById('wrapper_id_tds_percentage').classList.add('hidden');
+                    if (multiTripArea) multiTripArea.classList.add('hidden');
+                    if (multiBillArea) multiBillArea.classList.add('hidden');
+                    return; 
+                } else {
+                    // For Transactions/Invoices, follow standard logic
+                    if (document.getElementById('wrapper_id_party')) document.getElementById('wrapper_id_party').classList.remove('hidden');
+                }
+                
+                // 1. Handle Multi-Trip Area (Only for Trip Payment with a Party)
+                if (multiTripArea) {
+                    if (hasParty && isTripPayment) {
+                        multiTripArea.classList.remove('hidden');
                     } else {
-                        associatedTripWrapper.classList.remove('hidden');
+                        multiTripArea.classList.add('hidden');
+                        if (distributionInput) distributionInput.value = '';
                     }
-                } else {
-                    associatedTripWrapper.classList.add('hidden');
                 }
-            }
 
-            // 3. Handle Associated Bill (Show for Invoice Payment, Deductions, TDS, or Shortage)
-            if (associatedBillWrapper) {
-                if (isInvoicePayment || isDeduction || isTDS || isShortage) {
-                    associatedBillWrapper.classList.remove('hidden');
-                } else {
-                    associatedBillWrapper.classList.add('hidden');
+                // 1.5 Handle Multi-Bill Area (Only for Standard category with a Party)
+                if (multiBillArea) {
+                    if (hasParty && isStandard) {
+                        multiBillArea.classList.remove('hidden');
+                    } else {
+                        multiBillArea.classList.add('hidden');
+                        if (billDistributionInput) billDistributionInput.value = '';
+                    }
                 }
-            }
 
-            // 4. Handle Driver (Hide if Party selected)
-            if (driverFieldWrapper) {
-                if (hasParty) driverFieldWrapper.classList.add('hidden');
-                else driverFieldWrapper.classList.remove('hidden');
-            }
-
-            // 5. Handle TDS % Field
-            const tdsPercentageWrapper = document.getElementById('wrapper_id_tds_percentage');
-            if (tdsPercentageWrapper) {
-                if (isTDS) {
-                    tdsPercentageWrapper.classList.remove('hidden');
-                } else {
-                    tdsPercentageWrapper.classList.add('hidden');
+                // 2. Handle Associated Trip
+                if (associatedTripWrapper) {
+                    if ((isTripPayment && hasParty) || isStandard) {
+                        associatedTripWrapper.classList.add('hidden');
+                    } else if (isTripPayment || (categoryName.toLowerCase().includes('income') && !categoryName.toLowerCase().includes('payment in'))) {
+                        if (isInvoicePayment) {
+                            associatedTripWrapper.classList.add('hidden');
+                        } else {
+                            associatedTripWrapper.classList.remove('hidden');
+                        }
+                    } else {
+                        associatedTripWrapper.classList.add('hidden');
+                    }
                 }
+
+                // 3. Handle Associated Bill
+                if (associatedBillWrapper) {
+                    if (isInvoicePayment || isDeduction || isTDS || isShortage) {
+                        associatedBillWrapper.classList.remove('hidden');
+                    } else {
+                        associatedBillWrapper.classList.add('hidden');
+                    }
+                }
+
+                // 4. Handle Driver
+                if (driverFieldWrapper) {
+                    if (hasParty) driverFieldWrapper.classList.add('hidden');
+                    else driverFieldWrapper.classList.remove('hidden');
+                }
+
+                // 5. Handle TDS % Field
+                const tdsPercentageWrapper = document.getElementById('wrapper_id_tds_percentage');
+                if (tdsPercentageWrapper) {
+                    if (isTDS) {
+                        tdsPercentageWrapper.classList.remove('hidden');
+                    } else {
+                        tdsPercentageWrapper.classList.add('hidden');
+                    }
+                }
+            } catch (err) {
+                console.error("Error in updateUIState:", err);
             }
         }
 
@@ -272,6 +349,7 @@
             amountInput.addEventListener('input', function() {
                 isManualAmount = true;
                 renderSelectedTrips();
+                renderSelectedBills();
             });
         }
 
@@ -387,6 +465,9 @@
             if (!partyId) {
                 associatedBillSelect.innerHTML = '<option value="">---------</option>';
                 $billSelect.val('').trigger('change.select2');
+                unpaidBills = [];
+                renderUnpaidBills();
+                renderSelectedBills();
                 return;
             }
 
@@ -397,10 +478,11 @@
             fetch(`{% url 'get-party-bills' %}?party_id=${partyId}&unpaid_only=true&include_bill_id=${currentBillId}`)
                 .then(response => response.json())
                 .then(data => {
+                    unpaidBills = data.bills || [];
                     associatedBillSelect.innerHTML = '<option value="">---------</option>';
                     
-                    if (data.bills && data.bills.length > 0) {
-                        data.bills.forEach(bill => {
+                    if (unpaidBills.length > 0) {
+                        unpaidBills.forEach(bill => {
                             const option = new Option(bill.label, bill.id);
                             if (bill.id == currentBillId) option.selected = true;
                             associatedBillSelect.add(option);
@@ -415,11 +497,15 @@
                     isInternalChange = true;
                     $billSelect.trigger('change.select2');
                     isInternalChange = false;
+
+                    renderUnpaidBills();
+                    renderSelectedBills();
                 })
                 .catch(error => {
                     console.error('Error fetching bills:', error);
                     associatedBillSelect.innerHTML = '<option value="">Error loading bills</option>';
                     $billSelect.trigger('change.select2');
+                    unpaidBillsList.innerHTML = '<div class="text-red-500 p-4 text-sm font-medium">Error loading invoices.</div>';
                 });
         }
 
@@ -452,6 +538,33 @@
             });
         }
 
+        function renderUnpaidBills() {
+            unpaidBillsList.innerHTML = '';
+            if (unpaidBills.length === 0) {
+                unpaidBillsList.innerHTML = '<div class="text-slate-400 p-4 text-sm italic">No unpaid invoices found.</div>';
+                return;
+            }
+
+            unpaidBills.forEach(bill => {
+                if (selectedBillIds.includes(bill.id)) return;
+
+                const item = document.createElement('button');
+                item.type = 'button';
+                item.className = 'w-full text-left px-4 py-3 hover:bg-slate-50 flex justify-between items-center group transition-colors';
+                item.innerHTML = `
+                    <div class="pr-4">
+                        <p class="font-bold text-slate-800 text-sm leading-tight">${bill.label.split(' - ')[0]}</p>
+                        <p class="text-[10px] text-slate-500 mt-1 uppercase tracking-tight">${bill.label.split(' - ').slice(1).join(' - ')}</p>
+                    </div>
+                    <span class="w-6 h-6 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                        <i class="fa-solid fa-plus text-[10px]"></i>
+                    </span>
+                `;
+                item.onclick = () => selectBill(bill.id);
+                unpaidBillsList.appendChild(item);
+            });
+        }
+
         // Select Trip Logic
         function selectTrip(tripId) {
             if (!selectedTripIds.includes(tripId)) {
@@ -461,11 +574,25 @@
             }
         }
 
+        function selectBill(billId) {
+            if (!selectedBillIds.includes(billId)) {
+                selectedBillIds.push(billId);
+                renderUnpaidBills();
+                renderSelectedBills();
+            }
+        }
+
         // Deselect Trip Logic
         window.deselectTrip = function(tripId) {
             selectedTripIds = selectedTripIds.filter(id => id !== tripId);
             renderUnpaidTrips();
             renderSelectedTrips();
+        };
+
+        window.deselectBill = function(billId) {
+            selectedBillIds = selectedBillIds.filter(id => id !== billId);
+            renderUnpaidBills();
+            renderSelectedBills();
         };
 
         // Render Selected Trips & Calculate Allocation (Right Side)
@@ -524,6 +651,61 @@
             }
         }
 
+        function renderSelectedBills() {
+            selectedBillsBody.innerHTML = '';
+            
+            let totalAmount = parseFloat(amountInput.value) || 0;
+            let currentAllocated = 0;
+            let distributionData = [];
+
+            selectedBillIds.forEach(id => {
+                const bill = unpaidBills.find(b => b.id === id);
+                if (!bill) return;
+
+                // Extraction of balance from label if not directly available
+                let balanceStr = bill.label.split('Pending: ₹')[1].replace(')', '').replace(/,/g, '');
+                let billBalance = parseFloat(balanceStr);
+
+                let amountForThisBill = 0;
+                let remainingToAllocate = totalAmount - currentAllocated;
+                
+                if (remainingToAllocate > 0) {
+                    amountForThisBill = Math.min(remainingToAllocate, billBalance);
+                }
+                
+                amountForThisBill = Math.round(amountForThisBill * 100) / 100;
+                currentAllocated += amountForThisBill;
+
+                distributionData.push({
+                    bill_id: bill.id,
+                    amount: amountForThisBill
+                });
+
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td class="px-3 py-2 font-medium text-slate-900">${bill.label.split(' (Pending')[0]}</td>
+                    <td class="px-3 py-2 text-right text-slate-500">₹${billBalance.toFixed(2)}</td>
+                    <td class="px-3 py-2 text-right font-bold text-blue-600">₹${amountForThisBill.toFixed(2)}</td>
+                    <td class="px-3 py-2 text-right">
+                        <button type="button" class="text-slate-400 hover:text-red-600 transition-colors" onclick="deselectBill(${bill.id})">
+                            <i class="fa-regular fa-trash-can"></i>
+                        </button>
+                    </td>
+                `;
+                selectedBillsBody.appendChild(row);
+            });
+
+            totalAllocatedBillsEl.textContent = currentAllocated.toFixed(2);
+            let remaining = totalAmount - currentAllocated;
+            remainingAmountBillsEl.textContent = remaining.toFixed(2);
+            
+            if (distributionData.length > 0) {
+                billDistributionInput.value = JSON.stringify(distributionData);
+            } else {
+                billDistributionInput.value = '';
+            }
+        }
+
         // Restore State from Hidden Input (e.g. after validation error)
         function restoreState() {
             if (distributionInput && distributionInput.value) {
@@ -531,10 +713,20 @@
                     const data = JSON.parse(distributionInput.value);
                     if (Array.isArray(data)) {
                         selectedTripIds = data.map(item => item.trip_id);
-                        // renderSelectedTrips will be called after fetchTrips completes
                     }
                 } catch (e) {
                     console.error("Failed to restore state", e);
+                }
+            }
+
+            if (billDistributionInput && billDistributionInput.value) {
+                try {
+                    const data = JSON.parse(billDistributionInput.value);
+                    if (Array.isArray(data)) {
+                        selectedBillIds = data.map(item => item.bill_id);
+                    }
+                } catch (e) {
+                    console.error("Failed to restore bill state", e);
                 }
             }
         }
@@ -547,6 +739,7 @@
             partySelect.addEventListener('change', function() {
                 updateUIState();
                 selectedTripIds = []; // Clear on explicit user change
+                selectedBillIds = []; // Clear on explicit user change
                 fetchTrips(this.value);
                 fetchBills(this.value);
             });
@@ -569,6 +762,7 @@
             amountInput.addEventListener('input', function() {
                 isManualAmount = true;
                 renderSelectedTrips();
+                renderSelectedBills();
             });
         }
 
@@ -599,6 +793,7 @@
                                     amountInput.value = data.balance.toFixed(2);
                                     // Trigger distribution refresh if multi-trip was somehow active
                                     renderSelectedTrips();
+                                    renderSelectedBills();
                                 }
                             });
                     }

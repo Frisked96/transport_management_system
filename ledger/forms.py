@@ -22,6 +22,8 @@ class FinancialRecordForm(forms.ModelForm):
     """
     # Hidden field to store JSON data for multi-trip payment distribution
     payment_distribution = forms.CharField(widget=forms.HiddenInput(), required=False)
+    # Hidden field to store JSON data for multi-bill payment distribution
+    bill_distribution = forms.CharField(widget=forms.HiddenInput(), required=False)
     
     associated_trip = TripChoiceField(
         queryset=Trip.objects.none(),
@@ -75,6 +77,7 @@ class FinancialRecordForm(forms.ModelForm):
                 if 'associated_trip' in self.fields: del self.fields['associated_trip']
                 if 'associated_bill' in self.fields: del self.fields['associated_bill']
                 if 'payment_distribution' in self.fields: del self.fields['payment_distribution']
+                if 'bill_distribution' in self.fields: del self.fields['bill_distribution']
                 
                 # Filter categories for Creditor
                 from .models import TransactionCategory
@@ -128,6 +131,8 @@ class FinancialRecordForm(forms.ModelForm):
                 del self.fields['associated_trip']
             if 'associated_bill' in self.fields:
                 del self.fields['associated_bill']
+            if 'bill_distribution' in self.fields:
+                del self.fields['bill_distribution']
         
         # 3. General Ledger context
         else:
@@ -145,7 +150,7 @@ class FinancialRecordForm(forms.ModelForm):
         
         # Add basic styling for clarity
         for field_name, field in self.fields.items():
-            if field_name != 'payment_distribution':
+            if field_name not in ['payment_distribution', 'bill_distribution']:
                 field.widget.attrs.update({'class': 'block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white'})
     
     class Meta:
@@ -159,6 +164,7 @@ class FinancialRecordForm(forms.ModelForm):
             'associated_trip',
             'associated_bill',
             'payment_distribution',
+            'bill_distribution',
             'category',
             'amount',
             'tds_percentage',
