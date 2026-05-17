@@ -6,6 +6,18 @@ from decimal import Decimal
 
 register = template.Library()
 
+@register.filter(name='has_group')
+def has_group(user, group_name):
+    """
+    Checks if a user belongs to a specific group.
+    Usage: {% if user|has_group:"manager" %}
+    """
+    if not user.is_authenticated:
+        return False
+    if user.is_superuser:
+        return True
+    return user.groups.filter(name=group_name).exists()
+
 @register.filter
 def calculate_trip_gst(bill, trip):
     """
