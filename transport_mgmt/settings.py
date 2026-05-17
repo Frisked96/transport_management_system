@@ -34,6 +34,7 @@ INSTALLED_APPS = [
     'django.contrib.humanize',
     
     # Local apps
+    'accounts',
     'trips',
     'fleet',
     'ledger',

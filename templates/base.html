@@ -219,6 +219,9 @@
                             </a>
                             {% endif %}
                             {% if user.is_superuser %}
+                            <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'user-list' %}">
+                                <i class="fa-solid fa-users-gear mr-2"></i>User Management
+                            </a>
                             <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="/admin/">Django Admin</a>
                             {% endif %}
                             <div class="border-t border-slate-100 my-1"></div>

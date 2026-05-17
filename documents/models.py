@@ -1,5 +1,6 @@
 from django.db import models
 from django.utils import timezone
+from django.contrib.auth.models import User
 
 def document_upload_path(instance, filename):
     """
@@ -72,6 +73,15 @@ class Document(models.Model):
         null=True,
         blank=True,
         verbose_name='Scanned Copy'
+    )
+
+    added_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='uploaded_documents',
+        verbose_name='Added By'
     )
 
     created_at = models.DateTimeField(auto_now_add=True)

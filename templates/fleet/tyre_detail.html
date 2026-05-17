@@ -170,13 +170,17 @@
                         <th class="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider w-40">Event / Action</th>
                         <th class="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider">Asset Context</th>
                         <th class="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">Position</th>
+                        <th class="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider">Logged By</th>
                         <th class="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider">Remarks</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
                     {% for log in logs %}
                     <tr class="hover:bg-slate-50/80 transition-colors">
-                        <td class="px-6 py-4 text-slate-500 font-medium">{{ log.date|date:"d M Y" }}</td>
+                        <td class="px-6 py-4">
+                            <span class="text-slate-900 font-bold block">{{ log.date|date:"d M Y" }}</span>
+                            <span class="text-[9px] text-slate-400 font-black uppercase tracking-tighter">{{ log.created_at|date:"M d, H:i" }}</span>
+                        </td>
                         <td class="px-6 py-4">
                             <span class="inline-flex px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-tight 
                                 {% if log.action == 'Mount' %}bg-emerald-100 text-emerald-700
@@ -195,6 +199,11 @@
                             {% endif %}
                         </td>
                         <td class="px-6 py-4 text-center font-bold text-slate-700">{{ log.position|default:"-" }}</td>
+                        <td class="px-6 py-4">
+                            <div class="flex flex-col">
+                                <span class="text-xs font-bold text-slate-700">{{ log.logged_by.get_full_name|default:log.logged_by.username|default:"System" }}</span>
+                            </div>
+                        </td>
                         <td class="px-6 py-4 text-slate-500 text-xs">{{ log.notes|default:"-" }}</td>
                     </tr>
                     {% empty %}

@@ -400,8 +400,18 @@ class TyreLog(models.Model):
     position = models.CharField(max_length=50, blank=True)
     notes = models.TextField(blank=True)
 
+    logged_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='logged_tyre_actions',
+        verbose_name='Logged By'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
     class Meta:
-        ordering = ['-date', '-id']
+        ordering = ['-date', '-created_at', '-id']
 
     def __str__(self):
         return f"{self.tyre} - {self.action} on {self.date}"

@@ -20,6 +20,7 @@ urlpatterns = [
     
     # App URLs
     path('', include('trips.urls')),
+    path('accounts/', include('accounts.urls')),
     path('fleet/', include('fleet.urls')),
     path('ledger/', include('ledger.urls')),
     path('drivers/', include('drivers.urls')),

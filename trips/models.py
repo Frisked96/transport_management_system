@@ -287,51 +287,9 @@ class Trip(models.Model):
     def sync_ledger_invoice(self):
         """
         Manage accrual-based revenue for this trip.
-        - If NOT billed: Create/Update a 'Trip Payment' invoice record in the ledger.
-        - If Billed: Delete the individual trip record (Bill handles the consolidated accrual).
         """
-        from ledger.models import FinancialRecord, TransactionCategory, CompanyAccount
-
-        # If trip is billed, individual trip accruals should be removed
-        if self.is_billed:
-            FinancialRecord.objects.filter(
-                associated_trip=self,
-                record_type=FinancialRecord.RECORD_TYPE_INVOICE
-            ).delete()
-            return
-
-        # If no revenue or no party, no accrual
-        if not self.revenue or not self.party:
-            FinancialRecord.objects.filter(
-                associated_trip=self,
-                record_type=FinancialRecord.RECORD_TYPE_INVOICE
-            ).delete()
-            return
-
-        # Get default category
-        category, _ = TransactionCategory.objects.get_or_create(
-            name='Trip Payment',
-            type=TransactionCategory.TYPE_INCOME
-        )
-
-        # Get default company account (issuer)
-        account = CompanyAccount.objects.first()
-        if not account:
-             return
-
-        # Find or create individual trip invoice record
-        FinancialRecord.objects.update_or_create(
-            associated_trip=self,
-            record_type=FinancialRecord.RECORD_TYPE_INVOICE,
-            defaults={
-                'date': self.date,
-                'account': account,
-                'party': self.party,
-                'category': category,
-                'amount': self.revenue, # Subtotal only for unbilled
-                'description': f"Accrual for Trip {self.trip_number}",
-            }
-        )
+        from ledger.services import TripFinancialService
+        return TripFinancialService.sync_trip_accrual(self)
 
     def save(self, *args, **kwargs):
         """
@@ -443,145 +401,22 @@ class Trip(models.Model):
     def update_financial_caches(self):
         """
         Recalculate and update the cached received amount and outstanding balance.
-        Triggered by payment signals.
         """
-        if not self.pk:
-            return
-
-        # We must not use self.amount_received property if it's still dynamic, 
-        # or we update it to use the dynamic logic for now.
-        received = self.calculate_amount_received()
-        total_rev = self.total_revenue_cached
-        
-        self.amount_received_cached = received
-        self.outstanding_balance_cached = total_rev - received
-        
-        if total_rev <= 0:
-            self.payment_status_cached = self.PAYMENT_STATUS_UNPAID
-        elif received >= total_rev:
-            self.payment_status_cached = self.PAYMENT_STATUS_PAID
-        elif received > 0:
-            self.payment_status_cached = self.PAYMENT_STATUS_PARTIAL
-        else:
-            self.payment_status_cached = self.PAYMENT_STATUS_UNPAID
-            
-        self._updating_financial_caches = True
-        try:
-            self.save(update_fields=[
-                'amount_received_cached', 'outstanding_balance_cached', 'payment_status_cached'
-            ])
-        finally:
-            del self._updating_financial_caches
+        from ledger.services import TripFinancialService
+        return TripFinancialService.update_trip_financial_caches(self)
 
     def calculate_amount_received(self):
         """Helper to calculate amount received without using cached field"""
-        from ledger.models import FinancialRecord, TransactionCategory
-        
-        if not self.pk:
-            return 0
-
-        # 1. Direct links
-        direct = self.financial_records.exclude(
-            record_type=FinancialRecord.RECORD_TYPE_INVOICE
-        ).filter(
-            models.Q(category__type=TransactionCategory.TYPE_INCOME) | 
-            models.Q(category__name__in=["Deductions", "TDS", "Shortage"])
-        ).aggregate(total=models.Sum('amount'))['total'] or 0
-        
-        # 2. M2M Allocations
-        allocated = self.payment_allocations.aggregate(
-            total=models.Sum('amount')
-        )['total'] or 0
-        
-        # 3. Share of Bill Payments/Adjustments
-        bill = self.associated_bill
-        if bill:
-            if bill.payment_status_cached == 'Paid': # Use cached status if available
-                return self.total_revenue_cached
-            
-            # Direct payments to bill
-            direct_bill = bill.financial_records.exclude(
-                record_type=FinancialRecord.RECORD_TYPE_INVOICE
-            ).filter(
-                models.Q(category__type=TransactionCategory.TYPE_INCOME) | 
-                models.Q(category__name__in=["Deductions", "TDS", "Shortage", "Credit Note", "Debit Note"])
-            ).aggregate(total=models.Sum('amount'))['total'] or 0
-            
-            # Adjustments
-            adjustments = 0
-            for adj in bill.adjustment_bills.select_related('category').all():
-                if adj.category:
-                    if adj.category.name == 'Credit Note':
-                        adjustments += adj.rounded_total
-                    elif adj.category.name == 'Debit Note':
-                        adjustments -= adj.rounded_total
-            
-            bill_pool = direct_bill + adjustments
-            if bill_pool > 0:
-                bill_total = bill.total_amount_cached
-                if bill_total > 0:
-                    share = (self.total_revenue_cached / bill_total) * bill_pool
-                    return direct + allocated + share
-
-        return direct + allocated
+        from ledger.services import TripFinancialService
+        return TripFinancialService.calculate_trip_received_amount(self)
 
     @classmethod
     def recalculate_vehicle_trip_numbers(cls, vehicle):
         """
-        Recalculate and update all trip numbers for a specific vehicle to ensure gap-less sequencing.
+        Recalculate and update all trip numbers for a specific vehicle.
         """
-        from ledger.models import Sequence
-        
-        # Order by date first, then by created_at to maintain chronological order
-        trips = cls.objects.filter(vehicle=vehicle).order_by('date', 'created_at')
-        reg_plate = vehicle.registration_plate
-        
-        # Track counts
-        total_count = 0
-        monthly_counts = {} # Key: (year, month)
-        yearly_counts = {}  # Key: year
-        
-        trips_to_update = []
-        
-        for trip in trips:
-            total_count += 1
-            
-            # Use trip date
-            ref_date = trip.date
-            year, month = ref_date.year, ref_date.month
-            
-            monthly_key = (year, month)
-            monthly_counts[monthly_key] = monthly_counts.get(monthly_key, 0) + 1
-            yearly_counts[year] = yearly_counts.get(year, 0) + 1
-            
-            new_number = f"{reg_plate}-{total_count}/{monthly_counts[monthly_key]}/{yearly_counts[year]}"
-            
-            if trip.trip_number != new_number:
-                trip.trip_number = new_number
-                trips_to_update.append(trip)
-        
-        if trips_to_update:
-            from django.db import transaction
-            import uuid
-            with transaction.atomic():
-                # Step 1: Set to temporary unique numbers to avoid collisions during bulk update
-                # This is necessary because SQLite checks unique constraints immediately
-                temp_nums = {t.pk: t.trip_number for t in trips_to_update}
-                for trip in trips_to_update:
-                    trip.trip_number = f"TEMP-{uuid.uuid4().hex[:8]}-{trip.pk}"
-                cls.objects.bulk_update(trips_to_update, ['trip_number'])
-                
-                # Step 2: Set to final numbers
-                for trip in trips_to_update:
-                    trip.trip_number = temp_nums[trip.pk]
-                cls.objects.bulk_update(trips_to_update, ['trip_number'])
-        
-        # Update sequences to match the new state so future trips continue correctly
-        Sequence.objects.filter(key=f"trip_total_{vehicle.pk}").update(value=total_count)
-        for (year, month), val in monthly_counts.items():
-            Sequence.objects.filter(key=f"trip_month_{vehicle.pk}_{year}_{month}").update(value=val)
-        for year, val in yearly_counts.items():
-            Sequence.objects.filter(key=f"trip_year_{vehicle.pk}_{year}").update(value=val)
+        from ledger.services import TripFinancialService
+        return TripFinancialService.recalculate_vehicle_trip_numbers(vehicle)
 
     @property
     def gst_type(self):
@@ -713,31 +548,3 @@ class Trip(models.Model):
         if hasattr(self, 'annotated_outstanding'):
             return self.annotated_outstanding
         return self.total_revenue - self.amount_received
-
-
-# --- Signals ---
-from django.db.models.signals import post_save, post_delete
-from django.dispatch import receiver
-
-@receiver(post_delete, sender=Trip)
-def recalculate_on_trip_delete(sender, instance, **kwargs):
-    """
-    Trigger recalculation of trip numbers for a vehicle when a trip is deleted.
-    """
-    # Use a small delay or ensure we don't trigger recursively if it were save
-    # But for delete it's straightforward.
-    Trip.recalculate_vehicle_trip_numbers(instance.vehicle)
-
-@receiver(post_save, sender=Trip)
-def recalculate_on_trip_update(sender, instance, created, **kwargs):
-    """
-    Trigger recalculation if date was changed (affecting sequence).
-    Vehicle change is already handled in save() override.
-    """
-    if not created:
-        # Check if date changed
-        # Since we don't have easy access to 'old' instance here without another query
-        # and trip numbers are chronological, any update might justify a sync.
-        # However, to be efficient, we only do it if the number would actually change.
-        # For simplicity and robust sequencing, we'll run it.
-        Trip.recalculate_vehicle_trip_numbers(instance.vehicle)

@@ -1054,6 +1054,7 @@ class BillCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
         return kwargs
 
     def form_valid(self, form):
+        form.instance.created_by = self.request.user
         response = super().form_valid(form)
         # sync_to_ledger is already called in BillForm.save(), 
         # but views might also trigger it for safety/clarity.

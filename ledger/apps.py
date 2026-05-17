@@ -8,3 +8,6 @@ class LedgerConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
     name = 'ledger'
     verbose_name = 'Financial Ledger'
+
+    def ready(self):
+        import ledger.signals

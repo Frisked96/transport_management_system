@@ -134,6 +134,8 @@ class DocumentCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView
             form.instance.vehicle = self.parent_obj
         elif self.driver_pk:
             form.instance.driver = self.parent_obj
+        
+        form.instance.added_by = self.request.user
 
         messages.success(self.request, 'Document added successfully!')
         return super().form_valid(form)

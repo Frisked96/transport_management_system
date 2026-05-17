@@ -11,6 +11,7 @@ This project is a comprehensive Transport Management System built with Django. I
 *   **`drivers/`**: Contains driver profiles, license information, and personal financial ledgers (salary, allowances).
 *   **`ledger/`**: The financial engine of the application, handling double-entry accounting, invoicing, payment tracking, and financial reporting.
 *   **`documents/`**: A centralized module for uploading and managing documents (e.g., permits, licenses) with expiry tracking features.
+*   **`accounts/`**: Manages system users, passwords, and permissions via a custom "no-admin" UI panel.
 *   **`templates/`**: Global HTML templates that define the layout and structure of the application's frontend.
 *   **`static/`**: Static assets such as CSS stylesheets, JavaScript files, and images used across the application.
 *   **`manage.py`**: Django's command-line utility for administrative tasks like running the server, making migrations, and creating superusers.
@@ -32,9 +33,11 @@ To assist in understanding the application architecture:
     *   `FinancialRecord`: The core of the double-entry system mapping Income/Expense transactions.
     *   `Bill`: Represents an Invoice, either aggregated from multiple `Trip`s or as a standalone Standard item.
 *   **`documents`**:
-    *   `Document`: A unified model for tracking expirations and storing scanned copies linked to Vehicles or Drivers.
+    `Document`: A unified model for tracking expirations and storing scanned copies linked to Vehicles or Drivers.
+    *   **`accounts`**:
+    *   `User`: Managed via the custom **User Management** panel for IDs, passwords, and Roles (Groups). Restricted to Superusers.
 
-## Core Financial Logic (Ledger & Billing)
+    ## Core Financial Logic (Ledger & Billing)
 
 *   **Accrual-Based Revenue**: Revenue is recorded as an "Invoice" type entry in the ledger as soon as a Trip is created or a Bill is generated. This represents earned income before cash is received.
 *   **Ledger Hand-off**: Trip Payment exists in the ledger as either an individual entry (if unbilled) OR as part of a consolidated Bill entry (if billed). When a Bill is created, individual trip ledger entries are deleted, and a single consolidated entry for the Bill is created.

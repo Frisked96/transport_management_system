@@ -168,6 +168,9 @@ class TyreLogCreateView(LoginRequiredMixin, CreateView):
         tyre._skip_auto_log = True
         tyre.save()
         
+        # Assign user who performed the manual action
+        form.instance.logged_by = self.request.user
+        
         messages.success(self.request, f'Tyre action {action} processed.')
         return super().form_valid(form)
 

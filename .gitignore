@@ -66,3 +66,4 @@ trips/management/commands/seed_data.py
 .djcache
 /.djcache
 
+note.txt

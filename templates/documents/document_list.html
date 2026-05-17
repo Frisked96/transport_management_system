@@ -112,7 +112,12 @@
                         <tbody class="divide-y divide-slate-100">
                             {% for doc in vehicle.documents.all %}
                             <tr class="hover:bg-slate-50 transition-colors">
-                                <td class="px-4 py-3 text-sm font-medium text-slate-800">{{ doc.document_type }}</td>
+                                <td class="px-4 py-3">
+                                    <div class="text-sm font-medium text-slate-800">{{ doc.document_type }}</div>
+                                    <div class="text-[9px] text-slate-400 font-black uppercase tracking-tighter">
+                                        Added By: {{ doc.added_by.username|default:"System" }} | {{ doc.created_at|date:"M d, H:i" }}
+                                    </div>
+                                </td>
                                 <td class="px-4 py-3 text-sm text-slate-600">{{ doc.document_number }}</td>
                                 <td class="px-4 py-3 text-sm text-slate-600">
                                     {% if doc.never_expires %}
@@ -253,7 +258,12 @@
                         <tbody class="divide-y divide-slate-100">
                             {% for doc in driver.documents.all %}
                             <tr class="hover:bg-slate-50 transition-colors">
-                                <td class="px-4 py-3 text-sm font-medium text-slate-800">{{ doc.document_type }}</td>
+                                <td class="px-4 py-3">
+                                    <div class="text-sm font-medium text-slate-800">{{ doc.document_type }}</div>
+                                    <div class="text-[9px] text-slate-400 font-black uppercase tracking-tighter">
+                                        Added By: {{ doc.added_by.username|default:"System" }} | {{ doc.created_at|date:"M d, H:i" }}
+                                    </div>
+                                </td>
                                 <td class="px-4 py-3 text-sm text-slate-600">{{ doc.document_number }}</td>
                                 <td class="px-4 py-3 text-sm text-slate-600">
                                     {% if doc.never_expires %}

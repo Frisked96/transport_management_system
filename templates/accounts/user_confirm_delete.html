@@ -1,0 +1,32 @@
+{% extends 'base.html' %}
+
+{% block title %}Delete User: {{ object.username }} - TMS{% endblock %}
+
+{% block content %}
+<div class="max-w-md mx-auto">
+    <div class="bg-white shadow sm:rounded-lg border border-red-200 overflow-hidden">
+        <div class="px-4 py-5 sm:p-6 text-center">
+            <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
+                <i class="fa-solid fa-triangle-exclamation text-red-600 text-xl"></i>
+            </div>
+            <h3 class="text-lg leading-6 font-medium text-slate-900" id="modal-title">Delete User</h3>
+            <div class="mt-2">
+                <p class="text-sm text-slate-500">
+                    Are you sure you want to delete the user <span class="font-bold text-slate-900">{{ object.username }}</span>? This action cannot be undone.
+                </p>
+            </div>
+        </div>
+        <div class="bg-slate-50 px-4 py-4 sm:px-6 flex flex-row-reverse space-x-reverse space-x-3">
+            <form method="post">
+                {% csrf_token %}
+                <button type="submit" class="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+                    Yes, Delete User
+                </button>
+            </form>
+            <a href="{% url 'user-list' %}" class="inline-flex justify-center py-2 px-4 border border-slate-300 shadow-sm text-sm font-medium rounded-md text-slate-700 bg-white hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500">
+                Cancel
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
