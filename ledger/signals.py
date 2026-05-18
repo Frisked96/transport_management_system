@@ -95,14 +95,31 @@ def sync_trip_ledger_on_billtrip_delete(sender, instance, **kwargs):
     """
     TripFinancialService.sync_trip_accrual(instance.trip)
     
+    # Get the actual bill object from the instance cache if possible, or fetch it
+    bill = None
+    if 'bill' in instance._state.fields_cache:
+        bill = instance.bill
+    else:
+        try:
+            # We use an internal class-level check if the instance is not cached
+            bill = Bill.objects.get(pk=instance.bill_id)
+        except Bill.DoesNotExist:
+            pass
+
     # Don't try to sync the bill if it's being deleted
-    if getattr(instance.bill, '_is_being_deleted', False):
+    if bill and getattr(bill, '_is_being_deleted', False):
+        return
+        
+    # Also check if there's a global flag or we know it's being deleted
+    if hasattr(Bill, '_deleting_pks') and instance.bill_id in Bill._deleting_pks:
         return
 
     try:
-        BillingService.sync_bill_to_ledger(instance.bill)
-    except (Bill.DoesNotExist, Exception):
+        if bill:
+            BillingService.sync_bill_to_ledger(bill)
+    except Exception:
         pass
+
 
 @receiver(pre_save, sender=Party)
 def sync_party_balance_on_opening_change(sender, instance, **kwargs):

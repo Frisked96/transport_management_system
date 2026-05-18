@@ -860,6 +860,12 @@ class Bill(models.Model):
             return super().delete(*args, **kwargs)
 
         self._is_being_deleted = True
+        
+        # Track globally so signals know this specific bill is being deleted
+        if not hasattr(Bill, '_deleting_pks'):
+            Bill._deleting_pks = set()
+        Bill._deleting_pks.add(self.pk)
+        
         try:
             affected_trips = list(self.trips.all())
 
@@ -878,6 +884,9 @@ class Bill(models.Model):
         finally:
             if hasattr(self, '_is_being_deleted'):
                 del self._is_being_deleted
+            if hasattr(Bill, '_deleting_pks') and self.pk in Bill._deleting_pks:
+                Bill._deleting_pks.remove(self.pk)
+
 
     def sync_to_ledger(self):
         """
