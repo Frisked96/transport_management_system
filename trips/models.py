@@ -291,6 +291,37 @@ class Trip(models.Model):
         from ledger.services import TripFinancialService
         return TripFinancialService.sync_trip_accrual(self)
 
+    def clean(self):
+        """
+        Custom validation to prevent changes to billed trips.
+        """
+        super().clean()
+        if self.pk and self.is_billed:
+            try:
+                old_instance = Trip.objects.get(pk=self.pk)
+                
+                financial_fields = ['weight', 'rate_per_ton', 'revenue_type', 'route', 'party']
+                changed_fields = []
+                for field in financial_fields:
+                    if getattr(old_instance, field) != getattr(self, field):
+                        changed_fields.append(field)
+                
+                if changed_fields:
+                    # Use verbose names for the error message
+                    field_names = []
+                    for f in changed_fields:
+                        try:
+                            field_names.append(str(self._meta.get_field(f).verbose_name))
+                        except:
+                            field_names.append(f)
+
+                    raise ValidationError(
+                        f"Cannot change {', '.join(field_names)} as this trip is already billed. "
+                        "Delete the associated bill first to make corrections."
+                    )
+            except Trip.DoesNotExist:
+                pass
+
     def save(self, *args, **kwargs):
         """
         Override save to handle business logic

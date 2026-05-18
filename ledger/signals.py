@@ -47,6 +47,9 @@ def cleanup_financial_record_on_bill_delete(sender, instance, **kwargs):
     """
     Ensure the consolidated FinancialRecord is deleted when the Bill is deleted.
     """
+    if getattr(instance, '_is_being_deleted', False):
+        return
+
     FinancialRecord.objects.filter(
         associated_bill_id=instance.id,
         record_type=FinancialRecord.RECORD_TYPE_INVOICE
@@ -91,6 +94,11 @@ def sync_trip_ledger_on_billtrip_delete(sender, instance, **kwargs):
     When a trip is unlinked from a bill, its individual accrual should be restored.
     """
     TripFinancialService.sync_trip_accrual(instance.trip)
+    
+    # Don't try to sync the bill if it's being deleted
+    if getattr(instance.bill, '_is_being_deleted', False):
+        return
+
     try:
         BillingService.sync_bill_to_ledger(instance.bill)
     except (Bill.DoesNotExist, Exception):

@@ -859,20 +859,25 @@ class Bill(models.Model):
         if not self.pk:
             return super().delete(*args, **kwargs)
 
-        affected_trips = list(self.trips.all())
+        self._is_being_deleted = True
+        try:
+            affected_trips = list(self.trips.all())
 
-        # Delete only the consolidated invoice record associated with this bill
-        FinancialRecord.objects.filter(
-            associated_bill=self,
-            record_type=FinancialRecord.RECORD_TYPE_INVOICE
-        ).delete()
+            # Delete only the consolidated invoice record associated with this bill
+            FinancialRecord.objects.filter(
+                associated_bill=self,
+                record_type=FinancialRecord.RECORD_TYPE_INVOICE
+            ).delete()
 
-        super().delete(*args, **kwargs)
+            super().delete(*args, **kwargs)
 
-        # Re-sync trips to restore their individual accruals now that they are unbilled
-        for trip in affected_trips:
-            from ledger.services import TripFinancialService
-            TripFinancialService.sync_trip_accrual(trip)
+            # Re-sync trips to restore their individual accruals now that they are unbilled
+            for trip in affected_trips:
+                from ledger.services import TripFinancialService
+                TripFinancialService.sync_trip_accrual(trip)
+        finally:
+            if hasattr(self, '_is_being_deleted'):
+                del self._is_being_deleted
 
     def sync_to_ledger(self):
         """

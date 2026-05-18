@@ -76,10 +76,15 @@ class TripForm(forms.ModelForm):
             status=Vehicle.STATUS_ACTIVE
         ).order_by('registration_plate')
         
-        # Disable party if trip is billed
+        # Disable fields if trip is billed
         if self.instance and self.instance.pk and self.instance.is_billed:
-            self.fields['party'].disabled = True
-            self.fields['party'].help_text = "Party cannot be changed because this trip is already billed."
+            billed_fields = ['party', 'route', 'revenue_type', 'weight', 'rate_per_ton']
+            for field_name in billed_fields:
+                if field_name in self.fields:
+                    self.fields[field_name].disabled = True
+                    # Add help text only if not already present or to the main financial ones
+                    if field_name in ['party', 'rate_per_ton']:
+                        self.fields[field_name].help_text = f"{self.fields[field_name].label} cannot be changed because this trip is already billed. Delete the associated bill first."
         
         # Add basic Tailwind styling for clarity
         tailwind_classes = "block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white"
