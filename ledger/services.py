@@ -338,7 +338,7 @@ class TripFinancialService:
                 'account': account,
                 'party': trip.party,
                 'category': category,
-                'amount': trip.revenue,
+                'amount': trip.total_revenue,
                 'description': f"Accrual for Trip {trip.trip_number}",
             }
         )
