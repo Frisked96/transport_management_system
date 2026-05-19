@@ -53,11 +53,18 @@ class Vehicle(models.Model):
         verbose_name='Vehicle Status'
     )
     
+    # Deletion flag to prevent signals from trying to update a deleted object
+    _is_being_deleted = False
+
     class Meta:
         verbose_name = 'Vehicle'
         verbose_name_plural = 'Vehicles'
         ordering = ['-registration_plate'] # Or -id/created_at if you want newest added. Registration plate descending might put newer ones on top if they follow a pattern. Let's use -id.
     
+    def delete(self, *args, **kwargs):
+        self._is_being_deleted = True
+        super().delete(*args, **kwargs)
+
     def __str__(self):
         return f"{self.registration_plate} - {self.make_model}"
     

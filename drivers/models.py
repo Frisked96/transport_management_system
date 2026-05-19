@@ -57,6 +57,9 @@ class Driver(models.Model):
         verbose_name='Current Balance'
     )
 
+    # Deletion flag to prevent signals from trying to update a deleted object
+    _is_being_deleted = False
+
     @property
     def name(self):
         """Returns the full name or username of the driver"""
@@ -72,6 +75,10 @@ class Driver(models.Model):
             self.save(update_fields=['current_balance_cached'])
         finally:
             del self._refreshing_balance
+
+    def delete(self, *args, **kwargs):
+        self._is_being_deleted = True
+        super().delete(*args, **kwargs)
 
     class Meta:
         verbose_name = 'Driver'
@@ -196,8 +203,11 @@ def update_driver_balance_on_save(sender, instance, created, **kwargs):
     """
     Update Driver balance when a transaction is saved.
     """
+    if getattr(instance.driver, '_is_being_deleted', False):
+        return
+
     if created:
-        Driver.objects.filter(pk=instance.driver.pk).update(
+        Driver.objects.filter(pk=instance.driver_id).update(
             current_balance_cached=F('current_balance_cached') + instance.amount
         )
     else:
@@ -208,6 +218,9 @@ def update_driver_balance_on_delete(sender, instance, **kwargs):
     """
     Update Driver balance when a transaction is deleted.
     """
-    Driver.objects.filter(pk=instance.driver.pk).update(
+    if getattr(instance.driver, '_is_being_deleted', False):
+        return
+
+    Driver.objects.filter(pk=instance.driver_id).update(
         current_balance_cached=F('current_balance_cached') - instance.amount
     )

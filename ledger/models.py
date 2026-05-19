@@ -90,10 +90,17 @@ class Party(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='Created At')
 
+    # Deletion flag to prevent signals from trying to update a deleted object
+    _is_being_deleted = False
+
     class Meta:
         verbose_name = 'Party'
         verbose_name_plural = 'Parties'
         ordering = ['-created_at']
+
+    def delete(self, *args, **kwargs):
+        self._is_being_deleted = True
+        super().delete(*args, **kwargs)
 
     def __str__(self):
         return self.name
@@ -222,10 +229,17 @@ class CompanyAccount(models.Model):
     description = models.TextField(blank=True, verbose_name='Notes/Description')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='Created At')
 
+    # Deletion flag to prevent signals from trying to update a deleted object
+    _is_being_deleted = False
+
     class Meta:
         verbose_name = 'Company Account'
         verbose_name_plural = 'Company Accounts'
         ordering = ['-created_at']
+
+    def delete(self, *args, **kwargs):
+        self._is_being_deleted = True
+        super().delete(*args, **kwargs)
 
     def __str__(self):
         return self.name
@@ -814,14 +828,30 @@ class Bill(models.Model):
             self.bill_number = f"{prefix}{self.bill_no:0{padding}d}{suffix}"
         
         # Update revenue caches before save
-        self.subtotal_cached = self.subtotal
-        self.gst_amount_cached = self.gst_amount
-        self.total_amount_cached = self.rounded_total
+        self._bypass_cache = True
+        try:
+            self.subtotal_cached = self.subtotal
+            self.gst_amount_cached = self.gst_amount
+            self.total_amount_cached = self.rounded_total
+            
+            # Update payment caches as well
+            self.amount_received_cached = self.calculate_amount_received()
+            self.outstanding_balance_cached = self.total_amount_cached - self.amount_received_cached
+            
+            total = self.total_amount_cached
+            received = self.amount_received_cached
+            if total <= 0:
+                self.payment_status_cached = self.PAYMENT_STATUS_UNPAID
+            elif received >= total:
+                self.payment_status_cached = self.PAYMENT_STATUS_PAID
+            elif received > 0:
+                self.payment_status_cached = self.PAYMENT_STATUS_PARTIAL
+            else:
+                self.payment_status_cached = self.PAYMENT_STATUS_UNPAID
+        finally:
+            del self._bypass_cache
         
         is_new = self.pk is None
-        if is_new:
-             self.outstanding_balance_cached = self.total_amount_cached
-             self.payment_status_cached = self.PAYMENT_STATUS_UNPAID
             
         super().save(*args, **kwargs)
         
@@ -902,13 +932,17 @@ class Bill(models.Model):
 
     @property
     def subtotal(self):
-        """Returns subtotal, prioritizing cached value"""
+        """Returns subtotal, prioritizing cached value unless requested otherwise"""
+        if getattr(self, '_bypass_cache', False):
+            return self._calculate_subtotal()
         if self.subtotal_cached:
             return self.subtotal_cached
-            
         if hasattr(self, 'annotated_subtotal'):
             return self.annotated_subtotal
+        return self._calculate_subtotal()
 
+    def _calculate_subtotal(self):
+        """Core logic for subtotal calculation"""
         if self.bill_type == self.TYPE_STANDARD:
             base = 0
             if self.amount_override is not None:
@@ -928,6 +962,8 @@ class Bill(models.Model):
     @property
     def gst_amount(self):
         """Returns GST amount, prioritizing cached value"""
+        if getattr(self, '_bypass_cache', False):
+            return self.subtotal * (Decimal(self.gst_rate) / Decimal(100))
         if self.gst_amount_cached:
             return self.gst_amount_cached
         if hasattr(self, 'annotated_gst_amount'):
@@ -937,6 +973,8 @@ class Bill(models.Model):
     @property
     def total_amount(self):
         """Returns total amount, prioritizing cached value"""
+        if getattr(self, '_bypass_cache', False):
+            return self.subtotal + self.gst_amount
         if self.total_amount_cached:
             return self.total_amount_cached
         if hasattr(self, 'annotated_total_amount'):
@@ -946,6 +984,10 @@ class Bill(models.Model):
     @property
     def rounded_total(self):
         """Returns rounded total, prioritizing cached value"""
+        if getattr(self, '_bypass_cache', False):
+            if not self.use_roundoff:
+                return self.total_amount
+            return self.total_amount.quantize(Decimal('1'), rounding='ROUND_HALF_UP')
         if self.total_amount_cached:
             return self.total_amount_cached # rounded_total is stored in total_amount_cached
             

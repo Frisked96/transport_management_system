@@ -23,8 +23,12 @@ def update_original_bill_on_adjustment(sender, instance, **kwargs):
 @receiver(post_delete, sender=Bill)
 def update_original_bill_on_adjustment_delete(sender, instance, **kwargs):
     """Update original bill caches when an adjustment is deleted"""
-    if instance.original_bill:
-        BillingService.update_bill_financial_caches(instance.original_bill)
+    if instance.original_bill_id:
+        try:
+            if instance.original_bill:
+                BillingService.update_bill_financial_caches(instance.original_bill)
+        except Bill.DoesNotExist:
+            pass
 
 @receiver(post_save, sender=Trip)
 def update_bill_on_trip_change(sender, instance, **kwargs):
@@ -40,7 +44,8 @@ def update_bill_on_trip_change(sender, instance, **kwargs):
     # 2. Sync Bill totals to Ledger
     associated_bills = Bill.objects.filter(trips=instance)
     for bill in associated_bills:
-        BillingService.sync_bill_to_ledger(bill)
+        # Calling save() is the most robust way to refresh all caches and sync to ledger
+        bill.save()
 
 @receiver(post_delete, sender=Bill)
 def cleanup_financial_record_on_bill_delete(sender, instance, **kwargs):
@@ -86,22 +91,32 @@ def sync_trip_ledger_on_billtrip_save(sender, instance, **kwargs):
     When a trip is linked to a bill, its individual accrual should be deleted.
     """
     TripFinancialService.sync_trip_accrual(instance.trip)
-    BillingService.sync_bill_to_ledger(instance.bill)
+    # Refresh the bill's cached totals and sync to ledger
+    instance.bill.save()
 
 @receiver(post_delete, sender=BillTrip)
 def sync_trip_ledger_on_billtrip_delete(sender, instance, **kwargs):
     """
     When a trip is unlinked from a bill, its individual accrual should be restored.
     """
-    TripFinancialService.sync_trip_accrual(instance.trip)
+    if not instance.trip_id:
+        return
+
+    try:
+        trip = instance.trip
+        # Don't try to sync if the trip itself is being deleted
+        if getattr(trip, '_is_being_deleted', False):
+            return
+        TripFinancialService.sync_trip_accrual(trip)
+    except Trip.DoesNotExist:
+        return
     
     # Get the actual bill object from the instance cache if possible, or fetch it
     bill = None
     if 'bill' in instance._state.fields_cache:
         bill = instance.bill
-    else:
+    elif instance.bill_id:
         try:
-            # We use an internal class-level check if the instance is not cached
             bill = Bill.objects.get(pk=instance.bill_id)
         except Bill.DoesNotExist:
             pass
@@ -116,7 +131,8 @@ def sync_trip_ledger_on_billtrip_delete(sender, instance, **kwargs):
 
     try:
         if bill:
-            BillingService.sync_bill_to_ledger(bill)
+            # Refresh caches and sync to ledger
+            bill.save()
     except Exception:
         pass
 
@@ -126,6 +142,9 @@ def sync_party_balance_on_opening_change(sender, instance, **kwargs):
     """
     If opening_balance is changed, trigger a refresh of the cached balance.
     """
+    if getattr(instance, '_is_being_deleted', False):
+        return
+
     if instance.pk:
         try:
             old_instance = Party.objects.get(pk=instance.pk)
@@ -146,6 +165,9 @@ def sync_account_balance_on_opening_change(sender, instance, **kwargs):
     """
     If opening_balance is changed for a company account, trigger a refresh.
     """
+    if getattr(instance, '_is_being_deleted', False):
+        return
+
     if instance.pk:
         try:
             old_instance = CompanyAccount.objects.get(pk=instance.pk)
@@ -205,11 +227,21 @@ def update_balances_on_delete(sender, instance, **kwargs):
     """
     Update Party and CompanyAccount balances when a FinancialRecord is deleted.
     """
-    if instance.party:
-        BalanceService.refresh_party_balance(instance.party)
+    if instance.party_id:
+        try:
+            party = instance.party
+            if party and not getattr(party, '_is_being_deleted', False):
+                BalanceService.refresh_party_balance(party)
+        except Party.DoesNotExist:
+            pass
 
-    if instance.account:
-        BalanceService.refresh_account_balance(instance.account)
+    if instance.account_id:
+        try:
+            account = instance.account
+            if account and not getattr(account, '_is_being_deleted', False):
+                BalanceService.refresh_account_balance(account)
+        except CompanyAccount.DoesNotExist:
+            pass
 
 @receiver(post_save, sender=FinancialRecord)
 def update_trip_bill_caches_on_save(sender, instance, **kwargs):
@@ -238,10 +270,21 @@ def update_trip_bill_caches_on_delete(sender, instance, **kwargs):
     if getattr(instance, '_updating_financial_caches', False):
         return
 
-    if instance.associated_trip:
-        TripFinancialService.update_trip_financial_caches(instance.associated_trip)
-    if instance.associated_bill:
-        BillingService.update_bill_financial_caches(instance.associated_bill)
+    if instance.associated_trip_id:
+        try:
+            trip = instance.associated_trip
+            if trip and not getattr(trip, '_is_being_deleted', False):
+                TripFinancialService.update_trip_financial_caches(trip)
+        except Trip.DoesNotExist:
+            pass
+    
+    if instance.associated_bill_id:
+        try:
+            bill = instance.associated_bill
+            if bill and not getattr(bill, '_is_being_deleted', False):
+                BillingService.update_bill_financial_caches(bill)
+        except Bill.DoesNotExist:
+            pass
 
 @receiver(post_save, sender=TripAllocation)
 def update_trip_bill_caches_on_alloc_save(sender, instance, **kwargs):
@@ -259,16 +302,29 @@ def update_trip_bill_caches_on_alloc_delete(sender, instance, **kwargs):
     if getattr(instance, '_updating_financial_caches', False):
         return
 
-    TripFinancialService.update_trip_financial_caches(instance.trip)
-    if instance.trip.associated_bill:
-        BillingService.update_bill_financial_caches(instance.trip.associated_bill)
+    if instance.trip_id:
+        try:
+            trip = instance.trip
+            if not getattr(trip, '_is_being_deleted', False):
+                TripFinancialService.update_trip_financial_caches(trip)
+                if trip.associated_bill and not getattr(trip.associated_bill, '_is_being_deleted', False):
+                    BillingService.update_bill_financial_caches(trip.associated_bill)
+        except Trip.DoesNotExist:
+            pass
 
 @receiver(post_save, sender=BillAllocation)
 def update_bill_caches_on_alloc_save(sender, instance, **kwargs):
     """Update Bill caches when a bill allocation is created/updated"""
-    BillingService.update_bill_financial_caches(instance.bill)
+    if not getattr(instance.bill, '_is_being_deleted', False):
+        BillingService.update_bill_financial_caches(instance.bill)
 
 @receiver(post_delete, sender=BillAllocation)
 def update_bill_caches_on_alloc_delete(sender, instance, **kwargs):
     """Update Bill caches when a bill allocation is deleted"""
-    BillingService.update_bill_financial_caches(instance.bill)
+    if instance.bill_id:
+        try:
+            bill = instance.bill
+            if not getattr(bill, '_is_being_deleted', False):
+                BillingService.update_bill_financial_caches(bill)
+        except Bill.DoesNotExist:
+            pass

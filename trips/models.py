@@ -263,6 +263,9 @@ class Trip(models.Model):
         auto_now_add=True,
         verbose_name='Created At'
     )
+
+    # Deletion flag to prevent signals from saving a deleted object
+    _is_being_deleted = False
     
     class Meta:
         verbose_name = 'Trip'
@@ -322,6 +325,14 @@ class Trip(models.Model):
             except Trip.DoesNotExist:
                 pass
 
+    def delete(self, *args, **kwargs):
+        """
+        Override delete to set a flag that prevents signals from trying to save 
+        this object after it's gone from the database.
+        """
+        self._is_being_deleted = True
+        super().delete(*args, **kwargs)
+
     def save(self, *args, **kwargs):
         """
         Override save to handle business logic
@@ -329,7 +340,11 @@ class Trip(models.Model):
         is_new = self._state.adding
         old_instance = None
         if not is_new:
-            old_instance = Trip.objects.get(pk=self.pk)
+            try:
+                old_instance = Trip.objects.get(pk=self.pk)
+            except Trip.DoesNotExist:
+                # If the trip was deleted, we shouldn't be saving it
+                return
 
         # Sync locations from route if provided
         if self.route:
@@ -397,15 +412,19 @@ class Trip(models.Model):
                     raise ValidationError(f"Cannot change Party for Trip {self.trip_number} as it is already billed.")
 
         # Update revenue caches before save
-        self.revenue_cached = self.revenue
-        self.gst_amount_cached = self.gst_amount
-        self.total_revenue_cached = self.total_revenue
+        self._bypass_cache = True
+        try:
+            self.revenue_cached = self.revenue
+            self.gst_amount_cached = self.gst_amount
+            self.total_revenue_cached = self.total_revenue
+            
+            # Recalculate outstanding/status even for existing trips
+            self.amount_received_cached = self.amount_received
+            self.outstanding_balance_cached = self.outstanding_balance
+            self.payment_status_cached = self.payment_status
+        finally:
+            del self._bypass_cache
         
-        # Initial outstanding calculation for new trips
-        if is_new:
-            self.outstanding_balance_cached = self.total_revenue_cached
-            self.payment_status_cached = self.PAYMENT_STATUS_UNPAID
-
         # Perform the actual save
         super().save(*args, **kwargs)
 
@@ -495,16 +514,19 @@ class Trip(models.Model):
 
     @property
     def revenue(self):
-        """Returns revenue, prioritizing cached value"""
+        """Returns revenue, prioritizing cached value unless requested otherwise"""
+        if getattr(self, '_bypass_cache', False):
+            return self._calculate_revenue()
         if self.revenue_cached:
             return self.revenue_cached
-            
         if hasattr(self, 'annotated_revenue'):
             return self.annotated_revenue
-            
+        return self._calculate_revenue()
+
+    def _calculate_revenue(self):
+        """Core logic for revenue calculation"""
         if self.revenue_type == self.REVENUE_FIXED:
             return self.rate_per_ton or 0
-        
         if self.weight and self.rate_per_ton:
             return self.weight * self.rate_per_ton
         return 0
@@ -512,18 +534,23 @@ class Trip(models.Model):
     @property
     def gst_amount(self):
         """Returns GST amount, prioritizing cached value"""
+        if getattr(self, '_bypass_cache', False):
+            return self._calculate_gst_amount()
         if self.gst_amount_cached:
             return self.gst_amount_cached
-
         if hasattr(self, 'annotated_gst_amount'):
             return self.annotated_gst_amount
+        return self._calculate_gst_amount()
 
+    def _calculate_gst_amount(self):
+        """Core logic for GST calculation"""
         from decimal import Decimal
+        rev = self.revenue # This will use _bypass_cache if set on self
         
         # 1. Use Bill Rate if available
         bill = self.associated_bill
         if bill and bill.gst_rate:
-            return self.revenue * (Decimal(bill.gst_rate) / Decimal(100))
+            return rev * (Decimal(bill.gst_rate) / Decimal(100))
         
         # 2. If unbilled, check if route/snapshot is taxable
         is_taxable = False
@@ -533,13 +560,15 @@ class Trip(models.Model):
             is_taxable = True
             
         if is_taxable:
-            return self.revenue * (Decimal('18') / Decimal('100'))
+            return rev * (Decimal('18') / Decimal('100'))
             
         return Decimal('0')
 
     @property
     def total_revenue(self):
         """Returns total revenue, prioritizing cached value"""
+        if getattr(self, '_bypass_cache', False):
+            return self.revenue + self.gst_amount
         if self.total_revenue_cached:
             return self.total_revenue_cached
         if hasattr(self, 'annotated_total_revenue'):
@@ -549,6 +578,8 @@ class Trip(models.Model):
     @property
     def amount_received(self):
         """Returns amount received, prioritizing cached value"""
+        if getattr(self, '_bypass_cache', False):
+            return self.calculate_amount_received()
         if self.amount_received_cached:
             return self.amount_received_cached
         if hasattr(self, 'annotated_received'):
@@ -558,12 +589,16 @@ class Trip(models.Model):
     @property
     def payment_status(self):
         """Returns payment status, prioritizing cached value"""
+        if getattr(self, '_bypass_cache', False):
+            return self._calculate_payment_status()
         if self.payment_status_cached:
             return self.payment_status_cached
         if hasattr(self, 'annotated_status'):
             return self.annotated_status
-        
-        # Fallback to dynamic check
+        return self._calculate_payment_status()
+
+    def _calculate_payment_status(self):
+        """Core logic for payment status"""
         received = self.amount_received
         total_rev = self.total_revenue
         if total_rev <= 0: return self.PAYMENT_STATUS_UNPAID
@@ -574,6 +609,8 @@ class Trip(models.Model):
     @property
     def outstanding_balance(self):
         """Returns outstanding balance, prioritizing cached value"""
+        if getattr(self, '_bypass_cache', False):
+            return self.total_revenue - self.amount_received
         if self.outstanding_balance_cached:
             return self.outstanding_balance_cached
         if hasattr(self, 'annotated_outstanding'):

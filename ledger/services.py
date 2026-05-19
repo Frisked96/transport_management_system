@@ -206,26 +206,36 @@ class BillingService:
     @staticmethod
     def update_bill_financial_caches(bill):
         """
-        Recalculate and update cached received and outstanding amounts.
+        Recalculate and update all cached financial fields for the bill.
         """
-        received = BillingService.calculate_bill_received_amount(bill)
-        total = bill.total_amount_cached
-        
-        bill.amount_received_cached = received
-        bill.outstanding_balance_cached = total - received
-        
-        if total <= 0:
-            bill.payment_status_cached = bill.PAYMENT_STATUS_UNPAID
-        elif received >= total:
-            bill.payment_status_cached = bill.PAYMENT_STATUS_PAID
-        elif received > 0:
-            bill.payment_status_cached = bill.PAYMENT_STATUS_PARTIAL
-        else:
-            bill.payment_status_cached = bill.PAYMENT_STATUS_UNPAID
+        # Set bypass cache to get real-time calculated values
+        bill._bypass_cache = True
+        try:
+            bill.subtotal_cached = bill.subtotal
+            bill.gst_amount_cached = bill.gst_amount
+            bill.total_amount_cached = bill.rounded_total
+            
+            received = BillingService.calculate_bill_received_amount(bill)
+            total = bill.total_amount_cached
+            
+            bill.amount_received_cached = received
+            bill.outstanding_balance_cached = total - received
+            
+            if total <= 0:
+                bill.payment_status_cached = bill.PAYMENT_STATUS_UNPAID
+            elif received >= total:
+                bill.payment_status_cached = bill.PAYMENT_STATUS_PAID
+            elif received > 0:
+                bill.payment_status_cached = bill.PAYMENT_STATUS_PARTIAL
+            else:
+                bill.payment_status_cached = bill.PAYMENT_STATUS_UNPAID
+        finally:
+            del bill._bypass_cache
             
         bill._updating_financial_caches = True
         try:
             bill.save(update_fields=[
+                'subtotal_cached', 'gst_amount_cached', 'total_amount_cached',
                 'amount_received_cached', 'outstanding_balance_cached', 'payment_status_cached'
             ])
         finally:
