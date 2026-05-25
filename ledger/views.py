@@ -654,7 +654,7 @@ class PartyDetailView(LoginRequiredMixin, BaseLedgerPermissionMixin, DetailView)
             'bill_trips__trip',
             'adjustment_bills',
             'adjustment_bills__category'
-        ).order_by('-date', '-created_at')
+        ).order_by('-date', '-category__name', '-bill_no')
         
         bills_page_num = self.request.GET.get('bills_page', 1)
         bills_paginator = Paginator(bills_qs, 25)
@@ -973,7 +973,7 @@ class BillListView(LoginRequiredMixin, BaseLedgerPermissionMixin, ListView):
             'bill_trips__trip',
             'adjustment_bills',
             'adjustment_bills__category'
-        ).order_by('-date', '-created_at')
+        ).order_by('-date', '-category__name', '-bill_no')
         
         # Filter by Issuer (Company Account)
         issuer_id = self.request.GET.get('issuer')
@@ -1679,7 +1679,7 @@ def get_party_bills(request):
             'adjustment_bills__category'
         ).filter(
             models.Q(category__isnull=True) | ~models.Q(category__name__in=['Credit Note', 'Debit Note'])
-        ).order_by('-date', '-created_at')
+        ).order_by('-date', '-category__name', '-bill_no')
 
         data = []
         for bill in bills_qs:
