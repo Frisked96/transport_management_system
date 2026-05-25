@@ -143,6 +143,13 @@ class TripListView(LoginRequiredMixin, BaseTripPermissionMixin, ListView):
         if status:
             queryset = queryset.filter(annotated_status=status)
 
+        # Billing Status filter
+        billing_status = self.request.GET.get('billing_status')
+        if billing_status == 'unbilled':
+            queryset = queryset.filter(annotated_is_billed=False)
+        elif billing_status == 'billed':
+            queryset = queryset.filter(annotated_is_billed=True)
+
         # GST Filter
         gst_filter = self.request.GET.get('gst_filter')
         if gst_filter == 'gst':
@@ -198,6 +205,7 @@ class TripListView(LoginRequiredMixin, BaseTripPermissionMixin, ListView):
         context = super().get_context_data(**kwargs)
         context['status_choices'] = Trip.PAYMENT_STATUS_CHOICES
         context['current_status'] = self.request.GET.get('status', '')
+        context['current_billing_status'] = self.request.GET.get('billing_status', '')
         context['current_gst_filter'] = self.request.GET.get('gst_filter', '')
         context['search_term'] = self.request.GET.get('search', '')
         context['current_lr_search'] = self.request.GET.get('lr_search', '')
