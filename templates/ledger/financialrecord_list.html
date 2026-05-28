@@ -26,10 +26,15 @@
 <!-- END: Page Header -->
 
 <!-- BEGIN: Dashboard Stats -->
-<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
     <div class="bg-white border border-slate-200 rounded-lg p-5 border-l-4 border-l-emerald-500 shadow-sm">
         <h5 class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Total Debit (In)</h5>
         <h2 class="text-xl font-bold text-emerald-600">₹{{ total_income|indian_comma }}</h2>
+        <p class="text-[10px] text-slate-400 mt-1 italic uppercase tracking-tighter">Net of TDS</p>
+    </div>
+    <div class="bg-white border border-slate-200 rounded-lg p-5 border-l-4 border-l-amber-500 shadow-sm">
+        <h5 class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Total TDS</h5>
+        <h2 class="text-xl font-bold text-amber-600">₹{{ total_tds|indian_comma }}</h2>
         <p class="text-[10px] text-slate-400 mt-1 italic">Filtered range</p>
     </div>
     <div class="bg-white border border-slate-200 rounded-lg p-5 border-l-4 border-l-red-500 shadow-sm">

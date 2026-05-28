@@ -116,17 +116,26 @@ class FinancialRecordListView(LoginRequiredMixin, BaseLedgerPermissionMixin, Lis
 
         # 1. Financial Records Totals (Filtered)
         records = self.get_queryset()
-        total_income = records.filter(
+        
+        total_tds = records.filter(
+            category__name='TDS'
+        ).exclude(record_type='Invoice').aggregate(total=Sum('amount'))['total'] or 0
+
+        total_income_all = records.filter(
             category__type=TransactionCategory.TYPE_INCOME
         ).exclude(record_type='Invoice').aggregate(total=Sum('amount'))['total'] or 0
+        
+        # Total Debit (In) should have TDS subtracted
+        total_income = total_income_all - total_tds
         
         total_expenses = records.filter(
             category__type=TransactionCategory.TYPE_EXPENSE
         ).exclude(record_type='Invoice').aggregate(total=Sum('amount'))['total'] or 0
 
+        context['total_tds'] = total_tds
         context['total_income'] = total_income
         context['total_expenses'] = total_expenses
-        context['net_total'] = total_income - total_expenses
+        context['net_total'] = total_income_all - total_expenses
 
         # 2. Party Outstanding Dashboard (Unfiltered by date/category)
         # We want to see who owes money overall
