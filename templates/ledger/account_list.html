@@ -78,7 +78,8 @@
                 <div class="md:w-40 md:text-right">
                     <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1 md:text-right">Current Balance</span>
                     <p class="text-lg font-bold {% if account.current_balance_value >= 0 %}text-emerald-600{% else %}text-red-600{% endif %}">
-                        ₹{{ account.current_balance }}
+                        ₹{{ account.current_balance_value|abs_val|indian_comma }}
+                        <span class="text-xs ml-0.5">{% if account.current_balance_value > 0 %}Dr{% elif account.current_balance_value < 0 %}Cr{% endif %}</span>
                     </p>
                 </div>
 

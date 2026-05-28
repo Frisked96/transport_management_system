@@ -40,6 +40,135 @@
 </div>
 <!-- END: Action Bar -->
 
+<!-- BEGIN: Internal Summary & Related Entries (d-print-none) -->
+<div class="mb-8 p-5 bg-slate-50 border border-slate-200 rounded-xl shadow-sm d-print-none">
+    <div class="flex items-center justify-between mb-4 border-b border-slate-200 pb-3">
+        <h3 class="text-sm font-bold text-slate-700 uppercase tracking-widest flex items-center">
+            <span class="w-2 h-2 bg-blue-500 rounded-full mr-2"></span>
+            Internal Summary & Related Entries
+        </h3>
+        <div class="flex gap-4 items-center">
+            <span class="text-[10px] font-black uppercase text-slate-400">Payment Status:</span>
+            <span class="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider 
+                {% if bill.payment_status == 'Paid' %}bg-emerald-100 text-emerald-700 border border-emerald-200
+                {% elif bill.payment_status == 'Partially Paid' %}bg-amber-100 text-amber-700 border border-amber-200
+                {% else %}bg-rose-100 text-rose-700 border border-rose-200{% endif %}">
+                {{ bill.payment_status }}
+            </span>
+        </div>
+    </div>
+    
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <!-- Column 1: Financial Quick View -->
+        <div class="space-y-4">
+            <div class="flex justify-between items-end">
+                <span class="text-[11px] font-bold text-slate-400 uppercase">Total Invoice:</span>
+                <span class="text-sm font-black text-slate-900">₹{{ bill.rounded_total|indian_comma }}</span>
+            </div>
+            <div class="flex justify-between items-end">
+                <span class="text-[11px] font-bold text-slate-400 uppercase">Total Received:</span>
+                <span class="text-sm font-black text-emerald-600">₹{{ bill.amount_received|indian_comma }}</span>
+            </div>
+            <div class="pt-3 border-t border-slate-200 flex justify-between items-end">
+                <span class="text-[11px] font-black text-slate-700 uppercase">Outstanding:</span>
+                <span class="text-lg font-black {% if bill.outstanding_balance > 0 %}text-rose-600{% else %}text-emerald-600{% endif %}">
+                    ₹{{ bill.outstanding_balance|indian_comma }}
+                </span>
+            </div>
+        </div>
+
+        <!-- Column 2: Ledger Records -->
+        <div class="md:border-l md:border-slate-200 md:pl-8 space-y-4">
+            <div>
+                <p class="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-2">Ledger Source</p>
+                {% if invoice_record %}
+                <div class="flex items-center group">
+                    <div class="w-8 h-8 rounded bg-blue-50 text-blue-500 flex items-center justify-center mr-3 group-hover:bg-blue-500 group-hover:text-white transition-colors">
+                        <i class="fa-solid fa-file-invoice text-xs"></i>
+                    </div>
+                    <div>
+                        <p class="text-[10px] font-bold text-slate-400 uppercase leading-none mb-1">Invoice Entry</p>
+                        <a href="{% url 'financialrecord-detail' invoice_record.pk %}" class="text-xs font-black text-blue-600 hover:text-blue-800 underline decoration-blue-200 underline-offset-2">
+                            #{{ invoice_record.entry_number }} <span class="text-slate-400 font-medium ml-1">({{ invoice_record.date|date:"d/m/y" }})</span>
+                        </a>
+                    </div>
+                </div>
+                {% else %}
+                <p class="text-xs italic text-slate-400">No ledger entry found.</p>
+                {% endif %}
+            </div>
+
+            <div>
+                <p class="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-2">Payment History</p>
+                {% if payments %}
+                <div class="space-y-2 max-h-40 overflow-y-auto pr-2 custom-scrollbar">
+                    {% for payment in payments %}
+                    <div class="flex items-center justify-between group">
+                        <div class="flex items-center">
+                            <i class="fa-solid fa-receipt text-[10px] text-emerald-400 mr-2" title="{{ payment.type }}"></i>
+                            <a href="{% url 'financialrecord-detail' payment.financial_record.pk %}" class="text-xs font-bold text-slate-600 hover:text-blue-600 transition-colors">
+                                #{{ payment.financial_record.entry_number }}
+                            </a>
+                            <span class="text-[9px] text-slate-400 ml-2">{{ payment.financial_record.date|date:"d/m/y" }}</span>
+                            <span class="text-[9px] font-bold text-slate-500 ml-2">[{{ payment.financial_record.category.name }}]</span>
+                            <span class="text-[8px] bg-slate-100 text-slate-500 px-1 rounded ml-2 font-black uppercase tracking-tighter opacity-0 group-hover:opacity-100 transition-opacity">
+                                {{ payment.type }}
+                            </span>
+                        </div>
+                        <span class="text-xs font-black text-slate-700">₹{{ payment.amount|indian_comma }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-xs italic text-slate-400">No payments recorded.</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Column 3: Related Adjustments -->
+        <div class="md:border-l md:border-slate-200 md:pl-8 space-y-4">
+            {% if bill.original_bill %}
+            <div>
+                <p class="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-2">Adjusted Against</p>
+                <div class="flex items-center group">
+                    <div class="w-8 h-8 rounded bg-amber-50 text-amber-500 flex items-center justify-center mr-3 group-hover:bg-amber-500 group-hover:text-white transition-colors">
+                        <i class="fa-solid fa-link text-xs"></i>
+                    </div>
+                    <div>
+                        <p class="text-[10px] font-bold text-slate-400 uppercase leading-none mb-1">Parent Invoice</p>
+                        <a href="{% url 'bill-detail' bill.original_bill.pk %}" class="text-xs font-black text-amber-600 hover:text-amber-800 underline decoration-amber-200 underline-offset-2">
+                            {{ bill.original_bill.bill_number }}
+                        </a>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <div>
+                <p class="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-2">Related Adjustments (CN/DN)</p>
+                {% if adjustments %}
+                <div class="space-y-2">
+                    {% for adj in adjustments %}
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center">
+                            <i class="fa-solid fa-file-signature text-[10px] text-amber-400 mr-2"></i>
+                            <a href="{% url 'bill-detail' adj.pk %}" class="text-xs font-bold text-slate-600 hover:text-blue-600 transition-colors">
+                                {{ adj.bill_number }}
+                            </a>
+                        </div>
+                        <span class="text-xs font-black text-slate-700">₹{{ adj.rounded_total|indian_comma }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-xs italic text-slate-400">No linked Credit/Debit notes.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+<!-- END: Internal Summary & Related Entries -->
+
 <!-- BEGIN: Invoice Preview -->
 <div class="bg-slate-100 p-4 md:p-10 rounded-xl border border-slate-200 shadow-inner overflow-x-auto">
     <div class="bg-white max-w-[900px] mx-auto shadow-2xl p-6 md:p-12 text-slate-900 border border-slate-900 min-w-[750px]">

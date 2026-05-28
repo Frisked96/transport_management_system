@@ -1134,7 +1134,85 @@ class BillDetailView(LoginRequiredMixin, BaseLedgerPermissionMixin, DetailView):
 
         context['has_discount'] = has_discount
         context['has_lr'] = has_lr
+
+        # Related ledger entries for internal summary
+        context['invoice_record'] = bill.financial_records.filter(record_type='Invoice').first()
         
+        # Comprehensive list of payments/credits contributing to this bill
+        related_payments = []
+        seen_records = set()
+
+        # 1. Direct Ledger Entries (where associated_bill = bill)
+        direct_records = bill.financial_records.exclude(record_type='Invoice').select_related('category')
+        for rec in direct_records:
+            related_payments.append({
+                'financial_record': rec,
+                'amount': rec.amount,
+                'type': 'Direct'
+            })
+            seen_records.add(rec.pk)
+
+        # 2. Bill Allocations
+        for alloc in bill.payment_allocations.select_related('financial_record', 'financial_record__category').all():
+            if alloc.financial_record_id not in seen_records:
+                related_payments.append({
+                    'financial_record': alloc.financial_record,
+                    'amount': alloc.amount,
+                    'type': 'Allocated'
+                })
+                seen_records.add(alloc.financial_record_id)
+            else:
+                # Update amount if already added via direct (though this shouldn't happen with clean data)
+                for p in related_payments:
+                    if p['financial_record'].pk == alloc.financial_record_id:
+                        p['amount'] += alloc.amount
+                        p['type'] = 'Direct + Allocated'
+
+        # 3. Trip-based Payments (for trip-based bills)
+        if bill.bill_type == 'Trip':
+            trip_ids = bill.trips.values_list('id', flat=True)
+            
+            # Trip Allocations
+            trip_allocations = TripAllocation.objects.filter(
+                trip_id__in=trip_ids
+            ).select_related('financial_record', 'financial_record__category', 'trip')
+            
+            for ta in trip_allocations:
+                if ta.financial_record_id not in seen_records:
+                    related_payments.append({
+                        'financial_record': ta.financial_record,
+                        'amount': ta.amount,
+                        'type': f'Trip {ta.trip.registration_plate or ta.trip.pk}'
+                    })
+                    seen_records.add(ta.financial_record_id)
+                else:
+                    for p in related_payments:
+                        if p['financial_record'].pk == ta.financial_record_id:
+                            p['amount'] += ta.amount
+
+            # Direct Trip Records
+            direct_trip_records = FinancialRecord.objects.filter(
+                associated_trip_id__in=trip_ids
+            ).exclude(
+                Q(record_type='Invoice') |
+                Q(associated_bill=bill) |
+                Q(bill_allocations__bill=bill)
+            ).select_related('category', 'associated_trip')
+            
+            for tr in direct_trip_records:
+                if tr.pk not in seen_records:
+                    related_payments.append({
+                        'financial_record': tr,
+                        'amount': tr.amount,
+                        'type': f'Trip {tr.associated_trip.registration_plate or tr.associated_trip.pk}'
+                    })
+                    seen_records.add(tr.pk)
+
+        # Sort payments by date
+        related_payments.sort(key=lambda x: (x['financial_record'].date, x['financial_record'].created_at), reverse=True)
+        context['payments'] = related_payments
+        context['adjustments'] = bill.adjustment_bills.select_related('category').all()
+
         return context
 
 def group_trips_for_bill(bill):
