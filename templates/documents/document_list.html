@@ -102,7 +102,7 @@
                     <table class="w-full text-left border-collapse">
                         <thead class="bg-slate-50">
                             <tr>
-                                <th class="px-4 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-100">Type</th>
+                                <th class="px-4 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-100">Name</th>
                                 <th class="px-4 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-100">Number</th>
                                 <th class="px-4 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-100">Expiry Date</th>
                                 <th class="px-4 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-100">Status</th>
@@ -113,12 +113,12 @@
                             {% for doc in vehicle.documents.all %}
                             <tr class="hover:bg-slate-50 transition-colors">
                                 <td class="px-4 py-3">
-                                    <div class="text-sm font-medium text-slate-800">{{ doc.document_type }}</div>
+                                    <div class="text-sm font-medium text-slate-800">{{ doc.document_name }}</div>
                                     <div class="text-[9px] text-slate-400 font-black uppercase tracking-tighter">
                                         Added By: {{ doc.added_by.username|default:"System" }} | {{ doc.created_at|date:"M d, H:i" }}
                                     </div>
                                 </td>
-                                <td class="px-4 py-3 text-sm text-slate-600">{{ doc.document_number }}</td>
+                                <td class="px-4 py-3 text-sm text-slate-600">{{ doc.document_number|default:"-" }}</td>
                                 <td class="px-4 py-3 text-sm text-slate-600">
                                     {% if doc.never_expires %}
                                     <span class="text-slate-400 italic">No Expiry</span>
@@ -139,11 +139,11 @@
                                 </td>
                                 <td class="px-4 py-3 text-right text-sm">
                                     <div class="flex justify-end space-x-2">
-                                        {% if doc.scanned_copy %}
-                                        <a href="{% url 'document-view' doc.pk %}" target="_blank" class="text-slate-400 hover:text-emerald-600" title="View Scanned Copy">
+                                        {% for doc_file in doc.files.all %}
+                                        <a href="{% url 'document-view' doc_file.pk %}" target="_blank" class="text-slate-400 hover:text-emerald-600" title="View Scanned Copy">
                                             <i class="fa-solid fa-file-lines"></i>
                                         </a>
-                                        {% endif %}
+                                        {% endfor %}
                                         <a href="{% url 'document-update' doc.pk %}" class="text-slate-400 hover:text-blue-600" title="Edit">
                                             <i class="fa-solid fa-pen-to-square"></i>
                                         </a>
@@ -259,12 +259,12 @@
                             {% for doc in driver.documents.all %}
                             <tr class="hover:bg-slate-50 transition-colors">
                                 <td class="px-4 py-3">
-                                    <div class="text-sm font-medium text-slate-800">{{ doc.document_type }}</div>
+                                    <div class="text-sm font-medium text-slate-800">{{ doc.document_name }}</div>
                                     <div class="text-[9px] text-slate-400 font-black uppercase tracking-tighter">
                                         Added By: {{ doc.added_by.username|default:"System" }} | {{ doc.created_at|date:"M d, H:i" }}
                                     </div>
                                 </td>
-                                <td class="px-4 py-3 text-sm text-slate-600">{{ doc.document_number }}</td>
+                                <td class="px-4 py-3 text-sm text-slate-600">{{ doc.document_number|default:"-" }}</td>
                                 <td class="px-4 py-3 text-sm text-slate-600">
                                     {% if doc.never_expires %}
                                     <span class="text-slate-400 italic">No Expiry</span>
@@ -285,11 +285,11 @@
                                 </td>
                                 <td class="px-4 py-3 text-right text-sm">
                                     <div class="flex justify-end space-x-2">
-                                        {% if doc.scanned_copy %}
-                                        <a href="{% url 'document-view' doc.pk %}" target="_blank" class="text-slate-400 hover:text-emerald-600" title="View Scanned Copy">
+                                        {% for doc_file in doc.files.all %}
+                                        <a href="{% url 'document-view' doc_file.pk %}" target="_blank" class="text-slate-400 hover:text-emerald-600" title="View Scanned Copy">
                                             <i class="fa-solid fa-file-lines"></i>
                                         </a>
-                                        {% endif %}
+                                        {% endfor %}
                                         <a href="{% url 'document-update' doc.pk %}" class="text-slate-400 hover:text-blue-600" title="Edit">
                                             <i class="fa-solid fa-pen-to-square"></i>
                                         </a>

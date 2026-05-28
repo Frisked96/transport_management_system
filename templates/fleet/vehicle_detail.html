@@ -178,13 +178,13 @@
                     {% for doc in vehicle.documents.all %}
                     <div class="p-3 rounded-lg border border-slate-100 bg-slate-50/50 flex justify-between items-center group">
                         <div class="min-w-0">
-                            <p class="text-xs font-bold text-slate-800 truncate uppercase">{{ doc.document_type }}</p>
+                            <p class="text-xs font-bold text-slate-800 truncate uppercase">{{ doc.document_name }}</p>
                             <p class="text-[10px] text-slate-400 font-bold uppercase tracking-tight">Exp: {{ doc.expiry_date|date:"d M Y"|default:"N/A" }}</p>
                         </div>
                         <div class="flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            {% if doc.scanned_copy %}
-                            <a href="{% url 'document-view' doc.pk %}" target="_blank" class="text-slate-400 hover:text-emerald-600"><i class="fa-regular fa-eye text-xs"></i></a>
-                            {% endif %}
+                            {% for doc_file in doc.files.all %}
+                            <a href="{% url 'document-view' doc_file.pk %}" target="_blank" class="text-slate-400 hover:text-emerald-600"><i class="fa-regular fa-eye text-xs"></i></a>
+                            {% endfor %}
                             <a href="{% url 'document-update' doc.pk %}" class="text-slate-400 hover:text-amber-600"><i class="fa-regular fa-pen-to-square text-xs"></i></a>
                         </div>
                     </div>

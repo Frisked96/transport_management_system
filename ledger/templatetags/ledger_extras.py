@@ -6,6 +6,16 @@ from decimal import Decimal
 
 register = template.Library()
 
+import os
+
+@register.filter
+def filename(value):
+    """
+    Returns the base name of a file path.
+    Usage: {{ file.name|filename }}
+    """
+    return os.path.basename(value)
+
 @register.filter(name='has_group')
 def has_group(user, group_name):
     """

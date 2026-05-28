@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load ledger_extras %}
 
 {% block title %}{% if object %}Edit{% else %}Add{% endif %} Document - Transport Management System{% endblock %}
 
@@ -44,6 +45,59 @@
             </div>
         {% endfor %}
 
+        <div class="pt-6 border-t border-slate-200">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-bold text-slate-800 uppercase tracking-tight">Scanned Files</h3>
+                <button type="button" id="add-file-btn" class="inline-flex items-center px-3 py-1 bg-slate-100 text-slate-700 rounded-md text-sm font-semibold hover:bg-slate-200 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
+                    </svg>
+                    Add Another File
+                </button>
+            </div>
+            
+            {{ files_formset.management_form }}
+            <div id="file-forms-container" class="space-y-4">
+                {% for file_form in files_formset %}
+                    <div class="file-form-row p-4 bg-slate-50 rounded-lg border border-slate-200 relative group">
+                        {{ file_form.id }}
+                        <div class="grid grid-cols-1 gap-4">
+                            <div>
+                                <label class="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-widest">Select File (PDF, Image)</label>
+                                {{ file_form.file }}
+                                {% if file_form.file.errors %}
+                                    <p class="mt-1 text-xs text-red-600">{{ file_form.file.errors.0 }}</p>
+                                {% endif %}
+                            </div>
+                            
+                            {% if file_form.instance.pk %}
+                                <div class="flex items-center justify-between text-sm pt-2">
+                                    <span class="text-slate-600 truncate max-w-[200px]">Current: {{ file_form.instance.file.name|filename }}</span>
+                                    {% if files_formset.can_delete %}
+                                        <div class="flex items-center space-x-2">
+                                            {{ file_form.DELETE }}
+                                            <label for="{{ file_form.DELETE.id_for_label }}" class="text-xs text-red-600 font-bold uppercase cursor-pointer">Delete</label>
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+            
+            <script type="text/html" id="file-form-template">
+                <div class="file-form-row p-4 bg-slate-50 rounded-lg border border-slate-200 relative group animate-fade-in">
+                    <div class="grid grid-cols-1 gap-4">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-widest">Select File (PDF, Image)</label>
+                            <input type="file" name="files-__prefix__-file" class="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100" id="id_files-__prefix__-file">
+                        </div>
+                    </div>
+                </div>
+            </script>
+        </div>
+
         <div class="flex items-center space-x-3 pt-4 border-t border-slate-100">
             <button type="submit" class="px-6 py-2 bg-emerald-600 text-white rounded-md font-medium hover:bg-emerald-700 shadow-sm transition-colors">
                 {% if object %}Update Document{% else %}Add Document{% endif %}
@@ -77,6 +131,38 @@
             neverExpiresCheckbox.addEventListener('change', toggleExpiryDate);
             toggleExpiryDate(); // Initial state
         }
+
+        // Formset dynamic adding
+        const addFileBtn = document.getElementById('add-file-btn');
+        const fileFormsContainer = document.getElementById('file-forms-container');
+        const totalFormsInput = document.getElementById('id_files-TOTAL_FORMS');
+        const formTemplate = document.getElementById('file-form-template').innerHTML;
+
+        if (addFileBtn && fileFormsContainer && totalFormsInput) {
+            addFileBtn.addEventListener('click', function() {
+                const currentFormCount = parseInt(totalFormsInput.value);
+                const newFormHtml = formTemplate.replace(/__prefix__/g, currentFormCount);
+                
+                // Create a temporary element to hold the new form
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = newFormHtml;
+                
+                // Append the new form to the container
+                fileFormsContainer.appendChild(tempDiv.firstElementChild);
+                
+                // Update the total forms count
+                totalFormsInput.value = currentFormCount + 1;
+            });
+        }
     });
 </script>
+<style>
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(-10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fade-in {
+        animation: fadeIn 0.3s ease-out forwards;
+    }
+</style>
 {% endblock %}

@@ -13,6 +13,9 @@ class GoogleDriveOAuth2Storage(GoogleDriveStorage):
     An optimized bridge to allow django-googledrive-storage to use OAuth2.
     Optimized for speed by adjusting chunk sizes and upload methods.
     """
+    # Simple in-memory cache for folder IDs to avoid redundant API calls
+    _folder_id_cache = {}
+
     def __init__(self, **kwargs):
         self._permissions = kwargs.get('permissions', None)
         if self._permissions is None:
@@ -96,7 +99,12 @@ class GoogleDriveOAuth2Storage(GoogleDriveStorage):
     def _get_or_create_folder(self, name, parent_id=None):
         """
         Helper to find or create a folder in Google Drive.
+        Uses in-memory cache to avoid redundant calls.
         """
+        cache_key = f"{name}_{parent_id}"
+        if cache_key in self._folder_id_cache:
+            return self._folder_id_cache[cache_key]
+
         query = f"name = '{name}' and mimeType = 'application/vnd.google-apps.folder'"
         if parent_id:
             query += f" and '{parent_id}' in parents"
@@ -105,18 +113,21 @@ class GoogleDriveOAuth2Storage(GoogleDriveStorage):
         files = results.get('files', [])
         
         if files:
-            return files[0].get('id')
+            folder_id = files[0].get('id')
+        else:
+            # Create folder if it doesn't exist
+            metadata = {
+                'name': name,
+                'mimeType': 'application/vnd.google-apps.folder'
+            }
+            if parent_id:
+                metadata['parents'] = [parent_id]
+                
+            folder = self._drive_service.files().create(body=metadata, fields='id').execute()
+            folder_id = folder.get('id')
         
-        # Create folder if it doesn't exist
-        metadata = {
-            'name': name,
-            'mimeType': 'application/vnd.google-apps.folder'
-        }
-        if parent_id:
-            metadata['parents'] = [parent_id]
-            
-        folder = self._drive_service.files().create(body=metadata, fields='id').execute()
-        return folder.get('id')
+        self._folder_id_cache[cache_key] = folder_id
+        return folder_id
 
     def _save(self, name, content):
         """
