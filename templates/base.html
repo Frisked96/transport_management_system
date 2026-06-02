@@ -229,7 +229,10 @@
                             <i class="fa-solid fa-caret-down text-xs ml-1"></i>
                         </button>
                         <div class="absolute right-0 mt-1 w-48 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5 hidden dropdown-menu">
-                            {% if user.is_authenticated and request.user.is_superuser or request.user.groups.all.0.name == 'manager' %}
+                            <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'user-profile' %}">
+                                <i class="fa-solid fa-user-circle mr-2"></i>My Profile
+                            </a>
+                            {% if user.is_authenticated and request.user.is_superuser or perms.trips.can_view_manager_dashboard %}
                             <a class="block px-4 py-2 text-sm text-emerald-600 font-bold hover:bg-emerald-50" href="{% url 'global-resync' %}">
                                 <i class="fa-solid fa-sync-alt mr-2"></i>Resync Balances
                             </a>

@@ -6,6 +6,41 @@ from django.urls import reverse_lazy
 from django.contrib import messages
 from .forms import UserForm, UserCreateForm, AdminPasswordChangeForm
 
+from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
+from django.views.generic import ListView, CreateView, UpdateView, DeleteView, FormView, DetailView
+
+from django.core.cache import cache
+
+class UserProfileView(LoginRequiredMixin, DetailView):
+    model = User
+    template_name = 'accounts/user_profile.html'
+    context_object_name = 'profile_user'
+
+    def get_object(self):
+        pk = self.kwargs.get('pk')
+        if pk and self.request.user.is_superuser:
+            return get_object_or_404(User, pk=pk)
+        return self.request.user
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        user = self.get_object()
+        
+        # Last Online Logic
+        last_seen = cache.get(f'last-seen-{user.id}')
+        context['last_online'] = last_seen
+        
+        # Fetch recent actions from different apps
+        from trips.models import Trip
+        from ledger.models import Bill
+        from drivers.models import DriverTransaction
+        
+        context['recent_trips'] = Trip.objects.filter(created_by=user).order_by('-created_at')[:5]
+        context['recent_bills'] = Bill.objects.filter(created_by=user).order_by('-created_at')[:5]
+        context['recent_driver_tx'] = DriverTransaction.objects.filter(created_by=user).order_by('-created_at')[:5]
+        
+        return context
+
 class SuperuserRequiredMixin(UserPassesTestMixin):
     def test_func(self):
         return self.request.user.is_superuser

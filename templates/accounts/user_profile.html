@@ -1,0 +1,146 @@
+{% extends 'base.html' %}
+
+{% block title %}My Profile - TMS{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <div class="mb-6 flex justify-between items-center">
+        <div>
+            <h1 class="text-2xl font-bold text-slate-800">
+                {% if profile_user == request.user %}My Profile{% else %}User Profile: {{ profile_user.username }}{% endif %}
+            </h1>
+            <p class="text-sm text-slate-600">View account details and recent activity.</p>
+        </div>
+        {% if request.user.is_superuser %}
+        <a href="{% url 'user-list' %}" class="inline-flex items-center px-3 py-2 border border-slate-300 rounded-md shadow-sm text-sm font-medium text-slate-700 bg-white hover:bg-slate-50">
+            <i class="fa-solid fa-arrow-left mr-2"></i> User Management
+        </a>
+        {% endif %}
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <!-- Account Info -->
+        <div class="md:col-span-1 space-y-6">
+            <div class="bg-white shadow rounded-lg border border-slate-200 p-6 text-center">
+                <div class="relative inline-block mb-4">
+                    <div class="inline-flex items-center justify-center w-20 h-20 rounded-full bg-emerald-100 text-emerald-600">
+                        <i class="fa-solid fa-user text-4xl"></i>
+                    </div>
+                    {% if last_online %}
+                    <span class="absolute bottom-0 right-0 block h-5 w-5 rounded-full bg-green-500 border-4 border-white" title="Online Now"></span>
+                    {% endif %}
+                </div>
+                <h2 class="text-xl font-bold text-slate-900">{{ profile_user.username }}</h2>
+                <p class="text-sm text-slate-500 mb-4">{{ profile_user.get_full_name|default:"No Name Set" }}</p>
+                <div class="text-xs font-semibold uppercase tracking-wider text-slate-400 border-t border-slate-100 pt-4 mb-2">Role</div>
+                <div class="flex flex-wrap justify-center gap-1">
+                    {% if profile_user.is_superuser %}
+                    <span class="px-2 py-1 rounded bg-purple-100 text-purple-700 text-xs font-bold">SUPERUSER</span>
+                    {% endif %}
+                    {% for group in profile_user.groups.all %}
+                    <span class="px-2 py-1 rounded bg-slate-100 text-slate-700 text-xs font-bold uppercase">{{ group.name }}</span>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="bg-white shadow rounded-lg border border-slate-200 p-6">
+                <h3 class="text-sm font-bold text-slate-900 uppercase tracking-widest mb-4 border-b border-slate-100 pb-2">Session Info</h3>
+                <div class="space-y-3">
+                    <div>
+                        <p class="text-[10px] text-slate-400 uppercase font-bold">Last Online</p>
+                        {% if last_online %}
+                        <p class="text-sm text-green-600 font-bold flex items-center">
+                            <span class="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></span>
+                            Online Now
+                        </p>
+                        {% else %}
+                        <p class="text-sm text-slate-700 italic">Offline</p>
+                        {% endif %}
+                    </div>
+                    <div>
+                        <p class="text-[10px] text-slate-400 uppercase font-bold">Last Login</p>
+                        <p class="text-sm text-slate-700">{{ profile_user.last_login|date:"D, d M Y" }} <span class="text-slate-400">at</span> {{ profile_user.last_login|time:"H:i" }}</p>
+                    </div>
+                    <div>
+                        <p class="text-[10px] text-slate-400 uppercase font-bold">Member Since</p>
+                        <p class="text-sm text-slate-700">{{ profile_user.date_joined|date:"M Y" }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Activity -->
+        <div class="md:col-span-2 space-y-6">
+            <div class="bg-white shadow rounded-lg border border-slate-200 overflow-hidden">
+                <div class="px-6 py-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+                    <h3 class="text-sm font-bold text-slate-900 uppercase tracking-widest">Recent Activity</h3>
+                    <i class="fa-solid fa-clock-rotate-left text-slate-400"></i>
+                </div>
+                
+                <div class="divide-y divide-slate-100">
+                    {% if not recent_trips and not recent_bills and not recent_driver_tx %}
+                    <div class="p-8 text-center text-slate-500 italic">
+                        No recent activity recorded.
+                    </div>
+                    {% endif %}
+
+                    {% for trip in recent_trips %}
+                    <div class="p-4 hover:bg-slate-50 transition-colors flex items-start">
+                        <div class="w-8 h-8 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mr-3 mt-1">
+                            <i class="fa-solid fa-truck text-xs"></i>
+                        </div>
+                        <div class="flex-grow">
+                            <div class="flex justify-between">
+                                <p class="text-sm font-semibold text-slate-900">Created Trip #{{ trip.trip_number }}</p>
+                                <span class="text-[10px] text-slate-400">{{ trip.created_at|timesince }} ago</span>
+                            </div>
+                            <p class="text-xs text-slate-500">{{ trip.pickup_location }} to {{ trip.delivery_location }}</p>
+                        </div>
+                        <a href="{% url 'trip-detail' trip.pk %}" class="ml-4 text-slate-400 hover:text-emerald-600">
+                            <i class="fa-solid fa-chevron-right text-sm"></i>
+                        </a>
+                    </div>
+                    {% endfor %}
+
+                    {% for bill in recent_bills %}
+                    <div class="p-4 hover:bg-slate-50 transition-colors flex items-start">
+                        <div class="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center mr-3 mt-1">
+                            <i class="fa-solid fa-file-invoice-dollar text-xs"></i>
+                        </div>
+                        <div class="flex-grow">
+                            <div class="flex justify-between">
+                                <p class="text-sm font-semibold text-slate-900">Generated Invoice #{{ bill.bill_number }}</p>
+                                <span class="text-[10px] text-slate-400">{{ bill.created_at|timesince }} ago</span>
+                            </div>
+                            <p class="text-xs text-slate-500">Party: {{ bill.party.name }} | Amount: {{ bill.total_amount }}</p>
+                        </div>
+                        <a href="{% url 'bill-detail' bill.pk %}" class="ml-4 text-slate-400 hover:text-blue-600">
+                            <i class="fa-solid fa-chevron-right text-sm"></i>
+                        </a>
+                    </div>
+                    {% endfor %}
+
+                    {% for tx in recent_driver_tx %}
+                    <div class="p-4 hover:bg-slate-50 transition-colors flex items-start">
+                        <div class="w-8 h-8 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center mr-3 mt-1">
+                            <i class="fa-solid fa-money-bill-transfer text-xs"></i>
+                        </div>
+                        <div class="flex-grow">
+                            <div class="flex justify-between">
+                                <p class="text-sm font-semibold text-slate-900">Driver Transaction: {{ tx.get_transaction_type_display }}</p>
+                                <span class="text-[10px] text-slate-400">{{ tx.created_at|timesince }} ago</span>
+                            </div>
+                            <p class="text-xs text-slate-500">Driver: {{ tx.driver.user.get_full_name|default:tx.driver.user.username }} | Amount: {{ tx.amount }}</p>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                
+                <div class="bg-slate-50 px-6 py-3 border-t border-slate-100 text-center">
+                    <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Showing last 5 items of each category</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
