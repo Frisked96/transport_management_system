@@ -18,4 +18,7 @@ urlpatterns = [
     
     # Proxy for viewing/downloading documents to avoid slow page loads
     path('<int:pk>/view/', views.document_download_proxy, name='document-view'),
+    
+    # API for background upload tracking
+    path('api/upload-status/', views.get_upload_status, name='upload-status-api'),
 ]

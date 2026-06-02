@@ -125,7 +125,9 @@ class DocumentListView(LoginRequiredMixin, ListView):
             
         return context
 
-from concurrent.futures import ThreadPoolExecutor
+import os
+from .services import process_uploads_background
+from django.conf import settings
 
 class DocumentCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
     model = Document
@@ -170,23 +172,36 @@ class DocumentCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView
             form.instance.added_by = self.request.user
             self.object = form.save()
             
-            # Save formset with parallel indexing/upload assignment
-            files = files_formset.save(commit=False)
-            base_index = 0
+            # Handle files manually to save locally first
+            upload_dir = os.path.join(settings.BASE_DIR, 'tmp', 'uploads')
+            os.makedirs(upload_dir, exist_ok=True)
             
-            def save_file(i, file_instance):
-                file_instance.document = self.object
-                file_instance._upload_index = base_index + i + 1
-                file_instance.save()
-
-            # Execute GDrive uploads in parallel
-            with ThreadPoolExecutor(max_workers=5) as executor:
-                executor.map(lambda x: save_file(*x), enumerate(files))
+            new_doc_file_ids = []
             
-            for obj in files_formset.deleted_objects:
-                obj.delete()
+            # Formsets use indexed names for files
+            for i in range(int(self.request.POST.get('files-TOTAL_FORMS', 0))):
+                file_key = f'files-{i}-file'
+                uploaded_file = self.request.FILES.get(file_key)
+                
+                if uploaded_file:
+                    # Save to local temp storage
+                    local_path = os.path.join(upload_dir, f"{self.object.pk}_{i}_{uploaded_file.name}")
+                    with open(local_path, 'wb+') as destination:
+                        for chunk in uploaded_file.chunks():
+                            destination.write(chunk)
+                    
+                    # Create record with local path
+                    doc_file = DocumentFile.objects.create(
+                        document=self.object,
+                        local_tmp_path=local_path,
+                        upload_status='pending'
+                    )
+                    new_doc_file_ids.append(doc_file.pk)
+            
+            if new_doc_file_ids:
+                process_uploads_background(new_doc_file_ids)
 
-            messages.success(self.request, 'Document added successfully!')
+            messages.success(self.request, 'Document details saved. Files are being uploaded to Google Drive in the background.')
             return redirect(self.get_success_url())
         else:
             return self.render_to_response(self.get_context_data(form=form))
@@ -226,27 +241,42 @@ class DocumentUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView
         if files_formset.is_valid():
             self.object = form.save()
             
-            # Handle indexing for new files
-            existing_count = self.object.files.count()
+            # Handle new files from formset
+            upload_dir = os.path.join(settings.BASE_DIR, 'tmp', 'uploads')
+            os.makedirs(upload_dir, exist_ok=True)
             
-            # Save formset with parallel indexing/upload assignment
-            new_files = files_formset.save(commit=False)
+            new_doc_file_ids = []
             
-            def save_file(i, file_instance):
-                if not file_instance.pk: # It's a new file
-                    # Continue indexing from existing
-                    file_instance._upload_index = existing_count + i + 1
-                file_instance.document = self.object
-                file_instance.save()
+            # Check for both existing updates and new additions in formset
+            for i in range(int(self.request.POST.get('files-TOTAL_FORMS', 0))):
+                file_key = f'files-{i}-file'
+                uploaded_file = self.request.FILES.get(file_key)
+                
+                # Only handle NEW files here for background processing
+                # Existing files being deleted are handled by files_formset.save()
+                if uploaded_file:
+                    local_path = os.path.join(upload_dir, f"{self.object.pk}_{i}_{uploaded_file.name}")
+                    with open(local_path, 'wb+') as destination:
+                        for chunk in uploaded_file.chunks():
+                            destination.write(chunk)
+                    
+                    doc_file = DocumentFile.objects.create(
+                        document=self.object,
+                        local_tmp_path=local_path,
+                        upload_status='pending'
+                    )
+                    new_doc_file_ids.append(doc_file.pk)
 
-            # Execute GDrive uploads in parallel
-            with ThreadPoolExecutor(max_workers=5) as executor:
-                executor.map(lambda x: save_file(*x), enumerate(new_files))
+            if new_doc_file_ids:
+                process_uploads_background(new_doc_file_ids)
             
+            # Process deletions manually to avoid formset saving new files synchronously
+            # The .save(commit=False) call populates .deleted_objects
+            files_formset.save(commit=False)
             for obj in files_formset.deleted_objects:
                 obj.delete()
 
-            messages.success(self.request, 'Document updated successfully!')
+            messages.success(self.request, 'Document updated. New files are being uploaded in the background.')
             return redirect(self.get_success_url())
         else:
             return self.render_to_response(self.get_context_data(form=form))
@@ -275,6 +305,29 @@ class DocumentDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponseRedirect
 from .models import DocumentFile
+
+from django.http import JsonResponse
+
+@login_required
+def get_upload_status(request):
+    """
+    Returns counts of active and recently completed background uploads.
+    """
+    # Active = Pending or Uploading
+    active_count = DocumentFile.objects.filter(upload_status__in=['pending', 'uploading']).count()
+    
+    # Recent completed (last 10 minutes)
+    recent_time = timezone.now() - timedelta(minutes=10)
+    completed_count = DocumentFile.objects.filter(upload_status='completed', created_at__gte=recent_time).count()
+    
+    # Any failed uploads
+    failed_count = DocumentFile.objects.filter(upload_status='failed').count()
+    
+    return JsonResponse({
+        'active': active_count,
+        'completed': completed_count,
+        'failed': failed_count
+    })
 
 @login_required
 def document_download_proxy(request, pk):

@@ -60,32 +60,28 @@ class BaseTripPermissionMixin:
     """Base mixin for trip permissions"""
     
     def has_manager_permission(self):
-        """Check if user is in manager group"""
-        return self.request.user.groups.filter(name='manager').exists()
+        """Check if user has manager dashboard permission"""
+        return self.request.user.has_perm('trips.can_view_manager_dashboard')
     
     def has_supervisor_permission(self):
-        """Check if user is in supervisor group"""
-        return self.request.user.groups.filter(name='supervisor').exists()
+        """Check if user has view all trips permission"""
+        return self.request.user.has_perm('trips.can_view_all_trips')
     
-    def has_driver_permission(self):
-        """Check if user is in driver group"""
-        return self.request.user.groups.filter(name='driver').exists()
+    def has_driver_profile(self):
+        """Check if user has an associated driver profile"""
+        return hasattr(self.request.user, 'driver_profile')
     
     def get_queryset_for_user(self):
         """Filter trips based on user permissions"""
         user = self.request.user
         
-        # Admin can see all trips
-        if user.is_superuser:
-            return Trip.objects.all()
-        
-        # Manager and supervisor can see all trips
-        if self.has_manager_permission() or self.has_supervisor_permission():
+        # Admin or user with explicit permission can see all trips
+        if user.is_superuser or user.has_perm('trips.can_view_all_trips'):
             return Trip.objects.all()
         
         # Driver can only see their own trips
-        if self.has_driver_permission():
-            return Trip.objects.filter(driver=user)
+        if hasattr(user, 'driver_profile'):
+            return Trip.objects.filter(driver=user.driver_profile)
         
         # Default: no trips
         return Trip.objects.none()
@@ -428,7 +424,7 @@ def manager_dashboard(request):
     Manager dashboard - optimized with SQL-level aggregations
     """
     if not (request.user.is_superuser or 
-            request.user.groups.filter(name='manager').exists()):
+            request.user.has_perm('trips.can_view_manager_dashboard')):
         messages.error(request, 'Access denied. Manager dashboard is only for managers.')
         return redirect('trip-list')
     

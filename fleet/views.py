@@ -19,16 +19,17 @@ class BaseFleetPermissionMixin:
     """Base mixin for fleet permissions"""
     
     def has_manager_permission(self):
-        """Check if user is in manager group"""
-        return self.request.user.groups.filter(name='manager').exists()
+        """Check if user has manager dashboard permission"""
+        return self.request.user.has_perm('trips.can_view_manager_dashboard')
     
     def has_supervisor_permission(self):
-        """Check if user is in supervisor group"""
-        return self.request.user.groups.filter(name='supervisor').exists()
+        """Check if user has supervisor access (can view all vehicles/maintenance)"""
+        # Supervisors generally have change permissions but not necessarily delete
+        return self.request.user.has_perm('fleet.change_vehicle')
     
-    def has_driver_permission(self):
-        """Check if user is in driver group"""
-        return self.request.user.groups.filter(name='driver').exists()
+    def has_driver_profile(self):
+        """Check if user has an associated driver profile"""
+        return hasattr(self.request.user, 'driver_profile')
 
 
 class TyreListView(LoginRequiredMixin, ListView):

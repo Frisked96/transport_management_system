@@ -145,6 +145,13 @@ class DocumentFile(models.Model):
     """
     Model to support multiple files for a single document
     """
+    UPLOAD_STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('uploading', 'Uploading'),
+        ('completed', 'Completed'),
+        ('failed', 'Failed'),
+    ]
+
     document = models.ForeignKey(
         Document,
         on_delete=models.CASCADE,
@@ -153,8 +160,31 @@ class DocumentFile(models.Model):
     )
     file = models.FileField(
         upload_to=document_file_upload_path,
-        verbose_name='File'
+        verbose_name='File',
+        null=True,
+        blank=True
     )
+    
+    upload_status = models.CharField(
+        max_length=20,
+        choices=UPLOAD_STATUS_CHOICES,
+        default='pending',
+        verbose_name='Upload Status'
+    )
+    
+    local_tmp_path = models.CharField(
+        max_length=500,
+        null=True,
+        blank=True,
+        verbose_name='Local Temp Path'
+    )
+    
+    error_message = models.TextField(
+        null=True,
+        blank=True,
+        verbose_name='Error Message'
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -163,7 +193,7 @@ class DocumentFile(models.Model):
         ordering = ['created_at']
 
     def __str__(self):
-        return f"File for {self.document.document_name}"
+        return f"File for {self.document.document_name} ({self.get_upload_status_display()})"
 
 
 # --- Signals ---

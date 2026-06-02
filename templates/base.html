@@ -85,6 +85,22 @@
     {% block extra_css %}{% endblock %}
 </head>
 <body class="text-slate-800 flex flex-col min-h-screen">
+<!-- BEGIN: Background Upload Notification Bar -->
+<div id="upload-status-bar" class="fixed top-0 left-0 w-full z-[100] transform -translate-y-full transition-transform duration-500 ease-in-out">
+    <div class="bg-emerald-600 text-white px-4 py-2 shadow-lg flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+            <div id="upload-spinner" class="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+            <span id="upload-status-text" class="text-sm font-bold uppercase tracking-wider">Uploading files to Google Drive...</span>
+        </div>
+        <div class="flex items-center space-x-4">
+            <span id="upload-stats" class="text-xs font-medium bg-emerald-700 px-2 py-0.5 rounded-full"></span>
+            <button onclick="document.getElementById('upload-status-bar').classList.add('-translate-y-full')" class="text-white hover:text-emerald-200">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+    </div>
+</div>
+<!-- END: Background Upload Notification Bar -->
 <!-- BEGIN: Top Navigation -->
 <nav class="bg-slate-800 text-white shadow-md relative z-50">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -111,7 +127,7 @@
                         </div>
                     </div>
                     
-                    {% if user.is_superuser or user.groups.all.0.name == 'manager' %}
+                    {% if user.is_superuser or perms.trips.can_view_manager_dashboard %}
                     <a class="px-3 py-2 rounded-md {% if request.resolver_match.url_name == 'manager-dashboard' %}bg-slate-900 text-white{% else %}text-slate-300 hover:bg-slate-700 hover:text-white{% endif %}" href="{% url 'manager-dashboard' %}">
                         <i class="fa-solid fa-gauge mr-2"></i>Dashboard
                     </a>
@@ -120,7 +136,7 @@
                     </a>
                     {% endif %}
 
-                    {% if user.is_superuser or user.groups.all.0.name == 'manager' or user.groups.all.0.name == 'supervisor' %}
+                    {% if user.is_superuser or perms.ledger.can_view_financial_records %}
                     <div class="relative dropdown-container">
                         <button class="flex items-center space-x-2 px-3 py-2 rounded-md text-slate-300 hover:bg-slate-700 hover:text-white focus:outline-none dropdown-toggle">
                             <i class="fa-solid fa-wallet"></i><span>Finance</span><i class="fa-solid fa-chevron-down text-xs ml-1"></i>
@@ -298,11 +314,12 @@
                 <p class="px-3 py-1 text-xs font-bold text-slate-500 uppercase tracking-widest">Fleet</p>
                 <a class="block px-3 py-2 rounded-md text-base font-medium text-slate-300 hover:bg-slate-700 hover:text-white" href="{% url 'route-list' %}">Routes</a>
                 <a class="block px-3 py-2 rounded-md text-base font-medium text-slate-300 hover:bg-slate-700 hover:text-white" href="{% url 'vehicle-list' %}">Vehicles</a>
+                <a class="block px-3 py-2 rounded-md text-base font-medium text-slate-300 hover:bg-slate-700 hover:text-white" href="{% url 'document-list' %}">Documents</a>
                 <a class="block px-3 py-2 rounded-md text-base font-medium text-slate-300 hover:bg-slate-700 hover:text-white" href="{% url 'maintenance-list' %}">Maintenance</a>
                 <a class="block px-3 py-2 rounded-md text-base font-medium text-slate-300 hover:bg-slate-700 hover:text-white" href="{% url 'tyre-list' %}">Tyre Inventory</a>
             </div>
             
-            {% if user.is_superuser or user.groups.all.0.name == 'manager' %}
+            {% if user.is_superuser or perms.trips.can_view_manager_dashboard %}
             <a class="block px-3 py-2 rounded-md text-base font-medium {% if request.resolver_match.url_name == 'manager-dashboard' %}bg-slate-900 text-white{% else %}text-slate-300 hover:bg-slate-700 hover:text-white{% endif %}" href="{% url 'manager-dashboard' %}">
                 <i class="fa-solid fa-gauge mr-2 w-5"></i>Dashboard
             </a>
@@ -311,14 +328,14 @@
             </a>
             {% endif %}
 
-            {% if user.is_superuser or user.groups.all.0.name == 'manager' or user.groups.all.0.name == 'supervisor' %}
+            {% if user.is_superuser or perms.ledger.can_view_financial_records %}
             <!-- Finance Mobile -->
             <div class="space-y-1 pl-4 border-l border-slate-700 mt-2">
                 <p class="px-3 py-1 text-xs font-bold text-slate-500 uppercase tracking-widest">Finance</p>
                 <a class="block px-3 py-2 rounded-md text-base font-medium text-slate-300 hover:bg-slate-700 hover:text-white" href="{% url 'bill-list' %}">Invoices</a>
                 <a class="block px-3 py-2 rounded-md text-base font-medium text-slate-300 hover:bg-slate-700 hover:text-white" href="{% url 'financialrecord-list' %}">Ledger</a>
                 <a class="block px-3 py-2 rounded-md text-base font-medium text-slate-300 hover:bg-slate-700 hover:text-white" href="{% url 'party-list' %}">Parties</a>
-                <a class="block px-3 py-2 rounded-md text-base font-medium text-slate-300 hover:bg-slate-700 hover:text-white" href="{% url 'account-list' %}">Accounts</a>
+                <a class="block px-3 py-2 rounded-md text-base font-medium text-slate-300 hover:bg-slate-700 hover:text-white" href="{% url 'account-list' %}">Company Accounts</a>
                 <a class="block px-3 py-2 rounded-md text-base font-medium text-slate-300 hover:bg-slate-700 hover:text-white" href="{% url 'financial-summary' %}">Reports</a>
             </div>
             {% endif %}
@@ -333,7 +350,11 @@
                     </div>
                 </div>
                 <div class="mt-3 px-2 space-y-1">
+                    {% if user.is_authenticated and request.user.is_superuser or perms.trips.can_view_manager_dashboard %}
+                    <a href="{% url 'global-resync' %}" class="block px-3 py-2 rounded-md text-base font-medium text-emerald-400 hover:text-white hover:bg-slate-700">Resync Balances</a>
+                    {% endif %}
                     {% if user.is_superuser %}
+                    <a href="{% url 'user-list' %}" class="block px-3 py-2 rounded-md text-base font-medium text-slate-400 hover:text-white hover:bg-slate-700">User Management</a>
                     <a href="/admin/" class="block px-3 py-2 rounded-md text-base font-medium text-slate-400 hover:text-white hover:bg-slate-700">Django Admin</a>
                     {% endif %}
                     <form method="post" action="{% url 'logout' %}" class="block">
@@ -445,6 +466,56 @@
         function getCachedData() {
             return JSON.parse(localStorage.getItem(CACHE_KEY) || '{}');
         }
+
+        // --- Background Upload Polling ---
+        let uploadPollingInterval;
+        let lastActiveCount = 0;
+
+        function checkUploadStatus() {
+            {% if user.is_authenticated %}
+            $.getJSON('{% url "upload-status-api" %}', function(data) {
+                const $bar = $('#upload-status-bar');
+                const $text = $('#upload-status-text');
+                const $spinner = $('#upload-spinner');
+                const $stats = $('#upload-stats');
+
+                if (data.active > 0) {
+                    // Active uploads
+                    $bar.removeClass('-translate-y-full').addClass('translate-y-0');
+                    $bar.find('> div').removeClass('bg-red-600 bg-blue-600').addClass('bg-emerald-600');
+                    $text.text(`Uploading ${data.active} files to Google Drive...`);
+                    $spinner.show();
+                    $stats.text(`${data.active} queued`);
+                    lastActiveCount = data.active;
+                } else if (lastActiveCount > 0 && data.active === 0) {
+                    // Just finished
+                    $bar.find('> div').removeClass('bg-emerald-600').addClass('bg-blue-600');
+                    $text.text('All uploads completed successfully!');
+                    $spinner.hide();
+                    $stats.text('Done');
+                    
+                    // Hide after 5 seconds
+                    setTimeout(() => {
+                        $bar.removeClass('translate-y-0').addClass('-translate-y-full');
+                        lastActiveCount = 0;
+                    }, 5000);
+                } else if (data.failed > 0) {
+                     // Failed uploads (only if not active)
+                    $bar.removeClass('-translate-y-full').addClass('translate-y-0');
+                    $bar.find('> div').removeClass('bg-emerald-600 bg-blue-600').addClass('bg-red-600');
+                    $text.text(`${data.failed} upload(s) failed. Check Document Logs.`);
+                    $spinner.hide();
+                    $stats.text('Error');
+                }
+            });
+            {% endif %}
+        }
+
+        // Start polling if user is logged in
+        {% if user.is_authenticated %}
+        uploadPollingInterval = setInterval(checkUploadStatus, 3000); // Every 3 seconds
+        $(document).ready(checkUploadStatus); // Initial check
+        {% endif %}
 
         // Universal Fix: Disable scroll from changing numeric input values
         $(document).on('wheel', 'input[type=number]', function(e) {
