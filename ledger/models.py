@@ -728,7 +728,7 @@ class Bill(models.Model):
     bill_type = models.CharField(max_length=10, choices=TYPE_CHOICES, default=TYPE_TRIP, verbose_name="Bill Type")
     issuer = models.ForeignKey(CompanyAccount, on_delete=models.PROTECT, related_name='bills', verbose_name="Issued From", null=True)
     party = models.ForeignKey(Party, on_delete=models.PROTECT, related_name='bills', verbose_name="Bill To")
-    date = models.DateField(verbose_name="Invoice Date")
+    date = models.DateField(verbose_name="Invoice Date", db_index=True)
     
     # Trip-based bills
     trips = models.ManyToManyField(Trip, through='BillTrip', related_name='bills', verbose_name="Included Trips", blank=True)
