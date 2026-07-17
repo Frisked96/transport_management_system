@@ -39,13 +39,13 @@
 
 <!-- BEGIN: Type Tabs -->
 <div class="border-b border-slate-200 mb-8">
-    <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+    <nav class="-mb-px flex space-x-8 overflow-x-auto" aria-label="Tabs">
         <a href="?type=vehicles{% if search_term %}&search={{ search_term }}{% endif %}" 
-           class="{% if doc_type == 'vehicles' %}border-emerald-500 text-emerald-600{% else %}border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300{% endif %} whitespace-nowrap py-4 px-1 border-b-2 font-bold text-sm">
+           class="flex-shrink-0 {% if doc_type == 'vehicles' %}border-emerald-500 text-emerald-600{% else %}border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300{% endif %} whitespace-nowrap py-4 px-1 border-b-2 font-bold text-sm">
             <i class="fa-solid fa-truck mr-2"></i>Vehicle Documents
         </a>
         <a href="?type=drivers{% if search_term %}&search={{ search_term }}{% endif %}" 
-           class="{% if doc_type == 'drivers' %}border-emerald-500 text-emerald-600{% else %}border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300{% endif %} whitespace-nowrap py-4 px-1 border-b-2 font-bold text-sm">
+           class="flex-shrink-0 {% if doc_type == 'drivers' %}border-emerald-500 text-emerald-600{% else %}border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300{% endif %} whitespace-nowrap py-4 px-1 border-b-2 font-bold text-sm">
             <i class="fa-solid fa-users mr-2"></i>Driver Documents
         </a>
     </nav>
@@ -98,7 +98,61 @@
             
             <!-- Hidden Table Content -->
             <div id="vehicle-docs-{{ vehicle.pk }}" class="hidden border-t border-slate-100">
-                <div class="overflow-x-auto">
+                <!-- Mobile Card View -->
+                <div class="md:hidden divide-y divide-slate-100">
+                    {% for doc in vehicle.documents.all %}
+                    <div class="px-4 py-3">
+                        <div class="flex items-start justify-between gap-3">
+                            <div class="min-w-0 flex-1">
+                                <p class="text-sm font-bold text-slate-900 truncate">{{ doc.document_name }}</p>
+                                <p class="text-xs text-slate-500 mt-0.5">{{ doc.document_number|default:"-" }}</p>
+                            </div>
+                            <div class="flex-shrink-0">
+                                {% if doc.never_expires %}
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-800">Permanent</span>
+                                {% elif doc.is_expired %}
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-800">Expired</span>
+                                {% elif doc.days_until_expiry <= 30 %}
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-800">Expiring Soon</span>
+                                {% else %}
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-800">Valid</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="mt-1.5 flex items-center justify-between">
+                            <div>
+                                <p class="text-xs text-slate-500">
+                                    {% if doc.never_expires %}
+                                    <span class="italic text-slate-400">No Expiry</span>
+                                    {% else %}
+                                    Expires: {{ doc.expiry_date|date:"M d, Y" }}
+                                    {% endif %}
+                                </p>
+                                <p class="text-[9px] text-slate-400 font-black uppercase tracking-tighter mt-0.5">
+                                    Added By: {{ doc.added_by.username|default:"System" }} | {{ doc.created_at|date:"M d, H:i" }}
+                                </p>
+                            </div>
+                            <div class="flex items-center space-x-3">
+                                {% for doc_file in doc.files.all %}
+                                <a href="{% url 'document-view' doc_file.pk %}" target="_blank" class="text-slate-400 hover:text-emerald-600 min-h-[44px] min-w-[44px] inline-flex items-center justify-center" title="View Scanned Copy">
+                                    <i class="fa-solid fa-file-lines"></i>
+                                </a>
+                                {% endfor %}
+                                <a href="{% url 'document-update' doc.pk %}" class="text-slate-400 hover:text-blue-600 min-h-[44px] min-w-[44px] inline-flex items-center justify-center" title="Edit">
+                                    <i class="fa-solid fa-pen-to-square"></i>
+                                </a>
+                                <a href="{% url 'document-delete' doc.pk %}" class="text-slate-400 hover:text-rose-600 min-h-[44px] min-w-[44px] inline-flex items-center justify-center" title="Delete">
+                                    <i class="fa-solid fa-trash-can"></i>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="px-4 py-4 text-sm text-slate-500 italic text-center">No documents uploaded for this vehicle.</div>
+                    {% endfor %}
+                </div>
+                <!-- Desktop Table View -->
+                <div class="overflow-x-auto hidden md:block">
                     <table class="w-full text-left border-collapse">
                         <thead class="bg-slate-50">
                             <tr>
@@ -244,7 +298,61 @@
             
             <!-- Hidden Table Content -->
             <div id="driver-docs-{{ driver.pk }}" class="hidden border-t border-slate-100">
-                <div class="overflow-x-auto">
+                <!-- Mobile Card View -->
+                <div class="md:hidden divide-y divide-slate-100">
+                    {% for doc in driver.documents.all %}
+                    <div class="px-4 py-3">
+                        <div class="flex items-start justify-between gap-3">
+                            <div class="min-w-0 flex-1">
+                                <p class="text-sm font-bold text-slate-900 truncate">{{ doc.document_name }}</p>
+                                <p class="text-xs text-slate-500 mt-0.5">{{ doc.document_number|default:"-" }}</p>
+                            </div>
+                            <div class="flex-shrink-0">
+                                {% if doc.never_expires %}
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-800">Permanent</span>
+                                {% elif doc.is_expired %}
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-800">Expired</span>
+                                {% elif doc.days_until_expiry <= 30 %}
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-800">Expiring Soon</span>
+                                {% else %}
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-800">Valid</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="mt-1.5 flex items-center justify-between">
+                            <div>
+                                <p class="text-xs text-slate-500">
+                                    {% if doc.never_expires %}
+                                    <span class="italic text-slate-400">No Expiry</span>
+                                    {% else %}
+                                    Expires: {{ doc.expiry_date|date:"M d, Y" }}
+                                    {% endif %}
+                                </p>
+                                <p class="text-[9px] text-slate-400 font-black uppercase tracking-tighter mt-0.5">
+                                    Added By: {{ doc.added_by.username|default:"System" }} | {{ doc.created_at|date:"M d, H:i" }}
+                                </p>
+                            </div>
+                            <div class="flex items-center space-x-3">
+                                {% for doc_file in doc.files.all %}
+                                <a href="{% url 'document-view' doc_file.pk %}" target="_blank" class="text-slate-400 hover:text-emerald-600 min-h-[44px] min-w-[44px] inline-flex items-center justify-center" title="View Scanned Copy">
+                                    <i class="fa-solid fa-file-lines"></i>
+                                </a>
+                                {% endfor %}
+                                <a href="{% url 'document-update' doc.pk %}" class="text-slate-400 hover:text-blue-600 min-h-[44px] min-w-[44px] inline-flex items-center justify-center" title="Edit">
+                                    <i class="fa-solid fa-pen-to-square"></i>
+                                </a>
+                                <a href="{% url 'document-delete' doc.pk %}" class="text-slate-400 hover:text-rose-600 min-h-[44px] min-w-[44px] inline-flex items-center justify-center" title="Delete">
+                                    <i class="fa-solid fa-trash-can"></i>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="px-4 py-4 text-sm text-slate-500 italic text-center">No documents uploaded for this driver.</div>
+                    {% endfor %}
+                </div>
+                <!-- Desktop Table View -->
+                <div class="overflow-x-auto hidden md:block">
                     <table class="w-full text-left border-collapse">
                         <thead class="bg-slate-50">
                             <tr>

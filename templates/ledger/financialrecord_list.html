@@ -147,7 +147,34 @@
         <!-- BEGIN: Financial Records List -->
         {% if financial_records %}
         <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-            <div class="overflow-x-auto">
+            <!-- Mobile Card List -->
+            <div class="md:hidden divide-y divide-slate-50">
+                {% for record in financial_records %}
+                <a href="{% url 'financialrecord-detail' record.pk %}" class="block px-4 py-3 active:bg-slate-50 transition-colors">
+                    <div class="flex items-start justify-between">
+                        <div class="min-w-0 flex-1">
+                            <div class="flex items-center space-x-2">
+                                <p class="text-sm font-bold text-slate-900">#{{ record.entry_number|default:record.pk }}</p>
+                                <span class="text-[10px] text-slate-400 uppercase">{{ record.date|date:"d M Y" }}</span>
+                            </div>
+                            <p class="text-xs font-bold text-slate-700 truncate mt-1">{{ record.party.name|default:"-" }}</p>
+                            <div class="flex items-center space-x-1 mt-1">
+                                <span class="text-[9px] font-bold px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded uppercase">{{ record.category.name|truncatechars:15 }}</span>
+                                {% if record.is_invoice %}<span class="text-[9px] font-bold px-1.5 py-0.5 bg-blue-100 text-blue-600 rounded uppercase">Inv</span>{% endif %}
+                            </div>
+                        </div>
+                        <div class="text-right ml-4 flex-shrink-0">
+                            <p class="text-sm font-black {% if record.debit_amount %}text-emerald-600{% else %}text-red-600{% endif %}">
+                                ₹{{ record.amount|indian_comma }}
+                            </p>
+                            <p class="text-[9px] font-bold uppercase tracking-tighter text-slate-400">{% if record.debit_amount %}Dr{% else %}Cr{% endif %}</p>
+                        </div>
+                    </div>
+                </a>
+                {% endfor %}
+            </div>
+            <!-- Desktop Table -->
+            <div class="hidden md:block overflow-x-auto">
                 <table class="w-full text-left text-xs">
                     <thead class="bg-slate-50 border-b border-slate-100">
                         <tr>
@@ -221,4 +248,9 @@
         {% endif %}
     </div>
 </div>
+{% if perms.ledger.add_financialrecord %}
+<a href="{% url 'financialrecord-create' %}" class="fixed bottom-24 right-6 z-40 lg:hidden w-14 h-14 bg-emerald-600 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-emerald-700 active:scale-95 transition-all" title="Add Record">
+    <i class="fa-solid fa-plus text-xl"></i>
+</a>
+{% endif %}
 {% endblock %}

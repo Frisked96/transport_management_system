@@ -176,4 +176,10 @@
 </div>
 {% endif %}
 
+{% if perms.ledger.add_financialrecord %}
+<a href="{% url 'party-create' %}" class="fixed bottom-24 right-6 z-40 lg:hidden w-14 h-14 bg-emerald-600 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-emerald-700 active:scale-95 transition-all" title="Add Party">
+    <i class="fa-solid fa-plus text-xl"></i>
+</a>
+{% endif %}
+
 {% endblock %}

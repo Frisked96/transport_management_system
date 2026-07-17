@@ -41,7 +41,44 @@
 </section>
 
 {% if routes %}
-<div class="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+<!-- Mobile card view -->
+<div class="md:hidden space-y-3 pb-20 lg:pb-0">
+    {% for route in routes %}
+    <div class="bg-white border border-slate-200 rounded-lg p-4 active:bg-slate-50 transition-colors">
+        <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center space-x-2 min-w-0">
+                <span class="text-sm font-bold text-slate-900 truncate">{{ route.pickup_location }}</span>
+                <i class="fa-solid fa-arrow-right text-slate-400 text-xs flex-shrink-0"></i>
+                <span class="text-sm font-bold text-slate-900 truncate">{{ route.delivery_location }}</span>
+            </div>
+        </div>
+        <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                    {% if route.route_type == 'local' %}bg-blue-100 text-blue-800{% elif route.route_type == 'intra' %}bg-purple-100 text-purple-800{% else %}bg-slate-100 text-slate-800{% endif %}">
+                    {{ route.get_route_type_display }}
+                </span>
+                <span class="text-sm font-bold text-slate-700">₹ {{ route.default_rate|default:"0.00" }}</span>
+            </div>
+            <div class="flex items-center space-x-4">
+                {% if perms.trips.change_route %}
+                <a href="{% url 'route-update' route.pk %}" class="w-11 h-11 inline-flex items-center justify-center text-indigo-600 hover:text-indigo-900 rounded-full hover:bg-indigo-50 transition-colors" title="Edit Route">
+                    <i class="fa-solid fa-pen-to-square"></i>
+                </a>
+                {% endif %}
+                {% if perms.trips.delete_route %}
+                <a href="{% url 'route-delete' route.pk %}" class="w-11 h-11 inline-flex items-center justify-center text-rose-600 hover:text-rose-900 rounded-full hover:bg-rose-50 transition-colors" title="Delete Route">
+                    <i class="fa-solid fa-trash"></i>
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Desktop table view -->
+<div class="hidden md:block bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
     <div class="overflow-x-auto">
         <table class="min-w-full divide-y divide-slate-200">
             <thead class="bg-slate-50">
@@ -135,5 +172,10 @@
         {% endif %}
     </div>
 </nav>
+{% endif %}
+{% if perms.trips.add_route %}
+<a href="{% url 'route-create' %}" class="fixed bottom-24 right-6 z-40 lg:hidden w-14 h-14 bg-emerald-600 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-emerald-700 active:scale-95 transition-all" title="Add Route">
+    <i class="fa-solid fa-plus text-xl"></i>
+</a>
 {% endif %}
 {% endblock %}
