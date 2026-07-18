@@ -230,6 +230,14 @@ class Trip(models.Model):
         default=0
     )
 
+    vendor_hire_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        verbose_name='Vendor Hire Amount',
+        default=0,
+        help_text='Amount payable to the vendor/owner for attached vehicles'
+    )
+
     # Additional notes
     notes = models.TextField(
         blank=True,

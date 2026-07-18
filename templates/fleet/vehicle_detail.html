@@ -66,6 +66,24 @@
                                 <td class="py-2 text-slate-500 font-medium whitespace-nowrap pr-4">Current Odo</td>
                                 <td class="py-2 text-slate-900 font-bold">{{ vehicle.current_odometer|default:"0" }} <span class="text-[10px] text-slate-400">km</span></td>
                             </tr>
+                            <tr class="border-t border-slate-50">
+                                <td class="py-2 text-slate-500 font-medium whitespace-nowrap pr-4">Ownership</td>
+                                <td class="py-2 font-bold">
+                                    {% if vehicle.is_attached %}
+                                    <span class="text-orange-600">Attached</span>
+                                    {% else %}
+                                    <span class="text-slate-900">Owned</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% if vehicle.vendor %}
+                            <tr class="border-t border-slate-50">
+                                <td class="py-2 text-slate-500 font-medium whitespace-nowrap pr-4">Vendor</td>
+                                <td class="py-2 text-orange-600 font-bold">
+                                    <a href="{% url 'party-detail' vehicle.vendor.pk %}" class="hover:underline">{{ vehicle.vendor.name }}</a>
+                                </td>
+                            </tr>
+                            {% endif %}
                         </table>
                     </div>
                 </div>

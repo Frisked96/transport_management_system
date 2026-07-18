@@ -38,7 +38,7 @@ def reference_data(request):
     to be cached in the browser's local storage.
     """
     parties = list(Party.objects.all().order_by('name').values('id', 'name'))
-    vehicles = list(Vehicle.objects.filter(status=Vehicle.STATUS_ACTIVE).order_by('registration_plate').values('id', 'registration_plate', 'make_model'))
+    vehicles = list(Vehicle.objects.filter(status=Vehicle.STATUS_ACTIVE).order_by('registration_plate').values('id', 'registration_plate', 'make_model', 'ownership'))
     routes = list(Route.objects.all().order_by('pickup_location').values('id', 'pickup_location', 'delivery_location', 'route_type', 'default_rate'))
     drivers = list(Driver.objects.select_related('user').all().order_by('user__username').values('id', 'user__username'))
     

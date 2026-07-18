@@ -16,6 +16,12 @@ class VehicleForm(forms.ModelForm):
         # Add basic styling for clarity
         for field_name, field in self.fields.items():
             field.widget.attrs.update({'class': 'block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white'})
+        
+        # Filter vendor to only show Creditor-type parties
+        from ledger.models import Party
+        self.fields['vendor'].queryset = Party.objects.filter(
+            party_type=Party.TYPE_CREDITOR
+        ).order_by('name')
     
     class Meta:
         model = Vehicle
@@ -24,7 +30,9 @@ class VehicleForm(forms.ModelForm):
             'make_model',
             'purchase_date',
             'current_odometer',
-            'status'
+            'status',
+            'ownership',
+            'vendor',
         ]
         
         widgets = {
@@ -34,6 +42,19 @@ class VehicleForm(forms.ModelForm):
                 }
             ),
         }
+    
+    def clean(self):
+        cleaned_data = super().clean()
+        ownership = cleaned_data.get('ownership')
+        vendor = cleaned_data.get('vendor')
+        
+        if ownership == Vehicle.OWNERSHIP_ATTACHED and not vendor:
+            self.add_error('vendor', 'Vendor is required for Attached vehicles.')
+        
+        if ownership == Vehicle.OWNERSHIP_OWNED and vendor:
+            cleaned_data['vendor'] = None
+        
+        return cleaned_data
 
 
 class MaintenanceRecordForm(forms.ModelForm):

@@ -97,6 +97,13 @@
                         </div>
                     </div>
 
+                    <!-- Row 3b: Vendor Hire (only for attached vehicles) -->
+                    <div class="md:col-span-3" id="vendor-hire-container" style="display: none;">
+                        <label class="block text-xs sm:text-[10px] font-black text-orange-500 uppercase tracking-widest mb-1.5">Vendor Hire (₹)</label>
+                        {{ form.vendor_hire_amount }}
+                        {% if form.vendor_hire_amount.errors %}<p class="text-rose-600 text-[10px] mt-1 font-bold">{{ form.vendor_hire_amount.errors.0 }}</p>{% endif %}
+                    </div>
+
                     <!-- Row 4: Notes -->
                     <div class="md:col-span-12">
                         <label class="block text-xs sm:text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Remarks / Notes</label>
@@ -259,6 +266,46 @@ $(document).ready(function() {
             }
         }
     });
+
+    // Vendor Hire visibility toggle based on vehicle ownership
+    const $vehicleSelect = $('#id_vehicle');
+    const $vendorHireContainer = $('#vendor-hire-container');
+    
+    // Build a map of vehicle ID -> ownership from cached reference data
+    let vehicleOwnership = {};
+    try {
+        const cached = localStorage.getItem('tms_reference_data');
+        if (cached) {
+            const data = JSON.parse(cached);
+            if (data.vehicles) {
+                data.vehicles.forEach(v => {
+                    vehicleOwnership[v.id] = v.ownership;
+                });
+            }
+        }
+    } catch(e) {}
+    
+    function toggleVendorHire() {
+        const vehicleId = $vehicleSelect.val();
+        const ownership = vehicleOwnership[vehicleId];
+        if (ownership === 'Attached') {
+            $vendorHireContainer.show();
+        } else {
+            $vendorHireContainer.hide();
+        }
+    }
+    
+    $vehicleSelect.on('change', toggleVendorHire);
+    // Also update on data sync
+    $(document).on('tms:data-synced', function(e, data) {
+        if (data.vehicles) {
+            data.vehicles.forEach(v => {
+                vehicleOwnership[v.id] = v.ownership;
+            });
+            toggleVendorHire();
+        }
+    });
+    toggleVendorHire();
 });
 </script>
 {% endblock %}

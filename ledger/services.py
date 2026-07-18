@@ -187,21 +187,57 @@ class BillingService:
         FinancialRecord.objects.update_or_create(
             associated_bill=bill,
             record_type=FinancialRecord.RECORD_TYPE_INVOICE,
+            party=bill.party,
             defaults={
                 'date': bill.date,
                 'account': bill.issuer,
-                'party': bill.party,
                 'category': category,
                 'amount': total_revenue,
                 'description': description,
             }
         )
         
-        # 2. Clean up individual trip accruals
+        # 2. Clean up individual trip accruals (both customer and vendor)
         FinancialRecord.objects.filter(
             associated_trip__in=bill.trips.all(),
             record_type=FinancialRecord.RECORD_TYPE_INVOICE
         ).delete()
+
+        # 3. Create consolidated vendor hire records for attached vehicles
+        # Group trips by vendor to create one entry per vendor
+        from collections import defaultdict
+        vendor_totals = defaultdict(Decimal)
+        for trip in bill.trips.select_related('vehicle__vendor').all():
+            if (trip.vehicle and trip.vehicle.is_attached and 
+                trip.vehicle.vendor and trip.vendor_hire_amount > 0):
+                vendor_totals[trip.vehicle.vendor] += trip.vendor_hire_amount
+        
+        lorry_hire_cat, _ = TransactionCategory.objects.get_or_create(
+            name='Lorry Hire',
+            defaults={'type': TransactionCategory.TYPE_EXPENSE}
+        )
+        
+        # Remove any stale vendor hire records for this bill that are no longer valid
+        existing_vendor_pks = [v.pk for v in vendor_totals.keys()]
+        FinancialRecord.objects.filter(
+            associated_bill=bill,
+            record_type=FinancialRecord.RECORD_TYPE_INVOICE,
+            category=lorry_hire_cat
+        ).exclude(party_id__in=existing_vendor_pks).delete()
+        
+        for vendor, total in vendor_totals.items():
+            FinancialRecord.objects.update_or_create(
+                associated_bill=bill,
+                record_type=FinancialRecord.RECORD_TYPE_INVOICE,
+                party=vendor,
+                category=lorry_hire_cat,
+                defaults={
+                    'date': bill.date,
+                    'account': bill.issuer,
+                    'amount': total,
+                    'description': f"Lorry Hire for Bill {bill.bill_number or 'Draft'}",
+                }
+            )
 
     @staticmethod
     def update_bill_financial_caches(bill):
@@ -304,6 +340,7 @@ class TripFinancialService:
     def sync_trip_accrual(trip):
         """
         Manage accrual-based revenue for this trip.
+        Also manages vendor hire accruals for attached vehicles.
         """
         from ledger.models import FinancialRecord, TransactionCategory, CompanyAccount
 
@@ -330,18 +367,50 @@ class TripFinancialService:
         if not account:
              return
 
+        # Customer revenue accrual
         FinancialRecord.objects.update_or_create(
             associated_trip=trip,
             record_type=FinancialRecord.RECORD_TYPE_INVOICE,
+            party=trip.party,
             defaults={
                 'date': trip.date,
                 'account': account,
-                'party': trip.party,
                 'category': category,
                 'amount': trip.total_revenue,
                 'description': f"Accrual for Trip {trip.trip_number}",
             }
         )
+
+        # Vendor hire accrual for attached vehicles
+        if (trip.vehicle and trip.vehicle.is_attached and 
+            trip.vehicle.vendor and trip.vendor_hire_amount > 0):
+            lorry_hire_cat, _ = TransactionCategory.objects.get_or_create(
+                name='Lorry Hire',
+                defaults={'type': TransactionCategory.TYPE_EXPENSE}
+            )
+            FinancialRecord.objects.update_or_create(
+                associated_trip=trip,
+                record_type=FinancialRecord.RECORD_TYPE_INVOICE,
+                party=trip.vehicle.vendor,
+                defaults={
+                    'date': trip.date,
+                    'account': account,
+                    'category': lorry_hire_cat,
+                    'amount': trip.vendor_hire_amount,
+                    'description': f"Lorry Hire accrual for Trip {trip.trip_number}",
+                }
+            )
+        else:
+            # Clean up any stale vendor hire accruals if vehicle is no longer attached
+            lorry_hire_cat = TransactionCategory.objects.filter(
+                name='Lorry Hire'
+            ).first()
+            if lorry_hire_cat:
+                FinancialRecord.objects.filter(
+                    associated_trip=trip,
+                    record_type=FinancialRecord.RECORD_TYPE_INVOICE,
+                    category=lorry_hire_cat
+                ).delete()
 
     @staticmethod
     def update_trip_financial_caches(trip):

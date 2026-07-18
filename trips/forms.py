@@ -42,12 +42,14 @@ class TripForm(forms.ModelForm):
             'delivery_location',
             'weight',
             'rate_per_ton',
+            'vendor_hire_amount',
             'notes'
         ]
         
         labels = {
             'rate_per_ton': 'Rate',
             'lr_no': 'LR Number',
+            'vendor_hire_amount': 'Vendor Hire (₹)',
         }
         
         widgets = {
@@ -59,6 +61,7 @@ class TripForm(forms.ModelForm):
             'date': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date'}),
             'weight': forms.NumberInput(attrs={'step': '0.01', 'inputmode': 'decimal'}),
             'rate_per_ton': forms.NumberInput(attrs={'step': '0.01', 'inputmode': 'decimal'}),
+            'vendor_hire_amount': forms.NumberInput(attrs={'step': '0.01', 'inputmode': 'decimal'}),
             'pickup_location': forms.HiddenInput(),
             'delivery_location': forms.HiddenInput(),
         }
@@ -78,7 +81,7 @@ class TripForm(forms.ModelForm):
         
         # Disable fields if trip is billed
         if self.instance and self.instance.pk and self.instance.is_billed:
-            billed_fields = ['party', 'route', 'revenue_type', 'weight', 'rate_per_ton']
+            billed_fields = ['party', 'route', 'revenue_type', 'weight', 'rate_per_ton', 'vendor_hire_amount']
             for field_name in billed_fields:
                 if field_name in self.fields:
                     self.fields[field_name].disabled = True

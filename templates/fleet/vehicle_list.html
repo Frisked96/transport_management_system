@@ -140,6 +140,7 @@
                 <tr class="hover:bg-slate-50/80 transition-colors group">
                     <td class="px-6 py-4">
                         <a href="{% url 'vehicle-detail' vehicle.pk %}" class="text-sm font-black text-slate-900 hover:text-emerald-600 transition-colors uppercase">{{ vehicle.registration_plate }}</a>
+                        {% if vehicle.is_attached %}<span class="ml-1 px-1 py-0.5 rounded text-[7px] font-black uppercase bg-orange-100 text-orange-600">ATT</span>{% endif %}
                     </td>
                     <td class="px-6 py-4 text-xs font-bold text-slate-600 uppercase">{{ vehicle.make_model|default:"-" }}</td>
                     <td class="px-6 py-4 text-xs font-bold text-slate-500">{{ vehicle.purchase_date|date:"d/m/y"|default:"-" }}</td>

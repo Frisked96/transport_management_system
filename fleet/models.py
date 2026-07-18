@@ -21,6 +21,15 @@ class Vehicle(models.Model):
         (STATUS_MAINTENANCE, 'Maintenance'),
         (STATUS_RETIRED, 'Retired'),
     ]
+
+    # Ownership choices
+    OWNERSHIP_OWNED = 'Owned'
+    OWNERSHIP_ATTACHED = 'Attached'
+    
+    OWNERSHIP_CHOICES = [
+        (OWNERSHIP_OWNED, 'Owned (Company Fleet)'),
+        (OWNERSHIP_ATTACHED, 'Attached (Market Vehicle)'),
+    ]
     
     # Vehicle registration plate (unique)
     registration_plate = models.CharField(
@@ -53,6 +62,23 @@ class Vehicle(models.Model):
         verbose_name='Vehicle Status'
     )
     
+    ownership = models.CharField(
+        max_length=20,
+        choices=OWNERSHIP_CHOICES,
+        default=OWNERSHIP_OWNED,
+        verbose_name='Ownership Type'
+    )
+    
+    vendor = models.ForeignKey(
+        'ledger.Party',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='attached_vehicles',
+        verbose_name='Vendor / Owner',
+        help_text='Required if Ownership Type is Attached'
+    )
+    
     # Deletion flag to prevent signals from trying to update a deleted object
     _is_being_deleted = False
 
@@ -72,6 +98,11 @@ class Vehicle(models.Model):
     def is_available(self):
         """Check if vehicle is available for assignment"""
         return self.status == self.STATUS_ACTIVE
+    
+    @property
+    def is_attached(self):
+        """Check if vehicle is an attached/market vehicle"""
+        return self.ownership == self.OWNERSHIP_ATTACHED
     
     @property
     def last_maintenance(self):

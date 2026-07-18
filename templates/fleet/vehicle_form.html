@@ -49,4 +49,28 @@
     </div>
     <!-- END: Form Card -->
 </div>
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const ownershipField = document.getElementById('id_ownership');
+    const vendorField = document.getElementById('id_vendor');
+    if (!ownershipField || !vendorField) return;
+    
+    const vendorContainer = vendorField.closest('.flex.flex-col');
+    
+    function toggleVendor() {
+        if (ownershipField.value === 'Attached') {
+            vendorContainer.style.display = '';
+        } else {
+            vendorContainer.style.display = 'none';
+            vendorField.value = '';
+        }
+    }
+    
+    ownershipField.addEventListener('change', toggleVendor);
+    toggleVendor();
+});
+</script>
+{% endblock %}
 {% endblock %}

@@ -72,6 +72,9 @@
                                 <td class="py-2 text-slate-500 font-medium whitespace-nowrap pr-4">Vehicle</td>
                                 <td class="py-2 text-slate-900 font-bold uppercase tracking-tight">
                                     <a href="{% url 'vehicle-detail' trip.vehicle.pk %}" class="text-emerald-600 hover:underline">{{ trip.vehicle.registration_plate }}</a>
+                                    {% if trip.vehicle.is_attached %}
+                                    <span class="ml-1 px-1.5 py-0.5 rounded text-[8px] font-black uppercase bg-orange-100 text-orange-600 tracking-widest">Attached</span>
+                                    {% endif %}
                                 </td>
                             </tr>
                             <tr>
@@ -125,6 +128,12 @@
                                 <td class="py-2 text-slate-700 font-black uppercase text-[10px]">Total Revenue</td>
                                 <td class="py-2 text-emerald-700 font-black text-lg">₹{{ trip.total_revenue|indian_comma }}</td>
                             </tr>
+                            {% if trip.vendor_hire_amount > 0 %}
+                            <tr class="border-t border-orange-100">
+                                <td class="py-2 text-orange-500 font-black uppercase text-[10px]">Vendor Hire</td>
+                                <td class="py-2 text-orange-600 font-black">₹{{ trip.vendor_hire_amount|indian_comma }}</td>
+                            </tr>
+                            {% endif %}
                         </table>
 
                     </div>
