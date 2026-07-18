@@ -14,6 +14,8 @@ from trips.models import Trip
 from ledger.models import Bill
 from ledger.services import TripFinancialService, BillingService
 from decimal import Decimal
+from django.db import transaction
+from django.db.models import F, Sum
 
 
 class Command(BaseCommand):
@@ -60,15 +62,10 @@ class Command(BaseCommand):
                 self.stdout.write(f'  {vehicle.registration_plate}: No trips found. Skipping.')
                 continue
             
-            vehicle_total = Decimal('0')
-            for trip in trips:
-                # Set vendor_hire_amount = revenue (exactly equal, no commission)
-                hire_amount = trip.revenue or Decimal('0')
-                vehicle_total += hire_amount
-                
-                if not dry_run:
-                    trip.vendor_hire_amount = hire_amount
-                    trip.save(update_fields=['vendor_hire_amount'])
+            vehicle_total = trips.aggregate(total=Sum('total_revenue_cached'))['total'] or Decimal('0')
+            
+            if not dry_run:
+                trips.update(vendor_hire_amount=F('total_revenue_cached'))
             
             total_trips_updated += trip_count
             total_hire_amount += vehicle_total
@@ -87,30 +84,33 @@ class Command(BaseCommand):
         # 3. Re-sync ledger entries
         self.stdout.write('\nSyncing ledger entries...')
         
-        # 3a. Re-sync unbilled trips (creates trip-level vendor accruals)
-        unbilled_trips = Trip.objects.filter(
-            vehicle__in=attached_vehicles,
-            bills__isnull=True
-        ).distinct()
-        
-        for trip in unbilled_trips:
-            TripFinancialService.sync_trip_accrual(trip)
-        self.stdout.write(f'  Synced {unbilled_trips.count()} unbilled trip accruals.')
-        
-        # 3b. Re-sync bills (creates consolidated vendor accruals)
-        affected_bills = Bill.objects.filter(
-            trips__vehicle__in=attached_vehicles
-        ).distinct()
-        
-        for bill in affected_bills:
-            BillingService.sync_bill_to_ledger(bill)
-        self.stdout.write(f'  Synced {affected_bills.count()} bill ledger entries.')
-        
-        # 3c. Refresh vendor balances
-        vendor_ids = set(v.vendor_id for v in attached_vehicles)
-        from ledger.models import Party
-        for vendor in Party.objects.filter(pk__in=vendor_ids):
-            vendor.refresh_balance()
-            self.stdout.write(f'  Refreshed balance for vendor: {vendor.name} → ₹{vendor.current_balance_cached:,.2f}')
+        with transaction.atomic():
+            # 3a. Re-sync unbilled trips (creates trip-level vendor accruals)
+            unbilled_trips = Trip.objects.filter(
+                vehicle__in=attached_vehicles,
+                bills__isnull=True
+            ).select_related('vehicle__vendor').distinct()
+            
+            unbilled_count = unbilled_trips.count()
+            for trip in unbilled_trips.iterator(chunk_size=1000):
+                TripFinancialService.sync_trip_accrual(trip)
+            self.stdout.write(f'  Synced {unbilled_count} unbilled trip accruals.')
+            
+            # 3b. Re-sync bills (creates consolidated vendor accruals)
+            affected_bills = Bill.objects.filter(
+                trips__vehicle__in=attached_vehicles
+            ).distinct()
+            
+            affected_bills_count = affected_bills.count()
+            for bill in affected_bills.iterator(chunk_size=500):
+                BillingService.sync_bill_to_ledger(bill)
+            self.stdout.write(f'  Synced {affected_bills_count} bill ledger entries.')
+            
+            # 3c. Refresh vendor balances
+            vendor_ids = set(v.vendor_id for v in attached_vehicles)
+            from ledger.models import Party
+            for vendor in Party.objects.filter(pk__in=vendor_ids):
+                vendor.refresh_balance()
+                self.stdout.write(f'  Refreshed balance for vendor: {vendor.name} → ₹{vendor.current_balance_cached:,.2f}')
         
         self.stdout.write(self.style.SUCCESS('\n✓ Backfill complete!'))

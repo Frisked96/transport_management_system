@@ -61,6 +61,32 @@
     <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
         <!-- Column 1: Financial Quick View -->
         <div class="space-y-4">
+            {% if associated_vendors %}
+            <div class="mb-2 pb-3 border-b border-slate-100">
+                <span class="text-[10px] font-black uppercase tracking-wider text-amber-500 block mb-1">
+                    Contains Vendor Vehicles
+                </span>
+                <div class="space-y-1">
+                    {% for vendor in associated_vendors %}
+                    <div class="flex items-center justify-between gap-2">
+                        <a href="{% url 'party-detail' vendor.pk %}" class="text-xs font-bold text-slate-700 hover:text-amber-600 transition-colors flex items-center truncate max-w-[150px]" title="{{ vendor.name }}">
+                            <i class="fa-solid fa-truck text-[9px] mr-1.5 text-amber-400"></i>
+                            {{ vendor.name }}
+                            <i class="fa-solid fa-arrow-up-right-from-square ml-1.5 text-[9px] text-slate-400"></i>
+                        </a>
+                        {% for vr in vendor_records %}
+                            {% if vr.party_id == vendor.pk %}
+                            <a href="{% url 'financialrecord-detail' vr.pk %}" class="text-[9px] font-black text-amber-600 hover:text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 transition-colors shrink-0" title="View Vendor Ledger Entry">
+                                #{{ vr.entry_number }}
+                            </a>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
             <div class="flex justify-between items-end">
                 <span class="text-[11px] font-bold text-slate-400 uppercase">Total Invoice:</span>
                 <span class="text-sm font-black text-slate-900">₹{{ bill.rounded_total|indian_comma }}</span>

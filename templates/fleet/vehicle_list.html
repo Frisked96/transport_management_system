@@ -67,6 +67,8 @@
 <!-- END: Search & Filter Bar -->
 
 <!-- BEGIN: Vehicle List -->
+<form id="bulkUpdateForm" method="post" action="{% url 'vehicle-bulk-update' %}">
+    {% csrf_token %}
 {% if vehicles %}
 <div id="vehicleGridView" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
     {% for vehicle in vehicles %}
@@ -74,12 +76,19 @@
     <div class="bg-white border border-slate-200 rounded-xl overflow-hidden hover:shadow-lg transition-all group">
         <div class="p-5">
             <div class="flex items-start justify-between mb-4">
-                <div class="min-w-0">
-                    <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Registration No.</span>
-                    <h3 class="font-black text-xl text-slate-900 leading-tight truncate group-hover:text-emerald-600 transition-colors uppercase">
-                        <a href="{% url 'vehicle-detail' vehicle.pk %}">{{ vehicle.registration_plate }}</a>
-                    </h3>
-                    <p class="text-xs font-bold text-slate-500 mt-1 uppercase">{{ vehicle.make_model|default:"-" }}</p>
+                <div class="min-w-0 flex items-start gap-3">
+                    {% if perms.fleet.change_vehicle %}
+                    <div class="pt-1">
+                        <input type="checkbox" name="vehicle_ids" value="{{ vehicle.pk }}" class="vehicle-checkbox w-5 h-5 text-emerald-600 border-slate-300 rounded focus:ring-emerald-500 cursor-pointer transition-colors shadow-sm">
+                    </div>
+                    {% endif %}
+                    <div>
+                        <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Registration No.</span>
+                        <h3 class="font-black text-xl text-slate-900 leading-tight truncate group-hover:text-emerald-600 transition-colors uppercase">
+                            <a href="{% url 'vehicle-detail' vehicle.pk %}">{{ vehicle.registration_plate }}</a>
+                        </h3>
+                        <p class="text-xs font-bold text-slate-500 mt-1 uppercase">{{ vehicle.make_model|default:"-" }}</p>
+                    </div>
                 </div>
                 <div class="flex flex-col items-end gap-2">
                     <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-tight
@@ -127,6 +136,11 @@
         <table class="w-full text-left border-collapse">
             <thead>
                 <tr class="bg-slate-50 border-b border-slate-200">
+                    {% if perms.fleet.change_vehicle %}
+                    <th class="px-6 py-4 w-10">
+                        <input type="checkbox" id="selectAllCheckbox" class="w-4 h-4 text-emerald-600 border-slate-300 rounded focus:ring-emerald-500 cursor-pointer">
+                    </th>
+                    {% endif %}
                     <th class="px-6 py-4 text-[11px] font-black uppercase tracking-widest text-slate-400">Reg. No.</th>
                     <th class="px-6 py-4 text-[11px] font-black uppercase tracking-widest text-slate-400">Make/Model</th>
                     <th class="px-6 py-4 text-[11px] font-black uppercase tracking-widest text-slate-400">Purchase Date</th>
@@ -138,6 +152,11 @@
             <tbody class="divide-y divide-slate-100">
                 {% for vehicle in vehicles %}
                 <tr class="hover:bg-slate-50/80 transition-colors group">
+                    {% if perms.fleet.change_vehicle %}
+                    <td class="px-6 py-4">
+                        <input type="checkbox" name="vehicle_ids" value="{{ vehicle.pk }}" class="vehicle-checkbox w-4 h-4 text-emerald-600 border-slate-300 rounded focus:ring-emerald-500 cursor-pointer">
+                    </td>
+                    {% endif %}
                     <td class="px-6 py-4">
                         <a href="{% url 'vehicle-detail' vehicle.pk %}" class="text-sm font-black text-slate-900 hover:text-emerald-600 transition-colors uppercase">{{ vehicle.registration_plate }}</a>
                         {% if vehicle.is_attached %}<span class="ml-1 px-1 py-0.5 rounded text-[7px] font-black uppercase bg-orange-100 text-orange-600">ATT</span>{% endif %}
@@ -203,6 +222,42 @@
 {% endif %}
 <!-- END: Pagination -->
 
+<!-- BEGIN: Bulk Actions Toolbar -->
+<div id="bulkActionsToolbar" class="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 shadow-[0_-4px_6px_-1px_rgb(0,0,0,0.1)] transform translate-y-full transition-transform duration-300 z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col md:flex-row items-center justify-between gap-4">
+        <div class="flex items-center space-x-4">
+            <span class="bg-emerald-100 text-emerald-800 text-xs font-bold px-2.5 py-1.5 rounded-full" id="selectedCount">0 Selected</span>
+            <span class="text-sm font-medium text-slate-700">Apply Ownership Change:</span>
+        </div>
+        <div class="flex items-center space-x-3 w-full md:w-auto">
+            <select name="ownership" id="bulkOwnershipSelect" class="block w-full md:w-48 pl-3 pr-10 py-2 text-sm border border-slate-300 focus:outline-none focus:ring-emerald-500 focus:border-emerald-500 rounded-md">
+                <option value="">Select Ownership...</option>
+                <option value="Owned">Owned (Company Fleet)</option>
+                <option value="Attached">Attached (Market Vehicle)</option>
+            </select>
+            
+            <div id="bulkVendorContainer" class="hidden">
+                <select name="vendor" class="block w-full md:w-56 pl-3 pr-10 py-2 text-sm border border-slate-300 focus:outline-none focus:ring-emerald-500 focus:border-emerald-500 rounded-md">
+                    <option value="">Select Vendor...</option>
+                    {% for vendor in vendors %}
+                    <option value="{{ vendor.pk }}">{{ vendor.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <button type="submit" class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500">
+                Apply Update
+            </button>
+            
+            <button type="button" id="cancelBulkBtn" class="inline-flex items-center px-3 py-2 border border-slate-300 shadow-sm text-sm font-medium rounded-md text-slate-700 bg-white hover:bg-slate-50 focus:outline-none">
+                Cancel
+            </button>
+        </div>
+    </div>
+</div>
+<!-- END: Bulk Actions Toolbar -->
+</form>
+
 {% else %}
 <div class="text-center py-16 bg-white rounded-lg border border-slate-200 shadow-sm">
     <div class="inline-flex items-center justify-center w-20 h-20 bg-slate-50 rounded-full mb-4">
@@ -256,6 +311,85 @@
         // Load preference
         const savedView = localStorage.getItem('vehicleViewPreference') || 'grid';
         setView(savedView);
+
+        // Bulk Actions Logic
+        const checkboxes = $('.vehicle-checkbox');
+        const selectAllCheckbox = $('#selectAllCheckbox');
+        const bulkToolbar = $('#bulkActionsToolbar');
+        const selectedCountLabel = $('#selectedCount');
+        const bulkOwnershipSelect = $('#bulkOwnershipSelect');
+        const bulkVendorContainer = $('#bulkVendorContainer');
+        const cancelBulkBtn = $('#cancelBulkBtn');
+        const bulkUpdateForm = $('#bulkUpdateForm');
+
+        function updateBulkToolbar() {
+            // Because there are two sets of checkboxes (grid and list), we count unique values
+            const checkedValues = new Set();
+            $('.vehicle-checkbox:checked').each(function() {
+                checkedValues.add($(this).val());
+            });
+            const checkedCount = checkedValues.size;
+
+            if (checkedCount > 0) {
+                bulkToolbar.removeClass('translate-y-full');
+                selectedCountLabel.text(`${checkedCount} Selected`);
+            } else {
+                bulkToolbar.addClass('translate-y-full');
+            }
+        }
+
+        checkboxes.on('change', function() {
+            // Keep grid and list checkboxes in sync
+            const val = $(this).val();
+            const isChecked = $(this).prop('checked');
+            $(`.vehicle-checkbox[value="${val}"]`).prop('checked', isChecked);
+            
+            updateBulkToolbar();
+            
+            // Handle select all state
+            const checkedValues = new Set();
+            $('.vehicle-checkbox:checked').each(function() { checkedValues.add($(this).val()); });
+            
+            const uniqueCheckboxesCount = new Set();
+            checkboxes.each(function() { uniqueCheckboxesCount.add($(this).val()); });
+
+            if (!isChecked) {
+                selectAllCheckbox.prop('checked', false);
+            } else if (checkedValues.size === uniqueCheckboxesCount.size && uniqueCheckboxesCount.size > 0) {
+                selectAllCheckbox.prop('checked', true);
+            }
+        });
+
+        selectAllCheckbox.on('change', function() {
+            const isChecked = $(this).prop('checked');
+            checkboxes.prop('checked', isChecked);
+            updateBulkToolbar();
+        });
+
+        cancelBulkBtn.on('click', function() {
+            checkboxes.prop('checked', false);
+            selectAllCheckbox.prop('checked', false);
+            updateBulkToolbar();
+        });
+
+        bulkOwnershipSelect.on('change', function() {
+            if ($(this).val() === 'Attached') {
+                bulkVendorContainer.removeClass('hidden');
+                bulkVendorContainer.find('select').prop('required', true);
+            } else {
+                bulkVendorContainer.addClass('hidden');
+                bulkVendorContainer.find('select').prop('required', false).val('');
+            }
+        });
+
+        bulkUpdateForm.on('submit', function(e) {
+            const ownership = bulkOwnershipSelect.val();
+            if (!ownership) {
+                e.preventDefault();
+                alert('Please select an ownership type to apply.');
+                return false;
+            }
+        });
     });
 </script>
 {% endblock %}

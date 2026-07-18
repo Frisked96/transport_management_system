@@ -11,6 +11,7 @@ urlpatterns = [
     path('vehicle/create/', views.VehicleCreateView.as_view(), name='vehicle-create'),
     path('vehicle/<int:pk>/update/', views.VehicleUpdateView.as_view(), name='vehicle-update'),
     path('vehicle/<int:pk>/delete/', views.VehicleDeleteView.as_view(), name='vehicle-delete'),
+    path('vehicle/bulk-update/', views.vehicle_bulk_update, name='vehicle-bulk-update'),
     
     # Maintenance Record URLs
     path('maintenance/', views.MaintenanceListView.as_view(), name='maintenance-list'),

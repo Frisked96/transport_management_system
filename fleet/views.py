@@ -10,6 +10,7 @@ from django.urls import reverse_lazy
 from django.contrib import messages
 from django.db.models import Q, Count, Sum
 from django.http import JsonResponse, HttpResponse
+from ledger.models import Party
 
 from .models import Vehicle, MaintenanceRecord, Tyre, TyreLog
 from .forms import VehicleForm, MaintenanceRecordForm, MaintenanceCompleteForm, TyreForm, TyreLogForm
@@ -257,6 +258,7 @@ class VehicleListView(LoginRequiredMixin, BaseFleetPermissionMixin, ListView):
         context['status_choices'] = Vehicle.STATUS_CHOICES
         context['current_status'] = self.request.GET.get('status', '')
         context['search_term'] = self.request.GET.get('search', '')
+        context['vendors'] = Party.objects.filter(party_type=Party.TYPE_CREDITOR).order_by('name')
         return context
 
 
@@ -317,6 +319,43 @@ class VehicleUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView)
     
     def get_success_url(self):
         return reverse_lazy('vehicle-detail', kwargs={'pk': self.object.pk})
+
+
+@login_required
+@permission_required('fleet.change_vehicle')
+def vehicle_bulk_update(request):
+    """
+    Bulk update ownership and vendor for multiple vehicles.
+    """
+    if request.method == 'POST':
+        vehicle_ids = list(set(request.POST.getlist('vehicle_ids')))
+        ownership = request.POST.get('ownership')
+        vendor_id = request.POST.get('vendor')
+
+        if not vehicle_ids:
+            messages.error(request, 'No vehicles selected for update.')
+            return redirect('vehicle-list')
+
+        if ownership not in [Vehicle.OWNERSHIP_OWNED, Vehicle.OWNERSHIP_ATTACHED]:
+            messages.error(request, 'Invalid ownership type selected.')
+            return redirect('vehicle-list')
+
+        vendor = None
+        if ownership == Vehicle.OWNERSHIP_ATTACHED:
+            if not vendor_id:
+                messages.error(request, 'Vendor must be selected for attached vehicles.')
+                return redirect('vehicle-list')
+            vendor = get_object_or_404(Party, pk=vendor_id)
+
+        # Update the selected vehicles
+        Vehicle.objects.filter(id__in=vehicle_ids).update(
+            ownership=ownership,
+            vendor=vendor if ownership == Vehicle.OWNERSHIP_ATTACHED else None
+        )
+        
+        messages.success(request, f'Successfully updated {len(vehicle_ids)} vehicle(s).')
+    
+    return redirect('vehicle-list')
 
 
 class VehicleDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):

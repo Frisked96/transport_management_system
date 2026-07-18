@@ -1148,9 +1148,20 @@ class BillDetailView(LoginRequiredMixin, BaseLedgerPermissionMixin, DetailView):
         context['has_discount'] = has_discount
         context['has_lr'] = has_lr
 
+        # Extract unique vendors for all attached vehicles in this bill
+        associated_vendors = set()
+        for bt in bill_trips:
+            if bt.trip and bt.trip.vehicle and bt.trip.vehicle.ownership == 'Attached' and bt.trip.vehicle.vendor:
+                associated_vendors.add(bt.trip.vehicle.vendor)
+        context['associated_vendors'] = list(associated_vendors)
+
         # Related ledger entries for internal summary
-        context['invoice_record'] = bill.financial_records.filter(record_type='Invoice').first()
+        context['invoice_record'] = bill.financial_records.filter(record_type='Invoice', party=bill.party).first()
         
+        # Get vendor specific invoice records (Lorry Hire accruals)
+        vendor_records = bill.financial_records.filter(record_type='Invoice').exclude(party=bill.party)
+        context['vendor_records'] = vendor_records
+
         # Comprehensive list of payments/credits contributing to this bill
         related_payments = []
         seen_records = set()
