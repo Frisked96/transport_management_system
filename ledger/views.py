@@ -251,9 +251,13 @@ class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, Cre
         return initial
 
     def form_valid(self, form):
+        from decimal import InvalidOperation
         distribution_json = form.cleaned_data.get('payment_distribution')
         bill_distribution_json = form.cleaned_data.get('bill_distribution')
+        tds_amount = form.cleaned_data.get('tds_amount')
         
+        has_tds = tds_amount and tds_amount > 0
+
         if distribution_json or bill_distribution_json:
             try:
                 # 1. Create the single parent FinancialRecord
@@ -261,9 +265,31 @@ class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, Cre
                 self.object.recorded_by = self.request.user
                 self.object.save()
                 
+                # 1.5 Auto-create TDS record if specified
+                tds_record = None
+                if has_tds:
+                    tds_category, _ = TransactionCategory.objects.get_or_create(
+                        name='TDS',
+                        defaults={'type': TransactionCategory.TYPE_EXPENSE, 'description': 'Tax Deducted at Source'}
+                    )
+                    tds_record = FinancialRecord.objects.create(
+                        date=self.object.date,
+                        account=None,
+                        party=self.object.party,
+                        driver=self.object.driver,
+                        associated_trip=self.object.associated_trip,
+                        associated_bill=self.object.associated_bill,
+                        record_type=self.object.record_type,
+                        category=tds_category,
+                        amount=tds_amount,
+                        description=f"Auto-generated TDS for {self.object.category.name} entry #{self.object.entry_number}",
+                        recorded_by=self.request.user
+                    )
+
                 # 2. Handle Trip Allocations
                 if distribution_json:
                     distribution_data = json.loads(distribution_json)
+                    total_allocated = sum(Decimal(str(item.get('amount', 0))) for item in distribution_data)
                     for item in distribution_data:
                         trip_id = item.get('trip_id')
                         try:
@@ -273,17 +299,25 @@ class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, Cre
                         
                         if amount > 0:
                             trip = Trip.objects.get(pk=trip_id)
-                            TripAllocation.objects.create(
-                                financial_record=self.object,
-                                trip=trip,
-                                amount=amount
-                            )
+                            if has_tds and total_allocated > 0:
+                                ratio = amount / total_allocated
+                                payment_alloc = self.object.amount * ratio
+                                tds_alloc = tds_amount * ratio
+                                TripAllocation.objects.create(financial_record=self.object, trip=trip, amount=payment_alloc)
+                                TripAllocation.objects.create(financial_record=tds_record, trip=trip, amount=tds_alloc)
+                            else:
+                                TripAllocation.objects.create(
+                                    financial_record=self.object,
+                                    trip=trip,
+                                    amount=amount
+                                )
                     messages.success(self.request, f'Financial record created and distributed across {len(distribution_data)} trips!')
 
                 # 3. Handle Bill Allocations
                 if bill_distribution_json:
                     from .models import BillAllocation
                     bill_data = json.loads(bill_distribution_json)
+                    total_allocated = sum(Decimal(str(item.get('amount', 0))) for item in bill_data)
                     for item in bill_data:
                         bill_id = item.get('bill_id')
                         try:
@@ -293,11 +327,18 @@ class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, Cre
                         
                         if amount > 0:
                             bill = Bill.objects.get(pk=bill_id)
-                            BillAllocation.objects.create(
-                                financial_record=self.object,
-                                bill=bill,
-                                amount=amount
-                            )
+                            if has_tds and total_allocated > 0:
+                                ratio = amount / total_allocated
+                                payment_alloc = self.object.amount * ratio
+                                tds_alloc = tds_amount * ratio
+                                BillAllocation.objects.create(financial_record=self.object, bill=bill, amount=payment_alloc)
+                                BillAllocation.objects.create(financial_record=tds_record, bill=bill, amount=tds_alloc)
+                            else:
+                                BillAllocation.objects.create(
+                                    financial_record=self.object,
+                                    bill=bill,
+                                    amount=amount
+                                )
                     messages.success(self.request, f'Financial record created and distributed across {len(bill_data)} bills!')
                 
                 # 4. Auto-generate description if blank
@@ -329,6 +370,25 @@ class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, Cre
         # Fallback to standard single record creation
         form.instance.recorded_by = self.request.user
         response = super().form_valid(form)
+        
+        if has_tds:
+            tds_category, _ = TransactionCategory.objects.get_or_create(
+                name='TDS',
+                defaults={'type': TransactionCategory.TYPE_EXPENSE, 'description': 'Tax Deducted at Source'}
+            )
+            FinancialRecord.objects.create(
+                date=self.object.date,
+                account=None,
+                party=self.object.party,
+                driver=self.object.driver,
+                associated_trip=self.object.associated_trip,
+                associated_bill=self.object.associated_bill,
+                record_type=self.object.record_type,
+                category=tds_category,
+                amount=tds_amount,
+                description=f"Auto-generated TDS for {self.object.category.name} entry #{self.object.entry_number}",
+                recorded_by=self.request.user
+            )
         
         messages.success(self.request, 'Financial record created successfully!')
         return response

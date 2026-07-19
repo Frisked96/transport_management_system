@@ -36,6 +36,20 @@ class FinancialRecordForm(forms.ModelForm):
         label="Associated Bill"
     )
 
+    tds_amount = forms.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        required=False,
+        label='TDS Amount',
+        help_text='If TDS was deducted, enter the exact TDS amount here to automatically create a TDS entry.',
+        widget=forms.NumberInput(attrs={
+            'step': '0.01',
+            'min': '0',
+            'placeholder': 'TDS Amount',
+            'class': 'block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white'
+        })
+    )
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         
