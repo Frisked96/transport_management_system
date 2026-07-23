@@ -25,7 +25,7 @@
                 <i class="fa-solid fa-truck-pickup mr-2"></i>Mount
             </a>
             {% else %}
-            <a href="{% url 'tyre-action' tyre.pk 'Dismount' %}" class="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-bold hover:bg-blue-700 shadow-sm transition-colors" onclick="return confirm('Dismount this tyre?')">
+            <a href="{% url 'tyre-log-create' %}?tyre={{ tyre.pk }}&action=Dismount" class="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-bold hover:bg-blue-700 shadow-sm transition-colors">
                 <i class="fa-solid fa-arrow-down-long mr-2"></i>Dismount
             </a>
             {% endif %}
