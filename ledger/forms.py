@@ -181,6 +181,7 @@ class FinancialRecordForm(forms.ModelForm):
             'bill_distribution',
             'category',
             'amount',
+            'tds_amount',
             'tds_percentage',
             'description',
             'document_ref'

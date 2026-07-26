@@ -36,7 +36,7 @@
     <div class="bg-white border border-slate-200 rounded-lg p-6 shadow-sm space-y-6">
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
             {% for field in form %}
-                {% if field.name != 'payment_distribution' and field.name != 'bill_distribution' %}
+                {% if field.name != 'payment_distribution' and field.name != 'bill_distribution' and field.name != 'amount' and field.name != 'tds_amount' and field.name != 'tds_percentage' %}
                 <div class="{% if field.name == 'description' or field.name == 'document_ref' %}md:col-span-2{% endif %}" id="wrapper_{{ field.id_for_label }}">
                     <label class="block text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider" for="{{ field.id_for_label }}">
                         {{ field.label }}
@@ -50,9 +50,105 @@
                     {% endif %}
                 </div>
                 {% else %}
-                    {{ field }}
+                    {% if field.name == 'payment_distribution' or field.name == 'bill_distribution' %}
+                        {{ field }}
+                    {% endif %}
                 {% endif %}
             {% endfor %}
+        </div>
+
+        <!-- Payment Details Block -->
+        <div id="payment-details-block" class="border-2 border-slate-200 rounded-lg overflow-hidden mt-2">
+            <div class="bg-slate-700 px-4 py-2.5">
+                <h3 class="text-sm font-bold text-white uppercase tracking-wider flex items-center">
+                    <i class="fa-solid fa-indian-rupee-sign mr-2"></i>Payment Details
+                </h3>
+            </div>
+            <div class="p-5 bg-white space-y-4">
+                <!-- Taxable Value & Invoice Balance Info (shown when bill selected) -->
+                <div id="bill-info-panel" class="hidden bg-gradient-to-r from-blue-50 to-slate-50 border border-blue-200 rounded-lg p-4">
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                        <div>
+                            <span class="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Taxable Value</span>
+                            <span class="text-lg font-bold text-slate-800" id="info-taxable-value">—</span>
+                        </div>
+                        <div>
+                            <span class="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Invoice Total</span>
+                            <span class="text-lg font-bold text-slate-800" id="info-invoice-total">—</span>
+                        </div>
+                        <div>
+                            <span class="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Already Received</span>
+                            <span class="text-lg font-bold text-emerald-600" id="info-received">—</span>
+                        </div>
+                        <div>
+                            <span class="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Outstanding</span>
+                            <span class="text-lg font-bold text-red-600" id="info-outstanding">—</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Amount + TDS Amount side by side -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div id="wrapper_id_amount">
+                        <label class="block text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider" for="id_amount">
+                            Payment Amount
+                        </label>
+                        {{ form.amount }}
+                        {% if form.amount.errors %}
+                            <p class="mt-1 text-sm text-red-600 font-medium">{{ form.amount.errors.as_text }}</p>
+                        {% endif %}
+                    </div>
+                    <div id="wrapper_id_tds_amount">
+                        <label class="block text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider" for="id_tds_amount">
+                            TDS Amount
+                        </label>
+                        {{ form.tds_amount }}
+                        {% if form.tds_amount.errors %}
+                            <p class="mt-1 text-sm text-red-600 font-medium">{{ form.tds_amount.errors.as_text }}</p>
+                        {% endif %}
+                        <p class="mt-1 text-xs text-slate-500 italic">If TDS was deducted, enter the exact TDS amount here.</p>
+                    </div>
+                </div>
+
+                <!-- Inline TDS Calculator -->
+                <div id="tds-calculator-panel" class="hidden bg-amber-50 border border-amber-200 rounded-lg p-4">
+                    <div class="flex items-center gap-2 mb-3">
+                        <i class="fa-solid fa-calculator text-amber-600 text-sm"></i>
+                        <span class="text-xs font-bold text-amber-800 uppercase tracking-wider">Quick TDS Calculator</span>
+                    </div>
+                    <div class="flex items-end gap-3">
+                        <div class="flex-1">
+                            <label class="block text-[10px] font-semibold text-slate-600 mb-1 uppercase">TDS %</label>
+                            <div class="flex">
+                                <input type="number" id="inline-tds-pct" step="0.01" min="0" max="100" placeholder="e.g. 2" 
+                                    class="flex-1 px-3 py-2 border border-amber-300 rounded-l-md text-sm shadow-sm focus:ring-amber-500 focus:border-amber-500 bg-white" />
+                                <button type="button" id="btn-calc-tds" class="px-4 py-2 bg-amber-600 text-white text-sm font-medium rounded-r-md hover:bg-amber-700 transition-colors">
+                                    <i class="fa-solid fa-bolt mr-1"></i>Calculate
+                                </button>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <span class="block text-[10px] font-semibold text-slate-500 uppercase">Calculated TDS</span>
+                            <span class="text-lg font-bold text-amber-700" id="calc-tds-result">—</span>
+                        </div>
+                    </div>
+                    <p class="text-[10px] text-amber-700 mt-2 italic">Calculates TDS on taxable value (subtotal excl. GST). Click to auto-fill TDS Amount above.</p>
+                </div>
+
+                <!-- TDS Percentage (for TDS category entries) -->
+                <div id="wrapper_id_tds_percentage" class="hidden">
+                    <label class="block text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider" for="id_tds_percentage">
+                        TDS Percentage
+                    </label>
+                    {{ form.tds_percentage }}
+                    {% if form.tds_percentage.errors %}
+                        <p class="mt-1 text-sm text-red-600 font-medium">{{ form.tds_percentage.errors.as_text }}</p>
+                    {% endif %}
+                </div>
+
+                <!-- Live Remaining Balance -->
+                <div id="dynamic-bill-balance" class="hidden bg-slate-50 border border-slate-200 rounded-md p-3 text-sm"></div>
+            </div>
         </div>
 
         <!-- Custom Multi-Trip Selection Area -->
@@ -207,6 +303,9 @@
         let isManualAmount = false;
         let isInternalChange = false;
         let currentSelectedBillBalance = 0;
+        let currentBillSubtotal = 0;
+        let currentBillTotal = 0;
+        let currentBillReceived = 0;
 
         const recordTypeSelect = document.getElementById('id_record_type');
 
@@ -333,7 +432,7 @@
                     else driverFieldWrapper.classList.remove('hidden');
                 }
 
-                // 5. Handle TDS % Field
+                // 5. Handle TDS % Field (only for TDS category entries)
                 const tdsPercentageWrapper = document.getElementById('wrapper_id_tds_percentage');
                 if (tdsPercentageWrapper) {
                     if (isTDS) {
@@ -343,14 +442,23 @@
                     }
                 }
 
-                // 5.5 Handle TDS Amount Field
+                // 5.5 Handle TDS Amount Field & Calculator
                 const tdsAmountWrapper = document.getElementById('wrapper_id_tds_amount');
+                const tdsCalcPanel = document.getElementById('tds-calculator-panel');
+                const showTdsFields = isTripPayment || isInvoicePayment || categoryName.toLowerCase().includes('payment out') || isStandard;
                 if (tdsAmountWrapper) {
-                    if (isTripPayment || isInvoicePayment || categoryName.toLowerCase().includes('payment out') || isStandard) {
+                    if (showTdsFields) {
                         tdsAmountWrapper.classList.remove('hidden');
                     } else {
                         tdsAmountWrapper.classList.add('hidden');
                         if (tdsAmountInput) tdsAmountInput.value = '';
+                    }
+                }
+                if (tdsCalcPanel) {
+                    if (showTdsFields) {
+                        tdsCalcPanel.classList.remove('hidden');
+                    } else {
+                        tdsCalcPanel.classList.add('hidden');
                     }
                 }
             } catch (err) {
@@ -420,17 +528,27 @@
             tdsPercentageInput.addEventListener('input', () => calculateTDS(true));
         }
         
-        // Setup dynamic balance display
-        const balanceDisplay = document.createElement('div');
-        balanceDisplay.id = 'dynamic-bill-balance';
-        balanceDisplay.className = 'mt-2 p-3 bg-slate-50 border border-slate-200 rounded-md text-sm hidden';
-        if (associatedBillWrapper) {
-            associatedBillWrapper.appendChild(balanceDisplay);
+        // Bill info panel & balance display references
+        const billInfoPanel = document.getElementById('bill-info-panel');
+        const balanceDisplay = document.getElementById('dynamic-bill-balance');
+
+        function updateBillInfoPanel() {
+            if (!billInfoPanel) return;
+            if (!associatedBillSelect || !associatedBillSelect.value || currentSelectedBillBalance === 0) {
+                billInfoPanel.classList.add('hidden');
+                return;
+            }
+            billInfoPanel.classList.remove('hidden');
+            document.getElementById('info-taxable-value').textContent = '₹' + currentBillSubtotal.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            document.getElementById('info-invoice-total').textContent = '₹' + currentBillTotal.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            document.getElementById('info-received').textContent = '₹' + currentBillReceived.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            document.getElementById('info-outstanding').textContent = '₹' + currentSelectedBillBalance.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
         }
 
         function updateBillBalanceDisplay() {
             if (!balanceDisplay || !associatedBillSelect || !associatedBillSelect.value || currentSelectedBillBalance === 0) {
                 if (balanceDisplay) balanceDisplay.classList.add('hidden');
+                updateBillInfoPanel();
                 return;
             }
             
@@ -438,19 +556,20 @@
             const tdsAmount = tdsAmountInput ? (parseFloat(tdsAmountInput.value) || 0) : 0;
             const remaining = currentSelectedBillBalance - paidAmount - tdsAmount;
             
+            updateBillInfoPanel();
             balanceDisplay.classList.remove('hidden');
             balanceDisplay.innerHTML = `
                 <div class="flex justify-between items-center text-slate-700 mb-1">
-                    <span class="font-semibold text-xs uppercase tracking-wider">Invoice Balance:</span>
-                    <span class="font-medium">₹${currentSelectedBillBalance.toFixed(2)}</span>
+                    <span class="font-semibold text-xs uppercase tracking-wider">Outstanding:</span>
+                    <span class="font-medium">₹${currentSelectedBillBalance.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
                 </div>
                 <div class="flex justify-between items-center text-slate-500">
                     <span class="text-xs uppercase tracking-wider">Payment + TDS:</span>
-                    <span>- ₹${(paidAmount + tdsAmount).toFixed(2)}</span>
+                    <span>− ₹${(paidAmount + tdsAmount).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
                 </div>
                 <div class="flex justify-between items-center font-bold mt-2 pt-2 border-t border-slate-200 ${remaining < 0 ? 'text-red-600' : 'text-emerald-600'}">
-                    <span class="text-xs uppercase tracking-wider">Remaining Balance:</span>
-                    <span>₹${remaining.toFixed(2)}</span>
+                    <span class="text-xs uppercase tracking-wider">After This Payment:</span>
+                    <span>₹${remaining.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
                 </div>
             `;
         }
@@ -458,6 +577,9 @@
         function fetchBillBalanceForDisplay(billId) {
             if (!billId) {
                 currentSelectedBillBalance = 0;
+                currentBillSubtotal = 0;
+                currentBillTotal = 0;
+                currentBillReceived = 0;
                 updateBillBalanceDisplay();
                 return;
             }
@@ -466,10 +588,56 @@
                 .then(data => {
                     if (data.balance !== undefined) {
                         currentSelectedBillBalance = data.balance;
+                        currentBillSubtotal = data.subtotal || 0;
+                        currentBillTotal = data.total || 0;
+                        currentBillReceived = data.received || 0;
                         updateBillBalanceDisplay();
                     }
                 })
                 .catch(error => console.error('Error fetching bill balance:', error));
+        }
+
+        // --- Inline TDS Calculator ---
+        const inlineTdsPct = document.getElementById('inline-tds-pct');
+        const btnCalcTds = document.getElementById('btn-calc-tds');
+        const calcTdsResult = document.getElementById('calc-tds-result');
+
+        function doInlineTdsCalc() {
+            const pct = parseFloat(inlineTdsPct ? inlineTdsPct.value : 0);
+            // Use bill subtotal if available, otherwise use the outstanding balance
+            const taxableBase = currentBillSubtotal || currentSelectedBillBalance;
+            if (!isNaN(pct) && pct > 0 && taxableBase > 0) {
+                const tds = (taxableBase * pct / 100);
+                const tdsRounded = Math.round(tds * 100) / 100;
+                if (calcTdsResult) calcTdsResult.textContent = '₹' + tdsRounded.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                // Auto-fill the TDS Amount field
+                if (tdsAmountInput) {
+                    tdsAmountInput.value = tdsRounded.toFixed(2);
+                    updateBillBalanceDisplay();
+                }
+            } else {
+                if (calcTdsResult) calcTdsResult.textContent = '—';
+            }
+        }
+
+        if (btnCalcTds) {
+            btnCalcTds.addEventListener('click', doInlineTdsCalc);
+        }
+        if (inlineTdsPct) {
+            inlineTdsPct.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') { e.preventDefault(); doInlineTdsCalc(); }
+            });
+            inlineTdsPct.addEventListener('input', function() {
+                // Live preview as user types
+                const pct = parseFloat(this.value);
+                const taxableBase = currentBillSubtotal || currentSelectedBillBalance;
+                if (!isNaN(pct) && pct > 0 && taxableBase > 0) {
+                    const tds = Math.round(taxableBase * pct / 100 * 100) / 100;
+                    if (calcTdsResult) calcTdsResult.textContent = '₹' + tds.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                } else {
+                    if (calcTdsResult) calcTdsResult.textContent = '—';
+                }
+            });
         }
 
         if (associatedBillSelect) {
