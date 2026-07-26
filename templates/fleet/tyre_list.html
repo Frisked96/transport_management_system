@@ -30,9 +30,9 @@
 
 <!-- BEGIN: Search & Filter Bar -->
 <section class="bg-white p-5 rounded-lg border border-slate-200 mb-8 shadow-sm">
-    <form method="get" class="grid grid-cols-1 md:grid-cols-12 gap-4">
+    <form method="get" id="filterForm" class="grid grid-cols-1 md:grid-cols-12 gap-4">
         <!-- Search -->
-        <div class="md:col-span-6 flex flex-col">
+        <div class="md:col-span-5 flex flex-col">
             <label for="search" class="text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">Search</label>
             <div class="relative">
                 <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
@@ -44,9 +44,9 @@
         </div>
         
         <!-- Status -->
-        <div class="md:col-span-4 flex flex-col">
+        <div class="md:col-span-3 flex flex-col">
             <label for="status" class="text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">Status</label>
-            <select id="status" name="status" class="block w-full pl-3 pr-10 py-2 border border-slate-300 rounded-md text-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white">
+            <select id="status" name="status" onchange="this.form.submit()" class="block w-full pl-3 pr-10 py-2 border border-slate-300 rounded-md text-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white">
                 <option value="">All Statuses</option>
                 <option value="In Stock" {% if request.GET.status == 'In Stock' %}selected{% endif %}>In Stock</option>
                 <option value="Mounted" {% if request.GET.status == 'Mounted' %}selected{% endif %}>Mounted</option>
@@ -54,11 +54,22 @@
                 <option value="Scrap" {% if request.GET.status == 'Scrap' %}selected{% endif %}>Scrap</option>
             </select>
         </div>
+
+        <!-- Vehicle -->
+        <div class="md:col-span-3 flex flex-col">
+            <label for="vehicle" class="text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">Vehicle</label>
+            <select id="vehicle" name="vehicle" class="block w-full pl-3 pr-10 py-2 border border-slate-300 rounded-md text-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white">
+                <option value="">All Vehicles</option>
+                {% for v in vehicles %}
+                <option value="{{ v.id }}" {% if request.GET.vehicle == v.id|stringformat:"s" %}selected{% endif %}>{{ v.registration_plate }}</option>
+                {% endfor %}
+            </select>
+        </div>
         
         <!-- Actions -->
-        <div class="md:col-span-2 flex items-end">
-            <button type="submit" class="w-full px-4 py-2 bg-slate-800 text-white rounded-md text-sm font-medium hover:bg-slate-700 transition-colors shadow-sm">
-                <i class="fa-solid fa-filter mr-2"></i>Filter
+        <div class="md:col-span-1 flex items-end">
+            <button type="submit" class="w-full px-2 py-2 bg-slate-800 text-white rounded-md text-sm font-medium hover:bg-slate-700 transition-colors shadow-sm" title="Filter">
+                <i class="fa-solid fa-filter"></i>
             </button>
         </div>
     </form>
@@ -134,7 +145,7 @@
                         {% if tyre.status != 'Mounted' %}
                         <a href="{% url 'tyre-log-create' %}?tyre={{ tyre.pk }}&action=Mount" class="block px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 uppercase">Mount</a>
                         {% else %}
-                        <a href="{% url 'tyre-action' tyre.pk 'Dismount' %}" class="block px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 uppercase" onclick="return confirm('Dismount this tyre?')">Dismount</a>
+                        <a href="{% url 'tyre-log-create' %}?tyre={{ tyre.pk }}&action=Dismount" class="block px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 uppercase">Dismount</a>
                         <a href="{% url 'tyre-log-create' %}?tyre={{ tyre.pk }}&action=Rotation" class="block px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 uppercase">Rotation</a>
                         {% endif %}
                         <hr class="my-1 border-slate-50">
@@ -216,10 +227,10 @@
 <nav class="mt-8 flex justify-center">
     <div class="flex space-x-1">
         {% if page_obj.has_previous %}
-        <a href="?page=1{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
+        <a href="?page=1{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.vehicle %}&vehicle={{ request.GET.vehicle }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
             <i class="fa-solid fa-angles-left"></i>
         </a>
-        <a href="?page={{ page_obj.previous_page_number }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
+        <a href="?page={{ page_obj.previous_page_number }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.vehicle %}&vehicle={{ request.GET.vehicle }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
             <i class="fa-solid fa-angle-left"></i>
         </a>
         {% endif %}
@@ -229,10 +240,10 @@
         </span>
 
         {% if page_obj.has_next %}
-        <a href="?page={{ page_obj.next_page_number }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
+        <a href="?page={{ page_obj.next_page_number }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.vehicle %}&vehicle={{ request.GET.vehicle }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
             <i class="fa-solid fa-angle-right"></i>
         </a>
-        <a href="?page={{ page_obj.paginator.num_pages }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
+        <a href="?page={{ page_obj.paginator.num_pages }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.vehicle %}&vehicle={{ request.GET.vehicle }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
             <i class="fa-solid fa-angles-right"></i>
         </a>
         {% endif %}
@@ -292,6 +303,35 @@
         // Load preference
         const savedView = localStorage.getItem('tyreViewPreference') || 'grid';
         setView(savedView);
+
+        // Auto-submit search after typing
+        let searchTimeout;
+        $('#search').on('input', function() {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                $('#filterForm').submit();
+            }, 600); // 600ms delay
+        });
+
+        // Maintain focus and put cursor at the end of input if search value exists
+        const searchInput = $('#search')[0];
+        if (searchInput && searchInput.value) {
+            searchInput.focus();
+            const val = searchInput.value;
+            searchInput.value = '';
+            searchInput.value = val;
+        }
+
+        // Initialize Select2 for vehicle search dropdown
+        $('#vehicle').select2({
+            placeholder: "All Vehicles",
+            allowClear: true,
+            theme: 'bootstrap-5', // using the theme loaded in base.html if any, otherwise default
+            width: '100%'
+        }).on('change', function() {
+            // Auto submit when a vehicle is selected or cleared
+            $('#filterForm').submit();
+        });
     });
 </script>
 {% endblock %}

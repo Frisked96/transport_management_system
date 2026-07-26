@@ -25,7 +25,7 @@
                 <i class="fa-solid fa-truck-pickup mr-2"></i>Mount
             </a>
             {% else %}
-            <a href="{% url 'tyre-action' tyre.pk 'Dismount' %}" class="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-bold hover:bg-blue-700 shadow-sm transition-colors" onclick="return confirm('Dismount this tyre?')">
+            <a href="{% url 'tyre-log-create' %}?tyre={{ tyre.pk }}&action=Dismount" class="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-bold hover:bg-blue-700 shadow-sm transition-colors">
                 <i class="fa-solid fa-arrow-down-long mr-2"></i>Dismount
             </a>
             {% endif %}
@@ -201,7 +201,13 @@
                         <td class="px-6 py-4 text-center font-bold text-slate-700">{{ log.position|default:"-" }}</td>
                         <td class="px-6 py-4">
                             <div class="flex flex-col">
-                                <span class="text-xs font-bold text-slate-700">{{ log.logged_by.get_full_name|default:log.logged_by.username|default:"System" }}</span>
+                                <span class="text-xs font-bold text-slate-700">
+                                    {% if log.logged_by %}
+                                        {{ log.logged_by.get_full_name|default:log.logged_by.username }}
+                                    {% else %}
+                                        System
+                                    {% endif %}
+                                </span>
                             </div>
                         </td>
                         <td class="px-6 py-4 text-slate-500 text-xs">{{ log.notes|default:"-" }}</td>

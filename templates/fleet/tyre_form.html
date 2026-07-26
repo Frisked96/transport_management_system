@@ -200,6 +200,14 @@ $(document).ready(function() {
             });
         });
     });
+
+    // Initialize Select2 for the assigned vehicle dropdown
+    $('#id_current_vehicle').select2({
+        placeholder: "Select a vehicle",
+        allowClear: true,
+        theme: 'bootstrap-5',
+        width: '100%'
+    });
 });
 </script>
 {% endblock %}

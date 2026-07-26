@@ -50,12 +50,25 @@ class TyreListView(LoginRequiredMixin, ListView):
             queryset = queryset.filter(
                 Q(serial_number__icontains=search) |
                 Q(brand__icontains=search) |
-                Q(size__icontains=search)
+                Q(size__icontains=search) |
+                Q(current_vehicle__registration_plate__icontains=search)
             )
         status = self.request.GET.get('status')
         if status:
             queryset = queryset.filter(status=status)
+            
+        vehicle_id = self.request.GET.get('vehicle')
+        if vehicle_id:
+            queryset = queryset.filter(current_vehicle_id=vehicle_id)
+            
         return queryset.order_by('brand', 'serial_number')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        from .models import Vehicle
+        context['vehicles'] = Vehicle.objects.all().order_by('registration_plate')
+        context['selected_vehicle'] = self.request.GET.get('vehicle', '')
+        return context
 
 
 class TyreDetailView(LoginRequiredMixin, DetailView):

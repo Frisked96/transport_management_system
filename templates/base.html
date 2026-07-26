@@ -131,7 +131,7 @@
         </div>
         <div class="flex items-center space-x-4">
             <span id="upload-stats" class="text-xs font-medium bg-emerald-700 px-2 py-0.5 rounded-full"></span>
-            <button onclick="document.getElementById('upload-status-bar').classList.add('-translate-y-full'); sessionStorage.setItem('dismissedFailedCount', document.getElementById('upload-status-bar').getAttribute('data-failed-count') || '0');" class="text-white hover:text-emerald-200 p-2 ml-2">
+            <button onclick="dismissUploadStatus()" class="text-white hover:text-emerald-200 p-2 ml-2">
                 <i class="fa-solid fa-xmark"></i>
             </button>
         </div>
@@ -633,6 +633,16 @@
         // --- Background Upload Polling ---
         let uploadPollingInterval;
         let lastActiveCount = 0;
+        let uploadAutoDismissTimeout = null;
+
+        window.dismissUploadStatus = function() {
+            $('#upload-status-bar').addClass('-translate-y-full').removeClass('translate-y-0');
+            if (uploadAutoDismissTimeout) clearTimeout(uploadAutoDismissTimeout);
+            
+            // Store dismissed failed count in sessionStorage so it doesn't pop up on navigation
+            const currentFailed = $('#upload-status-bar').attr('data-failed-count') || '0';
+            sessionStorage.setItem('dismissedFailedCount', currentFailed);
+        };
 
         function checkUploadStatus() {
             {% if user.is_authenticated %}
@@ -653,7 +663,7 @@
                     $stats.text(`${data.active} queued`);
                     lastActiveCount = data.active;
                     
-                    sessionStorage.setItem('dismissedFailedCount', '0');
+                    sessionStorage.setItem('dismissedFailedCount', '0'); // reset on new activity
                 } else if (lastActiveCount > 0 && data.active === 0) {
                     // Just finished
                     $bar.find('> div').removeClass('bg-emerald-600').addClass('bg-blue-600');
@@ -674,6 +684,12 @@
                     $spinner.hide();
                     $stats.text('Error');
                     $bar.attr('data-failed-count', data.failed);
+                    
+                    // Auto dismiss after 15 seconds if unattended
+                    if (uploadAutoDismissTimeout) clearTimeout(uploadAutoDismissTimeout);
+                    uploadAutoDismissTimeout = setTimeout(() => {
+                        window.dismissUploadStatus();
+                    }, 15000);
                 }
             });
             {% endif %}
