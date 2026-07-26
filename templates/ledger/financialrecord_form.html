@@ -576,6 +576,10 @@
                     isInternalChange = true;
                     $billSelect.trigger('change.select2');
                     isInternalChange = false;
+                    
+                    if (currentBillId) {
+                        fetchBillBalanceForDisplay(currentBillId);
+                    }
 
                     renderUnpaidBills();
                     renderSelectedBills();
