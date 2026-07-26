@@ -55,10 +55,14 @@
                     {% endif %}
                 {% endif %}
             {% endfor %}
+            <!-- Simple field slots (used for non-Invoice Payment categories) -->
+            <div id="simple-amount-slot"></div>
+            <div id="simple-tds-amount-slot"></div>
+            <div id="simple-tds-pct-slot"></div>
         </div>
 
-        <!-- Payment Details Block -->
-        <div id="payment-details-block" class="border-2 border-slate-200 rounded-lg overflow-hidden mt-2">
+        <!-- Payment Details Block (Invoice Payment only) -->
+        <div id="payment-details-block" class="hidden border-2 border-slate-200 rounded-lg overflow-hidden mt-2">
             <div class="bg-slate-700 px-4 py-2.5">
                 <h3 class="text-sm font-bold text-white uppercase tracking-wider flex items-center">
                     <i class="fa-solid fa-indian-rupee-sign mr-2"></i>Payment Details
@@ -88,7 +92,7 @@
                 </div>
 
                 <!-- Amount + TDS Amount side by side -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div id="payment-block-fields" class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div id="wrapper_id_amount">
                         <label class="block text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider" for="id_amount">
                             Payment Amount
@@ -389,21 +393,79 @@
                 // Handle General Type (Simplified view but keeps Party/Account)
                 const isGeneral = recordType === 'General';
 
+                // --- Payment Details Block & Field Placement ---
+                const paymentBlock = document.getElementById('payment-details-block');
+                const simpleAmountSlot = document.getElementById('simple-amount-slot');
+                const simpleTdsAmountSlot = document.getElementById('simple-tds-amount-slot');
+                const simpleTdsPctSlot = document.getElementById('simple-tds-pct-slot');
+                const paymentBlockFields = document.getElementById('payment-block-fields');
+                const amountWrapper = document.getElementById('wrapper_id_amount');
+                const tdsAmountWrapper = document.getElementById('wrapper_id_tds_amount');
+                const tdsPercentageWrapper = document.getElementById('wrapper_id_tds_percentage');
+                const tdsCalcPanel = document.getElementById('tds-calculator-panel');
+                const isPaymentOut = categoryName.toLowerCase().includes('payment out');
+                const showTdsAmountSimple = isTripPayment || isPaymentOut || isStandard;
+
+                // Helper to move a wrapper into a slot and show it
+                function moveToSlot(wrapper, slot, show) {
+                    if (!wrapper || !slot) return;
+                    slot.appendChild(wrapper);
+                    if (show) {
+                        wrapper.classList.remove('hidden');
+                        slot.classList.remove('hidden');
+                    } else {
+                        wrapper.classList.add('hidden');
+                        slot.classList.add('hidden');
+                    }
+                }
+
                 if (isGeneral) {
                     if (document.getElementById('wrapper_id_party')) document.getElementById('wrapper_id_party').classList.remove('hidden');
                     if (driverFieldWrapper) driverFieldWrapper.classList.add('hidden');
                     if (associatedTripWrapper) associatedTripWrapper.classList.add('hidden');
                     if (associatedBillWrapper) associatedBillWrapper.classList.add('hidden');
-                    if (document.getElementById('wrapper_id_tds_percentage')) document.getElementById('wrapper_id_tds_percentage').classList.add('hidden');
-                    if (document.getElementById('wrapper_id_tds_amount')) document.getElementById('wrapper_id_tds_amount').classList.add('hidden');
                     if (multiTripArea) multiTripArea.classList.add('hidden');
                     if (multiBillArea) multiBillArea.classList.add('hidden');
+                    // General: amount in simple grid, no fancy block
+                    if (paymentBlock) paymentBlock.classList.add('hidden');
+                    moveToSlot(amountWrapper, simpleAmountSlot, true);
+                    moveToSlot(tdsAmountWrapper, simpleTdsAmountSlot, false);
+                    moveToSlot(tdsPercentageWrapper, simpleTdsPctSlot, false);
+                    if (tdsCalcPanel) tdsCalcPanel.classList.add('hidden');
                     return; 
                 } else {
-                    // For Transactions/Invoices, follow standard logic
                     if (document.getElementById('wrapper_id_party')) document.getElementById('wrapper_id_party').classList.remove('hidden');
                 }
-                
+
+                // --- Invoice Payment: show fancy Payment Details block ---
+                if (isInvoicePayment) {
+                    if (paymentBlock) paymentBlock.classList.remove('hidden');
+                    // Move fields into the payment block
+                    if (paymentBlockFields && amountWrapper) {
+                        paymentBlockFields.insertBefore(amountWrapper, paymentBlockFields.firstChild);
+                        amountWrapper.classList.remove('hidden');
+                    }
+                    if (paymentBlockFields && tdsAmountWrapper) {
+                        paymentBlockFields.appendChild(tdsAmountWrapper);
+                        tdsAmountWrapper.classList.remove('hidden');
+                    }
+                    if (simpleAmountSlot) simpleAmountSlot.classList.add('hidden');
+                    if (simpleTdsAmountSlot) simpleTdsAmountSlot.classList.add('hidden');
+                    if (simpleTdsPctSlot) simpleTdsPctSlot.classList.add('hidden');
+                    if (tdsCalcPanel) tdsCalcPanel.classList.remove('hidden');
+                    if (tdsPercentageWrapper) tdsPercentageWrapper.classList.add('hidden');
+                } else {
+                    // --- All other categories: simple fields in the grid ---
+                    if (paymentBlock) paymentBlock.classList.add('hidden');
+                    moveToSlot(amountWrapper, simpleAmountSlot, true);
+                    moveToSlot(tdsAmountWrapper, simpleTdsAmountSlot, showTdsAmountSimple);
+                    if (!showTdsAmountSimple && tdsAmountInput) tdsAmountInput.value = '';
+                    if (tdsCalcPanel) tdsCalcPanel.classList.add('hidden');
+
+                    // TDS % only for TDS category
+                    moveToSlot(tdsPercentageWrapper, simpleTdsPctSlot, isTDS);
+                }
+
                 // 1. Handle Multi-Trip Area (Only for Trip Payment with a Party)
                 if (multiTripArea) {
                     if (hasParty && isTripPayment) {
@@ -452,36 +514,6 @@
                 if (driverFieldWrapper) {
                     if (hasParty) driverFieldWrapper.classList.add('hidden');
                     else driverFieldWrapper.classList.remove('hidden');
-                }
-
-                // 5. Handle TDS % Field (only for TDS category entries)
-                const tdsPercentageWrapper = document.getElementById('wrapper_id_tds_percentage');
-                if (tdsPercentageWrapper) {
-                    if (isTDS) {
-                        tdsPercentageWrapper.classList.remove('hidden');
-                    } else {
-                        tdsPercentageWrapper.classList.add('hidden');
-                    }
-                }
-
-                // 5.5 Handle TDS Amount Field & Calculator
-                const tdsAmountWrapper = document.getElementById('wrapper_id_tds_amount');
-                const tdsCalcPanel = document.getElementById('tds-calculator-panel');
-                const showTdsFields = isTripPayment || isInvoicePayment || categoryName.toLowerCase().includes('payment out') || isStandard;
-                if (tdsAmountWrapper) {
-                    if (showTdsFields) {
-                        tdsAmountWrapper.classList.remove('hidden');
-                    } else {
-                        tdsAmountWrapper.classList.add('hidden');
-                        if (tdsAmountInput) tdsAmountInput.value = '';
-                    }
-                }
-                if (tdsCalcPanel) {
-                    if (showTdsFields) {
-                        tdsCalcPanel.classList.remove('hidden');
-                    } else {
-                        tdsCalcPanel.classList.add('hidden');
-                    }
                 }
             } catch (err) {
                 console.error("Error in updateUIState:", err);
