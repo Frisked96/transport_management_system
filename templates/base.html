@@ -131,7 +131,7 @@
         </div>
         <div class="flex items-center space-x-4">
             <span id="upload-stats" class="text-xs font-medium bg-emerald-700 px-2 py-0.5 rounded-full"></span>
-            <button onclick="document.getElementById('upload-status-bar').classList.add('-translate-y-full')" class="text-white hover:text-emerald-200">
+            <button onclick="document.getElementById('upload-status-bar').classList.add('-translate-y-full'); sessionStorage.setItem('dismissedFailedCount', document.getElementById('upload-status-bar').getAttribute('data-failed-count') || '0');" class="text-white hover:text-emerald-200 p-2 ml-2">
                 <i class="fa-solid fa-xmark"></i>
             </button>
         </div>
@@ -641,6 +641,8 @@
                 const $text = $('#upload-status-text');
                 const $spinner = $('#upload-spinner');
                 const $stats = $('#upload-stats');
+                
+                const dismissedFailed = parseInt(sessionStorage.getItem('dismissedFailedCount') || '0');
 
                 if (data.active > 0) {
                     // Active uploads
@@ -650,6 +652,8 @@
                     $spinner.show();
                     $stats.text(`${data.active} queued`);
                     lastActiveCount = data.active;
+                    
+                    sessionStorage.setItem('dismissedFailedCount', '0');
                 } else if (lastActiveCount > 0 && data.active === 0) {
                     // Just finished
                     $bar.find('> div').removeClass('bg-emerald-600').addClass('bg-blue-600');
@@ -662,13 +666,14 @@
                         $bar.removeClass('translate-y-0').addClass('-translate-y-full');
                         lastActiveCount = 0;
                     }, 5000);
-                } else if (data.failed > 0) {
+                } else if (data.failed > 0 && data.failed > dismissedFailed) {
                      // Failed uploads (only if not active)
                     $bar.removeClass('-translate-y-full').addClass('translate-y-0');
                     $bar.find('> div').removeClass('bg-emerald-600 bg-blue-600').addClass('bg-red-600');
                     $text.text(`${data.failed} upload(s) failed. Check Document Logs.`);
                     $spinner.hide();
                     $stats.text('Error');
+                    $bar.attr('data-failed-count', data.failed);
                 }
             });
             {% endif %}

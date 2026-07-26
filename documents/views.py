@@ -320,8 +320,8 @@ def get_upload_status(request):
     recent_time = timezone.now() - timedelta(minutes=10)
     completed_count = DocumentFile.objects.filter(upload_status='completed', created_at__gte=recent_time).count()
     
-    # Any failed uploads
-    failed_count = DocumentFile.objects.filter(upload_status='failed').count()
+    # Any failed uploads recently (last 10 minutes)
+    failed_count = DocumentFile.objects.filter(upload_status='failed', created_at__gte=recent_time).count()
     
     return JsonResponse({
         'active': active_count,
