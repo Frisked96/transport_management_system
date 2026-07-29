@@ -120,6 +120,13 @@
                                 </div>
                             </div>
 
+                            <!-- Vendor Hire -->
+                            <div class="xl:col-span-2 hidden vendor-hire-container transition-all duration-300">
+                                <label class="block text-[10px] font-black text-rose-500 uppercase tracking-widest mb-1">Vendor Hire (₹)</label>
+                                {{ single_form.vendor_hire_amount }}
+                                {% if single_form.vendor_hire_amount.errors %}<p class="text-rose-600 text-[10px] mt-1 font-bold">{{ single_form.vendor_hire_amount.errors.0 }}</p>{% endif %}
+                            </div>
+
                             <!-- Notes -->
                             <div class="xl:col-span-2 notes-container transition-all duration-300">
                                 <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Remarks / Notes</label>
@@ -205,6 +212,12 @@
                             <div class="est-revenue bg-emerald-50 border border-emerald-100 rounded-md px-3 py-2 text-xs font-black text-emerald-700 min-h-[38px] flex items-center shadow-inner">
                                 ₹ 0.00
                             </div>
+                        </div>
+
+                        <!-- Vendor Hire -->
+                        <div class="xl:col-span-2 hidden vendor-hire-container transition-all duration-300">
+                            <label class="block text-[10px] font-black text-rose-500 uppercase tracking-widest mb-1">Vendor Hire (₹)</label>
+                            {{ form.empty_form.vendor_hire_amount }}
                         </div>
 
                         <div class="xl:col-span-2 notes-container transition-all duration-300">
@@ -443,6 +456,47 @@ $(document).ready(function() {
         }
 
         $estRevenue.text('₹ ' + revenue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+        
+        // Vendor hire auto-sync logic
+        const $vendorHireContainer = $row.find('.vendor-hire-container');
+        const $vendorHireInput = $row.find('[name$="-vendor_hire_amount"]');
+        const prevRevenue = $row.data('prev-revenue') || 0;
+        const currentVendorHire = parseFloat($vendorHireInput.val()) || 0;
+        
+        if (!$vendorHireContainer.hasClass('hidden')) {
+            // Only auto-update if it's currently 0 or matches the previous revenue
+            if (currentVendorHire === 0 || currentVendorHire === prevRevenue) {
+                $vendorHireInput.val(revenue);
+            }
+        }
+        $row.data('prev-revenue', revenue);
+    }
+
+    function updateVendorHireState($row) {
+        const vehicleId = $row.find('[name$="-vehicle"]').val();
+        const cachedData = getCachedData();
+        const $vendorHireContainer = $row.find('.vendor-hire-container');
+        const $vendorHireInput = $row.find('[name$="-vendor_hire_amount"]');
+        
+        let isAttached = false;
+        if (vehicleId && cachedData.vehicles) {
+            const vehicle = cachedData.vehicles.find(v => v.id.toString() === vehicleId.toString());
+            if (vehicle && vehicle.ownership === 'Attached') {
+                isAttached = true;
+            }
+        }
+        
+        if (isAttached) {
+            $vendorHireContainer.removeClass('hidden');
+            const currentVal = parseFloat($vendorHireInput.val()) || 0;
+            const revenue = $row.data('prev-revenue') || 0;
+            if (currentVal === 0) {
+                $vendorHireInput.val(revenue);
+            }
+        } else {
+            $vendorHireContainer.addClass('hidden');
+            $vendorHireInput.val(0);
+        }
     }
 
     // Attach event listeners to row for revenue and rate defaults
@@ -462,6 +516,11 @@ $(document).ready(function() {
                     saveDraft();
                 }
             }
+        });
+        
+        $row.on('change', '[name$="-vehicle"]', function() {
+            updateVendorHireState($row);
+            saveDraft();
         });
     }
 
@@ -499,6 +558,7 @@ $(document).ready(function() {
         initSelect2($newRow);
         attachRowListeners($newRow);
         updateRevenue($newRow);
+        updateVendorHireState($newRow);
         saveDraft();
     }
 
@@ -542,6 +602,7 @@ $(document).ready(function() {
         initSelect2($(this));
         attachRowListeners($(this));
         updateRevenue($(this));
+        updateVendorHireState($(this));
     });
 
     // Load draft if no validation errors are present on page load (which means fresh page load)
