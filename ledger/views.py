@@ -539,29 +539,43 @@ def financial_summary(request):
     current_month = now.month
     current_year = now.year
     
-    # Month calculations
-    monthly_income = FinancialRecord.objects.filter(
+    monthly_tds = FinancialRecord.objects.filter(
+        category__name='TDS',
+        date__month=current_month,
+        date__year=current_year
+    ).exclude(record_type='Invoice').aggregate(total=Sum('amount'))['total'] or 0
+
+    monthly_income_all = FinancialRecord.objects.filter(
         category__type=TransactionCategory.TYPE_INCOME,
         date__month=current_month,
         date__year=current_year
-    ).aggregate(total=Sum('amount'))['total'] or 0
+    ).exclude(record_type='Invoice').aggregate(total=Sum('amount'))['total'] or 0
+    
+    monthly_income = monthly_income_all - monthly_tds
     
     monthly_expenses = FinancialRecord.objects.filter(
         category__type=TransactionCategory.TYPE_EXPENSE,
         date__month=current_month,
         date__year=current_year
-    ).aggregate(total=Sum('amount'))['total'] or 0
+    ).exclude(record_type='Invoice').aggregate(total=Sum('amount'))['total'] or 0
     
     # Year calculations
-    yearly_income = FinancialRecord.objects.filter(
+    yearly_tds = FinancialRecord.objects.filter(
+        category__name='TDS',
+        date__year=current_year
+    ).exclude(record_type='Invoice').aggregate(total=Sum('amount'))['total'] or 0
+
+    yearly_income_all = FinancialRecord.objects.filter(
         category__type=TransactionCategory.TYPE_INCOME,
         date__year=current_year
-    ).aggregate(total=Sum('amount'))['total'] or 0
+    ).exclude(record_type='Invoice').aggregate(total=Sum('amount'))['total'] or 0
+
+    yearly_income = yearly_income_all - yearly_tds
     
     yearly_expenses = FinancialRecord.objects.filter(
         category__type=TransactionCategory.TYPE_EXPENSE,
         date__year=current_year
-    ).aggregate(total=Sum('amount'))['total'] or 0
+    ).exclude(record_type='Invoice').aggregate(total=Sum('amount'))['total'] or 0
 
     # Calculate GST portion from all Bills
     from .models import Bill
@@ -580,7 +594,7 @@ def financial_summary(request):
             category=cat,
             date__month=current_month,
             date__year=current_year
-        ).aggregate(total=Sum('amount'))['total'] or 0
+        ).exclude(record_type='Invoice').aggregate(total=Sum('amount'))['total'] or 0
         if total > 0:
             category_breakdown.append({
                 'name': cat.name,
@@ -591,12 +605,12 @@ def financial_summary(request):
     context = {
         'monthly_income': monthly_income,
         'monthly_expenses': monthly_expenses,
-        'monthly_net_incl_gst': monthly_income - monthly_expenses,
-        'monthly_net_excl_gst': (monthly_income - monthly_gst) - monthly_expenses,
+        'monthly_net_incl_gst': monthly_income_all - monthly_expenses,
+        'monthly_net_excl_gst': (monthly_income_all - monthly_gst) - monthly_expenses,
         'yearly_income': yearly_income,
         'yearly_expenses': yearly_expenses,
-        'yearly_net_incl_gst': yearly_income - yearly_expenses,
-        'yearly_net_excl_gst': (yearly_income - yearly_gst) - yearly_expenses,
+        'yearly_net_incl_gst': yearly_income_all - yearly_expenses,
+        'yearly_net_excl_gst': (yearly_income_all - yearly_gst) - yearly_expenses,
         'category_breakdown': category_breakdown,
         'current_month': datetime(current_year, current_month, 1).strftime('%B %Y'),
     }
