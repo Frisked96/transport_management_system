@@ -143,6 +143,20 @@
                     </div>
                 </div>
 
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-center pt-4 border-t border-slate-100">
+                    <span class="text-sm font-semibold text-slate-500 uppercase tracking-wider">Associated Tyre</span>
+                    <div class="md:col-span-2">
+                        {% if record.associated_tyre %}
+                            <a href="{% url 'tyre-detail' record.associated_tyre.pk %}" class="inline-flex items-center space-x-2 text-indigo-600 hover:text-indigo-700 font-bold">
+                                <i class="fa-solid fa-dharmachakra"></i>
+                                <span>{{ record.associated_tyre.serial_number }} ({{ record.associated_tyre.brand }})</span>
+                            </a>
+                        {% else %}
+                            <span class="text-sm text-slate-400">Not linked to a tyre</span>
+                        {% endif %}
+                    </div>
+                </div>
+
                 {% if record.allocations.all %}
                 <div class="mt-8 pt-6 border-t border-slate-100">
                     <span class="text-sm font-semibold text-slate-500 uppercase tracking-wider block mb-4">Allocated Across Trips</span>

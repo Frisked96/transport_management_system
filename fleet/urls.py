@@ -28,6 +28,13 @@ urlpatterns = [
     path('tyre/<int:pk>/update/', views.TyreUpdateView.as_view(), name='tyre-update'),
     path('tyre/<int:pk>/delete/', views.TyreDeleteView.as_view(), name='tyre-delete'),
     path('tyre/log/add/', views.TyreLogCreateView.as_view(), name='tyre-log-create'),
+    path('tyre/log/<int:pk>/delete/', views.tyre_log_delete, name='tyre-log-delete'),
     path('tyre/<int:pk>/action/<str:action>/', views.tyre_quick_action, name='tyre-action'),
     path('tyre/<int:pk>/photo/', views.tyre_photo_serve, name='tyre-photo-serve'),
+    
+    # Tyre Brand URLs
+    path('tyre-brands/', views.TyreBrandListView.as_view(), name='tyre-brand-list'),
+    path('tyre-brands/create/', views.TyreBrandCreateView.as_view(), name='tyre-brand-create'),
+    path('tyre-brands/<int:pk>/update/', views.TyreBrandUpdateView.as_view(), name='tyre-brand-update'),
+    path('tyre-brands/<int:pk>/delete/', views.TyreBrandDeleteView.as_view(), name='tyre-brand-delete'),
 ]

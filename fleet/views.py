@@ -12,8 +12,8 @@ from django.db.models import Q, Count, Sum
 from django.http import JsonResponse, HttpResponse
 from ledger.models import Party
 
-from .models import Vehicle, MaintenanceRecord, Tyre, TyreLog
-from .forms import VehicleForm, MaintenanceRecordForm, MaintenanceCompleteForm, TyreForm, TyreLogForm
+from .models import Vehicle, MaintenanceRecord, Tyre, TyreLog, TyreBrand
+from .forms import VehicleForm, MaintenanceRecordForm, MaintenanceCompleteForm, TyreForm, TyreLogForm, TyreBrandForm
 
 
 class BaseFleetPermissionMixin:
@@ -88,7 +88,14 @@ class TyreCreateView(LoginRequiredMixin, CreateView):
     template_name = 'fleet/tyre_form.html'
     success_url = reverse_lazy('tyre-list')
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        from .models import TyreBrand
+        context['tyre_brands'] = TyreBrand.objects.all()
+        return context
+
     def form_valid(self, form):
+        form.instance._user = self.request.user
         messages.success(self.request, 'Tyre added to inventory.')
         return super().form_valid(form)
 
@@ -98,6 +105,12 @@ class TyreUpdateView(LoginRequiredMixin, UpdateView):
     form_class = TyreForm
     template_name = 'fleet/tyre_form.html'
     
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        from .models import TyreBrand
+        context['tyre_brands'] = TyreBrand.objects.all()
+        return context
+
     def get_success_url(self):
         return reverse_lazy('tyre-detail', kwargs={'pk': self.object.pk})
 
@@ -121,6 +134,59 @@ class TyreDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
         tyre = self.get_object()
         serial = tyre.serial_number
         messages.success(self.request, f'Tyre {serial} and all its history have been deleted.')
+        return super().delete(request, *args, **kwargs)
+
+
+# --- Tyre Brand Views ---
+
+class TyreBrandListView(LoginRequiredMixin, ListView):
+    model = TyreBrand
+    template_name = 'fleet/tyre_brand_list.html'
+    context_object_name = 'brands'
+    paginate_by = 25
+
+    def get_queryset(self):
+        queryset = TyreBrand.objects.all().order_by('name')
+        search = self.request.GET.get('search')
+        if search:
+            queryset = queryset.filter(name__icontains=search)
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['search_term'] = self.request.GET.get('search', '')
+        return context
+
+
+class TyreBrandCreateView(LoginRequiredMixin, CreateView):
+    model = TyreBrand
+    form_class = TyreBrandForm
+    template_name = 'fleet/tyre_brand_form.html'
+    success_url = reverse_lazy('tyre-brand-list')
+
+    def form_valid(self, form):
+        messages.success(self.request, 'Tyre brand added successfully.')
+        return super().form_valid(form)
+
+
+class TyreBrandUpdateView(LoginRequiredMixin, UpdateView):
+    model = TyreBrand
+    form_class = TyreBrandForm
+    template_name = 'fleet/tyre_brand_form.html'
+    success_url = reverse_lazy('tyre-brand-list')
+
+    def form_valid(self, form):
+        messages.success(self.request, 'Tyre brand updated successfully.')
+        return super().form_valid(form)
+
+
+class TyreBrandDeleteView(LoginRequiredMixin, DeleteView):
+    model = TyreBrand
+    template_name = 'fleet/tyre_brand_confirm_delete.html'
+    success_url = reverse_lazy('tyre-brand-list')
+
+    def delete(self, request, *args, **kwargs):
+        messages.success(self.request, 'Tyre brand deleted successfully.')
         return super().delete(request, *args, **kwargs)
 
 
@@ -195,6 +261,24 @@ class TyreLogCreateView(LoginRequiredMixin, CreateView):
 
     def get_success_url(self):
         return reverse_lazy('tyre-detail', kwargs={'pk': self.object.tyre.pk})
+
+@login_required
+def tyre_log_delete(request, pk):
+    """
+    Deletes a specific tyre log. Only superusers can delete logs.
+    """
+    log = get_object_or_404(TyreLog, pk=pk)
+    tyre_pk = log.tyre.pk
+    
+    if not request.user.is_superuser:
+        messages.error(request, 'Only superusers can delete tyre logs.')
+        return redirect('tyre-detail', pk=tyre_pk)
+        
+    if request.method == 'POST':
+        log.delete()
+        messages.success(request, 'Tyre log deleted successfully.')
+        
+    return redirect('tyre-detail', pk=tyre_pk)
 
 
 @login_required

@@ -72,6 +72,14 @@
                 <i class="fa-solid fa-filter"></i>
             </button>
         </div>
+        
+        <!-- Quick Links -->
+        <div class="md:col-span-12 flex items-center justify-end border-t border-slate-100 pt-3 mt-1">
+            <a href="{% url 'tyre-brand-list' %}" class="inline-flex items-center space-x-1.5 text-xs font-semibold text-slate-500 hover:text-emerald-600 transition-colors">
+                <i class="fa-solid fa-tags"></i>
+                <span>Manage Brands / Makes</span>
+            </a>
+        </div>
     </form>
 </section>
 <!-- END: Search & Filter Bar -->
@@ -89,7 +97,7 @@
                     <h3 class="font-black text-xl text-slate-900 leading-tight truncate group-hover:text-emerald-600 transition-colors uppercase">
                         <a href="{% url 'tyre-detail' tyre.pk %}">{{ tyre.serial_number }}</a>
                     </h3>
-                    <p class="text-xs font-bold text-slate-500 mt-1 uppercase">{{ tyre.brand }} • {{ tyre.size }}</p>
+                    <p class="text-xs font-bold text-slate-500 mt-1 uppercase">{{ tyre.brand }} {% if tyre.size %}• {{ tyre.size }}{% endif %}</p>
                 </div>
                 <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-tight
                     {% if tyre.status == 'Mounted' %}bg-emerald-100 text-emerald-800
@@ -185,7 +193,7 @@
                     </td>
                     <td class="px-6 py-4">
                         <span class="text-xs font-bold text-slate-600 uppercase">{{ tyre.brand }}</span>
-                        <span class="text-[10px] text-slate-400 ml-1">({{ tyre.size }})</span>
+                        {% if tyre.size %}<span class="text-[10px] text-slate-400 ml-1">({{ tyre.size }})</span>{% endif %}
                     </td>
                     <td class="px-6 py-4">
                         {% if tyre.current_vehicle %}

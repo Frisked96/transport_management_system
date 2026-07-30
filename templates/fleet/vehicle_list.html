@@ -35,7 +35,7 @@
     <form method="get">
         <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
             <!-- Search -->
-            <div class="md:col-span-8 flex flex-col">
+            <div class="md:col-span-5 flex flex-col">
                 <label for="search" class="text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">Search</label>
                 <div class="relative">
                     <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -49,17 +49,22 @@
             <!-- Status -->
             <div class="md:col-span-4 flex flex-col">
                 <label for="status" class="text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">Status:</label>
-                <div class="flex space-x-2">
-                    <select id="status" name="status" class="block w-full pl-3 pr-10 py-2 border border-slate-300 rounded-md text-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white flex-grow">
-                        <option value="">All Statuses</option>
-                        {% for value, label in status_choices %}
-                        <option value="{{ value }}" {% if current_status == value %}selected{% endif %}>{{ label }}</option>
-                        {% endfor %}
-                    </select>
-                    <button type="submit" class="bg-emerald-600 text-white px-4 py-2 rounded-md hover:bg-emerald-700 transition-colors">
-                        <i class="fa-solid fa-filter"></i>
-                    </button>
-                </div>
+                <select id="status" name="status" class="block w-full pl-3 pr-10 py-2 border border-slate-300 rounded-md text-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white">
+                    <option value="">All Statuses</option>
+                    {% for value, label in status_choices %}
+                    <option value="{{ value }}" {% if current_status == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <!-- Actions -->
+            <div class="md:col-span-3 flex items-end space-x-2 mt-2 md:mt-0">
+                <button type="submit" class="flex-grow bg-emerald-600 text-white px-4 py-2 rounded-md hover:bg-emerald-700 transition-colors text-sm font-medium">
+                    Apply Filter
+                </button>
+                <a href="{% url 'vehicle-list' %}" class="px-4 py-2 border border-slate-300 rounded-md text-slate-700 bg-white hover:bg-slate-50 text-sm font-medium transition-colors text-center">
+                    Clear
+                </a>
             </div>
         </div>
     </form>
@@ -78,7 +83,7 @@
             <div class="flex items-start justify-between mb-4">
                 <div class="min-w-0 flex items-start gap-3">
                     {% if perms.fleet.change_vehicle %}
-                    <div class="pt-1">
+                    <div class="pt-1 flex-shrink-0">
                         <input type="checkbox" name="vehicle_ids" value="{{ vehicle.pk }}" class="vehicle-checkbox w-5 h-5 text-emerald-600 border-slate-300 rounded focus:ring-emerald-500 cursor-pointer transition-colors shadow-sm">
                     </div>
                     {% endif %}
@@ -223,21 +228,21 @@
 <!-- END: Pagination -->
 
 <!-- BEGIN: Bulk Actions Toolbar -->
-<div id="bulkActionsToolbar" class="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 shadow-[0_-4px_6px_-1px_rgb(0,0,0,0.1)] transform translate-y-full transition-transform duration-300 z-50">
+<div id="bulkActionsToolbar" class="fixed bottom-16 lg:bottom-0 left-0 right-0 bg-white border-t border-slate-200 shadow-[0_-4px_6px_-1px_rgb(0,0,0,0.1)] transform translate-y-full transition-transform duration-300 z-50">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col md:flex-row items-center justify-between gap-4">
         <div class="flex items-center space-x-4">
             <span class="bg-emerald-100 text-emerald-800 text-xs font-bold px-2.5 py-1.5 rounded-full" id="selectedCount">0 Selected</span>
             <span class="text-sm font-medium text-slate-700">Apply Ownership Change:</span>
         </div>
-        <div class="flex items-center space-x-3 w-full md:w-auto">
-            <select name="ownership" id="bulkOwnershipSelect" class="block w-full md:w-48 pl-3 pr-10 py-2 text-sm border border-slate-300 focus:outline-none focus:ring-emerald-500 focus:border-emerald-500 rounded-md">
+        <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
+            <select name="ownership" id="bulkOwnershipSelect" class="block w-full sm:w-48 pl-3 pr-10 py-2 text-sm border border-slate-300 focus:outline-none focus:ring-emerald-500 focus:border-emerald-500 rounded-md">
                 <option value="">Select Ownership...</option>
                 <option value="Owned">Owned (Company Fleet)</option>
                 <option value="Attached">Attached (Market Vehicle)</option>
             </select>
             
-            <div id="bulkVendorContainer" class="hidden">
-                <select name="vendor" class="block w-full md:w-56 pl-3 pr-10 py-2 text-sm border border-slate-300 focus:outline-none focus:ring-emerald-500 focus:border-emerald-500 rounded-md">
+            <div id="bulkVendorContainer" class="hidden w-full sm:w-auto">
+                <select name="vendor" class="block w-full sm:w-56 pl-3 pr-10 py-2 text-sm border border-slate-300 focus:outline-none focus:ring-emerald-500 focus:border-emerald-500 rounded-md">
                     <option value="">Select Vendor...</option>
                     {% for vendor in vendors %}
                     <option value="{{ vendor.pk }}">{{ vendor.name }}</option>
@@ -245,13 +250,15 @@
                 </select>
             </div>
             
-            <button type="submit" class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500">
-                Apply Update
-            </button>
-            
-            <button type="button" id="cancelBulkBtn" class="inline-flex items-center px-3 py-2 border border-slate-300 shadow-sm text-sm font-medium rounded-md text-slate-700 bg-white hover:bg-slate-50 focus:outline-none">
-                Cancel
-            </button>
+            <div class="flex gap-2 w-full sm:w-auto">
+                <button type="submit" class="flex-1 sm:flex-none justify-center inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500">
+                    Apply Update
+                </button>
+                
+                <button type="button" id="cancelBulkBtn" class="flex-1 sm:flex-none justify-center inline-flex items-center px-3 py-2 border border-slate-300 shadow-sm text-sm font-medium rounded-md text-slate-700 bg-white hover:bg-slate-50 focus:outline-none">
+                    Cancel
+                </button>
+            </div>
         </div>
     </div>
 </div>

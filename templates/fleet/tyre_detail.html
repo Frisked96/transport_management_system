@@ -10,7 +10,7 @@
         <span>Tyre Details</span>
     </div>
     <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <h1 class="text-3xl font-bold text-slate-900 tracking-tight">{{ tyre.brand }} {{ tyre.size }}</h1>
+        <h1 class="text-3xl font-bold text-slate-900 tracking-tight">{{ tyre.brand }} {% if tyre.size %}{{ tyre.size }}{% else %}-{% endif %}</h1>
         <div class="flex items-center gap-2">
             {% if perms.fleet.change_tyre %}
             <a href="{% url 'tyre-update' tyre.pk %}" class="px-4 py-2 border border-slate-300 rounded-md bg-white text-slate-700 text-sm font-bold hover:bg-slate-50 transition-colors">
@@ -79,11 +79,32 @@
                             </tr>
                             <tr class="border-b border-slate-50">
                                 <td class="py-2 text-slate-500 font-medium whitespace-nowrap pr-4">Dimension/Size</td>
-                                <td class="py-2 text-slate-900 font-bold">{{ tyre.size }}</td>
+                                <td class="py-2 text-slate-900 font-bold">{% if tyre.size %}{{ tyre.size }}{% else %}-{% endif %}</td>
                             </tr>
-                            <tr>
+                            <tr class="border-b border-slate-50">
                                 <td class="py-2 text-slate-500 font-medium whitespace-nowrap pr-4">Purchase Cost</td>
                                 <td class="py-2 text-emerald-700 font-black">₹{{ tyre.purchase_cost|floatformat:2 }}</td>
+                            </tr>
+                            <tr class="border-b border-slate-50">
+                                <td class="py-2 text-slate-500 font-medium whitespace-nowrap pr-4">Purchase Date</td>
+                                <td class="py-2 text-slate-900 font-bold">{{ tyre.purchase_date|date:"d M Y"|default:"-" }}</td>
+                            </tr>
+                            <tr class="border-b border-slate-50">
+                                <td class="py-2 text-slate-500 font-medium whitespace-nowrap pr-4">Vendor</td>
+                                <td class="py-2 text-slate-900 font-bold">{{ tyre.vendor.name|default:"-" }}</td>
+                            </tr>
+                            <tr>
+                                <td class="py-2 text-slate-500 font-medium whitespace-nowrap pr-4">System Entry</td>
+                                <td class="py-2 text-slate-900 font-bold">
+                                    {% if tyre.added_at %}
+                                        <div class="flex flex-col">
+                                            <span>{{ tyre.added_at|date:"d M Y, H:i" }}</span>
+                                            <span class="text-[10px] text-slate-400 font-medium mt-0.5">By: {{ tyre.added_by.get_full_name|default:tyre.added_by.username|default:"System" }}</span>
+                                        </div>
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
                             </tr>
                         </table>
                     </div>
@@ -172,6 +193,9 @@
                         <th class="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">Position</th>
                         <th class="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider">Logged By</th>
                         <th class="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider">Remarks</th>
+                        {% if request.user.is_superuser %}
+                        <th class="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider text-right">Actions</th>
+                        {% endif %}
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
@@ -211,9 +235,19 @@
                             </div>
                         </td>
                         <td class="px-6 py-4 text-slate-500 text-xs">{{ log.notes|default:"-" }}</td>
+                        {% if request.user.is_superuser %}
+                        <td class="px-6 py-4 text-right">
+                            <form action="{% url 'tyre-log-delete' log.pk %}" method="post" class="inline" onsubmit="return confirm('Are you sure you want to delete this log entry?');">
+                                {% csrf_token %}
+                                <button type="submit" class="text-rose-500 hover:text-rose-700 transition-colors" title="Delete Log">
+                                    <i class="fa-solid fa-trash-can text-sm"></i>
+                                </button>
+                            </form>
+                        </td>
+                        {% endif %}
                     </tr>
                     {% empty %}
-                    <tr><td colspan="5" class="px-6 py-12 text-center text-slate-400 italic">No movement history recorded.</td></tr>
+                    <tr><td colspan="{% if request.user.is_superuser %}7{% else %}6{% endif %}" class="px-6 py-12 text-center text-slate-400 italic">No movement history recorded.</td></tr>
                     {% endfor %}
                 </tbody>
             </table>

@@ -350,6 +350,10 @@
                                         </div>
                                     {% elif record.linked_trip %}
                                     <a href="{% url 'trip-detail' record.linked_trip.pk %}" class="text-xs font-bold text-emerald-600 hover:underline uppercase">{{ record.linked_trip.trip_number }}</a>
+                                    {% elif record.associated_tyre %}
+                                    <a href="{% url 'tyre-detail' record.associated_tyre.pk %}" class="text-xs font-bold text-indigo-600 hover:underline uppercase" title="Tyre Serial: {{ record.associated_tyre.serial_number }}">
+                                        <i class="fa-solid fa-dharmachakra mr-1"></i>{{ record.associated_tyre.brand }}
+                                    </a>
                                     {% else %}-{% endif %}
                                 </td>
                                 <td class="px-6 py-3 text-[10px] text-slate-500 font-medium">

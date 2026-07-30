@@ -358,6 +358,14 @@ class FinancialRecord(models.Model):
         related_name='financial_records',
         verbose_name='Associated Bill'
     )
+    associated_tyre = models.ForeignKey(
+        'fleet.Tyre',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='financial_records',
+        verbose_name='Associated Tyre'
+    )
 
     record_type = models.CharField(
         max_length=20,

@@ -3,7 +3,7 @@ Forms for Fleet application
 """
 from django import forms
 from django.utils import timezone
-from .models import Vehicle, MaintenanceRecord, Tyre, TyreLog
+from .models import Vehicle, MaintenanceRecord, Tyre, TyreLog, TyreBrand
 
 
 class VehicleForm(forms.ModelForm):
@@ -129,8 +129,16 @@ class TyreForm(forms.ModelForm):
     """
     Form for adding/editing Tyres
     """
+    brand = forms.ChoiceField(choices=[], required=True, label="Brand / Make")
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        
+        # Populate brand choices from TyreBrand model
+        brand_choices = [('', '---------')]
+        brand_choices.extend([(b.name, b.name) for b in TyreBrand.objects.all().order_by('name')])
+        self.fields['brand'].choices = brand_choices
+
         for field in self.fields.values():
             field.widget.attrs.update({'class': 'block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white'})
         
@@ -139,15 +147,13 @@ class TyreForm(forms.ModelForm):
             self.fields['status'].widget.attrs['disabled'] = True
             self.fields['status'].required = False
 
-        # Add data-autocomplete-field for JS to hook into
-        self.fields['brand'].widget.attrs.update({'data-autocomplete': 'tyre_brand', 'list': 'tyre_brand_list'})
         self.fields['size'].widget.attrs.update({'data-autocomplete': 'tyre_size', 'list': 'tyre_size_list'})
 
     class Meta:
         model = Tyre
         fields = [
             'serial_number', 'brand', 'size', 'purchase_date', 
-            'purchase_cost', 'current_vehicle', 'current_position', 'status', 'photo', 'notes'
+            'purchase_cost', 'vendor', 'current_vehicle', 'current_position', 'status', 'photo', 'notes'
         ]
         widgets = {
             'purchase_date': forms.DateInput(attrs={'type': 'date'}),
@@ -159,6 +165,24 @@ class TyreForm(forms.ModelForm):
         if self.instance.pk:
             return self.instance.status
         return self.cleaned_data.get('status')
+
+
+class TyreBrandForm(forms.ModelForm):
+    """
+    Form for creating and editing Tyre Brands
+    """
+    class Meta:
+        model = TyreBrand
+        fields = ['name', 'suggestive_price', 'vendor']
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        tailwind_classes = "block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white"
+        self.fields['suggestive_price'].widget.attrs.update({'class': tailwind_classes + " pl-7"})
+        self.fields['vendor'].queryset = self.fields['vendor'].queryset.filter(party_type='Creditor')
+        for field_name, field in self.fields.items():
+            if field_name != 'suggestive_price':
+                field.widget.attrs.update({'class': tailwind_classes})
 
 
 class TyreLogForm(forms.ModelForm):

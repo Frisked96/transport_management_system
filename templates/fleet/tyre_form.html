@@ -49,7 +49,6 @@
                             Brand
                         </label>
                         {{ form.brand }}
-                        <datalist id="tyre_brand_list"></datalist>
                         {% if form.brand.errors %}
                             <p class="text-red-500 text-xs mt-1">{{ form.brand.errors.0 }}</p>
                         {% endif %}
@@ -71,7 +70,7 @@
             <!-- Section 2: Purchase Details -->
             <div class="pt-8 border-t border-slate-100 space-y-6">
                 <h4 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Acquisition Details</h4>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div>
                         <label for="{{ form.purchase_date.id_for_label }}" class="block text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider">
                             Purchase Date
@@ -94,6 +93,13 @@
                             </div>
                             {{ form.purchase_cost }}
                         </div>
+                    </div>
+
+                    <div>
+                        <label for="{{ form.vendor.id_for_label }}" class="block text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider">
+                            Vendor
+                        </label>
+                        {{ form.vendor }}
                     </div>
                 </div>
             </div>
@@ -184,7 +190,22 @@
 {% block extra_js %}
 <script>
 $(document).ready(function() {
-    // Generic Autocomplete for Tyre Fields
+    // Store tyre brand prices globally from Django context
+    window.tyreBrandPrices = {
+        {% for b in tyre_brands %}
+            "{{ b.name|escapejs }}": parseFloat("{{ b.suggestive_price|default:0 }}") || 0,
+        {% endfor %}
+    };
+    
+    // Store tyre brand default vendors
+    window.tyreBrandVendors = {
+        {% for b in tyre_brands %}
+            {% if b.vendor %}
+            "{{ b.name|escapejs }}": "{{ b.vendor.id }}",
+            {% endif %}
+        {% endfor %}
+    };
+
     $('[data-autocomplete]').on('input', function() {
         const field = $(this).data('autocomplete');
         const listId = $(this).attr('list');
@@ -196,14 +217,55 @@ $(document).ready(function() {
             const datalist = $('#' + listId);
             datalist.empty();
             data.results.forEach(item => {
-                datalist.append(`<option value="${item}">`);
+                const itemText = item.text || item;
+                datalist.append(`<option value="${itemText}">`);
             });
         });
+    });
+
+    // Auto-fill purchase cost and vendor when brand is selected
+    $('#id_brand').on('change', function() {
+        const brand = $(this).val();
+        const price = window.tyreBrandPrices[brand];
+        const vendorId = window.tyreBrandVendors[brand];
+        
+        if (price) {
+            const $costInput = $('#id_purchase_cost');
+            const currentCost = parseFloat($costInput.val()) || 0;
+            
+            // Only update if current cost is 0 or empty (so we don't overwrite manual edits)
+            if (currentCost === 0) {
+                $costInput.val(price);
+            }
+        }
+        
+        if (vendorId) {
+            const $vendorSelect = $('#id_vendor');
+            // Only update if current vendor is not selected
+            if (!$vendorSelect.val()) {
+                $vendorSelect.val(vendorId).trigger('change');
+            }
+        }
     });
 
     // Initialize Select2 for the assigned vehicle dropdown
     $('#id_current_vehicle').select2({
         placeholder: "Select a vehicle",
+        allowClear: true,
+        theme: 'bootstrap-5',
+        width: '100%'
+    });
+
+    // Initialize Select2 for the brand dropdown
+    $('#id_brand').select2({
+        placeholder: "Select a brand",
+        theme: 'bootstrap-5',
+        width: '100%'
+    });
+    
+    // Initialize Select2 for the vendor dropdown
+    $('#id_vendor').select2({
+        placeholder: "Select a vendor",
         allowClear: true,
         theme: 'bootstrap-5',
         width: '100%'

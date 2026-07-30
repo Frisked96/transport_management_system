@@ -174,3 +174,26 @@
     }
 </style>
 {% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    $('#id_vehicle').select2({
+        placeholder: "Select a vehicle",
+        allowClear: true,
+        theme: 'bootstrap-5',
+        width: '100%'
+    });
+    
+    // Also initialize tyre field if it's rendered as a select
+    if ($('#id_tyre').is('select')) {
+        $('#id_tyre').select2({
+            placeholder: "Select a tyre",
+            allowClear: true,
+            theme: 'bootstrap-5',
+            width: '100%'
+        });
+    }
+});
+</script>
+{% endblock %}

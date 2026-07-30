@@ -561,7 +561,7 @@ def get_autocomplete_suggestions(request):
     Returns suggestions for Select2.
     """
     field = request.GET.get('field')
-    term = request.GET.get('term', '')
+    term = request.GET.get('term', request.GET.get('q', ''))
     
     results = []
     
@@ -580,8 +580,20 @@ def get_autocomplete_suggestions(request):
                 seen_names.add(name)
 
     elif field == 'tyre_brand':
-        qs = Tyre.objects.filter(brand__icontains=term).values_list('brand', flat=True).distinct()[:10]
-        results = [{'id': x, 'text': x} for x in qs]
+        from fleet.models import TyreBrand
+        qs = TyreBrand.objects.filter(name__icontains=term).order_by('name')[:10]
+        results = []
+        for brand in qs:
+            results.append({
+                'id': brand.name, 
+                'text': brand.name,
+                'price': str(brand.suggestive_price) if brand.suggestive_price else ''
+            })
+        
+        # Also include historical distinct brands if we want, but let's just use TyreBrand since that's the new standard
+        if not results:
+            qs_old = Tyre.objects.filter(brand__icontains=term).values_list('brand', flat=True).distinct()[:10]
+            results = [{'id': x, 'text': x, 'price': ''} for x in qs_old]
     elif field == 'tyre_size':
         qs = Tyre.objects.filter(size__icontains=term).values_list('size', flat=True).distinct()[:10]
         results = [{'id': x, 'text': x} for x in qs]
