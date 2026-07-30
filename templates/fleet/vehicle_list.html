@@ -89,8 +89,11 @@
                     {% endif %}
                     <div>
                         <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Registration No.</span>
-                        <h3 class="font-black text-xl text-slate-900 leading-tight truncate group-hover:text-emerald-600 transition-colors uppercase">
+                        <h3 class="font-black text-xl text-slate-900 leading-tight truncate group-hover:text-emerald-600 transition-colors uppercase flex items-center gap-2">
                             <a href="{% url 'vehicle-detail' vehicle.pk %}">{{ vehicle.registration_plate }}</a>
+                            {% if vehicle.is_attached %}
+                            <span class="px-1 py-0.5 rounded text-[10px] font-black uppercase tracking-tight bg-orange-100 text-orange-600">ATT</span>
+                            {% endif %}
                         </h3>
                         <p class="text-xs font-bold text-slate-500 mt-1 uppercase">{{ vehicle.make_model|default:"-" }}</p>
                     </div>
