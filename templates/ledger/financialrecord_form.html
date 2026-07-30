@@ -120,18 +120,18 @@
                         <i class="fa-solid fa-calculator text-amber-600 text-sm"></i>
                         <span class="text-xs font-bold text-amber-800 uppercase tracking-wider">Quick TDS Calculator</span>
                     </div>
-                    <div class="flex items-end gap-3">
-                        <div class="flex-1">
+                    <div class="flex flex-col sm:flex-row sm:items-end gap-3">
+                        <div class="flex-1 w-full">
                             <label class="block text-[10px] font-semibold text-slate-600 mb-1 uppercase">TDS %</label>
-                            <div class="flex">
+                            <div class="flex w-full">
                                 <input type="number" id="inline-tds-pct" step="0.01" min="0" max="100" placeholder="e.g. 2" 
-                                    class="flex-1 px-3 py-2 border border-amber-300 rounded-l-md text-sm shadow-sm focus:ring-amber-500 focus:border-amber-500 bg-white" />
-                                <button type="button" id="btn-calc-tds" class="px-4 py-2 bg-amber-600 text-white text-sm font-medium rounded-r-md hover:bg-amber-700 transition-colors">
+                                    class="w-full min-w-0 px-3 py-2 border border-amber-300 rounded-l-md text-sm shadow-sm focus:ring-amber-500 focus:border-amber-500 bg-white" />
+                                <button type="button" id="btn-calc-tds" class="whitespace-nowrap px-4 py-2 bg-amber-600 text-white text-sm font-medium rounded-r-md hover:bg-amber-700 transition-colors">
                                     <i class="fa-solid fa-bolt mr-1"></i>Calculate
                                 </button>
                             </div>
                         </div>
-                        <div class="text-right">
+                        <div class="flex justify-between items-center sm:block sm:text-right bg-amber-100/50 sm:bg-transparent p-2 sm:p-0 rounded-md w-full sm:w-auto">
                             <span class="block text-[10px] font-semibold text-slate-500 uppercase">Calculated TDS</span>
                             <span class="text-lg font-bold text-amber-700" id="calc-tds-result">—</span>
                         </div>

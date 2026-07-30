@@ -424,36 +424,41 @@
 
         <!-- Drawer Footer: User Profile -->
         {% if user.is_authenticated %}
-        <div class="border-t border-slate-700 px-4 py-4 space-y-2">
-            <div class="flex items-center space-x-3 mb-3">
-                <div class="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center">
-                    <i class="fa-solid fa-user text-slate-400"></i>
+        <details class="group border-t border-slate-700">
+            <summary class="flex items-center justify-between px-4 py-4 cursor-pointer list-none select-none [&::-webkit-details-marker]:hidden">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center">
+                        <i class="fa-solid fa-user text-slate-400"></i>
+                    </div>
+                    <div>
+                        <p class="text-sm font-bold text-white">{{ user.username }}</p>
+                        <p class="text-[10px] text-slate-400 uppercase tracking-wider">{{ user.groups.all.0.name|default:"User" }}</p>
+                    </div>
                 </div>
-                <div>
-                    <p class="text-sm font-bold text-white">{{ user.username }}</p>
-                    <p class="text-[10px] text-slate-400 uppercase tracking-wider">{{ user.groups.all.0.name|default:"User" }}</p>
-                </div>
+                <i class="fa-solid fa-chevron-down text-slate-400 group-open:rotate-180 transition-transform"></i>
+            </summary>
+            <div class="px-4 pb-4 space-y-2">
+                <a href="{% url 'user-profile' %}" class="flex items-center px-3 py-2 rounded-lg text-xs font-medium text-slate-400 hover:bg-slate-700 hover:text-white transition-colors">
+                    <i class="fa-solid fa-user-circle mr-2"></i>My Profile
+                </a>
+                {% if user.is_authenticated and request.user.is_superuser or perms.trips.can_view_manager_dashboard %}
+                <a href="{% url 'global-resync' %}" class="flex items-center px-3 py-2 rounded-lg text-xs font-medium text-emerald-400 hover:bg-slate-700 transition-colors">
+                    <i class="fa-solid fa-sync-alt mr-2"></i>Resync Balances
+                </a>
+                {% endif %}
+                {% if user.is_superuser %}
+                <a href="{% url 'user-list' %}" class="flex items-center px-3 py-2 rounded-lg text-xs font-medium text-slate-400 hover:bg-slate-700 hover:text-white transition-colors">
+                    <i class="fa-solid fa-users-gear mr-2"></i>User Management
+                </a>
+                {% endif %}
+                <form method="post" action="{% url 'logout' %}" class="block">
+                    {% csrf_token %}
+                    <button type="submit" class="w-full flex items-center px-3 py-2 rounded-lg text-xs font-medium text-rose-400 hover:bg-slate-700 hover:text-rose-300 focus:outline-none transition-colors">
+                        <i class="fa-solid fa-right-from-bracket mr-2"></i>Logout
+                    </button>
+                </form>
             </div>
-            <a href="{% url 'user-profile' %}" class="flex items-center px-3 py-2 rounded-lg text-xs font-medium text-slate-400 hover:bg-slate-700 hover:text-white transition-colors">
-                <i class="fa-solid fa-user-circle mr-2"></i>My Profile
-            </a>
-            {% if user.is_authenticated and request.user.is_superuser or perms.trips.can_view_manager_dashboard %}
-            <a href="{% url 'global-resync' %}" class="flex items-center px-3 py-2 rounded-lg text-xs font-medium text-emerald-400 hover:bg-slate-700 transition-colors">
-                <i class="fa-solid fa-sync-alt mr-2"></i>Resync Balances
-            </a>
-            {% endif %}
-            {% if user.is_superuser %}
-            <a href="{% url 'user-list' %}" class="flex items-center px-3 py-2 rounded-lg text-xs font-medium text-slate-400 hover:bg-slate-700 hover:text-white transition-colors">
-                <i class="fa-solid fa-users-gear mr-2"></i>User Management
-            </a>
-            {% endif %}
-            <form method="post" action="{% url 'logout' %}" class="block">
-                {% csrf_token %}
-                <button type="submit" class="w-full flex items-center px-3 py-2 rounded-lg text-xs font-medium text-rose-400 hover:bg-slate-700 hover:text-rose-300 focus:outline-none transition-colors">
-                    <i class="fa-solid fa-right-from-bracket mr-2"></i>Logout
-                </button>
-            </form>
-        </div>
+        </details>
         {% endif %}
     </div>
 </div>
