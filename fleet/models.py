@@ -280,6 +280,42 @@ class MaintenanceRecord(models.Model):
             )
 
 
+class TyreBrand(models.Model):
+    """
+    Pre-defined tyre brands/makes with suggestive pricing.
+    Used as reference data for tyre inventory management.
+    """
+    name = models.CharField(
+        max_length=100,
+        unique=True,
+        verbose_name='Brand / Make'
+    )
+    suggestive_price = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        verbose_name='Suggestive Price',
+        help_text='Suggested purchase price for tyres of this brand'
+    )
+    vendor = models.ForeignKey(
+        'ledger.Party',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        limit_choices_to={'party_type': 'Creditor'},
+        verbose_name='Default Vendor',
+        help_text='Vendor to automatically bill when a tyre of this brand is created'
+    )
+
+    class Meta:
+        verbose_name = 'Tyre Brand'
+        verbose_name_plural = 'Tyre Brands'
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+
 class Tyre(models.Model):
     """
     Inventory management for individual tyres.
@@ -299,9 +335,17 @@ class Tyre(models.Model):
 
     serial_number = models.CharField(max_length=100, unique=True, verbose_name='Serial Number')
     brand = models.CharField(max_length=100, verbose_name='Brand')
-    size = models.CharField(max_length=50, verbose_name='Size')
+    size = models.CharField(max_length=50, blank=True, null=True, verbose_name='Size')
     purchase_date = models.DateField(null=True, blank=True, verbose_name='Purchase Date')
     purchase_cost = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    vendor = models.ForeignKey(
+        'ledger.Party',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        limit_choices_to={'party_type': 'Creditor'},
+        verbose_name='Vendor'
+    )
     
     current_vehicle = models.ForeignKey(
         Vehicle,
@@ -319,6 +363,16 @@ class Tyre(models.Model):
 
     def __str__(self):
         return f"{self.brand} {self.size} ({self.serial_number})"
+
+    @property
+    def added_by(self):
+        initial_log = self.logs.order_by('created_at').first()
+        return initial_log.logged_by if initial_log else None
+        
+    @property
+    def added_at(self):
+        initial_log = self.logs.order_by('created_at').first()
+        return initial_log.created_at if initial_log else None
 
     def save(self, *args, **kwargs):
         is_new = self._state.adding
@@ -349,8 +403,20 @@ class Tyre(models.Model):
                     action=TyreLog.ACTION_MOUNT,
                     vehicle=self.current_vehicle,
                     position=self.current_position,
-                    notes="Initial mount on creation"
+                    notes="Initial mount on creation",
+                    date=self.purchase_date or timezone.now().date(),
+                    logged_by=getattr(self, '_user', None)
                 )
+            else:
+                TyreLog.objects.create(
+                    tyre=self,
+                    action=TyreLog.ACTION_STOCK,
+                    notes="Initial addition to stock",
+                    date=self.purchase_date or timezone.now().date(),
+                    logged_by=getattr(self, '_user', None)
+                )
+
+
         else:
             # Check for changes in vehicle or position
             vehicle_changed = old_instance.current_vehicle != self.current_vehicle
@@ -408,6 +474,71 @@ class Tyre(models.Model):
                         notes="Repair completed, moved back to stock"
                     )
 
+        # Sync financial record for tyre purchase unconditionally
+        self.sync_financial_record()
+
+    def sync_financial_record(self):
+        """
+        Creates, updates, or deletes the ledger entry linked to this tyre purchase.
+        """
+        from ledger.models import FinancialRecord, TransactionCategory
+        from django.utils import timezone
+        
+        final_vendor = self.vendor
+        if not final_vendor and self.brand:
+            try:
+                tyre_brand = TyreBrand.objects.get(name=self.brand)
+                final_vendor = tyre_brand.vendor
+            except TyreBrand.DoesNotExist:
+                pass
+                
+        # Find existing record
+        record = FinancialRecord.objects.filter(associated_tyre=self).first()
+        
+        if self.purchase_cost > 0 and final_vendor:
+            category, _ = TransactionCategory.objects.get_or_create(
+                name='Tyre Purchase',
+                defaults={
+                    'type': TransactionCategory.TYPE_EXPENSE,
+                    'description': 'Purchases of new tyres'
+                }
+            )
+            
+            if record:
+                # Update existing record
+                updated = False
+                if record.amount != self.purchase_cost:
+                    record.amount = self.purchase_cost
+                    updated = True
+                if record.party != final_vendor:
+                    record.party = final_vendor
+                    updated = True
+                if self.purchase_date and record.date != self.purchase_date:
+                    record.date = self.purchase_date
+                    updated = True
+                
+                if record.record_type != FinancialRecord.RECORD_TYPE_INVOICE:
+                    record.record_type = FinancialRecord.RECORD_TYPE_INVOICE
+                    updated = True
+                    
+                if updated:
+                    record.save()
+            else:
+                # Create new record
+                FinancialRecord.objects.create(
+                    date=self.purchase_date or getattr(self, '_created_date', None) or timezone.now().date(),
+                    party=final_vendor,
+                    record_type=FinancialRecord.RECORD_TYPE_INVOICE,
+                    category=category,
+                    amount=self.purchase_cost,
+                    associated_tyre=self,
+                    description=f"Auto-generated entry for tyre purchase: {self.serial_number} ({self.brand})"
+                )
+        else:
+            # Delete record if it exists but condition is no longer met
+            if record:
+                record.delete()
+
 
 class TyreLog(models.Model):
     """
@@ -420,6 +551,7 @@ class TyreLog(models.Model):
     ACTION_REPAIR = 'Repair'
     ACTION_REMOLD = 'Remold'
     ACTION_SCRAP = 'Scrap'
+    ACTION_STOCK = 'Stock'
 
     ACTION_CHOICES = [
         (ACTION_MOUNT, 'Mount'),
@@ -428,6 +560,7 @@ class TyreLog(models.Model):
         (ACTION_REPAIR, 'Repair'),
         (ACTION_REMOLD, 'Remold'),
         (ACTION_SCRAP, 'Scrap'),
+        (ACTION_STOCK, 'Stock'),
     ]
 
     tyre = models.ForeignKey(Tyre, on_delete=models.CASCADE, related_name='logs')
