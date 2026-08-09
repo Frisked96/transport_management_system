@@ -30,14 +30,33 @@ class UserProfileView(LoginRequiredMixin, DetailView):
         last_seen = cache.get(f'last-seen-{user.id}')
         context['last_online'] = last_seen
         
-        # Fetch recent actions from different apps
-        from trips.models import Trip
-        from ledger.models import Bill
-        from drivers.models import DriverTransaction
+        from django.contrib.admin.models import LogEntry
+        from django.utils import timezone
+        import datetime
         
-        context['recent_trips'] = Trip.objects.filter(created_by=user).order_by('-created_at')[:5]
-        context['recent_bills'] = Bill.objects.filter(created_by=user).order_by('-created_at')[:5]
-        context['recent_driver_tx'] = DriverTransaction.objects.filter(created_by=user).order_by('-created_at')[:5]
+        # Get filter parameters
+        action_type = self.request.GET.get('action', '')
+        time_filter = self.request.GET.get('time', '')
+        
+        # Fetch generic activity log
+        activities = LogEntry.objects.filter(user=user).select_related('content_type')
+        
+        # Apply action filter
+        if action_type in ['1', '2', '3']:
+            activities = activities.filter(action_flag=action_type)
+            
+        # Apply time filter
+        if time_filter == '7':
+            activities = activities.filter(action_time__gte=timezone.now() - datetime.timedelta(days=7))
+        elif time_filter == '30':
+            activities = activities.filter(action_time__gte=timezone.now() - datetime.timedelta(days=30))
+            
+        activities = activities.order_by('-action_time')[:50]
+        context['activities'] = activities
+        
+        # Pass active filters to context for template
+        context['active_action'] = action_type
+        context['active_time'] = time_filter
         
         return context
 

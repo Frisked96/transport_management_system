@@ -72,72 +72,77 @@
         <!-- Recent Activity -->
         <div class="md:col-span-2 space-y-6">
             <div class="bg-white shadow rounded-lg border border-slate-200 overflow-hidden">
-                <div class="px-6 py-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
-                    <h3 class="text-sm font-bold text-slate-900 uppercase tracking-widest">Recent Activity</h3>
-                    <i class="fa-solid fa-clock-rotate-left text-slate-400"></i>
+                <div class="px-6 py-4 bg-slate-50 border-b border-slate-200">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-sm font-bold text-slate-900 uppercase tracking-widest">Recent Activity</h3>
+                        <i class="fa-solid fa-clock-rotate-left text-slate-400"></i>
+                    </div>
+                    <form method="get" class="flex flex-col sm:flex-row gap-3">
+                        <select name="action" class="block w-full sm:w-auto pl-3 pr-10 py-2 text-base border-slate-300 focus:outline-none focus:ring-emerald-500 focus:border-emerald-500 sm:text-sm rounded-md shadow-sm" onchange="this.form.submit()">
+                            <option value="">All Actions</option>
+                            <option value="1" {% if active_action == '1' %}selected{% endif %}>Additions</option>
+                            <option value="2" {% if active_action == '2' %}selected{% endif %}>Changes</option>
+                            <option value="3" {% if active_action == '3' %}selected{% endif %}>Deletions</option>
+                        </select>
+                        <select name="time" class="block w-full sm:w-auto pl-3 pr-10 py-2 text-base border-slate-300 focus:outline-none focus:ring-emerald-500 focus:border-emerald-500 sm:text-sm rounded-md shadow-sm" onchange="this.form.submit()">
+                            <option value="">All Time</option>
+                            <option value="7" {% if active_time == '7' %}selected{% endif %}>Last 7 Days</option>
+                            <option value="30" {% if active_time == '30' %}selected{% endif %}>Last 30 Days</option>
+                        </select>
+                    </form>
                 </div>
                 
                 <div class="divide-y divide-slate-100">
-                    {% if not recent_trips and not recent_bills and not recent_driver_tx %}
+                    {% if not activities %}
                     <div class="p-8 text-center text-slate-500 italic">
                         No recent activity recorded.
                     </div>
                     {% endif %}
 
-                    {% for trip in recent_trips %}
+                    {% for activity in activities %}
                     <div class="p-4 hover:bg-slate-50 transition-colors flex items-start">
+                        {% if activity.is_addition %}
                         <div class="w-8 h-8 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mr-3 mt-1">
-                            <i class="fa-solid fa-truck text-xs"></i>
+                            <i class="fa-solid fa-plus text-xs"></i>
                         </div>
-                        <div class="flex-grow">
-                            <div class="flex justify-between">
-                                <p class="text-sm font-semibold text-slate-900">Created Trip #{{ trip.trip_number }}</p>
-                                <span class="text-[10px] text-slate-400">{{ trip.created_at|timesince }} ago</span>
-                            </div>
-                            <p class="text-xs text-slate-500">{{ trip.pickup_location }} to {{ trip.delivery_location }}</p>
-                        </div>
-                        <a href="{% url 'trip-detail' trip.pk %}" class="ml-4 text-slate-400 hover:text-emerald-600">
-                            <i class="fa-solid fa-chevron-right text-sm"></i>
-                        </a>
-                    </div>
-                    {% endfor %}
-
-                    {% for bill in recent_bills %}
-                    <div class="p-4 hover:bg-slate-50 transition-colors flex items-start">
+                        {% elif activity.is_change %}
                         <div class="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center mr-3 mt-1">
-                            <i class="fa-solid fa-file-invoice-dollar text-xs"></i>
+                            <i class="fa-solid fa-pen text-xs"></i>
                         </div>
+                        {% elif activity.is_deletion %}
+                        <div class="w-8 h-8 rounded-full bg-red-100 text-red-600 flex items-center justify-center mr-3 mt-1">
+                            <i class="fa-solid fa-trash text-xs"></i>
+                        </div>
+                        {% else %}
+                        <div class="w-8 h-8 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center mr-3 mt-1">
+                            <i class="fa-solid fa-circle text-xs"></i>
+                        </div>
+                        {% endif %}
                         <div class="flex-grow">
                             <div class="flex justify-between">
-                                <p class="text-sm font-semibold text-slate-900">Generated Invoice #{{ bill.bill_number }}</p>
-                                <span class="text-[10px] text-slate-400">{{ bill.created_at|timesince }} ago</span>
+                                <p class="text-sm font-semibold text-slate-900">
+                                    {{ activity.get_action_flag_display }} {{ activity.content_type.name|title }}
+                                </p>
+                                <span class="text-[10px] text-slate-400" title="{{ activity.action_time }}">{{ activity.action_time|timesince }} ago</span>
                             </div>
-                            <p class="text-xs text-slate-500">Party: {{ bill.party.name }} | Amount: {{ bill.total_amount }}</p>
+                            <p class="text-xs text-slate-500">
+                                {{ activity.object_repr }}
+                                {% if activity.change_message and activity.change_message != 'Added' and activity.change_message != 'Changed' and activity.change_message != 'Deleted' %}
+                                 - <span class="italic">{{ activity.change_message }}</span>
+                                {% endif %}
+                            </p>
                         </div>
-                        <a href="{% url 'bill-detail' bill.pk %}" class="ml-4 text-slate-400 hover:text-blue-600">
+                        {% if activity.get_admin_url %}
+                        <a href="{{ activity.get_admin_url }}" class="ml-4 text-slate-400 hover:text-indigo-600">
                             <i class="fa-solid fa-chevron-right text-sm"></i>
                         </a>
-                    </div>
-                    {% endfor %}
-
-                    {% for tx in recent_driver_tx %}
-                    <div class="p-4 hover:bg-slate-50 transition-colors flex items-start">
-                        <div class="w-8 h-8 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center mr-3 mt-1">
-                            <i class="fa-solid fa-money-bill-transfer text-xs"></i>
-                        </div>
-                        <div class="flex-grow">
-                            <div class="flex justify-between">
-                                <p class="text-sm font-semibold text-slate-900">Driver Transaction: {{ tx.get_transaction_type_display }}</p>
-                                <span class="text-[10px] text-slate-400">{{ tx.created_at|timesince }} ago</span>
-                            </div>
-                            <p class="text-xs text-slate-500">Driver: {{ tx.driver.user.get_full_name|default:tx.driver.user.username }} | Amount: {{ tx.amount }}</p>
-                        </div>
+                        {% endif %}
                     </div>
                     {% endfor %}
                 </div>
                 
                 <div class="bg-slate-50 px-6 py-3 border-t border-slate-100 text-center">
-                    <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Showing last 5 items of each category</p>
+                    <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Showing last 50 activities</p>
                 </div>
             </div>
         </div>
