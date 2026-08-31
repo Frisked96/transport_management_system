@@ -385,10 +385,8 @@ class Trip(models.Model):
             
             # Using Sequences for robust atomic numbering
             total_count = Sequence.next_value(f"trip_total_{self.vehicle.pk}")
-            month_count = Sequence.next_value(f"trip_month_{self.vehicle.pk}_{ref_date.year}_{ref_date.month}")
-            year_count = Sequence.next_value(f"trip_year_{self.vehicle.pk}_{ref_date.year}")
             
-            self.trip_number = f"{reg_plate}-{total_count}/{month_count}/{year_count}"
+            self.trip_number = f"{reg_plate}-{total_count}"
         
         # If trip_number already exists but vehicle plate changed (manual correction)
         # ensure the prefix matches the current plate

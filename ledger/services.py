@@ -509,21 +509,13 @@ class TripFinancialService:
         reg_plate = vehicle.registration_plate
         
         total_count = 0
-        monthly_counts = {}
-        yearly_counts = {}
         
         trips_to_update = []
         
         for trip in trips:
             total_count += 1
-            ref_date = trip.date
-            year, month = ref_date.year, ref_date.month
             
-            monthly_key = (year, month)
-            monthly_counts[monthly_key] = monthly_counts.get(monthly_key, 0) + 1
-            yearly_counts[year] = yearly_counts.get(year, 0) + 1
-            
-            new_number = f"{reg_plate}-{total_count}/{monthly_counts[monthly_key]}/{yearly_counts[year]}"
+            new_number = f"{reg_plate}-{total_count}"
             
             if trip.trip_number != new_number:
                 trip.trip_number = new_number
@@ -544,7 +536,3 @@ class TripFinancialService:
         
         # Update sequences
         Sequence.objects.filter(key=f"trip_total_{vehicle.pk}").update(value=total_count)
-        for (year, month), val in monthly_counts.items():
-            Sequence.objects.filter(key=f"trip_month_{vehicle.pk}_{year}_{month}").update(value=val)
-        for year, val in yearly_counts.items():
-            Sequence.objects.filter(key=f"trip_year_{vehicle.pk}_{year}").update(value=val)

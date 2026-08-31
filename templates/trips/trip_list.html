@@ -54,85 +54,99 @@
 <!-- BEGIN: Search & Filter Bar -->
 <section class="bg-slate-100 p-4 rounded-xl border border-slate-200 mb-6">
     <form method="get" id="filter-form">
-        <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-3">
             <!-- Search -->
             <div class="md:col-span-3 lg:col-span-2 flex flex-col">
-                <label for="search" class="text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-widest">General Search</label>
+                <label for="search" class="text-[9px] font-black text-slate-500 mb-1 uppercase tracking-widest">General Search</label>
                 <div class="relative">
-                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <i class="fa-solid fa-magnifying-glass text-slate-400"></i>
+                    <div class="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none">
+                        <i class="fa-solid fa-magnifying-glass text-slate-400 text-[10px]"></i>
                     </div>
-                    <input type="text" id="search" name="search" class="block w-full pl-9 pr-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white" 
-                           value="{{ search_term }}" placeholder="Trip #, Vehicle, Party...">
+                    <input type="text" id="search" name="search" class="block w-full pl-7 pr-2 py-1 border border-slate-300 rounded-md text-xs focus:ring-emerald-500 focus:border-emerald-500 bg-white" 
+                           value="{{ search_term }}" placeholder="Trip, Vehicle...">
                 </div>
             </div>
 
             <!-- LR Search -->
             <div class="md:col-span-3 lg:col-span-2 flex flex-col">
-                <label for="lr_search" class="text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-widest">Search LR No</label>
+                <label for="lr_search" class="text-[9px] font-black text-slate-500 mb-1 uppercase tracking-widest">Search LR No</label>
                 <div class="relative">
-                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <i class="fa-solid fa-file-contract text-slate-400"></i>
+                    <div class="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none">
+                        <i class="fa-solid fa-file-contract text-slate-400 text-[10px]"></i>
                     </div>
-                    <input type="text" id="lr_search" name="lr_search" class="block w-full pl-9 pr-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white" 
+                    <input type="text" id="lr_search" name="lr_search" class="block w-full pl-7 pr-2 py-1 border border-slate-300 rounded-md text-xs focus:ring-emerald-500 focus:border-emerald-500 bg-white" 
                            value="{{ current_lr_search }}" placeholder="Exact LR No...">
                 </div>
             </div>
 
             <!-- Party Filter -->
             <div class="md:col-span-3 lg:col-span-3 flex flex-col">
-                <label for="party" class="text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-widest">Filter by Party</label>
-                <select id="party" name="party" class="block w-full select2-party">
-                    <option value="">All Parties</option>
-                </select>
+                <label for="party" class="text-[9px] font-black text-slate-500 mb-1 uppercase tracking-widest">Filter by Party</label>
+                <div class="h-[26px]"> <!-- Wrapper to constrain select2 height -->
+                    <select id="party" name="party" class="block w-full select2-party text-xs">
+                        <option value="">All Parties</option>
+                    </select>
+                </div>
             </div>
             
-            <!-- Date Range & Quick Filters -->
+            <!-- Date Filters -->
             <div class="md:col-span-3 lg:col-span-3 flex flex-col">
-                <div class="flex justify-between items-center mb-1.5">
-                    <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Date Range</label>
-                    <div class="flex gap-2">
-                        <a href="?date_filter=today{% if current_party %}&party={{ current_party }}{% endif %}{% if current_lr_search %}&lr_search={{ current_lr_search }}{% endif %}" class="text-[9px] font-black uppercase {% if date_filter == 'today' %}text-emerald-600{% else %}text-slate-400 hover:text-slate-600{% endif %}">Today</a>
-                        <a href="?date_filter=yesterday{% if current_party %}&party={{ current_party }}{% endif %}{% if current_lr_search %}&lr_search={{ current_lr_search }}{% endif %}" class="text-[9px] font-black uppercase {% if date_filter == 'yesterday' %}text-emerald-600{% else %}text-slate-400 hover:text-slate-600{% endif %}">Yesterday</a>
-                        <a href="?date_filter=last_7_days{% if current_party %}&party={{ current_party }}{% endif %}{% if current_lr_search %}&lr_search={{ current_lr_search }}{% endif %}" class="text-[9px] font-black uppercase {% if date_filter == 'last_7_days' %}text-emerald-600{% else %}text-slate-400 hover:text-slate-600{% endif %}">7 Days</a>
+                <div class="flex justify-between items-center mb-1">
+                    <label class="text-[9px] font-black text-slate-500 uppercase tracking-widest">Date Filters</label>
+                    <div class="flex gap-1.5">
+                        <a href="?date_filter=today{% if current_party %}&party={{ current_party }}{% endif %}{% if current_lr_search %}&lr_search={{ current_lr_search }}{% endif %}" class="text-[8px] font-black uppercase {% if date_filter == 'today' %}text-emerald-600{% else %}text-slate-400 hover:text-slate-600{% endif %}">Today</a>
+                        <a href="?date_filter=yesterday{% if current_party %}&party={{ current_party }}{% endif %}{% if current_lr_search %}&lr_search={{ current_lr_search }}{% endif %}" class="text-[8px] font-black uppercase {% if date_filter == 'yesterday' %}text-emerald-600{% else %}text-slate-400 hover:text-slate-600{% endif %}">Yest</a>
+                        <a href="?date_filter=last_7_days{% if current_party %}&party={{ current_party }}{% endif %}{% if current_lr_search %}&lr_search={{ current_lr_search }}{% endif %}" class="text-[8px] font-black uppercase {% if date_filter == 'last_7_days' %}text-emerald-600{% else %}text-slate-400 hover:text-slate-600{% endif %}">7d</a>
                     </div>
                 </div>
-                <div class="flex space-x-2">
-                    <input type="date" name="start_date" class="block w-full px-2 py-2 border border-slate-300 rounded-md text-xs focus:ring-emerald-500 focus:border-emerald-500 bg-white" value="{{ start_date }}">
-                    <input type="date" name="end_date" class="block w-full px-2 py-2 border border-slate-300 rounded-md text-xs focus:ring-emerald-500 focus:border-emerald-500 bg-white" value="{{ end_date }}">
+                <div class="flex flex-col gap-1">
+                    <div class="relative">
+                        <div class="absolute inset-y-0 left-0 pl-1.5 flex items-center pointer-events-none">
+                            <span class="text-[8px] font-bold text-slate-400 uppercase">Exact</span>
+                        </div>
+                        <input type="date" name="exact_date" class="block w-full pl-9 pr-1 py-0.5 border border-slate-300 rounded-md text-[10px] focus:ring-emerald-500 focus:border-emerald-500 bg-white" value="{{ exact_date }}">
+                    </div>
+                    <div class="flex space-x-1">
+                        <input type="date" name="start_date" class="block w-full px-1.5 py-0.5 border border-slate-300 rounded-md text-[10px] focus:ring-emerald-500 focus:border-emerald-500 bg-white" value="{{ start_date }}" title="Start Date">
+                        <input type="date" name="end_date" class="block w-full px-1.5 py-0.5 border border-slate-300 rounded-md text-[10px] focus:ring-emerald-500 focus:border-emerald-500 bg-white" value="{{ end_date }}" title="End Date">
+                    </div>
                 </div>
             </div>
 
             <!-- Sort By -->
             <div class="md:col-span-3 lg:col-span-2 flex flex-col">
-                <label for="sort" class="text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-widest">Status & Sort</label>
-                <div class="flex flex-col gap-2">
-                    <select id="billing_status" name="billing_status" class="block w-full pl-3 pr-8 py-1.5 border border-slate-300 rounded-md text-[10px] font-bold uppercase focus:ring-emerald-500 focus:border-emerald-500 bg-white">
-                        <option value="">Category: All</option>
-                        <option value="unbilled" {% if current_billing_status == 'unbilled' %}selected{% endif %}>Unbilled</option>
-                        <option value="billed" {% if current_billing_status == 'billed' %}selected{% endif %}>Billed Only</option>
-                    </select>
-                    <select id="gst_filter" name="gst_filter" class="block w-full pl-3 pr-8 py-1.5 border border-slate-300 rounded-md text-[10px] font-bold uppercase focus:ring-emerald-500 focus:border-emerald-500 bg-white">
-                        <option value="">GST: All</option>
-                        <option value="gst" {% if current_gst_filter == 'gst' %}selected{% endif %}>GST Trips</option>
-                        <option value="non_gst" {% if current_gst_filter == 'non_gst' %}selected{% endif %}>Non-GST</option>
-                    </select>
-                    <select id="status" name="status" class="block w-full pl-3 pr-8 py-1.5 border border-slate-300 rounded-md text-[10px] font-bold uppercase focus:ring-emerald-500 focus:border-emerald-500 bg-white">
-                        <option value="">Status: All</option>
-                        {% for value, label in status_choices %}
-                        <option value="{{ value }}" {% if current_status == value %}selected{% endif %}>{{ label }}</option>
-                        {% endfor %}
-                    </select>
-                    <div class="flex gap-2">
-                        <select id="sort" name="sort" class="block w-full pl-3 pr-8 py-1.5 border border-slate-300 rounded-md text-[10px] font-bold uppercase focus:ring-emerald-500 focus:border-emerald-500 bg-white flex-grow">
-                            <option value="-date" {% if current_sort == '-date' %}selected{% endif %}>Newest</option>
-                            <option value="date" {% if current_sort == 'date' %}selected{% endif %}>Oldest</option>
-                            <option value="-weight" {% if current_sort == '-weight' %}selected{% endif %}>Weight</option>
-                            <option value="-revenue" {% if current_sort == '-revenue' %}selected{% endif %}>Revenue</option>
+                <label for="sort" class="text-[9px] font-black text-slate-500 mb-1 uppercase tracking-widest">Status & Sort</label>
+                <div class="flex flex-col gap-1">
+                    <div class="grid grid-cols-2 gap-1">
+                        <select id="billing_status" name="billing_status" class="block w-full pl-1.5 pr-4 py-0.5 border border-slate-300 rounded-md text-[9px] font-bold uppercase focus:ring-emerald-500 focus:border-emerald-500 bg-white">
+                            <option value="">Bill: All</option>
+                            <option value="unbilled" {% if current_billing_status == 'unbilled' %}selected{% endif %}>Unbilled</option>
+                            <option value="billed" {% if current_billing_status == 'billed' %}selected{% endif %}>Billed</option>
                         </select>
-                        <button type="submit" class="bg-slate-800 text-white px-2 py-1 rounded-md hover:bg-slate-900 transition-colors">
-                            <i class="fa-solid fa-check text-xs"></i>
-                        </button>
+                        <select id="gst_filter" name="gst_filter" class="block w-full pl-1.5 pr-4 py-0.5 border border-slate-300 rounded-md text-[9px] font-bold uppercase focus:ring-emerald-500 focus:border-emerald-500 bg-white">
+                            <option value="">GST: All</option>
+                            <option value="gst" {% if current_gst_filter == 'gst' %}selected{% endif %}>GST</option>
+                            <option value="non_gst" {% if current_gst_filter == 'non_gst' %}selected{% endif %}>No GST</option>
+                        </select>
+                    </div>
+                    <div class="grid grid-cols-2 gap-1">
+                        <select id="status" name="status" class="block w-full pl-1.5 pr-4 py-0.5 border border-slate-300 rounded-md text-[9px] font-bold uppercase focus:ring-emerald-500 focus:border-emerald-500 bg-white">
+                            <option value="">Pay: All</option>
+                            {% for value, label in status_choices %}
+                            <option value="{{ value }}" {% if current_status == value %}selected{% endif %}>{{ label|truncatechars:8 }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="flex gap-1">
+                            <select id="sort" name="sort" class="block w-full pl-1.5 pr-4 py-0.5 border border-slate-300 rounded-md text-[9px] font-bold uppercase focus:ring-emerald-500 focus:border-emerald-500 bg-white flex-grow">
+                                <option value="-date" {% if current_sort == '-date' %}selected{% endif %}>Newest</option>
+                                <option value="date" {% if current_sort == 'date' %}selected{% endif %}>Oldest</option>
+                                <option value="-weight" {% if current_sort == '-weight' %}selected{% endif %}>Weight</option>
+                                <option value="-revenue" {% if current_sort == '-revenue' %}selected{% endif %}>Revenue</option>
+                            </select>
+                            <button type="submit" class="bg-slate-800 text-white px-1.5 rounded-md hover:bg-slate-900 transition-colors" title="Apply Filters">
+                                <i class="fa-solid fa-check text-[10px]"></i>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -168,11 +182,10 @@
 
             <div class="p-4 flex-grow">
                 <div class="mb-3">
-                    <span class="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-0.5">Trip / LR No</span>
-                    <h3 class="font-black text-base text-slate-900 leading-tight truncate group-hover:text-emerald-600 transition-colors">
-                        <a href="{% url 'trip-detail' trip.pk %}">{{ trip.trip_number }}</a>
+                    <span class="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-0.5">Truck Number</span>
+                    <h3 class="font-black text-base text-slate-900 leading-tight truncate group-hover:text-emerald-600 transition-colors uppercase">
+                        <a href="{% url 'trip-detail' trip.pk %}">{{ trip.vehicle.registration_plate }}</a>
                     </h3>
-                    {% if trip.lr_no %}<span class="text-[9px] font-bold text-slate-400 block uppercase">LR: {{ trip.lr_no }}</span>{% endif %}
                 </div>
 
                 <div class="space-y-2 text-[11px]">
@@ -181,25 +194,20 @@
                         <span class="font-black text-slate-700 truncate ml-4 max-w-[120px]">{{ trip.party.name|default:"-" }}</span>
                     </div>
                     <div class="flex items-center justify-between">
-                        <span class="text-slate-400 font-bold uppercase tracking-tighter">Vehicle</span>
-                        <span class="font-black text-slate-700 uppercase">{{ trip.vehicle.registration_plate }}</span>
+                        <span class="text-slate-400 font-bold uppercase tracking-tighter">Route</span>
+                        <span class="font-black text-slate-700 truncate ml-4 max-w-[120px]" title="{{ trip.pickup_location|default:'-' }} → {{ trip.delivery_location|default:'-' }}">{{ trip.pickup_location|default:"-"|truncatechars:15 }} → {{ trip.delivery_location|default:"-"|truncatechars:15 }}</span>
                     </div>
                     <div class="pt-2 border-t border-slate-50 grid grid-cols-2 gap-y-2">
                         <div class="text-left">
                             <span class="text-[8px] font-bold text-slate-400 uppercase block">Weight / Rate</span>
-                            <span class="font-black text-slate-900 text-xs">{{ trip.weight|indian_comma }} <span class="text-slate-300 font-normal">@</span> {{ trip.rate_per_ton|indian_comma }}</span>
-                        </div>
-                        <div class="text-right">
-                            <span class="text-[8px] font-bold text-slate-400 uppercase block">Subtotal</span>
-                            <span class="font-black text-slate-600 text-xs">₹{{ trip.revenue|indian_comma }}</span>
-                        </div>
-                        <div class="text-left">
-                            <span class="text-[8px] font-bold text-slate-400 uppercase block">Tax (GST)</span>
-                            <span class="font-black text-slate-500 text-xs">₹{{ trip.gst_amount|indian_comma }}</span>
+                            <span class="font-black text-slate-900 text-xs">{{ trip.weight|default:"-" }} <span class="text-slate-300 font-normal">@</span> {{ trip.rate_per_ton|indian_comma }}</span>
                         </div>
                         <div class="text-right">
                             <span class="text-[8px] font-bold text-emerald-600 uppercase block">Total Revenue</span>
                             <span class="font-black text-emerald-600 text-sm">₹{{ trip.total_revenue|indian_comma }}</span>
+                            {% if trip.gst_amount > 0 %}
+                            <span class="text-[8px] font-bold text-slate-400 uppercase block mt-0.5 tracking-tighter">Incl. ₹{{ trip.gst_amount|indian_comma }} Tax</span>
+                            {% endif %}
                         </div>
                     </div>
                 </div>
@@ -229,26 +237,36 @@
         <a href="{% url 'trip-detail' trip.pk %}" class="block bg-white border border-slate-200 rounded-lg p-3 active:bg-slate-50 transition-colors">
             <div class="flex justify-between items-start mb-2">
                 <div class="min-w-0">
-                    <p class="text-[10px] font-black text-slate-400 uppercase leading-none mb-1">{{ trip.date|date:"d/m/y" }} • {{ trip.vehicle.registration_plate }}</p>
-                    <h3 class="text-sm font-black text-slate-900 truncate uppercase">{{ trip.trip_number }}</h3>
-                    {% if trip.lr_no %}<p class="text-[9px] font-bold text-slate-500 uppercase">LR: {{ trip.lr_no }}</p>{% endif %}
+                    <p class="text-[10px] font-black text-slate-400 uppercase leading-none mb-1">{{ trip.date|date:"d/m/y" }}</p>
+                    <h3 class="text-sm font-black text-slate-900 truncate uppercase">{{ trip.vehicle.registration_plate }}</h3>
                 </div>
                 <div class="text-right shrink-0">
+                    <p class="text-[10px] font-black text-emerald-600 uppercase leading-none mb-1">Revenue</p>
                     <p class="text-sm font-black text-emerald-600 leading-none">₹{{ trip.total_revenue|indian_comma }}</p>
                     {% if trip.gst_amount > 0 %}
-                    <p class="text-[8px] font-bold text-slate-400 uppercase mt-1">Incl. ₹{{ trip.gst_amount|indian_comma }} Tax</p>
+                    <p class="text-[8px] font-bold text-slate-400 uppercase mt-1 tracking-tighter">Incl. ₹{{ trip.gst_amount|indian_comma }} Tax</p>
                     {% endif %}
-                    <span class="inline-block mt-1 px-1.5 py-0.5 rounded text-[8px] font-black uppercase
-                        {% if trip.annotated_status == 'Paid' %}bg-emerald-100 text-emerald-700
-                        {% elif trip.annotated_status == 'Partially Paid' %}bg-amber-100 text-amber-700
-                        {% else %}bg-slate-100 text-slate-600{% endif %}">
-                        {{ trip.annotated_status }}
-                    </span>
                 </div>
             </div>
-            <div class="flex items-center justify-between pt-2 border-t border-slate-50">
-                <p class="text-[10px] font-bold text-slate-700 truncate w-2/3 uppercase">{% if trip.party %}{{ trip.party.name }}{% else %}-{% endif %}</p>
-                <p class="text-[9px] font-bold text-slate-400 uppercase">{{ trip.pickup_location|default:"-"|truncatechars:10 }} → {{ trip.delivery_location|default:"-"|truncatechars:10 }}</p>
+            <div class="flex items-start justify-between pt-2 border-t border-slate-50">
+                <div class="w-1/2 pr-2">
+                    <p class="text-[10px] font-bold text-slate-700 truncate uppercase">{% if trip.party %}{{ trip.party.name }}{% else %}-{% endif %}</p>
+                    <p class="text-[9px] font-bold text-slate-400 uppercase truncate mt-0.5" title="{{ trip.pickup_location|default:'-' }} → {{ trip.delivery_location|default:'-' }}">{{ trip.pickup_location|default:"-"|truncatechars:10 }} → {{ trip.delivery_location|default:"-"|truncatechars:10 }}</p>
+                </div>
+                <div class="text-right w-1/2">
+                    <div class="flex justify-end gap-1 mb-1">
+                        {% if trip.annotated_is_billed %}
+                        <span class="text-[8px] font-black text-blue-600 bg-blue-50 px-1 py-0.5 rounded border border-blue-100 uppercase">Billed</span>
+                        {% endif %}
+                        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-tighter
+                            {% if trip.annotated_status == 'Paid' %}bg-emerald-100 text-emerald-700
+                            {% elif trip.annotated_status == 'Partially Paid' %}bg-amber-100 text-amber-700
+                            {% else %}bg-slate-100 text-slate-500{% endif %}">
+                            {{ trip.annotated_status }}
+                        </span>
+                    </div>
+                    <p class="text-[9px] font-bold text-slate-500 uppercase">{{ trip.weight|default:"-" }} MT @ ₹{{ trip.rate_per_ton|indian_comma }}</p>
+                </div>
             </div>
         </a>
         {% endfor %}
@@ -261,12 +279,11 @@
                 <thead>
                     <tr class="bg-slate-50 border-b border-slate-200">
                         <th class="px-6 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Date</th>
-                        <th class="px-6 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Trip # / LR</th>
-                        <th class="px-6 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Party</th>
-                        <th class="px-6 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Vehicle</th>
-                        <th class="px-6 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400 text-right">Rate</th>
-                        <th class="px-6 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400 text-right">Tax (GST)</th>
-                        <th class="px-6 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400 text-right">Revenue (Total)</th>
+                        <th class="px-6 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Truck Number</th>
+                        <th class="px-6 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Party Name</th>
+                        <th class="px-6 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Pick & Drop Location</th>
+                        <th class="px-6 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400 text-right">Weight / Rate</th>
+                        <th class="px-6 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400 text-right">Revenue</th>
                         <th class="px-6 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400 text-center">Status</th>
                         <th class="px-6 py-3"></th>
                     </tr>
@@ -275,25 +292,37 @@
                     {% for trip in trips %}
                     <tr class="hover:bg-slate-50 transition-colors group">
                         <td class="px-6 py-3 whitespace-nowrap text-slate-500 font-medium">{{ trip.date|date:"d/m/y" }}</td>
-                        <td class="px-6 py-3">
-                            <a href="{% url 'trip-detail' trip.pk %}" class="font-black text-slate-900 hover:text-emerald-600 block">{{ trip.trip_number }}</a>
-                            {% if trip.lr_no %}<span class="text-[10px] text-slate-400 font-bold uppercase">LR: {{ trip.lr_no }}</span>{% endif %}
+                        <td class="px-6 py-3 font-black text-slate-600 uppercase tracking-tight">
+                            <a href="{% url 'trip-detail' trip.pk %}" class="hover:text-emerald-600 block">{{ trip.vehicle.registration_plate }}</a>
                         </td>
-                        <td class="px-6 py-3 font-bold text-slate-700">{{ trip.party.name|default:"-"|truncatechars:30 }}</td>
-                        <td class="px-6 py-3 font-black text-slate-600 uppercase tracking-tight">{{ trip.vehicle.registration_plate }}</td>
-                        <td class="px-6 py-3 text-right font-bold text-slate-500">{{ trip.rate_per_ton|indian_comma }}</td>
-                        <td class="px-6 py-3 text-right font-bold text-slate-500">₹{{ trip.gst_amount|indian_comma }}</td>
+                        <td class="px-6 py-3 font-bold text-slate-700">{{ trip.party.name|default:"-"|truncatechars:20 }}</td>
+                        <td class="px-6 py-3 text-slate-600 text-xs">
+                            {{ trip.pickup_location|default:"-"|truncatechars:15 }} → {{ trip.delivery_location|default:"-"|truncatechars:15 }}
+                        </td>
                         <td class="px-6 py-3 text-right">
-                            <p class="font-black text-emerald-600 leading-none">₹{{ trip.total_revenue|indian_comma }}</p>
-                            <p class="text-[9px] font-bold text-slate-300 uppercase mt-0.5">Base: ₹{{ trip.revenue|indian_comma }}</p>
+                            <p class="font-bold text-slate-700 text-xs">{{ trip.weight|default:"-" }} MT</p>
+                            <p class="font-bold text-slate-400 text-[10px] mt-0.5">@ ₹{{ trip.rate_per_ton|indian_comma }}</p>
+                        </td>
+                        <td class="px-6 py-3 text-right">
+                            <p class="font-black text-emerald-600 text-sm">₹{{ trip.total_revenue|indian_comma }}</p>
+                            {% if trip.gst_amount > 0 %}
+                            <p class="text-[9px] font-bold text-slate-400 mt-0.5 uppercase tracking-tighter">Incl. ₹{{ trip.gst_amount|indian_comma }} Tax</p>
+                            {% endif %}
                         </td>
                         <td class="px-6 py-3 text-center">
-                            <span class="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-tighter
-                                {% if trip.annotated_status == 'Paid' %}bg-emerald-100 text-emerald-700
-                                {% elif trip.annotated_status == 'Partially Paid' %}bg-amber-100 text-amber-700
-                                {% else %}bg-slate-100 text-slate-600{% endif %}">
-                                {{ trip.annotated_status }}
-                            </span>
+                            <div class="flex flex-col items-center gap-1">
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-tighter
+                                    {% if trip.annotated_status == 'Paid' %}bg-emerald-100 text-emerald-700
+                                    {% elif trip.annotated_status == 'Partially Paid' %}bg-amber-100 text-amber-700
+                                    {% else %}bg-slate-100 text-slate-600{% endif %}">
+                                    {{ trip.annotated_status }}
+                                </span>
+                                {% if trip.annotated_is_billed %}
+                                <span class="text-[8px] font-black text-blue-600 bg-blue-50 px-1 py-0.5 rounded border border-blue-100 uppercase tracking-widest">Billed</span>
+                                {% else %}
+                                <span class="text-[8px] font-black text-slate-400 bg-slate-50 px-1 py-0.5 rounded border border-slate-200 uppercase tracking-widest">Unbilled</span>
+                                {% endif %}
+                            </div>
                         </td>
                         <td class="px-6 py-3 text-right">
                             <div class="flex items-center justify-end space-x-3 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -457,8 +486,8 @@
             $('#filter-form').submit();
         });
 
-        // Submit form on status/sort change
-        $('#status, #sort, #gst_filter, #billing_status').on('change', function() {
+        // Submit form on status/sort/date change
+        $('#status, #sort, #gst_filter, #billing_status, input[name="exact_date"], input[name="start_date"], input[name="end_date"]').on('change', function() {
             $('#filter-form').submit();
         });
 

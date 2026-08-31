@@ -170,16 +170,24 @@ class TripListView(LoginRequiredMixin, BaseTripPermissionMixin, ListView):
         # Date range filtering
         start_date = self.request.GET.get('start_date')
         end_date = self.request.GET.get('end_date')
-        if start_date:
+        exact_date = self.request.GET.get('exact_date')
+        
+        if exact_date:
             try:
-                queryset = queryset.filter(date__date__gte=start_date)
+                queryset = queryset.filter(date__date=exact_date)
             except (ValueError, TypeError):
                 pass
-        if end_date:
-            try:
-                queryset = queryset.filter(date__date__lte=end_date)
-            except (ValueError, TypeError):
-                pass
+        else:
+            if start_date:
+                try:
+                    queryset = queryset.filter(date__date__gte=start_date)
+                except (ValueError, TypeError):
+                    pass
+            if end_date:
+                try:
+                    queryset = queryset.filter(date__date__lte=end_date)
+                except (ValueError, TypeError):
+                    pass
 
         # Sorting
         sort = self.request.GET.get('sort', '-date')
@@ -211,6 +219,7 @@ class TripListView(LoginRequiredMixin, BaseTripPermissionMixin, ListView):
         context['current_lr_search'] = self.request.GET.get('lr_search', '')
         context['start_date'] = self.request.GET.get('start_date', '')
         context['end_date'] = self.request.GET.get('end_date', '')
+        context['exact_date'] = self.request.GET.get('exact_date', '')
         context['current_sort'] = self.request.GET.get('sort', '-date')
         context['current_party'] = self.request.GET.get('party', '')
         context['date_filter'] = self.request.GET.get('date_filter', '')
