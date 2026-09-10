@@ -229,20 +229,35 @@
             </div>
         </div>
 
-        <!-- Footer Actions -->
-        <div class="bg-slate-50 px-6 py-4 border border-slate-200 rounded-xl flex flex-col sm:flex-row items-center justify-between mt-6 sticky bottom-16 lg:bottom-4 z-50 shadow-lg">
-            <div class="flex items-center space-x-4 mb-4 sm:mb-0">
-                <a href="{% url 'trip-list' %}" class="text-sm font-bold text-slate-400 hover:text-slate-600 transition-colors">
-                    <i class="fa-solid fa-xmark mr-1"></i> Cancel
-                </a>
-                <button type="button" id="clear-draft-btn" class="text-sm font-bold text-rose-400 hover:text-rose-600 transition-colors">
-                    <i class="fa-solid fa-trash-can mr-1"></i> Clear Draft
+        <!-- Footer Actions Bar -->
+        <div id="bulk-actions-bar" class="sticky bottom-16 lg:bottom-4 z-40 mt-6 shadow-xl bg-slate-50/95 backdrop-blur-sm px-4 sm:px-6 py-3.5 sm:py-4 border border-slate-200 rounded-xl flex flex-col sm:flex-row items-center justify-between transition-all duration-200">
+            <div class="flex items-center justify-between w-full sm:w-auto space-x-4 mb-3 sm:mb-0">
+                <div class="flex items-center space-x-4">
+                    <a href="{% url 'trip-list' %}" class="text-sm font-bold text-slate-400 hover:text-slate-600 transition-colors flex items-center">
+                        <i class="fa-solid fa-xmark mr-1.5"></i> Cancel
+                    </a>
+                    <button type="button" id="clear-draft-btn" class="text-sm font-bold text-rose-400 hover:text-rose-600 transition-colors flex items-center">
+                        <i class="fa-solid fa-trash-can mr-1.5"></i> Clear Draft
+                    </button>
+                </div>
+                <!-- Minimize / Float button (mobile) -->
+                <button type="button" class="toggle-actions-dock-btn mobile-toggle sm:hidden text-slate-500 hover:text-slate-800 bg-slate-200/70 hover:bg-slate-200 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1" title="Minimize toolbar (move down to bottom of page)">
+                    <i class="fa-solid fa-arrow-down text-[10px]"></i>
+                    <span>Minimize</span>
                 </button>
             </div>
-            <button type="submit" class="flex items-center space-x-2 px-8 py-3 bg-emerald-600 text-white rounded-lg text-sm font-black hover:bg-emerald-700 shadow-lg shadow-emerald-100 transition-all active:scale-95 uppercase tracking-widest">
-                <i class="fa-solid fa-circle-check"></i>
-                <span>Save All Trips</span>
-            </button>
+
+            <div class="flex items-center space-x-3 w-full sm:w-auto justify-end">
+                <!-- Minimize / Float button (desktop) -->
+                <button type="button" class="toggle-actions-dock-btn desktop-toggle hidden sm:flex items-center space-x-1.5 px-3.5 py-2.5 text-slate-500 hover:text-slate-800 bg-slate-200/70 hover:bg-slate-200 rounded-lg text-xs font-bold transition-all" title="Minimize toolbar (move down to bottom of page)">
+                    <i class="fa-solid fa-arrow-down text-xs"></i>
+                    <span>Minimize</span>
+                </button>
+                <button type="submit" class="w-full sm:w-auto flex items-center justify-center space-x-2 px-8 py-3 bg-emerald-600 text-white rounded-lg text-sm font-black hover:bg-emerald-700 shadow-lg shadow-emerald-100 transition-all active:scale-95 uppercase tracking-widest">
+                    <i class="fa-solid fa-circle-check"></i>
+                    <span>Save All Trips</span>
+                </button>
+            </div>
         </div>
     </form>
 </div>
@@ -288,6 +303,11 @@
 
     .notes-container.xl\:col-span-12 textarea {
         min-height: 80px !important;
+    }
+
+    /* Actions Toolbar Transition */
+    #bulk-actions-bar {
+        transition: box-shadow 0.2s ease, background-color 0.2s ease;
     }
 </style>
 
@@ -375,9 +395,58 @@ $(document).ready(function() {
         // localStorage.removeItem(DRAFT_KEY); // Removed for robustness
     });
 
+    // Minimize / Float Actions Bar
+    const $actionsBar = $('#bulk-actions-bar');
+    const $toggleBtns = $('.toggle-actions-dock-btn');
+    const ACTIONS_MINIMIZED_KEY = 'bulk_trips_bar_minimized';
+
+    function setActionsMinimized(minimized) {
+        if (minimized) {
+            // Remove sticky floating classes so it sits directly down at "Add Another Trip Row"
+            $actionsBar
+                .removeClass('sticky bottom-16 lg:bottom-4 z-40 shadow-xl bg-slate-50/95 backdrop-blur-sm')
+                .addClass('relative mb-6 shadow-sm bg-slate-50');
+            
+            $toggleBtns.each(function() {
+                const $btn = $(this);
+                $btn.attr('title', 'Float toolbar on screen');
+                if ($btn.hasClass('mobile-toggle')) {
+                    $btn.html('<i class="fa-solid fa-thumbtack text-[10px]"></i><span>Float</span>');
+                } else {
+                    $btn.html('<i class="fa-solid fa-thumbtack text-xs"></i><span>Float Toolbar</span>');
+                }
+            });
+            localStorage.setItem(ACTIONS_MINIMIZED_KEY, 'true');
+        } else {
+            // Re-apply sticky floating classes
+            $actionsBar
+                .removeClass('relative mb-6 shadow-sm bg-slate-50')
+                .addClass('sticky bottom-16 lg:bottom-4 z-40 shadow-xl bg-slate-50/95 backdrop-blur-sm');
+            
+            $toggleBtns.each(function() {
+                const $btn = $(this);
+                $btn.attr('title', 'Minimize (move down to bottom of page)');
+                if ($btn.hasClass('mobile-toggle')) {
+                    $btn.html('<i class="fa-solid fa-arrow-down text-[10px]"></i><span>Minimize</span>');
+                } else {
+                    $btn.html('<i class="fa-solid fa-arrow-down text-xs"></i><span>Minimize</span>');
+                }
+            });
+            localStorage.setItem(ACTIONS_MINIMIZED_KEY, 'false');
+        }
+    }
+
+    $(document).on('click', '.toggle-actions-dock-btn', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const currentlyMinimized = localStorage.getItem(ACTIONS_MINIMIZED_KEY) === 'true';
+        setActionsMinimized(!currentlyMinimized);
+    });
+
     $('#clear-draft-btn').on('click', function() {
         if (confirm('Are you sure you want to clear all entered data and start fresh?')) {
             localStorage.removeItem(DRAFT_KEY);
+            localStorage.removeItem(ACTIONS_MINIMIZED_KEY);
             location.reload();
         }
     });
@@ -611,6 +680,13 @@ $(document).ready(function() {
         // Attempt to load draft.
         // Wait a slight tick to let select2 init
         setTimeout(loadDraft, 100);
+
+        // Restore minimize preference
+        if (localStorage.getItem(ACTIONS_MINIMIZED_KEY) === 'true') {
+            setActionsMinimized(true);
+        }
+    } else {
+        setActionsMinimized(false);
     }
     
     // Clear draft if successful (Django messages handle success usually)
