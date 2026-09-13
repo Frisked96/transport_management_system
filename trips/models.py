@@ -170,7 +170,7 @@ class Trip(models.Model):
     )
     
     # Date of the trip
-    date = models.DateTimeField(
+    date = models.DateField(
         verbose_name='Trip Date',
         default=timezone.now
     )
@@ -295,6 +295,20 @@ class Trip(models.Model):
         party_name = self.party.name if self.party else "Unknown"
         return f"{self.trip_number} - {party_name} ({self.vehicle.registration_plate})"
     
+    @property
+    def local_date(self):
+        """
+        Returns the trip date (direct alias for backward compatibility).
+        """
+        return self.date
+
+    @property
+    def local_date_only(self):
+        """
+        Returns the trip date object (direct alias for backward compatibility).
+        """
+        return self.date
+
     def sync_ledger_invoice(self):
         """
         Manage accrual-based revenue for this trip.

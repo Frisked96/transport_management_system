@@ -153,7 +153,7 @@ def run():
             revenue_type=random.choice([Trip.REVENUE_PER_TON, Trip.REVENUE_FIXED]),
             driver=driver,
             vehicle=vehicle,
-            date=fake.date_time_between(start_date='-6m', end_date='now', tzinfo=timezone.get_current_timezone()),
+            date=fake.date_between(start_date='-6m', end_date='today'),
             party=party,
             route=route,
             weight=Decimal(random.randint(10, 40)) if random.random() > 0.2 else None,

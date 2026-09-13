@@ -298,12 +298,8 @@ class TripBulkCreateView(LoginRequiredMixin, PermissionRequiredMixin, FormView):
         instances = form.save(commit=False)
         for instance in instances:
             instance.created_by = self.request.user
-            # Ensure the time portion is set if it's not present (date only)
             if not instance.date:
-                 instance.date = timezone.now()
-            elif type(instance.date) is datetime.date:
-                 current_time = timezone.now().time()
-                 instance.date = datetime.combine(instance.date, current_time)
+                 instance.date = timezone.now().date()
             instance.save()
         messages.success(self.request, f'{len(instances)} Trips created successfully!')
         return super().form_valid(form)
@@ -348,20 +344,18 @@ class TripCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
             date_str = self.request.GET.get('date')
             if date_str:
                 try:
-                    trip_date = datetime.strptime(date_str, '%Y-%m-%d').date()
-                    current_time = timezone.now().time()
-                    form.instance.date = datetime.combine(trip_date, current_time)
+                    form.instance.date = datetime.strptime(date_str, '%Y-%m-%d').date()
                 except ValueError:
-                    form.instance.date = timezone.now()
+                    form.instance.date = timezone.now().date()
             else:
-                form.instance.date = timezone.now()
+                form.instance.date = timezone.now().date()
 
         response = super().form_valid(form)
         messages.success(self.request, 'Trip created successfully!')
         
         # Handle "Save and Add New" options
         if '_save_new_date' in self.request.POST:
-            date_str = self.object.date.strftime('%Y-%m-%d')
+            date_str = self.object.date.strftime('%Y-%m-%d') if self.object.date else ''
             return redirect(f"{self.request.path}?date={date_str}")
         elif '_save_new_party' in self.request.POST:
             party_id = self.object.party.id if self.object.party else ''
@@ -749,7 +743,7 @@ def trip_export_excel(request):
             ws.cell(row=row_num, column=3, value=bill.date.strftime('%d-%m-%Y') if bill and bill.date else '-').border = border
             ws.cell(row=row_num, column=4, value=trip.party.name if trip.party else 'N/A').border = border
             ws.cell(row=row_num, column=5, value=trip.party.gstin if trip.party else 'N/A').border = border
-            ws.cell(row=row_num, column=6, value=trip.date.strftime('%d-%m-%Y')).border = border
+            ws.cell(row=row_num, column=6, value=trip.date.strftime('%d-%m-%Y') if trip.date else '-').border = border
             ws.cell(row=row_num, column=7, value=trip.vehicle.registration_plate).border = border
             ws.cell(row=row_num, column=8, value=trip.pickup_location or 'N/A').border = border
             ws.cell(row=row_num, column=9, value=trip.delivery_location or 'N/A').border = border

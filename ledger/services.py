@@ -368,12 +368,13 @@ class TripFinancialService:
              return
 
         # Customer revenue accrual
+        trip_date = trip.date or timezone.now().date()
         FinancialRecord.objects.update_or_create(
             associated_trip=trip,
             record_type=FinancialRecord.RECORD_TYPE_INVOICE,
             party=trip.party,
             defaults={
-                'date': trip.date,
+                'date': trip_date,
                 'account': account,
                 'category': category,
                 'amount': trip.total_revenue,
@@ -393,7 +394,7 @@ class TripFinancialService:
                 record_type=FinancialRecord.RECORD_TYPE_INVOICE,
                 party=trip.vehicle.vendor,
                 defaults={
-                    'date': trip.date,
+                    'date': trip_date,
                     'account': account,
                     'category': lorry_hire_cat,
                     'amount': trip.vendor_hire_amount,

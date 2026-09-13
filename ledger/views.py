@@ -947,7 +947,7 @@ def get_party_unpaid_trips(request):
         
         data = [{
             'id': trip.id,
-            'label': f"{trip.date.strftime('%d/%m/%Y')} - {trip.vehicle.registration_plate} (Pending: ₹{trip.outstanding_balance:,.2f})",
+            'label': f"{(trip.date.strftime('%d/%m/%Y') if trip.date else '')} - {trip.vehicle.registration_plate} (Pending: ₹{trip.outstanding_balance:,.2f})",
             'balance': float(trip.outstanding_balance)
         } for trip in trips]
         
@@ -1017,7 +1017,7 @@ def get_party_unbilled_trips(request):
 
             data.append({
                 'id': trip.id,
-                'date': trip.date.strftime('%d %b %Y'),
+                'date': trip.date.strftime('%d %b %Y') if trip.date else '',
                 'vehicle': trip.vehicle.registration_plate,
                 'pickup': trip.pickup_location,
                 'delivery': trip.delivery_location,
@@ -1382,7 +1382,7 @@ def print_combined_bill(request, pk):
     # For annexure
     bill_trips = bill.bill_trips.select_related('trip', 'trip__vehicle').order_by('trip__date')
     date_groups = []
-    for date, group in groupby(bill_trips, key=lambda bt: bt.trip.date.date()):
+    for date, group in groupby(bill_trips, key=lambda bt: bt.trip.date if bt.trip else None):
         bt_list = list(group)
         date_groups.append({
             'date': date,
