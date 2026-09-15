@@ -161,11 +161,11 @@ class TripListView(LoginRequiredMixin, BaseTripPermissionMixin, ListView):
         date_filter = self.request.GET.get('date_filter')
         today = timezone.now().date()
         if date_filter == 'today':
-            queryset = queryset.filter(date__date=today)
+            queryset = queryset.filter(date=today)
         elif date_filter == 'yesterday':
-            queryset = queryset.filter(date__date=today - timedelta(days=1))
+            queryset = queryset.filter(date=today - timedelta(days=1))
         elif date_filter == 'last_7_days':
-            queryset = queryset.filter(date__date__gte=today - timedelta(days=7))
+            queryset = queryset.filter(date__gte=today - timedelta(days=7))
 
         # Date range filtering
         start_date = self.request.GET.get('start_date')
@@ -174,18 +174,18 @@ class TripListView(LoginRequiredMixin, BaseTripPermissionMixin, ListView):
         
         if exact_date:
             try:
-                queryset = queryset.filter(date__date=exact_date)
+                queryset = queryset.filter(date=exact_date)
             except (ValueError, TypeError):
                 pass
         else:
             if start_date:
                 try:
-                    queryset = queryset.filter(date__date__gte=start_date)
+                    queryset = queryset.filter(date__gte=start_date)
                 except (ValueError, TypeError):
                     pass
             if end_date:
                 try:
-                    queryset = queryset.filter(date__date__lte=end_date)
+                    queryset = queryset.filter(date__lte=end_date)
                 except (ValueError, TypeError):
                     pass
 
@@ -695,9 +695,9 @@ def trip_export_excel(request):
             trips = trips.filter(bills__issuer_id__in=selected_issuers).distinct()
 
         if start_date:
-            trips = trips.filter(date__date__gte=start_date)
+            trips = trips.filter(date__gte=start_date)
         if end_date:
-            trips = trips.filter(date__date__lte=end_date)
+            trips = trips.filter(date__lte=end_date)
 
         # Sort by invoice number (numeric part) primarily, then by date
         trips = trips.order_by('bills__bill_no', 'date').distinct()
