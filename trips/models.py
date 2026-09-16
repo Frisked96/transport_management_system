@@ -4,7 +4,7 @@ Models for Trips application
 from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
-from django.core.exceptions import ValidationError
+from django.core.exceptions import ValidationError, ObjectDoesNotExist
 from django.db.models import Sum, Case, When, Value, F, DecimalField, OuterRef, Subquery, ExpressionWrapper
 from django.db.models.functions import Coalesce
 from fleet.models import Vehicle
@@ -292,8 +292,15 @@ class Trip(models.Model):
         ]
     
     def __str__(self):
-        party_name = self.party.name if self.party else "Unknown"
-        return f"{self.trip_number} - {party_name} ({self.vehicle.registration_plate})"
+        try:
+            party_name = self.party.name if self.party else "Unknown"
+        except ObjectDoesNotExist:
+            party_name = "Deleted Party"
+        try:
+            plate = self.vehicle.registration_plate if self.vehicle else "No Vehicle"
+        except ObjectDoesNotExist:
+            plate = "Deleted Vehicle"
+        return f"{self.trip_number} - {party_name} ({plate})"
     
     @property
     def local_date(self):

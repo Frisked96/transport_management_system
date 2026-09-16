@@ -86,12 +86,19 @@ class FinancialRecordListView(LoginRequiredMixin, BaseLedgerPermissionMixin, Lis
         if self.has_driver_profile():
             return FinancialRecord.objects.none()
         
-        queryset = FinancialRecord.objects.all().select_related('category', 'party', 'associated_trip')
+        queryset = FinancialRecord.objects.all().select_related(
+            'category', 'party', 'account', 'driver', 'associated_trip', 'associated_bill', 'associated_tyre'
+        ).prefetch_related('allocations__trip', 'bill_allocations__bill')
         
         # Category filter
         category_id = self.request.GET.get('category')
         if category_id:
             queryset = queryset.filter(category_id=category_id)
+
+        # Account filter
+        account_id = self.request.GET.get('account')
+        if account_id:
+            queryset = queryset.filter(account_id=account_id)
         
         # Trip filter
         trip_id = self.request.GET.get('trip')
@@ -117,6 +124,10 @@ class FinancialRecordListView(LoginRequiredMixin, BaseLedgerPermissionMixin, Lis
         context = super().get_context_data(**kwargs)
         context['category_choices'] = TransactionCategory.objects.all()
         context['current_category'] = self.request.GET.get('category', '')
+        context['account_choices'] = CompanyAccount.objects.all().order_by('name')
+        context['current_account'] = self.request.GET.get('account', '')
+        context['party_choices'] = Party.objects.all().order_by('name')
+        context['current_party'] = self.request.GET.get('party', '')
 
         # 1. Financial Records Totals (Filtered)
         records = self.get_queryset()
@@ -201,7 +212,11 @@ class FinancialRecordDetailView(LoginRequiredMixin, BaseLedgerPermissionMixin, D
         if self.has_driver_permission():
             return FinancialRecord.objects.none()
         
-        return FinancialRecord.objects.all()
+        return FinancialRecord.objects.all().select_related(
+            'category', 'party', 'account', 'driver', 'associated_trip', 'associated_bill', 'associated_tyre', 'recorded_by'
+        ).prefetch_related(
+            'allocations__trip', 'bill_allocations__bill', 'associated_bill__original_bill'
+        )
 
 
 class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
@@ -234,6 +249,22 @@ class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, Cre
             except User.DoesNotExist:
                 pass
                 
+        account_id = self.request.GET.get('account')
+        if account_id:
+            try:
+                account = CompanyAccount.objects.get(pk=account_id)
+                initial['account'] = account
+            except CompanyAccount.DoesNotExist:
+                pass
+
+        trip_id = self.request.GET.get('associated_trip')
+        if trip_id:
+            try:
+                trip = Trip.objects.get(pk=trip_id)
+                initial['associated_trip'] = trip
+            except Trip.DoesNotExist:
+                pass
+
         bill_id = self.request.GET.get('associated_bill')
         if bill_id:
             try:
@@ -873,7 +904,10 @@ class CompanyAccountDetailView(LoginRequiredMixin, BaseLedgerPermissionMixin, De
         start_date = self.request.GET.get('start_date')
         end_date = self.request.GET.get('end_date')
         
-        records = self.object.financial_records.all().select_related('category', 'party')
+        records = self.object.financial_records.exclude(
+            Q(record_type=FinancialRecord.RECORD_TYPE_INVOICE) | 
+            Q(category__name__in=['Deductions', 'TDS', 'Shortage', 'Credit Note', 'Debit Note'])
+        ).select_related('category', 'party', 'driver', 'associated_trip', 'associated_bill', 'associated_tyre')
         
         if start_date:
             records = records.filter(date__gte=start_date)
@@ -1605,12 +1639,12 @@ def account_statement_pdf(request, pk):
     pre_records = FinancialRecord.objects.filter(
         account=account,
         date__lt=start_date
+    ).exclude(
+        Q(record_type=FinancialRecord.RECORD_TYPE_INVOICE) |
+        Q(category__name__in=['Deductions', 'TDS', 'Shortage', 'Credit Note', 'Debit Note'])
     ).select_related('category')
     
     for rec in pre_records:
-        if rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE:
-            continue # Skip accruals for cash statements
-        
         # For Company Account (Asset): Income=Debit (+), Expense=Credit (-)
         if rec.is_income:
             opening_bal += rec.amount
@@ -1621,6 +1655,9 @@ def account_statement_pdf(request, pk):
     records = FinancialRecord.objects.filter(
         account=account,
         date__range=[start_date, end_date]
+    ).exclude(
+        Q(record_type=FinancialRecord.RECORD_TYPE_INVOICE) |
+        Q(category__name__in=['Deductions', 'TDS', 'Shortage', 'Credit Note', 'Debit Note'])
     ).select_related('category', 'associated_trip', 'associated_bill', 'party').order_by('date', 'created_at')
 
     # 3. Build statement rows
@@ -1630,11 +1667,8 @@ def account_statement_pdf(request, pk):
     total_period_credit = Decimal('0')
     
     for rec in records:
-        if rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE:
-            continue # Skip accruals
-            
-        debit = rec.debit_amount or Decimal('0')
-        credit = rec.credit_amount or Decimal('0')
+        debit = rec.amount if rec.is_income else Decimal('0')
+        credit = rec.amount if rec.is_expense else Decimal('0')
             
         current_running_bal += (debit - credit)
         total_period_debit += debit
@@ -1731,13 +1765,14 @@ def unified_ledger_pdf(request):
     opening_bal = CompanyAccount.objects.aggregate(total=Sum('opening_balance'))['total'] or Decimal('0')
     
     pre_records = FinancialRecord.objects.filter(
+        account__isnull=False,
         date__lt=start_date
+    ).exclude(
+        Q(record_type=FinancialRecord.RECORD_TYPE_INVOICE) |
+        Q(category__name__in=['Deductions', 'TDS', 'Shortage', 'Credit Note', 'Debit Note'])
     ).select_related('category')
     
     for rec in pre_records:
-        if rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE:
-            continue # Skip accruals for cash statements
-        
         if rec.is_income:
             opening_bal += rec.amount
         elif rec.is_expense:
@@ -1745,7 +1780,11 @@ def unified_ledger_pdf(request):
 
     # 2. Get records in range
     records = FinancialRecord.objects.filter(
+        account__isnull=False,
         date__range=[start_date, end_date]
+    ).exclude(
+        Q(record_type=FinancialRecord.RECORD_TYPE_INVOICE) |
+        Q(category__name__in=['Deductions', 'TDS', 'Shortage', 'Credit Note', 'Debit Note'])
     ).select_related('category', 'associated_trip', 'associated_bill', 'party', 'account').order_by('date', 'created_at')
 
     # 3. Build statement rows
@@ -1755,11 +1794,8 @@ def unified_ledger_pdf(request):
     total_period_credit = Decimal('0')
     
     for rec in records:
-        if rec.record_type == FinancialRecord.RECORD_TYPE_INVOICE:
-            continue # Skip accruals
-            
-        debit = rec.debit_amount or Decimal('0')
-        credit = rec.credit_amount or Decimal('0')
+        debit = rec.amount if rec.is_income else Decimal('0')
+        credit = rec.amount if rec.is_expense else Decimal('0')
             
         current_running_bal += (debit - credit)
         total_period_debit += debit

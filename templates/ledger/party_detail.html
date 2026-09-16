@@ -355,6 +355,11 @@
                                         <i class="fa-solid fa-dharmachakra mr-1"></i>{{ record.associated_tyre.brand }}
                                     </a>
                                     {% else %}-{% endif %}
+                                    {% if record.account %}
+                                    <span class="text-[9px] font-bold text-slate-400 block mt-0.5" title="Account: {{ record.account.name }}">
+                                        <i class="fa-solid fa-building-columns mr-1 text-[8px]"></i>{{ record.account.name }}
+                                    </span>
+                                    {% endif %}
                                 </td>
                                 <td class="px-6 py-3 text-[10px] text-slate-500 font-medium">
                                     {{ record.description|default:"-"|truncatechars:30 }}

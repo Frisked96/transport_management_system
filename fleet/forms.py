@@ -28,6 +28,8 @@ class VehicleForm(forms.ModelForm):
         fields = [
             'registration_plate',
             'make_model',
+            'chassis_number',
+            'engine_number',
             'purchase_date',
             'current_odometer',
             'status',
@@ -39,6 +41,16 @@ class VehicleForm(forms.ModelForm):
             'purchase_date': forms.DateInput(
                 attrs={
                     'type': 'date'
+                }
+            ),
+            'chassis_number': forms.TextInput(
+                attrs={
+                    'placeholder': 'Enter chassis number (optional)'
+                }
+            ),
+            'engine_number': forms.TextInput(
+                attrs={
+                    'placeholder': 'Enter engine number (optional)'
                 }
             ),
         }

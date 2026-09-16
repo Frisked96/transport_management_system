@@ -10,8 +10,11 @@ def recalculate_on_trip_delete(sender, instance, **kwargs):
     """
     Trigger recalculation of trip numbers for a vehicle when a trip is deleted.
     """
-    if not getattr(instance.vehicle, '_is_being_deleted', False):
-        Trip.recalculate_vehicle_trip_numbers(instance.vehicle)
+    try:
+        if instance.vehicle and not getattr(instance.vehicle, '_is_being_deleted', False):
+            Trip.recalculate_vehicle_trip_numbers(instance.vehicle)
+    except Exception:
+        pass
 
 @receiver(post_save, sender=Trip)
 def recalculate_on_trip_update(sender, instance, created, **kwargs):

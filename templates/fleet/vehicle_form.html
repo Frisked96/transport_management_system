@@ -25,6 +25,9 @@
                 <div class="flex flex-col">
                     <label for="{{ field.id_for_label }}" class="block text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider">
                         {{ field.label }}
+                        {% if not field.field.required and field.name != 'vendor' %}
+                            <span class="text-slate-400 font-normal normal-case text-xs tracking-normal">(Optional)</span>
+                        {% endif %}
                     </label>
                     {{ field }}
                     {% if field.errors %}

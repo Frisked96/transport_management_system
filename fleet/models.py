@@ -2,6 +2,7 @@
 Models for Fleet application
 """
 from django.db import models
+from django.core.exceptions import ObjectDoesNotExist
 from django.contrib.auth.models import User
 from django.utils import timezone
 
@@ -44,8 +45,25 @@ class Vehicle(models.Model):
         verbose_name='Make & Model'
     )
     
+    # Chassis and Engine numbers
+    chassis_number = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        verbose_name='Chassis Number'
+    )
+    
+    engine_number = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        verbose_name='Engine Number'
+    )
+    
     # Purchase date
     purchase_date = models.DateField(
+        null=True,
+        blank=True,
         verbose_name='Purchase Date'
     )
     
@@ -103,6 +121,15 @@ class Vehicle(models.Model):
     def is_attached(self):
         """Check if vehicle is an attached/market vehicle"""
         return self.ownership == self.OWNERSHIP_ATTACHED
+    
+    @property
+    def chassie_number(self):
+        """Alias for chassis_number"""
+        return self.chassis_number
+    
+    @chassie_number.setter
+    def chassie_number(self, value):
+        self.chassis_number = value
     
     @property
     def last_maintenance(self):
@@ -227,7 +254,11 @@ class MaintenanceRecord(models.Model):
     
     def __str__(self):
         status = "Completed" if self.is_completed else "Pending"
-        return f"{self.vehicle.registration_plate} - {self.name} ({status})"
+        try:
+            plate = self.vehicle.registration_plate if self.vehicle else "No Vehicle"
+        except ObjectDoesNotExist:
+            plate = f"Vehicle #{self.vehicle_id}"
+        return f"{plate} - {self.name} ({status})"
 
     @property
     def is_overdue(self):
@@ -585,7 +616,11 @@ class TyreLog(models.Model):
         ordering = ['-date', '-created_at', '-id']
 
     def __str__(self):
-        return f"{self.tyre} - {self.action} on {self.date}"
+        try:
+            tyre_str = str(self.tyre) if self.tyre else "No Tyre"
+        except ObjectDoesNotExist:
+            tyre_str = f"Tyre #{self.tyre_id}"
+        return f"{tyre_str} - {self.action} on {self.date}"
 
 
 # --- Signals ---

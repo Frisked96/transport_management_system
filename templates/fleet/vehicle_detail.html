@@ -59,6 +59,14 @@
                                 <td class="py-2 text-slate-900 font-bold">{{ vehicle.make_model|default:"-" }}</td>
                             </tr>
                             <tr class="border-b border-slate-50">
+                                <td class="py-2 text-slate-500 font-medium whitespace-nowrap pr-4">Chassis No.</td>
+                                <td class="py-2 text-slate-900 font-bold">{{ vehicle.chassis_number|default:"-" }}</td>
+                            </tr>
+                            <tr class="border-b border-slate-50">
+                                <td class="py-2 text-slate-500 font-medium whitespace-nowrap pr-4">Engine No.</td>
+                                <td class="py-2 text-slate-900 font-bold">{{ vehicle.engine_number|default:"-" }}</td>
+                            </tr>
+                            <tr class="border-b border-slate-50">
                                 <td class="py-2 text-slate-500 font-medium whitespace-nowrap pr-4">Purchase Date</td>
                                 <td class="py-2 text-slate-900 font-bold">{{ vehicle.purchase_date|date:"d M Y"|default:"-" }}</td>
                             </tr>

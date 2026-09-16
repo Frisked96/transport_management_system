@@ -2,6 +2,7 @@
 Models for Ledger application
 """
 from django.db import models
+from django.core.exceptions import ObjectDoesNotExist
 from django.contrib.auth.models import User
 from trips.models import Trip
 from django.db.models import F, Value, Max
@@ -430,6 +431,10 @@ class FinancialRecord(models.Model):
         if self.associated_trip and not self.party:
             self.party = self.associated_trip.party
             
+        # Deductions, TDS, Shortage are non-bank adjustments: ensure account is None
+        if self.is_deduction:
+            self.account = None
+
         super().save(*args, **kwargs)
 
     def delete(self, *args, **kwargs):
@@ -467,41 +472,107 @@ class FinancialRecord(models.Model):
         ]
 
     def __str__(self):
-        category_name = self.category.name if self.category else 'No Category'
-        if self.associated_trip:
-            return f"{category_name} - Trip: {self.associated_trip.trip_number} - {self.amount}"
-        if self.associated_bill:
-            bill_num = self.associated_bill.bill_number or "Draft Bill"
-            return f"{category_name} - Bill: {bill_num} - {self.amount}"
+        try:
+            category_name = self.category.name if self.category else 'No Category'
+        except ObjectDoesNotExist:
+            category_name = 'No Category'
+
+        if self.associated_trip_id:
+            try:
+                trip = self.associated_trip
+                if trip:
+                    return f"{category_name} - Trip: {trip.trip_number} - {self.amount}"
+            except ObjectDoesNotExist:
+                return f"{category_name} - Trip: #{self.associated_trip_id} - {self.amount}"
+
+        if self.associated_bill_id:
+            try:
+                bill = self.associated_bill
+                if bill:
+                    bill_num = bill.bill_number or "Draft Bill"
+                    return f"{category_name} - Bill: {bill_num} - {self.amount}"
+            except ObjectDoesNotExist:
+                return f"{category_name} - Bill: #{self.associated_bill_id} - {self.amount}"
+
         return f"{category_name} - {self.amount}"
 
     @property
     def linked_bill(self):
         """Returns associated bill or bill from allocations"""
-        if self.associated_bill:
-            return self.associated_bill
+        try:
+            if self.associated_bill:
+                return self.associated_bill
+        except ObjectDoesNotExist:
+            pass
         
         # If no direct bill, check if it's a trip payment with allocations
-        first_alloc = self.allocations.select_related('trip').first()
-        if first_alloc and first_alloc.trip.associated_bill:
-            return first_alloc.trip.associated_bill
+        try:
+            first_alloc = self.allocations.select_related('trip').first()
+            if first_alloc and first_alloc.trip and first_alloc.trip.associated_bill:
+                return first_alloc.trip.associated_bill
+        except ObjectDoesNotExist:
+            pass
         
         # Finally check if direct associated trip has a bill
-        if self.associated_trip and self.associated_trip.associated_bill:
-            return self.associated_trip.associated_bill
+        try:
+            if self.associated_trip and self.associated_trip.associated_bill:
+                return self.associated_trip.associated_bill
+        except ObjectDoesNotExist:
+            pass
             
         return None
 
     @property
     def linked_trip(self):
         """Returns associated trip or first trip from allocations"""
-        if self.associated_trip:
-            return self.associated_trip
+        try:
+            if self.associated_trip:
+                return self.associated_trip
+        except ObjectDoesNotExist:
+            pass
         
-        first_alloc = self.allocations.select_related('trip').first()
-        if first_alloc:
-            return first_alloc.trip
+        try:
+            first_alloc = self.allocations.select_related('trip').first()
+            if first_alloc:
+                return first_alloc.trip
+        except ObjectDoesNotExist:
+            pass
             
+        return None
+
+    @property
+    def reference_entity(self):
+        """Returns party, driver, or None as the reference entity"""
+        try:
+            if self.party:
+                return self.party
+        except ObjectDoesNotExist:
+            pass
+        try:
+            if self.driver:
+                return self.driver
+        except ObjectDoesNotExist:
+            pass
+        return None
+
+    @property
+    def refrence_entity(self):
+        """Alias for reference_entity"""
+        return self.reference_entity
+
+    @property
+    def reference_entity_name(self):
+        """Returns the human-readable name of the reference entity"""
+        try:
+            if self.party:
+                return self.party.name
+        except ObjectDoesNotExist:
+            pass
+        try:
+            if self.driver:
+                return self.driver.get_full_name() or self.driver.username
+        except ObjectDoesNotExist:
+            pass
         return None
 
     @property
@@ -640,7 +711,15 @@ class TripAllocation(models.Model):
         unique_together = ('financial_record', 'trip')
 
     def __str__(self):
-        return f"{self.financial_record} -> {self.trip.trip_number}: {self.amount}"
+        try:
+            fr_str = str(self.financial_record) if self.financial_record_id else 'No FR'
+        except ObjectDoesNotExist:
+            fr_str = f"FR #{self.financial_record_id}"
+        try:
+            trip_str = self.trip.trip_number if self.trip_id else 'No Trip'
+        except ObjectDoesNotExist:
+            trip_str = f"Trip #{self.trip_id}"
+        return f"{fr_str} -> {trip_str}: {self.amount}"
 
 class BillAllocation(models.Model):
     financial_record = models.ForeignKey(
@@ -668,7 +747,15 @@ class BillAllocation(models.Model):
         unique_together = ('financial_record', 'bill')
 
     def __str__(self):
-        return f"{self.financial_record} -> {self.bill.bill_number}: {self.amount}"
+        try:
+            fr_str = str(self.financial_record) if self.financial_record_id else 'No FR'
+        except ObjectDoesNotExist:
+            fr_str = f"FR #{self.financial_record_id}"
+        try:
+            bill_str = self.bill.bill_number if self.bill_id else 'No Bill'
+        except ObjectDoesNotExist:
+            bill_str = f"Bill #{self.bill_id}"
+        return f"{fr_str} -> {bill_str}: {self.amount}"
 
 class BillQuerySet(models.QuerySet):
     def with_payment_info(self):
@@ -1064,7 +1151,11 @@ class Bill(models.Model):
         return rev + self.get_trip_gst(trip)
 
     def __str__(self):
-        return f"{self.bill_number or 'Draft'} - {self.party.name}"
+        try:
+            party_name = self.party.name if self.party else 'No Party'
+        except ObjectDoesNotExist:
+            party_name = 'Deleted Party'
+        return f"{self.bill_number or 'Draft'} - {party_name}"
     
     description = models.TextField(blank=True, verbose_name="Item Description",
                                    help_text="Description shown on invoice (e.g., destination/material)")
@@ -1112,4 +1203,12 @@ class BillTrip(models.Model):
         unique_together = ('bill', 'trip')
 
     def __str__(self):
-        return f"{self.bill.bill_number} - {self.trip.trip_number} (LR: {self.lr_no or 'N/A'})"
+        try:
+            bill_str = self.bill.bill_number if self.bill else 'No Bill'
+        except ObjectDoesNotExist:
+            bill_str = f"Bill #{self.bill_id}"
+        try:
+            trip_str = self.trip.trip_number if self.trip else 'No Trip'
+        except ObjectDoesNotExist:
+            trip_str = f"Trip #{self.trip_id}"
+        return f"{bill_str} - {trip_str} (LR: {self.lr_no or 'N/A'})"

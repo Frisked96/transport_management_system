@@ -335,7 +335,9 @@ class VehicleListView(LoginRequiredMixin, BaseFleetPermissionMixin, ListView):
         if search:
             queryset = queryset.filter(
                 Q(registration_plate__icontains=search) |
-                Q(make_model__icontains=search)
+                Q(make_model__icontains=search) |
+                Q(chassis_number__icontains=search) |
+                Q(engine_number__icontains=search)
             )
         
         # Status filter

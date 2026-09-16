@@ -107,9 +107,12 @@ class FinancialRecordForm(forms.ModelForm):
                     annotated_status=Trip.PAYMENT_STATUS_PAID
                 )
                 
-                # Include current trip if editing
+                # Include current trip if editing or from initial
                 if self.instance and self.instance.associated_trip:
                     trips_qs = trips_qs | Trip.objects.filter(pk=self.instance.associated_trip.pk).with_payment_info().with_billing_info()
+                initial_trip = kwargs.get('initial', {}).get('associated_trip')
+                if initial_trip:
+                    trips_qs = trips_qs | Trip.objects.filter(pk=initial_trip.pk).with_payment_info().with_billing_info()
                 
                 self.fields['associated_trip'].queryset = trips_qs.distinct().order_by('-date')
 
@@ -121,10 +124,13 @@ class FinancialRecordForm(forms.ModelForm):
                 # Further filter to only show unpaid bills
                 unpaid_bill_ids = [b.id for b in bills_qs if b.payment_status != Bill.PAYMENT_STATUS_PAID]
                 
-                # Include current bill if editing
+                # Include current bill if editing or from initial
                 if self.instance and self.instance.associated_bill:
                     if self.instance.associated_bill.pk not in unpaid_bill_ids:
                         unpaid_bill_ids.append(self.instance.associated_bill.pk)
+                initial_bill = kwargs.get('initial', {}).get('associated_bill')
+                if initial_bill and initial_bill.pk not in unpaid_bill_ids:
+                    unpaid_bill_ids.append(initial_bill.pk)
                 
                 self.fields['associated_bill'].queryset = Bill.objects.with_payment_info().filter(id__in=unpaid_bill_ids).order_by('-date')
                 
@@ -166,6 +172,13 @@ class FinancialRecordForm(forms.ModelForm):
         for field_name, field in self.fields.items():
             if field_name not in ['payment_distribution', 'bill_distribution']:
                 field.widget.attrs.update({'class': 'block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white'})
+
+    def clean(self):
+        cleaned_data = super().clean()
+        category = cleaned_data.get('category')
+        if category and category.name in ['Deductions', 'TDS', 'Shortage']:
+            cleaned_data['account'] = None
+        return cleaned_data
     
     class Meta:
         model = FinancialRecord

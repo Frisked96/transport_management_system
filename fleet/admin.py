@@ -10,6 +10,8 @@ class VehicleAdmin(admin.ModelAdmin):
     list_display = [
         'registration_plate',
         'make_model',
+        'chassis_number',
+        'engine_number',
         'purchase_date',
         'status',
         'current_odometer'
@@ -22,7 +24,9 @@ class VehicleAdmin(admin.ModelAdmin):
     
     search_fields = [
         'registration_plate',
-        'make_model'
+        'make_model',
+        'chassis_number',
+        'engine_number'
     ]
 
 

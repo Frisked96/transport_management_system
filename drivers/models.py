@@ -2,6 +2,7 @@
 Models for Drivers application
 """
 from django.db import models
+from django.core.exceptions import ObjectDoesNotExist
 from django.contrib.auth.models import User
 from django.utils import timezone
 
@@ -90,7 +91,10 @@ class Driver(models.Model):
         ]
 
     def __str__(self):
-        name = self.user.get_full_name() or self.user.username
+        try:
+            name = self.user.get_full_name() or self.user.username if self.user else "Unknown User"
+        except ObjectDoesNotExist:
+            name = f"User #{self.user_id}"
         if self.employee_id:
             return f"{name} ({self.employee_id})"
         return name
@@ -191,7 +195,11 @@ class DriverTransaction(models.Model):
         ]
 
     def __str__(self):
-        return f"{self.driver} - {self.transaction_type} - {self.amount}"
+        try:
+            driver_str = str(self.driver) if self.driver else "No Driver"
+        except ObjectDoesNotExist:
+            driver_str = f"Driver #{self.driver_id}"
+        return f"{driver_str} - {self.transaction_type} - {self.amount}"
 
 # --- Signals ---
 from django.db.models.signals import post_save, post_delete

@@ -103,47 +103,55 @@ def compute_field_diff(sender, instance):
     return changes
 
 def log_action(sender, instance, action_flag, **kwargs):
-    # Ignore models not in tracked apps
-    if sender._meta.app_label not in TRACKED_APPS:
-        return
-    model_name = sender._meta.model_name.lower()
-    if model_name in EXCLUDED_MODELS:
-        return
-
-    user = get_current_user()
-    if not user or not user.is_authenticated:
-        return
-
-    change_message = ''
-    if action_flag == CHANGE:
-        changes = compute_field_diff(sender, instance)
-        # If we had a snapshot and nothing user-facing changed, skip logging to avoid false clutter!
-        if changes is not None and len(changes) == 0:
+    try:
+        # Ignore models not in tracked apps
+        if sender._meta.app_label not in TRACKED_APPS:
+            return
+        model_name = sender._meta.model_name.lower()
+        if model_name in EXCLUDED_MODELS:
             return
 
-        if changes:
-            if len(changes) > 4:
-                change_message = "; ".join(changes[:4]) + f" (+{len(changes)-4} more)"
+        user = get_current_user()
+        if not user or not user.is_authenticated:
+            return
+
+        change_message = ''
+        if action_flag == CHANGE:
+            changes = compute_field_diff(sender, instance)
+            # If we had a snapshot and nothing user-facing changed, skip logging to avoid false clutter!
+            if changes is not None and len(changes) == 0:
+                return
+
+            if changes:
+                if len(changes) > 4:
+                    change_message = "; ".join(changes[:4]) + f" (+{len(changes)-4} more)"
+                else:
+                    change_message = "; ".join(changes)
             else:
-                change_message = "; ".join(changes)
-        else:
-            change_message = 'Updated record'
-    elif action_flag == ADDITION:
-        change_message = 'Added'
-    elif action_flag == DELETION:
-        change_message = 'Deleted'
+                change_message = 'Updated record'
+        elif action_flag == ADDITION:
+            change_message = 'Added'
+        elif action_flag == DELETION:
+            change_message = 'Deleted'
 
-    content_type = ContentType.objects.get_for_model(sender)
-    object_repr = str(instance)[:200]
+        content_type = ContentType.objects.get_for_model(sender)
+        try:
+            object_repr = str(instance)[:200]
+        except Exception:
+            object_repr = f"{sender._meta.verbose_name} #{getattr(instance, 'pk', '')}"
 
-    LogEntry.objects.create(
-        user_id=user.pk,
-        content_type_id=content_type.pk,
-        object_id=str(instance.pk),
-        object_repr=object_repr,
-        action_flag=action_flag,
-        change_message=change_message
-    )
+        LogEntry.objects.create(
+            user_id=user.pk,
+            content_type_id=content_type.pk,
+            object_id=str(instance.pk),
+            object_repr=object_repr,
+            action_flag=action_flag,
+            change_message=change_message
+        )
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"Failed to log action for {sender.__name__}: {e}")
 
 @receiver(post_save)
 def create_or_update_log(sender, instance, created, **kwargs):
