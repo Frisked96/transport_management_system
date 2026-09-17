@@ -6,7 +6,7 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.contrib.auth.models import User
 from trips.models import Trip
 from django.db.models import F, Value, Max
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 
 class Sequence(models.Model):
     """
@@ -930,18 +930,42 @@ class Bill(models.Model):
             self.total_amount_cached = self.rounded_total
             
             # Update payment caches as well
-            self.amount_received_cached = self.calculate_amount_received()
-            self.outstanding_balance_cached = self.total_amount_cached - self.amount_received_cached
-            
+            received = self.calculate_amount_received()
             total = self.total_amount_cached
-            received = self.amount_received_cached
+            
+            if isinstance(received, (int, float, Decimal)):
+                received = Decimal(str(received)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+            else:
+                received = Decimal('0.00')
+
+            diff = (total - received).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+            exact_unrounded = (self.subtotal_cached + self.gst_amount_cached).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+            
+            is_paid = False
             if total <= 0:
-                self.payment_status_cached = self.PAYMENT_STATUS_UNPAID
-            elif received >= total:
+                is_paid = False
+            elif received >= total or diff <= Decimal('0.00'):
+                is_paid = True
+            elif self.use_roundoff and received >= exact_unrounded:
+                is_paid = True
+            elif self.use_roundoff and abs(diff) < Decimal('1.00') and self.trips.exists() and all(t.payment_status_cached == 'Paid' for t in self.trips.all()):
+                is_paid = True
+
+            if is_paid:
+                self.amount_received_cached = total
+                self.outstanding_balance_cached = Decimal('0.00')
                 self.payment_status_cached = self.PAYMENT_STATUS_PAID
+            elif total <= 0:
+                self.amount_received_cached = Decimal('0.00')
+                self.outstanding_balance_cached = Decimal('0.00')
+                self.payment_status_cached = self.PAYMENT_STATUS_UNPAID
             elif received > 0:
+                self.amount_received_cached = received
+                self.outstanding_balance_cached = diff
                 self.payment_status_cached = self.PAYMENT_STATUS_PARTIAL
             else:
+                self.amount_received_cached = Decimal('0.00')
+                self.outstanding_balance_cached = total
                 self.payment_status_cached = self.PAYMENT_STATUS_UNPAID
         finally:
             del self._bypass_cache
@@ -1114,10 +1138,13 @@ class Bill(models.Model):
         if self.payment_status_cached:
             return self.payment_status_cached
             
-        total = self.rounded_total
-        received = self.amount_received
+        total = Decimal(str(self.rounded_total or 0))
+        received = Decimal(str(self.amount_received or 0))
         if total <= 0: return self.PAYMENT_STATUS_UNPAID
-        if received >= total: return self.PAYMENT_STATUS_PAID
+        diff = (total - received).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        if received >= total or diff <= Decimal('0.00'): return self.PAYMENT_STATUS_PAID
+        exact_unrounded = (Decimal(str(self.subtotal or 0)) + Decimal(str(self.gst_amount or 0))).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        if self.use_roundoff and received >= exact_unrounded: return self.PAYMENT_STATUS_PAID
         elif received > 0: return self.PAYMENT_STATUS_PARTIAL
         return self.PAYMENT_STATUS_UNPAID
 

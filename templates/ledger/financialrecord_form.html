@@ -2,6 +2,29 @@
 
 {% block title %}{% if object %}Edit{% else %}Add{% endif %} Financial Record - Transport Management System{% endblock %}
 
+{% block extra_css %}
+<style>
+    /* Compact Auto-resizing Description Box */
+    #id_description, textarea[name="description"] {
+        height: 38px !important;
+        min-height: 38px !important;
+        transition: height 0.2s ease-in-out, min-height 0.2s ease-in-out, border-color 0.2s ease-in-out;
+        resize: vertical;
+        border-color: #cbd5e1;
+    }
+
+    #id_description:focus, textarea[name="description"]:focus {
+        border-color: #10b981;
+        min-height: 80px !important;
+    }
+
+    /* Floating Actions Bar Transition */
+    #financial-actions-bar {
+        transition: box-shadow 0.2s ease, background-color 0.2s ease;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <!-- BEGIN: Page Header -->
 <header class="mb-6">
@@ -281,16 +304,18 @@
             </div>
         </div>
 
-        <div class="pt-6 border-t border-slate-100 flex items-center space-x-3 sticky bottom-16 z-30 bg-white py-3 px-4 -mx-4 md:relative md:bottom-auto md:z-auto md:bg-transparent md:border-t md:border-slate-100 md:py-0 md:px-0 md:mx-0 md:pt-6">
+    </div>
 
-            <button type="submit" class="px-6 py-2 bg-emerald-600 text-white rounded-md font-medium hover:bg-emerald-700 shadow-sm transition-colors">
-                <i class="fa-solid fa-check mr-2"></i>{% if object %}Update Record{% else %}Add Record{% endif %}
-            </button>
-            <a href="{% if object %}{% url 'financialrecord-detail' object.pk %}{% else %}{% url 'financialrecord-list' %}{% endif %}" 
-               class="px-6 py-2 border border-slate-300 rounded-md text-slate-700 bg-white hover:bg-slate-50 font-medium transition-colors">
-                Cancel
-            </a>
-        </div>
+    <!-- Footer Actions Bar -->
+    <div id="financial-actions-bar" class="sticky bottom-16 lg:bottom-4 z-40 mt-6 shadow-xl bg-slate-50/95 backdrop-blur-sm px-4 sm:px-6 py-3.5 sm:py-4 border border-slate-200 rounded-xl flex items-center justify-between transition-all duration-200">
+        <a href="{% if object %}{% url 'financialrecord-detail' object.pk %}{% else %}{% url 'financialrecord-list' %}{% endif %}" 
+           class="px-5 py-2.5 border border-slate-300 rounded-lg text-slate-700 bg-white hover:bg-slate-50 font-bold text-sm transition-all flex items-center shadow-sm">
+            <i class="fa-solid fa-xmark mr-2 text-slate-400"></i> Cancel
+        </a>
+        <button type="submit" class="flex items-center justify-center space-x-2 px-6 sm:px-8 py-2.5 bg-emerald-600 text-white rounded-lg text-sm font-black hover:bg-emerald-700 shadow-lg shadow-emerald-100 transition-all active:scale-95 uppercase tracking-wider">
+            <i class="fa-solid fa-circle-check mr-2"></i>
+            <span>{% if object %}Update Record{% else %}Add Record{% endif %}</span>
+        </button>
     </div>
 </form>
 
@@ -1103,6 +1128,26 @@
                             });
                     }
                 }
+            });
+        }
+
+        // Auto-resize description box on focus and typing (compact when unselected)
+        const descTextarea = document.getElementById('id_description');
+        if (descTextarea) {
+            function adjustDescHeight() {
+                if (document.activeElement === descTextarea) {
+                    descTextarea.style.setProperty('height', 'auto', 'important');
+                    const newHeight = Math.max(80, descTextarea.scrollHeight);
+                    descTextarea.style.setProperty('height', newHeight + 'px', 'important');
+                } else {
+                    descTextarea.style.removeProperty('height');
+                }
+            }
+
+            descTextarea.addEventListener('focus', adjustDescHeight);
+            descTextarea.addEventListener('input', adjustDescHeight);
+            descTextarea.addEventListener('blur', function() {
+                descTextarea.style.removeProperty('height');
             });
         }
 
