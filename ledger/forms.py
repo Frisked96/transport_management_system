@@ -50,6 +50,30 @@ class FinancialRecordForm(forms.ModelForm):
         })
     )
 
+    deduction_amount = forms.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        required=False,
+        label='Deduction Amount',
+        help_text='If deductions (shortage, charges, etc.) were made, enter the amount here.',
+        widget=forms.NumberInput(attrs={
+            'step': '0.01',
+            'min': '0',
+            'placeholder': 'Deductions (e.g. shortage, charges)',
+            'class': 'block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white'
+        })
+    )
+
+    deduction_notes = forms.CharField(
+        max_length=255,
+        required=False,
+        label='Deduction Reason',
+        widget=forms.TextInput(attrs={
+            'placeholder': 'Reason (e.g. shortage, charges, round-off)',
+            'class': 'block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white'
+        })
+    )
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         
@@ -168,6 +192,10 @@ class FinancialRecordForm(forms.ModelForm):
             ).order_by('username')
             self.fields['driver'].required = False
         
+        # Make amount not strictly required at field level to allow multi-trip or deduction-only settlements
+        if 'amount' in self.fields:
+            self.fields['amount'].required = False
+
         # Add basic styling for clarity
         for field_name, field in self.fields.items():
             if field_name not in ['payment_distribution', 'bill_distribution']:
@@ -178,6 +206,41 @@ class FinancialRecordForm(forms.ModelForm):
         category = cleaned_data.get('category')
         if category and category.name in ['Deductions', 'TDS', 'Shortage']:
             cleaned_data['account'] = None
+
+        # Auto-populate amount from multi-trip distribution if amount was not provided
+        distribution_json = cleaned_data.get('payment_distribution')
+        if distribution_json:
+            try:
+                import json
+                from decimal import Decimal
+                dist_data = json.loads(distribution_json)
+                if dist_data:
+                    total_p = sum(Decimal(str(item.get('payment', item.get('amount', 0)) or 0)) for item in dist_data)
+                    total_tds = sum(Decimal(str(item.get('tds', 0) or 0)) for item in dist_data)
+                    total_ded = sum(Decimal(str(item.get('deduction', 0) or 0)) for item in dist_data)
+                    
+                    if not cleaned_data.get('amount') or cleaned_data.get('amount') == 0:
+                        cleaned_data['amount'] = total_p
+                    if total_tds > 0 and (not cleaned_data.get('tds_amount') or cleaned_data.get('tds_amount') == 0):
+                        cleaned_data['tds_amount'] = total_tds
+                    if total_ded > 0 and (not cleaned_data.get('deduction_amount') or cleaned_data.get('deduction_amount') == 0):
+                        cleaned_data['deduction_amount'] = total_ded
+            except Exception:
+                pass
+
+        # Handle zero/empty bank payment when TDS or deduction is specified
+        amt = cleaned_data.get('amount')
+        tds = cleaned_data.get('tds_amount')
+        ded = cleaned_data.get('deduction_amount')
+        dist = cleaned_data.get('payment_distribution') or cleaned_data.get('bill_distribution')
+
+        if (amt is None or amt == 0) and not dist:
+            if (tds and tds > 0) or (ded and ded > 0):
+                from decimal import Decimal
+                cleaned_data['amount'] = Decimal('0.00')
+            else:
+                self.add_error('amount', 'Please specify an amount, TDS, or deduction.')
+
         return cleaned_data
     
     class Meta:

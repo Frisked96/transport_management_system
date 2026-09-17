@@ -18,9 +18,22 @@
         min-height: 80px !important;
     }
 
-    /* Floating Actions Bar Transition */
+    /* Floating Actions Bar */
     #financial-actions-bar {
         transition: box-shadow 0.2s ease, background-color 0.2s ease;
+    }
+
+    /* Multi-trip touch cards */
+    .multi-trip-card {
+        transition: transform 0.15s ease, border-color 0.15s ease;
+    }
+    .multi-trip-card:hover {
+        border-color: #10b981;
+    }
+
+    /* Pill toggle transitions */
+    .btn-trip-mode {
+        transition: all 0.2s ease;
     }
 </style>
 {% endblock %}
@@ -28,13 +41,13 @@
 {% block content %}
 <!-- BEGIN: Page Header -->
 <header class="mb-6">
-    <h1 class="text-3xl font-bold text-slate-900">{% if object %}Edit Financial Record{% else %}Add Financial Record{% endif %}</h1>
-    <p class="text-sm text-slate-600 mt-1">{% if object %}Modify the existing transaction details{% else %}Record a new financial transaction{% endif %}</p>
+    <h1 class="text-2xl sm:text-3xl font-bold text-slate-900">{% if object %}Edit Financial Record{% else %}Add Financial Record{% endif %}</h1>
+    <p class="text-xs sm:text-sm text-slate-600 mt-1">{% if object %}Modify the existing transaction details{% else %}Record a new financial transaction or settle trips/invoices{% endif %}</p>
 </header>
 <!-- END: Page Header -->
 
 {% if form.non_field_errors %}
-<div class="mb-6 p-4 bg-red-50 border border-red-200 rounded-md">
+<div class="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
     <div class="flex">
         <div class="flex-shrink-0">
             <i class="fa-solid fa-circle-exclamation text-red-400"></i>
@@ -53,20 +66,21 @@
 </div>
 {% endif %}
 
-<form method="post" enctype="multipart/form-data" id="financial-record-form" class="max-w-4xl">
+<form method="post" enctype="multipart/form-data" id="financial-record-form" class="w-full pb-16">
     {% csrf_token %}
     
-    <div class="bg-white border border-slate-200 rounded-lg p-6 shadow-sm space-y-6">
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <div class="bg-white border border-slate-200 rounded-xl p-4 sm:p-6 shadow-sm space-y-5">
+        <!-- Top Main Fields Grid (Party, Account, Date, Category, etc.) -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
             {% for field in form %}
-                {% if field.name != 'payment_distribution' and field.name != 'bill_distribution' and field.name != 'amount' and field.name != 'tds_amount' and field.name != 'tds_percentage' and field.name != 'description' and field.name != 'document_ref' %}
+                {% if field.name not in 'payment_distribution,bill_distribution,amount,tds_amount,tds_percentage,deduction_amount,deduction_notes,associated_trip,description,document_ref' %}
                 <div id="wrapper_{{ field.id_for_label }}">
-                    <label class="block text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider" for="{{ field.id_for_label }}">
+                    <label class="block text-xs sm:text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider" for="{{ field.id_for_label }}">
                         {{ field.label }}
                     </label>
                     {{ field }}
                     {% if field.errors %}
-                        <p class="mt-1 text-sm text-red-600 font-medium">{{ field.errors.as_text }}</p>
+                        <p class="mt-1 text-xs text-red-600 font-medium">{{ field.errors.as_text }}</p>
                     {% endif %}
                     {% if field.help_text %}
                         <p class="mt-1 text-xs text-slate-500 italic">{{ field.help_text }}</p>
@@ -78,69 +92,267 @@
                     {% endif %}
                 {% endif %}
             {% endfor %}
-            <!-- Simple field slots (used for non-Invoice Payment categories) -->
+
+            <!-- Simple field slots (used for non-Trip, non-Invoice Payment categories) -->
             <div id="simple-amount-slot"></div>
             <div id="simple-tds-amount-slot"></div>
             <div id="simple-tds-pct-slot"></div>
+            <div id="simple-ded-amount-slot"></div>
+            <div id="simple-ded-notes-slot"></div>
         </div>
 
-        <!-- Payment Details Block (Invoice Payment only) -->
-        <div id="payment-details-block" class="hidden border-2 border-slate-200 rounded-lg overflow-hidden mt-2">
+        <!-- ================================================================= -->
+        <!-- TRIP SETTLEMENT CONTAINER (Active when Category is "Trip Payment") -->
+        <!-- ================================================================= -->
+        <div id="trip-payment-container" class="hidden border-2 border-emerald-500 rounded-xl overflow-hidden mt-4 shadow-sm">
+            <!-- Header with segmented mode switch -->
+            <div class="bg-gradient-to-r from-emerald-600 to-teal-700 px-4 py-3 sm:px-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div class="flex items-center space-x-2 text-white">
+                    <i class="fa-solid fa-truck-moving text-emerald-200 text-lg"></i>
+                    <div>
+                        <h3 class="text-sm sm:text-base font-bold uppercase tracking-wider">Trip Settlement</h3>
+                        <p class="text-[11px] text-emerald-100">Record bank payments, TDS, and deductions for trips</p>
+                    </div>
+                </div>
+                <!-- Segmented Mode Switch -->
+                <div class="inline-flex p-1 bg-emerald-900/50 rounded-lg backdrop-blur-sm self-start sm:self-auto border border-emerald-400/30">
+                    <button type="button" id="btn-mode-single" class="btn-trip-mode px-3.5 py-1.5 rounded-md text-xs font-bold flex items-center gap-1.5 bg-white text-emerald-800 shadow-sm">
+                        <i class="fa-solid fa-truck-fast"></i>
+                        <span>Single Trip</span>
+                    </button>
+                    <button type="button" id="btn-mode-multi" class="btn-trip-mode px-3.5 py-1.5 rounded-md text-xs font-bold flex items-center gap-1.5 text-emerald-100 hover:text-white">
+                        <i class="fa-solid fa-layer-group"></i>
+                        <span>Multi Trip</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- ------------------------------------------------------------- -->
+            <!-- OPTION 1: SINGLE TRIP VIEW                                    -->
+            <!-- ------------------------------------------------------------- -->
+            <div id="single-trip-section" class="p-4 sm:p-5 bg-slate-50 space-y-4">
+                <!-- Trip Selector Slot -->
+                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-2">
+                    <div class="flex items-center justify-between">
+                        <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider" for="id_associated_trip">
+                            <i class="fa-solid fa-route mr-1 text-emerald-600"></i> Select Trip to Settle
+                        </label>
+                        <span id="single-trip-loading" class="hidden text-xs text-emerald-600 font-medium">
+                            <i class="fa-solid fa-spinner fa-spin mr-1"></i> Loading trips...
+                        </span>
+                    </div>
+                    <div id="slot-single-trip">
+                        <!-- wrapper_id_associated_trip moves here -->
+                    </div>
+                    <p class="text-[11px] text-slate-500 italic">Select an unpaid trip for this party. Only pending trips are shown.</p>
+                </div>
+
+                <!-- Selected Trip Info Card -->
+                <div id="single-trip-card" class="hidden bg-white border border-emerald-200 rounded-xl p-4 shadow-sm">
+                    <div class="flex items-center justify-between pb-2.5 border-b border-slate-100">
+                        <div class="flex items-center space-x-2">
+                            <span class="px-2.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-mono font-bold text-xs uppercase" id="card-vehicle-plate">—</span>
+                            <span class="text-xs font-bold text-slate-700 font-mono" id="card-trip-number">—</span>
+                        </div>
+                        <span class="text-xs text-slate-500 flex items-center gap-1" id="card-trip-date">
+                            <i class="fa-regular fa-calendar"></i> <span>—</span>
+                        </span>
+                    </div>
+                    <div class="mt-2 text-xs text-slate-600 font-medium truncate" id="card-trip-route">
+                        <i class="fa-solid fa-location-dot text-slate-400 mr-1"></i> <span>—</span>
+                    </div>
+
+                    <!-- 3 Stats Grid -->
+                    <div class="grid grid-cols-3 gap-2 mt-3 pt-2.5 border-t border-slate-100 text-center">
+                        <div class="bg-slate-50 p-2 rounded-lg">
+                            <span class="block text-[10px] font-semibold text-slate-500 uppercase">Total Revenue</span>
+                            <span class="text-xs sm:text-sm font-bold text-slate-800 font-mono" id="card-trip-total">₹0.00</span>
+                        </div>
+                        <div class="bg-emerald-50/50 p-2 rounded-lg">
+                            <span class="block text-[10px] font-semibold text-emerald-700 uppercase">Received</span>
+                            <span class="text-xs sm:text-sm font-bold text-emerald-700 font-mono" id="card-trip-received">₹0.00</span>
+                        </div>
+                        <div class="bg-amber-50 p-2 rounded-lg border border-amber-200/60">
+                            <span class="block text-[10px] font-bold text-amber-800 uppercase">Pending Due</span>
+                            <span class="text-xs sm:text-sm font-black text-amber-800 font-mono" id="card-trip-balance">₹0.00</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Input Slots for Single Trip -->
+                <div id="single-trip-inputs-box" class="bg-white border border-slate-200 rounded-xl p-4 sm:p-5 shadow-sm grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+                    <!-- Bank Payment Received Slot -->
+                    <div class="space-y-1 flex flex-col justify-between">
+                        <div id="slot-single-amount">
+                            <!-- wrapper_id_amount moves here -->
+                        </div>
+                        <p class="text-[11px] text-slate-500">Actual amount received in company bank or cash account.</p>
+                    </div>
+
+                    <!-- TDS Slot -->
+                    <div class="pt-4 sm:pt-0 border-t sm:border-t-0 sm:border-l sm:pl-4 lg:pl-6 border-slate-100 space-y-1 flex flex-col justify-between">
+                        <div id="slot-single-tds">
+                            <!-- wrapper_id_tds_amount moves here -->
+                        </div>
+                        <p class="text-[11px] text-slate-500">TDS deducted by client (creates non-bank TDS entry under Category 'TDS').</p>
+                    </div>
+
+                    <!-- Deduction Amount Slot -->
+                    <div class="pt-4 lg:pt-0 border-t lg:border-t-0 sm:border-t lg:border-l sm:pt-4 lg:pt-0 lg:pl-6 border-slate-100 space-y-1 flex flex-col justify-between">
+                        <div id="slot-single-ded-amount">
+                            <!-- wrapper_id_deduction_amount moves here -->
+                        </div>
+                        <p class="text-[11px] text-slate-500">Shortage, penalty, or discount deducted by party.</p>
+                    </div>
+
+                    <!-- Deduction Reason Slot -->
+                    <div class="pt-4 lg:pt-0 border-t lg:border-t-0 sm:border-t lg:border-l sm:border-l sm:pl-4 lg:pl-6 sm:pt-4 lg:pt-0 border-slate-100 space-y-1 flex flex-col justify-between">
+                        <div id="slot-single-ded-notes">
+                            <!-- wrapper_id_deduction_notes moves here -->
+                        </div>
+                        <p class="text-[11px] text-slate-500">Reason for deduction (creates Category 'Deductions' entry).</p>
+                    </div>
+                </div>
+
+                <!-- Live Reactive Balance Card (Option 1 Requirement) -->
+                <div id="single-trip-balance-summary" class="hidden bg-slate-900 text-white rounded-xl p-4 shadow-md">
+                    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 items-center">
+                        <div class="bg-slate-800/80 p-2.5 rounded-lg text-center">
+                            <span class="block text-[10px] font-semibold text-slate-400 uppercase">Trip Outstanding</span>
+                            <span class="text-xs sm:text-sm font-bold text-white font-mono" id="summary-pending">₹0.00</span>
+                        </div>
+                        <div class="bg-slate-800/80 p-2.5 rounded-lg text-center">
+                            <span class="block text-[10px] font-semibold text-emerald-400 uppercase">− Bank Payment</span>
+                            <span class="text-xs sm:text-sm font-bold text-emerald-400 font-mono" id="summary-payment">− ₹0.00</span>
+                        </div>
+                        <div class="bg-slate-800/80 p-2.5 rounded-lg text-center">
+                            <span class="block text-[10px] font-semibold text-amber-400 uppercase">− TDS Deducted</span>
+                            <span class="text-xs sm:text-sm font-bold text-amber-400 font-mono" id="summary-tds">− ₹0.00</span>
+                        </div>
+                        <div class="bg-slate-800/80 p-2.5 rounded-lg text-center">
+                            <span class="block text-[10px] font-semibold text-purple-400 uppercase">− Deductions</span>
+                            <span class="text-xs sm:text-sm font-bold text-purple-400 font-mono" id="summary-deduction">− ₹0.00</span>
+                        </div>
+                        <div class="col-span-2 sm:col-span-3 lg:col-span-1 bg-slate-800/80 p-2.5 rounded-lg text-center border border-emerald-500/40 flex flex-col justify-center items-center">
+                            <span class="block text-[10px] uppercase tracking-wider text-slate-300 font-bold">Balance After</span>
+                            <span class="text-xs sm:text-sm font-black font-mono mt-0.5" id="summary-remaining">₹0.00</span>
+                            <div id="summary-badge" class="mt-1"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ------------------------------------------------------------- -->
+            <!-- OPTION 2: MULTI TRIP VIEW                                     -->
+            <!-- ------------------------------------------------------------- -->
+            <div id="multi-trip-section" class="hidden p-4 sm:p-5 bg-slate-50 space-y-4">
+                <div class="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-900 flex items-start gap-2.5">
+                    <i class="fa-solid fa-circle-info text-blue-600 mt-0.5"></i>
+                    <div>
+                        <p class="font-bold">Multi-Trip Settlement Mode</p>
+                        <p class="text-blue-800 text-[11px] mt-0.5">Select trips to settle. Enter custom payment, TDS, and deductions for each trip. Live balances calculate per trip.</p>
+                    </div>
+                </div>
+
+                <!-- Unpaid Trips Picker -->
+                <div class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm space-y-2">
+                    <div class="flex items-center justify-between">
+                        <h4 class="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                            <i class="fa-solid fa-list-ul mr-1 text-emerald-600"></i> Available Unpaid Trips
+                        </h4>
+                        <button type="button" id="btn-select-all-trips" class="text-xs font-bold text-emerald-700 hover:text-emerald-900">
+                            + Add All Trips
+                        </button>
+                    </div>
+                    <div id="unpaid-trips-pills" class="flex flex-wrap gap-2 max-h-48 overflow-y-auto p-1">
+                        <!-- Populated by JS -->
+                        <div class="text-slate-400 text-xs italic p-2">Select a party to view unpaid trips.</div>
+                    </div>
+                </div>
+
+                <!-- Selected Trips Cards List -->
+                <div class="space-y-2.5">
+                    <div class="flex items-center justify-between">
+                        <h4 class="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                            <i class="fa-solid fa-check-double mr-1 text-emerald-600"></i> Selected Trips (<span id="multi-selected-count">0</span>)
+                        </h4>
+                        <button type="button" id="btn-clear-multi-trips" class="text-xs font-bold text-slate-500 hover:text-red-600">
+                            Clear All
+                        </button>
+                    </div>
+                    <div id="multi-trips-container" class="space-y-3">
+                        <!-- Populated dynamically as touch cards -->
+                        <div class="text-center p-6 bg-white border border-dashed border-slate-300 rounded-xl text-slate-400 text-xs">
+                            No trips selected yet. Tap trips above to add them to this settlement.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Multi-Trip Grand Totals Banner -->
+                <div id="multi-trip-totals-banner" class="bg-slate-900 text-white p-4 rounded-xl shadow-md space-y-2">
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
+                        <div class="bg-slate-800/80 p-2 rounded-lg">
+                            <span class="block text-[10px] font-semibold text-slate-400 uppercase">Bank Payment</span>
+                            <span class="text-xs sm:text-sm font-bold text-emerald-400 font-mono" id="multi-total-payment">₹0.00</span>
+                        </div>
+                        <div class="bg-slate-800/80 p-2 rounded-lg">
+                            <span class="block text-[10px] font-semibold text-slate-400 uppercase">Total TDS</span>
+                            <span class="text-xs sm:text-sm font-bold text-amber-400 font-mono" id="multi-total-tds">₹0.00</span>
+                        </div>
+                        <div class="bg-slate-800/80 p-2 rounded-lg">
+                            <span class="block text-[10px] font-semibold text-slate-400 uppercase">Total Deductions</span>
+                            <span class="text-xs sm:text-sm font-bold text-purple-400 font-mono" id="multi-total-deductions">₹0.00</span>
+                        </div>
+                        <div class="bg-slate-800/80 p-2 rounded-lg border border-emerald-500/40">
+                            <span class="block text-[10px] font-bold text-emerald-300 uppercase">Total Settled</span>
+                            <span class="text-xs sm:text-sm font-black text-white font-mono" id="multi-total-allocated">₹0.00</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================================================================= -->
+        <!-- PAYMENT DETAILS BLOCK (Invoice Payment only)                      -->
+        <!-- ================================================================= -->
+        <div id="payment-details-block" class="hidden border-2 border-slate-200 rounded-xl overflow-hidden mt-2">
             <div class="bg-slate-700 px-4 py-2.5">
                 <h3 class="text-sm font-bold text-white uppercase tracking-wider flex items-center">
-                    <i class="fa-solid fa-indian-rupee-sign mr-2"></i>Payment Details
+                    <i class="fa-solid fa-indian-rupee-sign mr-2"></i>Invoice Payment Details
                 </h3>
             </div>
-            <div class="p-5 bg-white space-y-4">
-                <!-- Taxable Value & Invoice Balance Info (shown when bill selected) -->
-                <div id="bill-info-panel" class="hidden bg-gradient-to-r from-blue-50 to-slate-50 border border-blue-200 rounded-lg p-4">
-                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+            <div class="p-4 sm:p-5 bg-white space-y-4">
+                <!-- Taxable Value & Invoice Balance Info -->
+                <div id="bill-info-panel" class="hidden bg-gradient-to-r from-blue-50 to-slate-50 border border-blue-200 rounded-lg p-3 sm:p-4">
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs sm:text-sm">
                         <div>
                             <span class="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Taxable Value</span>
-                            <span class="text-lg font-bold text-slate-800" id="info-taxable-value">—</span>
+                            <span class="text-base sm:text-lg font-bold text-slate-800 font-mono" id="info-taxable-value">—</span>
                         </div>
                         <div>
                             <span class="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Invoice Total</span>
-                            <span class="text-lg font-bold text-slate-800" id="info-invoice-total">—</span>
+                            <span class="text-base sm:text-lg font-bold text-slate-800 font-mono" id="info-invoice-total">—</span>
                         </div>
                         <div>
-                            <span class="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Already Received</span>
-                            <span class="text-lg font-bold text-emerald-600" id="info-received">—</span>
+                            <span class="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Received</span>
+                            <span class="text-base sm:text-lg font-bold text-emerald-600 font-mono" id="info-received">—</span>
                         </div>
                         <div>
                             <span class="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Outstanding</span>
-                            <span class="text-lg font-bold text-red-600" id="info-outstanding">—</span>
+                            <span class="text-base sm:text-lg font-bold text-red-600 font-mono" id="info-outstanding">—</span>
                         </div>
                     </div>
                 </div>
 
                 <!-- Amount + TDS Amount side by side -->
                 <div id="payment-block-fields" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div id="wrapper_id_amount">
-                        <label class="block text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider" for="id_amount">
-                            Payment Amount
-                        </label>
-                        {{ form.amount }}
-                        {% if form.amount.errors %}
-                            <p class="mt-1 text-sm text-red-600 font-medium">{{ form.amount.errors.as_text }}</p>
-                        {% endif %}
-                    </div>
-                    <div id="wrapper_id_tds_amount">
-                        <label class="block text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider" for="id_tds_amount">
-                            TDS Amount
-                        </label>
-                        {{ form.tds_amount }}
-                        {% if form.tds_amount.errors %}
-                            <p class="mt-1 text-sm text-red-600 font-medium">{{ form.tds_amount.errors.as_text }}</p>
-                        {% endif %}
-                        <p class="mt-1 text-xs text-slate-500 italic">If TDS was deducted, enter the exact TDS amount here.</p>
-                    </div>
+                    <!-- Fields dynamically moved here -->
                 </div>
 
                 <!-- Inline TDS Calculator -->
-                <div id="tds-calculator-panel" class="hidden bg-amber-50 border border-amber-200 rounded-lg p-4">
-                    <div class="flex items-center gap-2 mb-3">
-                        <i class="fa-solid fa-calculator text-amber-600 text-sm"></i>
+                <div id="tds-calculator-panel" class="hidden bg-amber-50 border border-amber-200 rounded-lg p-3 sm:p-4">
+                    <div class="flex items-center gap-2 mb-2">
+                        <i class="fa-solid fa-calculator text-amber-600 text-xs sm:text-sm"></i>
                         <span class="text-xs font-bold text-amber-800 uppercase tracking-wider">Quick TDS Calculator</span>
                     </div>
                     <div class="flex flex-col sm:flex-row sm:items-end gap-3">
@@ -148,131 +360,47 @@
                             <label class="block text-[10px] font-semibold text-slate-600 mb-1 uppercase">TDS %</label>
                             <div class="flex w-full">
                                 <input type="number" id="inline-tds-pct" step="0.01" min="0" max="100" placeholder="e.g. 2" 
-                                    class="w-full min-w-0 px-3 py-2 border border-amber-300 rounded-l-md text-sm shadow-sm focus:ring-amber-500 focus:border-amber-500 bg-white" />
-                                <button type="button" id="btn-calc-tds" class="whitespace-nowrap px-4 py-2 bg-amber-600 text-white text-sm font-medium rounded-r-md hover:bg-amber-700 transition-colors">
+                                    class="w-full min-w-0 px-3 py-2 border border-amber-300 rounded-l-md text-xs sm:text-sm shadow-sm focus:ring-amber-500 focus:border-amber-500 bg-white" />
+                                <button type="button" id="btn-calc-tds" class="whitespace-nowrap px-3 sm:px-4 py-2 bg-amber-600 text-white text-xs sm:text-sm font-medium rounded-r-md hover:bg-amber-700 transition-colors">
                                     <i class="fa-solid fa-bolt mr-1"></i>Calculate
                                 </button>
                             </div>
                         </div>
                         <div class="flex justify-between items-center sm:block sm:text-right bg-amber-100/50 sm:bg-transparent p-2 sm:p-0 rounded-md w-full sm:w-auto">
                             <span class="block text-[10px] font-semibold text-slate-500 uppercase">Calculated TDS</span>
-                            <span class="text-lg font-bold text-amber-700" id="calc-tds-result">—</span>
+                            <span class="text-base sm:text-lg font-bold text-amber-700 font-mono" id="calc-tds-result">—</span>
                         </div>
                     </div>
-                    <p class="text-[10px] text-amber-700 mt-2 italic">Calculates TDS on taxable value (subtotal excl. GST). Click to auto-fill TDS Amount above.</p>
+                    <p class="text-[10px] text-amber-700 mt-2 italic">Calculates TDS on taxable value. Click to auto-fill TDS Amount above.</p>
                 </div>
 
-                <!-- TDS Percentage (for TDS category entries) -->
-                <div id="wrapper_id_tds_percentage" class="hidden">
-                    <label class="block text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider" for="id_tds_percentage">
-                        TDS Percentage
-                    </label>
-                    {{ form.tds_percentage }}
-                    {% if form.tds_percentage.errors %}
-                        <p class="mt-1 text-sm text-red-600 font-medium">{{ form.tds_percentage.errors.as_text }}</p>
-                    {% endif %}
-                </div>
-
-                <!-- Live Remaining Balance -->
-                <div id="dynamic-bill-balance" class="hidden bg-slate-50 border border-slate-200 rounded-md p-3 text-sm"></div>
+                <!-- Live Remaining Bill Balance -->
+                <div id="dynamic-bill-balance" class="hidden bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs sm:text-sm"></div>
             </div>
         </div>
 
-        <!-- Description & Supporting Document -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-2">
-            <div class="md:col-span-1" id="wrapper_id_description">
-                <label class="block text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider" for="id_description">
-                    Description
-                </label>
-                {{ form.description }}
-                {% if form.description.errors %}
-                    <p class="mt-1 text-sm text-red-600 font-medium">{{ form.description.errors.as_text }}</p>
-                {% endif %}
-            </div>
-            <div class="md:col-span-1" id="wrapper_id_document_ref">
-                <label class="block text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider" for="id_document_ref">
-                    Supporting Document
-                </label>
-                {{ form.document_ref }}
-                {% if form.document_ref.errors %}
-                    <p class="mt-1 text-sm text-red-600 font-medium">{{ form.document_ref.errors.as_text }}</p>
-                {% endif %}
-                <p class="mt-1 text-xs text-slate-500 italic">Upload a receipt, voucher, or proof of payment.</p>
-            </div>
-        </div>
-        <!-- Custom Multi-Trip Selection Area -->
-        <div id="multi-trip-area" class="hidden border-2 border-emerald-500 rounded-lg overflow-hidden mt-8">
-            <div class="bg-emerald-500 px-4 py-3">
-                <h3 class="text-sm font-bold text-white uppercase tracking-wider flex items-center">
-                    <i class="fa-solid fa-list-check mr-2"></i>Payment Allocation (Multi-Trip)
-                </h3>
-            </div>
-            <div class="p-4 bg-slate-50">
-                <p class="text-xs text-slate-600 mb-4 italic">Select trips in the order you wish to pay them. The amount will be distributed sequentially.</p>
-                
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                        <h4 class="text-xs font-bold text-slate-700 uppercase mb-2">Unpaid Trips</h4>
-                        <div id="unpaid-trips-list" class="bg-white border border-slate-200 rounded-md max-h-64 overflow-y-auto divide-y divide-slate-100">
-                            <!-- Populated by JS -->
-                            <div class="text-center p-4 text-slate-400 text-sm italic">Select a party to load trips.</div>
-                        </div>
-                    </div>
-                    <div>
-                        <h4 class="text-xs font-bold text-slate-700 uppercase mb-2">Selected for Payment</h4>
-                        <div class="bg-white border border-slate-200 rounded-md overflow-hidden">
-                            <table class="w-full text-left text-xs">
-                                <thead class="bg-slate-100 border-b border-slate-200">
-                                    <tr>
-                                        <th class="px-3 py-2 font-semibold text-slate-700">Trip</th>
-                                        <th class="px-3 py-2 text-right font-semibold text-slate-700">Owed</th>
-                                        <th class="px-3 py-2 text-right font-semibold text-slate-700">Allocated</th>
-                                        <th class="px-3 py-2"></th>
-                                    </tr>
-                                </thead>
-                                <tbody id="selected-trips-body" class="divide-y divide-slate-50">
-                                    <!-- Populated by JS -->
-                                </tbody>
-                                <tfoot class="bg-slate-50 border-t border-slate-200">
-                                    <tr>
-                                        <td colspan="2" class="px-3 py-2 text-right font-bold text-slate-700">Total Allocated:</td>
-                                        <td class="px-3 py-2 text-right font-bold text-emerald-600" id="total-allocated">0.00</td>
-                                        <td></td>
-                                    </tr>
-                                    <tr>
-                                        <td colspan="2" class="px-3 py-1 text-right text-[10px] text-slate-500">Remaining:</td>
-                                        <td class="px-3 py-1 text-right text-[10px] text-slate-500" id="remaining-amount">0.00</td>
-                                        <td></td>
-                                    </tr>
-                                </tfoot>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Custom Multi-Bill Selection Area -->
-        <div id="multi-bill-area" class="hidden border-2 border-blue-500 rounded-lg overflow-hidden mt-8">
+        <!-- ================================================================= -->
+        <!-- MULTI-BILL SELECTION AREA (Standard category only)                -->
+        <!-- ================================================================= -->
+        <div id="multi-bill-area" class="hidden border-2 border-blue-500 rounded-xl overflow-hidden mt-6">
             <div class="bg-blue-500 px-4 py-3">
-                <h3 class="text-sm font-bold text-white uppercase tracking-wider flex items-center">
+                <h3 class="text-xs sm:text-sm font-bold text-white uppercase tracking-wider flex items-center">
                     <i class="fa-solid fa-file-invoice mr-2"></i>Payment Allocation (Multi-Invoice)
                 </h3>
             </div>
             <div class="p-4 bg-slate-50">
-                <p class="text-xs text-slate-600 mb-4 italic">Select invoices in the order you wish to pay them. The amount will be distributed sequentially.</p>
+                <p class="text-xs text-slate-600 mb-3 italic">Select invoices in the order you wish to pay them. The amount will be distributed sequentially.</p>
 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                         <h4 class="text-xs font-bold text-slate-700 uppercase mb-2">Unpaid Invoices</h4>
-                        <div id="unpaid-bills-list" class="bg-white border border-slate-200 rounded-md max-h-64 overflow-y-auto divide-y divide-slate-100">
-                            <!-- Populated by JS -->
-                            <div class="text-center p-4 text-slate-400 text-sm italic">Select a party to load invoices.</div>
+                        <div id="unpaid-bills-list" class="bg-white border border-slate-200 rounded-lg max-h-64 overflow-y-auto divide-y divide-slate-100">
+                            <div class="text-center p-4 text-slate-400 text-xs italic">Select a party to load invoices.</div>
                         </div>
                     </div>
                     <div>
                         <h4 class="text-xs font-bold text-slate-700 uppercase mb-2">Selected for Payment</h4>
-                        <div class="bg-white border border-slate-200 rounded-md overflow-hidden">
+                        <div class="bg-white border border-slate-200 rounded-lg overflow-hidden">
                             <table class="w-full text-left text-xs">
                                 <thead class="bg-slate-100 border-b border-slate-200">
                                     <tr>
@@ -283,17 +411,16 @@
                                     </tr>
                                 </thead>
                                 <tbody id="selected-bills-body" class="divide-y divide-slate-50">
-                                    <!-- Populated by JS -->
                                 </tbody>
                                 <tfoot class="bg-slate-50 border-t border-slate-200">
                                     <tr>
                                         <td colspan="2" class="px-3 py-2 text-right font-bold text-slate-700">Total Allocated:</td>
-                                        <td class="px-3 py-2 text-right font-bold text-blue-600" id="total-allocated-bills">0.00</td>
+                                        <td class="px-3 py-2 text-right font-bold text-blue-600 font-mono" id="total-allocated-bills">0.00</td>
                                         <td></td>
                                     </tr>
                                     <tr>
                                         <td colspan="2" class="px-3 py-1 text-right text-[10px] text-slate-500">Remaining:</td>
-                                        <td class="px-3 py-1 text-right text-[10px] text-slate-500" id="remaining-amount-bills">0.00</td>
+                                        <td class="px-3 py-1 text-right text-[10px] text-slate-500 font-mono" id="remaining-amount-bills">0.00</td>
                                         <td></td>
                                     </tr>
                                 </tfoot>
@@ -304,70 +431,227 @@
             </div>
         </div>
 
+        <!-- Description & Supporting Document -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 pt-3 border-t border-slate-100">
+            <div class="md:col-span-1" id="wrapper_id_description">
+                <label class="block text-xs sm:text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider" for="id_description">
+                    Description
+                </label>
+                {{ form.description }}
+                {% if form.description.errors %}
+                    <p class="mt-1 text-xs text-red-600 font-medium">{{ form.description.errors.as_text }}</p>
+                {% endif %}
+            </div>
+            <div class="md:col-span-1" id="wrapper_id_document_ref">
+                <label class="block text-xs sm:text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider" for="id_document_ref">
+                    Supporting Document
+                </label>
+                {{ form.document_ref }}
+                {% if form.document_ref.errors %}
+                    <p class="mt-1 text-xs text-red-600 font-medium">{{ form.document_ref.errors.as_text }}</p>
+                {% endif %}
+                <p class="mt-1 text-xs text-slate-500 italic">Upload a receipt, voucher, or proof of payment.</p>
+            </div>
+        </div>
+
     </div>
 
-    <!-- Footer Actions Bar -->
-    <div id="financial-actions-bar" class="sticky bottom-16 lg:bottom-4 z-40 mt-6 shadow-xl bg-slate-50/95 backdrop-blur-sm px-4 sm:px-6 py-3.5 sm:py-4 border border-slate-200 rounded-xl flex items-center justify-between transition-all duration-200">
+    <!-- ================================================================= -->
+    <!-- INDIVIDUAL FIELD WRAPPERS (Moved into slots dynamically)         -->
+    <!-- ================================================================= -->
+    <div id="dynamic-wrappers-pool" class="hidden">
+        <!-- Associated Trip Wrapper -->
+        <div id="wrapper_id_associated_trip">
+            {{ form.associated_trip }}
+            {% if form.associated_trip.errors %}
+                <p class="mt-1 text-xs text-red-600 font-medium">{{ form.associated_trip.errors.as_text }}</p>
+            {% endif %}
+        </div>
+
+        <!-- Amount Wrapper -->
+        <div id="wrapper_id_amount">
+            <div class="flex items-center justify-between mb-1 gap-1">
+                <label class="block text-xs sm:text-sm font-semibold text-slate-700 uppercase tracking-wider truncate" for="id_amount">
+                    <span id="amount-label-text">Payment Amount</span>
+                </label>
+                <button type="button" id="btn-single-pay-full" class="hidden px-2 py-0.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300 rounded text-[11px] font-bold transition-all active:scale-95 shrink-0 whitespace-nowrap">
+                    <i class="fa-solid fa-bolt text-[10px] mr-1"></i> Pay Full
+                </button>
+            </div>
+            {{ form.amount }}
+            {% if form.amount.errors %}
+                <p class="mt-1 text-xs text-red-600 font-medium">{{ form.amount.errors.as_text }}</p>
+            {% endif %}
+        </div>
+
+        <!-- TDS Amount Wrapper -->
+        <div id="wrapper_id_tds_amount">
+            <div class="flex items-center justify-between mb-1 gap-1">
+                <label class="block text-xs sm:text-sm font-semibold text-slate-700 uppercase tracking-wider truncate" for="id_tds_amount">
+                    TDS Amount
+                </label>
+                <div id="single-tds-chips" class="hidden items-center gap-1 shrink-0 whitespace-nowrap">
+                    <span class="text-[10px] text-slate-400 font-semibold uppercase mr-0.5">Auto:</span>
+                    <button type="button" class="btn-quick-single-tds px-1.5 py-0.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded text-[10px] font-bold active:scale-95" data-pct="1">1%</button>
+                    <button type="button" class="btn-quick-single-tds px-1.5 py-0.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded text-[10px] font-bold active:scale-95" data-pct="2">2%</button>
+                </div>
+            </div>
+            {{ form.tds_amount }}
+            {% if form.tds_amount.errors %}
+                <p class="mt-1 text-xs text-red-600 font-medium">{{ form.tds_amount.errors.as_text }}</p>
+            {% endif %}
+        </div>
+
+        <!-- TDS Percentage Wrapper -->
+        <div id="wrapper_id_tds_percentage">
+            <label class="block text-xs sm:text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider" for="id_tds_percentage">
+                TDS Percentage
+            </label>
+            {{ form.tds_percentage }}
+            {% if form.tds_percentage.errors %}
+                <p class="mt-1 text-xs text-red-600 font-medium">{{ form.tds_percentage.errors.as_text }}</p>
+            {% endif %}
+        </div>
+
+        <!-- Deduction Amount Wrapper -->
+        <div id="wrapper_id_deduction_amount">
+            <label class="block text-xs sm:text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider" for="id_deduction_amount">
+                Deduction Amount
+            </label>
+            {{ form.deduction_amount }}
+            {% if form.deduction_amount.errors %}
+                <p class="mt-1 text-xs text-red-600 font-medium">{{ form.deduction_amount.errors.as_text }}</p>
+            {% endif %}
+        </div>
+
+        <!-- Deduction Notes Wrapper -->
+        <div id="wrapper_id_deduction_notes">
+            <label class="block text-xs sm:text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider" for="id_deduction_notes">
+                Deduction Reason
+            </label>
+            {{ form.deduction_notes }}
+            <div id="single-ded-chips" class="hidden items-center gap-1.5 mt-2 flex-wrap">
+                <span class="text-[10px] text-slate-400 font-semibold uppercase tracking-wider mr-0.5">Quick:</span>
+                <button type="button" class="btn-quick-single-ded px-2 py-0.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded text-[11px] font-semibold transition-all active:scale-95 whitespace-nowrap" data-reason="Shortage">Shortage</button>
+                <button type="button" class="btn-quick-single-ded px-2 py-0.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded text-[11px] font-semibold transition-all active:scale-95 whitespace-nowrap" data-reason="Payment Charges">Charges</button>
+                <button type="button" class="btn-quick-single-ded px-2 py-0.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded text-[11px] font-semibold transition-all active:scale-95 whitespace-nowrap" data-reason="Round-off">Round-off</button>
+            </div>
+            {% if form.deduction_notes.errors %}
+                <p class="mt-1 text-xs text-red-600 font-medium">{{ form.deduction_notes.errors.as_text }}</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- ================================================================= -->
+    <!-- STICKY ACTION BAR (Optimized for Mobile)                          -->
+    <!-- ================================================================= -->
+    <div id="financial-actions-bar" class="sticky bottom-16 lg:bottom-4 z-40 mt-6 shadow-xl bg-slate-50/95 backdrop-blur-sm px-3 sm:px-6 py-3 border border-slate-200 rounded-xl flex items-center justify-between gap-2">
         <a href="{% if object %}{% url 'financialrecord-detail' object.pk %}{% else %}{% url 'financialrecord-list' %}{% endif %}" 
-           class="px-5 py-2.5 border border-slate-300 rounded-lg text-slate-700 bg-white hover:bg-slate-50 font-bold text-sm transition-all flex items-center shadow-sm">
-            <i class="fa-solid fa-xmark mr-2 text-slate-400"></i> Cancel
+           class="px-3 sm:px-4 py-2 border border-slate-300 rounded-lg text-slate-700 bg-white hover:bg-slate-50 font-bold text-xs sm:text-sm transition-all flex items-center shadow-sm">
+            <i class="fa-solid fa-xmark mr-1.5 text-slate-400"></i> Cancel
         </a>
-        <button type="submit" class="flex items-center justify-center space-x-2 px-6 sm:px-8 py-2.5 bg-emerald-600 text-white rounded-lg text-sm font-black hover:bg-emerald-700 shadow-lg shadow-emerald-100 transition-all active:scale-95 uppercase tracking-wider">
-            <i class="fa-solid fa-circle-check mr-2"></i>
-            <span>{% if object %}Update Record{% else %}Add Record{% endif %}</span>
-        </button>
+        <div class="flex items-center gap-2">
+            {% if not object %}
+            <button type="submit" name="_save_same_party" value="1" id="btn-save-next-trip" class="hidden items-center justify-center space-x-1 px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-lg text-xs sm:text-sm font-bold hover:bg-blue-700 shadow-md shadow-blue-100 transition-all active:scale-95">
+                <i class="fa-solid fa-forward-step"></i>
+                <span class="whitespace-nowrap">Save & Next</span>
+            </button>
+            {% endif %}
+            <button type="submit" class="flex items-center justify-center space-x-1.5 px-4 sm:px-6 py-2 bg-emerald-600 text-white rounded-lg text-xs sm:text-sm font-black hover:bg-emerald-700 shadow-lg shadow-emerald-100 transition-all active:scale-95 uppercase tracking-wider">
+                <i class="fa-solid fa-circle-check"></i>
+                <span class="whitespace-nowrap">{% if object %}Update{% else %}Save{% endif %}</span>
+            </button>
+        </div>
     </div>
 </form>
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
+        // Core elements
         const partySelect = document.getElementById('id_party');
         const amountInput = document.getElementById('id_amount');
         const driverFieldWrapper = document.getElementById('wrapper_id_driver');
-        const associatedTripWrapper = document.getElementById('wrapper_id_associated_trip');
+        const associatedTripSelect = document.getElementById('id_associated_trip');
         const categorySelect = document.getElementById('id_category');
-        
+        const associatedBillSelect = document.getElementById('id_associated_bill');
         const associatedBillWrapper = document.getElementById('wrapper_id_associated_bill');
         const tdsPercentageInput = document.getElementById('id_tds_percentage');
         const tdsAmountInput = document.getElementById('id_tds_amount');
-        const associatedBillSelect = document.getElementById('id_associated_bill');
-        
-        const multiTripArea = document.getElementById('multi-trip-area');
-        const unpaidTripsList = document.getElementById('unpaid-trips-list');
-        const selectedTripsBody = document.getElementById('selected-trips-body');
-        const totalAllocatedEl = document.getElementById('total-allocated');
-        const remainingAmountEl = document.getElementById('remaining-amount');
-        const distributionInput = document.getElementById('id_payment_distribution');
+        const deductionAmountInput = document.getElementById('id_deduction_amount');
+        const deductionNotesInput = document.getElementById('id_deduction_notes');
+        const recordTypeSelect = document.getElementById('id_record_type');
 
+        // Containers
+        const tripPaymentContainer = document.getElementById('trip-payment-container');
+        const singleTripSection = document.getElementById('single-trip-section');
+        const multiTripSection = document.getElementById('multi-trip-section');
+        const paymentDetailsBlock = document.getElementById('payment-details-block');
         const multiBillArea = document.getElementById('multi-bill-area');
-        const unpaidBillsList = document.getElementById('unpaid-bills-list');
-        const selectedBillsBody = document.getElementById('selected-bills-body');
-        const totalAllocatedBillsEl = document.getElementById('total-allocated-bills');
-        const remainingAmountBillsEl = document.getElementById('remaining-amount-bills');
+
+        // Wrappers
+        const wrapperAmount = document.getElementById('wrapper_id_amount');
+        const wrapperTdsAmount = document.getElementById('wrapper_id_tds_amount');
+        const wrapperTdsPct = document.getElementById('wrapper_id_tds_percentage');
+        const wrapperDedAmount = document.getElementById('wrapper_id_deduction_amount');
+        const wrapperDedNotes = document.getElementById('wrapper_id_deduction_notes');
+        const wrapperAssociatedTrip = document.getElementById('wrapper_id_associated_trip');
+
+        // Slots
+        const simpleAmountSlot = document.getElementById('simple-amount-slot');
+        const simpleTdsAmountSlot = document.getElementById('simple-tds-amount-slot');
+        const simpleTdsPctSlot = document.getElementById('simple-tds-pct-slot');
+        const simpleDedAmountSlot = document.getElementById('simple-ded-amount-slot');
+        const simpleDedNotesSlot = document.getElementById('simple-ded-notes-slot');
+        const paymentBlockFields = document.getElementById('payment-block-fields');
+        const slotSingleTrip = document.getElementById('slot-single-trip');
+        const slotSingleAmount = document.getElementById('slot-single-amount');
+        const slotSingleTds = document.getElementById('slot-single-tds');
+        const slotSingleDedAmount = document.getElementById('slot-single-ded-amount');
+        const slotSingleDedNotes = document.getElementById('slot-single-ded-notes');
+
+        // Action Buttons & Badges
+        const btnSaveNextTrip = document.getElementById('btn-save-next-trip');
+        const btnModeSingle = document.getElementById('btn-mode-single');
+        const btnModeMulti = document.getElementById('btn-mode-multi');
+        const btnSinglePayFull = document.getElementById('btn-single-pay-full');
+        const singleTdsChips = document.getElementById('single-tds-chips');
+        const singleDedChips = document.getElementById('single-ded-chips');
+
+        // Distribution inputs
+        const distributionInput = document.getElementById('id_payment_distribution');
         const billDistributionInput = document.getElementById('id_bill_distribution');
 
-        let unpaidTrips = []; // Store fetched trip data
-        let selectedTripIds = []; // Store IDs in order
-        let unpaidBills = []; // Store fetched bill data
-        let selectedBillIds = []; // Store IDs in order
+        // State variables
+        let currentTripMode = 'single'; // 'single' or 'multi'
+        let unpaidTrips = [];           // Array of trip objects
+        let selectedMultiTrips = {};    // Map: tripId -> { trip, payment, tds, deduction, deduction_notes }
+        let unpaidBills = [];
+        let selectedBillIds = [];
         let isInitialLoad = true;
-        let isManualAmount = false;
         let isInternalChange = false;
         let currentSelectedBillBalance = 0;
         let currentBillSubtotal = 0;
         let currentBillTotal = 0;
         let currentBillReceived = 0;
 
-        const recordTypeSelect = document.getElementById('id_record_type');
+        // Helper to move wrappers cleanly
+        function moveToSlot(wrapper, slot, show) {
+            if (!wrapper || !slot) return;
+            slot.appendChild(wrapper);
+            if (show) {
+                wrapper.classList.remove('hidden');
+                slot.classList.remove('hidden');
+            } else {
+                wrapper.classList.add('hidden');
+                slot.classList.add('hidden');
+            }
+        }
 
-        // --- Local Cache & Select2 Initialization ---
+        // --- Initialize Select2 ---
         function initFormSearch() {
-            const cachedData = getCachedData();
-            
-            // 1. Populate Party from cache if empty
+            const cachedData = typeof getCachedData === 'function' ? getCachedData() : {};
             if (partySelect && cachedData.parties && partySelect.options.length <= 1) {
                 const currentValue = partySelect.value;
-                // Keep the empty option
                 partySelect.innerHTML = '<option value="">---------</option>';
                 cachedData.parties.forEach(p => {
                     const option = new Option(p.name, p.id);
@@ -376,15 +660,13 @@
                 });
             }
 
-            // 2. Initialize Select2 for better searchability
             $(partySelect).select2({ theme: 'bootstrap-5', width: '100%', placeholder: 'Search Party...' });
             $(associatedBillSelect).select2({ theme: 'bootstrap-5', width: '100%', placeholder: 'Search Bill...' });
-            $('#id_associated_trip').select2({ theme: 'bootstrap-5', width: '100%', placeholder: 'Search Trip...' });
+            $(associatedTripSelect).select2({ theme: 'bootstrap-5', width: '100%', placeholder: 'Search Trip...' });
             $('#id_account').select2({ theme: 'bootstrap-5', width: '100%' });
             $('#id_category').select2({ theme: 'bootstrap-5', width: '100%' });
             $('#id_driver').select2({ theme: 'bootstrap-5', width: '100%', placeholder: 'Search Driver...' });
 
-            // Ensure Select2 changes trigger our standard native listeners without infinite loops
             const bridgeEvent = (el) => {
                 $(el).on('select2:select select2:unselect select2:clear', function() {
                     el.dispatchEvent(new Event('change', { bubbles: true }));
@@ -393,11 +675,12 @@
             if (partySelect) bridgeEvent(partySelect);
             if (categorySelect) bridgeEvent(categorySelect);
             if (associatedBillSelect) bridgeEvent(associatedBillSelect);
+            if (associatedTripSelect) bridgeEvent(associatedTripSelect);
         }
 
         initFormSearch();
 
-        // State Management
+        // --- Main UI State Management ---
         function updateUIState() {
             try {
                 const hasParty = partySelect && partySelect.value;
@@ -407,252 +690,585 @@
                 if (categorySelect && categorySelect.selectedIndex >= 0) {
                     categoryName = categorySelect.options[categorySelect.selectedIndex].text;
                 }
-                
+
                 const isTripPayment = categoryName.toLowerCase().includes('trip payment');
                 const isInvoicePayment = categoryName.toLowerCase().includes('invoice payment');
-                const isDeduction = categoryName.toLowerCase().includes('deductions');
-                const isTDS = categoryName.toLowerCase().includes('tds');
-                const isShortage = categoryName.toLowerCase().includes('shortage');
                 const isStandard = categoryName === 'Standard' || categoryName.toLowerCase().includes('standard');
-
-                // Handle General Type (Simplified view but keeps Party/Account)
+                const isTDS = categoryName.toLowerCase().includes('tds');
                 const isGeneral = recordType === 'General';
 
-                // --- Payment Details Block & Field Placement ---
-                const paymentBlock = document.getElementById('payment-details-block');
-                const simpleAmountSlot = document.getElementById('simple-amount-slot');
-                const simpleTdsAmountSlot = document.getElementById('simple-tds-amount-slot');
-                const simpleTdsPctSlot = document.getElementById('simple-tds-pct-slot');
-                const paymentBlockFields = document.getElementById('payment-block-fields');
-                const amountWrapper = document.getElementById('wrapper_id_amount');
-                const tdsAmountWrapper = document.getElementById('wrapper_id_tds_amount');
-                const tdsPercentageWrapper = document.getElementById('wrapper_id_tds_percentage');
-                const tdsCalcPanel = document.getElementById('tds-calculator-panel');
-                const isPaymentOut = categoryName.toLowerCase().includes('payment out');
-                const showTdsAmountSimple = isTripPayment || isPaymentOut || isStandard;
-
-                // Helper to move a wrapper into a slot and show it
-                function moveToSlot(wrapper, slot, show) {
-                    if (!wrapper || !slot) return;
-                    slot.appendChild(wrapper);
-                    if (show) {
-                        wrapper.classList.remove('hidden');
-                        slot.classList.remove('hidden');
-                    } else {
-                        wrapper.classList.add('hidden');
-                        slot.classList.add('hidden');
-                    }
+                // Driver field visibility
+                if (driverFieldWrapper) {
+                    if (hasParty) driverFieldWrapper.classList.add('hidden');
+                    else driverFieldWrapper.classList.remove('hidden');
                 }
 
-                if (isGeneral) {
-                    if (document.getElementById('wrapper_id_party')) document.getElementById('wrapper_id_party').classList.remove('hidden');
-                    if (driverFieldWrapper) driverFieldWrapper.classList.add('hidden');
-                    if (associatedTripWrapper) associatedTripWrapper.classList.add('hidden');
-                    if (associatedBillWrapper) associatedBillWrapper.classList.add('hidden');
-                    if (multiTripArea) multiTripArea.classList.add('hidden');
-                    if (multiBillArea) multiBillArea.classList.add('hidden');
-                    // General: amount in simple grid, no fancy block
-                    if (paymentBlock) paymentBlock.classList.add('hidden');
-                    moveToSlot(amountWrapper, simpleAmountSlot, true);
-                    moveToSlot(tdsAmountWrapper, simpleTdsAmountSlot, false);
-                    moveToSlot(tdsPercentageWrapper, simpleTdsPctSlot, false);
-                    if (tdsCalcPanel) tdsCalcPanel.classList.add('hidden');
-                    return; 
-                } else {
-                    if (document.getElementById('wrapper_id_party')) document.getElementById('wrapper_id_party').classList.remove('hidden');
-                }
-
-                // --- Invoice Payment: show fancy Payment Details block ---
-                if (isInvoicePayment) {
-                    if (paymentBlock) paymentBlock.classList.remove('hidden');
-                    // Move fields into the payment block
-                    if (paymentBlockFields && amountWrapper) {
-                        paymentBlockFields.insertBefore(amountWrapper, paymentBlockFields.firstChild);
-                        amountWrapper.classList.remove('hidden');
-                    }
-                    if (paymentBlockFields && tdsAmountWrapper) {
-                        paymentBlockFields.appendChild(tdsAmountWrapper);
-                        tdsAmountWrapper.classList.remove('hidden');
-                    }
-                    if (simpleAmountSlot) simpleAmountSlot.classList.add('hidden');
-                    if (simpleTdsAmountSlot) simpleTdsAmountSlot.classList.add('hidden');
-                    if (simpleTdsPctSlot) simpleTdsPctSlot.classList.add('hidden');
-                    if (tdsCalcPanel) tdsCalcPanel.classList.remove('hidden');
-                    if (tdsPercentageWrapper) tdsPercentageWrapper.classList.add('hidden');
-                } else {
-                    // --- All other categories: simple fields in the grid ---
-                    if (paymentBlock) paymentBlock.classList.add('hidden');
-                    moveToSlot(amountWrapper, simpleAmountSlot, true);
-                    moveToSlot(tdsAmountWrapper, simpleTdsAmountSlot, showTdsAmountSimple);
-                    if (!showTdsAmountSimple && tdsAmountInput) tdsAmountInput.value = '';
-                    if (tdsCalcPanel) tdsCalcPanel.classList.add('hidden');
-
-                    // TDS % only for TDS category
-                    moveToSlot(tdsPercentageWrapper, simpleTdsPctSlot, isTDS);
-                }
-
-                // 1. Handle Multi-Trip Area (Only for Trip Payment with a Party)
-                if (multiTripArea) {
-                    if (hasParty && isTripPayment) {
-                        multiTripArea.classList.remove('hidden');
-                    } else {
-                        multiTripArea.classList.add('hidden');
-                        if (distributionInput) distributionInput.value = '';
-                    }
-                }
-
-                // 1.5 Handle Multi-Bill Area (Only for Standard category with a Party)
-                if (multiBillArea) {
-                    if (hasParty && isStandard) {
-                        multiBillArea.classList.remove('hidden');
-                    } else {
-                        multiBillArea.classList.add('hidden');
-                        if (billDistributionInput) billDistributionInput.value = '';
-                    }
-                }
-
-                // 2. Handle Associated Trip
-                if (associatedTripWrapper) {
-                    if ((isTripPayment && hasParty) || isStandard) {
-                        associatedTripWrapper.classList.add('hidden');
-                    } else if (isTripPayment || (categoryName.toLowerCase().includes('income') && !categoryName.toLowerCase().includes('payment in'))) {
-                        if (isInvoicePayment) {
-                            associatedTripWrapper.classList.add('hidden');
-                        } else {
-                            associatedTripWrapper.classList.remove('hidden');
-                        }
-                    } else {
-                        associatedTripWrapper.classList.add('hidden');
-                    }
-                }
-
-                // 3. Handle Associated Bill
+                // Associated Bill field visibility
                 if (associatedBillWrapper) {
-                    if (isInvoicePayment || isDeduction || isTDS || isShortage) {
+                    if (isInvoicePayment || isStandard || isTDS || categoryName.toLowerCase().includes('deduction')) {
                         associatedBillWrapper.classList.remove('hidden');
                     } else {
                         associatedBillWrapper.classList.add('hidden');
                     }
                 }
 
-                // 4. Handle Driver
-                if (driverFieldWrapper) {
-                    if (hasParty) driverFieldWrapper.classList.add('hidden');
-                    else driverFieldWrapper.classList.remove('hidden');
+                // 1. TRIP PAYMENT CONTAINER
+                if (isTripPayment && hasParty) {
+                    tripPaymentContainer.classList.remove('hidden');
+                    if (btnSaveNextTrip) {
+                        btnSaveNextTrip.classList.remove('hidden');
+                        btnSaveNextTrip.classList.add('flex');
+                    }
+                    paymentDetailsBlock.classList.add('hidden');
+                    multiBillArea.classList.add('hidden');
+
+                    if (currentTripMode === 'single') {
+                        singleTripSection.classList.remove('hidden');
+                        multiTripSection.classList.add('hidden');
+                        moveToSlot(wrapperAssociatedTrip, slotSingleTrip, true);
+                        moveToSlot(wrapperAmount, slotSingleAmount, true);
+                        moveToSlot(wrapperTdsAmount, slotSingleTds, true);
+                        moveToSlot(wrapperDedAmount, slotSingleDedAmount, true);
+                        moveToSlot(wrapperDedNotes, slotSingleDedNotes, true);
+                        if (btnSinglePayFull) btnSinglePayFull.classList.remove('hidden');
+                        if (singleTdsChips) singleTdsChips.classList.remove('hidden');
+                        if (singleTdsChips) singleTdsChips.classList.add('flex');
+                        if (singleDedChips) singleDedChips.classList.remove('hidden');
+                        if (singleDedChips) singleDedChips.classList.add('flex');
+                        updateSingleTripBalance();
+                    } else {
+                        singleTripSection.classList.add('hidden');
+                        multiTripSection.classList.remove('hidden');
+                        wrapperAssociatedTrip.classList.add('hidden');
+                        wrapperAmount.classList.add('hidden');
+                        wrapperTdsAmount.classList.add('hidden');
+                        wrapperDedAmount.classList.add('hidden');
+                        wrapperDedNotes.classList.add('hidden');
+                        renderMultiTripCards();
+                    }
+                    return;
+                } else {
+                    tripPaymentContainer.classList.add('hidden');
+                    if (btnSaveNextTrip) {
+                        btnSaveNextTrip.classList.add('hidden');
+                        btnSaveNextTrip.classList.remove('flex');
+                    }
                 }
+
+                // 2. INVOICE PAYMENT
+                if (isInvoicePayment) {
+                    paymentDetailsBlock.classList.remove('hidden');
+                    multiBillArea.classList.add('hidden');
+                    moveToSlot(wrapperAmount, paymentBlockFields, true);
+                    moveToSlot(wrapperTdsAmount, paymentBlockFields, true);
+                    if (btnSinglePayFull) btnSinglePayFull.classList.add('hidden');
+                    if (singleTdsChips) {
+                        singleTdsChips.classList.add('hidden');
+                        singleTdsChips.classList.remove('flex');
+                    }
+                    if (singleDedChips) {
+                        singleDedChips.classList.add('hidden');
+                        singleDedChips.classList.remove('flex');
+                    }
+                    const tdsCalcPanel = document.getElementById('tds-calculator-panel');
+                    if (tdsCalcPanel) tdsCalcPanel.classList.remove('hidden');
+                    return;
+                } else {
+                    paymentDetailsBlock.classList.add('hidden');
+                }
+
+                // 3. MULTI-BILL (Standard Category)
+                if (isStandard && hasParty) {
+                    multiBillArea.classList.remove('hidden');
+                } else {
+                    multiBillArea.classList.add('hidden');
+                    if (billDistributionInput) billDistributionInput.value = '';
+                }
+
+                // 4. GENERAL / OTHER CATEGORIES
+                moveToSlot(wrapperAmount, simpleAmountSlot, true);
+                const showSimpleTds = isStandard || categoryName.toLowerCase().includes('payment out');
+                moveToSlot(wrapperTdsAmount, simpleTdsAmountSlot, showSimpleTds);
+                moveToSlot(wrapperTdsPct, simpleTdsPctSlot, isTDS);
+                moveToSlot(wrapperDedAmount, simpleDedAmountSlot, false);
+                moveToSlot(wrapperDedNotes, simpleDedNotesSlot, false);
+                if (btnSinglePayFull) btnSinglePayFull.classList.add('hidden');
+                if (singleTdsChips) {
+                    singleTdsChips.classList.add('hidden');
+                    singleTdsChips.classList.remove('flex');
+                }
+                if (singleDedChips) {
+                    singleDedChips.classList.add('hidden');
+                    singleDedChips.classList.remove('flex');
+                }
+
             } catch (err) {
                 console.error("Error in updateUIState:", err);
             }
         }
 
-        // Track manual amount edits
-        if (amountInput) {
-            amountInput.addEventListener('input', function() {
-                isManualAmount = true;
-                renderSelectedTrips();
-                renderSelectedBills();
-                if (typeof updateBillBalanceDisplay === 'function') updateBillBalanceDisplay();
+        // --- Mode Switching (Single vs Multi Trip) ---
+        function setTripMode(mode) {
+            currentTripMode = mode;
+            if (mode === 'single') {
+                btnModeSingle.className = 'btn-trip-mode px-3.5 py-1.5 rounded-md text-xs font-bold flex items-center gap-1.5 bg-white text-emerald-800 shadow-sm';
+                btnModeMulti.className = 'btn-trip-mode px-3.5 py-1.5 rounded-md text-xs font-bold flex items-center gap-1.5 text-emerald-100 hover:text-white';
+                if (distributionInput) distributionInput.value = '';
+            } else {
+                btnModeMulti.className = 'btn-trip-mode px-3.5 py-1.5 rounded-md text-xs font-bold flex items-center gap-1.5 bg-white text-emerald-800 shadow-sm';
+                btnModeSingle.className = 'btn-trip-mode px-3.5 py-1.5 rounded-md text-xs font-bold flex items-center gap-1.5 text-emerald-100 hover:text-white';
+                
+                // If a single trip was chosen, seamlessly add it to multi-trip
+                const singleTripId = parseInt(associatedTripSelect.value);
+                if (singleTripId && !selectedMultiTrips[singleTripId]) {
+                    const trip = unpaidTrips.find(t => t.id === singleTripId);
+                    if (trip) {
+                        const p = parseFloat(amountInput.value) || trip.balance;
+                        const t = parseFloat(tdsAmountInput.value) || 0;
+                        const d = parseFloat(deductionAmountInput.value) || 0;
+                        const n = deductionNotesInput.value || '';
+                        selectedMultiTrips[singleTripId] = { trip, payment: p, tds: t, deduction: d, deduction_notes: n };
+                    }
+                }
+                $(associatedTripSelect).val('').trigger('change.select2');
+            }
+            updateUIState();
+        }
+
+        if (btnModeSingle) btnModeSingle.addEventListener('click', () => setTripMode('single'));
+        if (btnModeMulti) btnModeMulti.addEventListener('click', () => setTripMode('multi'));
+
+        // --- Single Trip Logic & Live Balance Preview ---
+        function updateSingleTripBalance() {
+            const tripId = parseInt($(associatedTripSelect).val());
+            const trip = unpaidTrips.find(t => t.id === tripId);
+            const summaryCard = document.getElementById('single-trip-balance-summary');
+            const infoCard = document.getElementById('single-trip-card');
+
+            if (!trip) {
+                if (summaryCard) summaryCard.classList.add('hidden');
+                if (infoCard) infoCard.classList.add('hidden');
+                return;
+            }
+
+            // Populate Info Card
+            if (infoCard) {
+                infoCard.classList.remove('hidden');
+                document.getElementById('card-vehicle-plate').textContent = trip.vehicle || 'No Vehicle';
+                document.getElementById('card-trip-number').textContent = trip.trip_number || '';
+                document.getElementById('card-trip-date').querySelector('span').textContent = trip.date || '';
+                document.getElementById('card-trip-route').querySelector('span').textContent = trip.route || 'No route specified';
+                document.getElementById('card-trip-total').textContent = '₹' + trip.total.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                document.getElementById('card-trip-received').textContent = '₹' + trip.received.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                document.getElementById('card-trip-balance').textContent = '₹' + trip.balance.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            }
+
+            // Populate Balance Preview
+            if (summaryCard) {
+                summaryCard.classList.remove('hidden');
+                const pending = parseFloat(trip.balance) || 0;
+                const payment = parseFloat(amountInput.value) || 0;
+                const tds = parseFloat(tdsAmountInput.value) || 0;
+                const ded = parseFloat(deductionAmountInput.value) || 0;
+                const remaining = Math.round((pending - payment - tds - ded) * 100) / 100;
+
+                document.getElementById('summary-pending').textContent = '₹' + pending.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                document.getElementById('summary-payment').textContent = '− ₹' + payment.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                document.getElementById('summary-tds').textContent = '− ₹' + tds.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                document.getElementById('summary-deduction').textContent = '− ₹' + ded.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+                const remEl = document.getElementById('summary-remaining');
+                const badgeEl = document.getElementById('summary-badge');
+                remEl.textContent = '₹' + remaining.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+                if (Math.abs(remaining) < 0.01) {
+                    remEl.className = 'text-base sm:text-lg font-black font-mono text-emerald-400';
+                    badgeEl.innerHTML = '<span class="px-2.5 py-1 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 rounded-full text-xs font-bold flex items-center gap-1"><i class="fa-solid fa-check"></i> Settled Full</span>';
+                } else if (remaining > 0) {
+                    remEl.className = 'text-base sm:text-lg font-black font-mono text-amber-400';
+                    badgeEl.innerHTML = '<span class="px-2.5 py-1 bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded-full text-xs font-bold flex items-center gap-1"><i class="fa-solid fa-clock"></i> Partial</span>';
+                } else {
+                    remEl.className = 'text-base sm:text-lg font-black font-mono text-red-400';
+                    badgeEl.innerHTML = '<span class="px-2.5 py-1 bg-red-500/20 text-red-300 border border-red-500/40 rounded-full text-xs font-bold flex items-center gap-1"><i class="fa-solid fa-triangle-exclamation"></i> Overpaid</span>';
+                }
+            }
+        }
+
+        // Auto-fill and listeners for single trip inputs
+        if (associatedTripSelect) {
+            associatedTripSelect.addEventListener('change', function() {
+                const tripId = parseInt(this.value);
+                const trip = unpaidTrips.find(t => t.id === tripId);
+                if (trip) {
+                    if (!amountInput.value || parseFloat(amountInput.value) === 0) {
+                        amountInput.value = trip.balance.toFixed(2);
+                    }
+                }
+                updateSingleTripBalance();
             });
         }
 
-        if (tdsAmountInput) {
-            tdsAmountInput.addEventListener('input', function() {
-                isManualAmount = true;
-                renderSelectedTrips();
-                renderSelectedBills();
-                if (typeof updateBillBalanceDisplay === 'function') updateBillBalanceDisplay();
+        if (amountInput) amountInput.addEventListener('input', updateSingleTripBalance);
+        if (tdsAmountInput) tdsAmountInput.addEventListener('input', updateSingleTripBalance);
+        if (deductionAmountInput) deductionAmountInput.addEventListener('input', updateSingleTripBalance);
+
+        // Single Trip "Pay Full" button
+        if (btnSinglePayFull) {
+            btnSinglePayFull.addEventListener('click', function() {
+                const tripId = parseInt($(associatedTripSelect).val());
+                const trip = unpaidTrips.find(t => t.id === tripId);
+                if (!trip) return;
+                const tds = parseFloat(tdsAmountInput.value) || 0;
+                const ded = parseFloat(deductionAmountInput.value) || 0;
+                const fullPayment = Math.max(0, trip.balance - tds - ded);
+                amountInput.value = fullPayment.toFixed(2);
+                updateSingleTripBalance();
             });
         }
 
-        function calculateTDS(force = false) {
-            if (!associatedBillSelect || !tdsPercentageInput) return;
-            
-            // Skip if this is a programmatic change during loading
-            if (isInternalChange && !force) return;
+        // Single Trip Quick TDS chips (1%, 2%)
+        document.querySelectorAll('.btn-quick-single-tds').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const tripId = parseInt($(associatedTripSelect).val());
+                const trip = unpaidTrips.find(t => t.id === tripId);
+                if (!trip) return;
+                const pct = parseFloat(this.dataset.pct);
+                const tds = Math.round(trip.total * (pct / 100) * 100) / 100;
+                tdsAmountInput.value = tds.toFixed(2);
+                const ded = parseFloat(deductionAmountInput.value) || 0;
+                const payment = Math.max(0, trip.balance - tds - ded);
+                amountInput.value = payment.toFixed(2);
+                updateSingleTripBalance();
+            });
+        });
 
-            // PROTECT EDIT MODE: Never auto-calculate on initial load if we already have an amount
-            if (isInitialLoad && amountInput.value && amountInput.value !== '0.00' && !force) {
+        // Single Trip Quick Deduction Reason chips
+        document.querySelectorAll('.btn-quick-single-ded').forEach(btn => {
+            btn.addEventListener('click', function() {
+                deductionNotesInput.value = this.dataset.reason;
+            });
+        });
+
+        // --- Multi-Trip Logic ---
+        function renderMultiTripPills() {
+            const container = document.getElementById('unpaid-trips-pills');
+            if (!container) return;
+            container.innerHTML = '';
+
+            if (unpaidTrips.length === 0) {
+                container.innerHTML = '<div class="text-slate-400 text-xs italic p-2">No unpaid trips found for this party.</div>';
                 return;
             }
-            
-            // Don't overwrite manual amount unless forced (by changing % or Bill)
-            if (isManualAmount && !force) {
+
+            unpaidTrips.forEach(trip => {
+                const isSelected = !!selectedMultiTrips[trip.id];
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = `trip-pill px-3 py-1.5 rounded-lg text-xs font-medium border transition-all flex items-center gap-2 ${isSelected ? 'bg-emerald-50 border-emerald-400 text-emerald-800' : 'bg-white border-slate-200 hover:border-emerald-300 text-slate-800'}`;
+                btn.innerHTML = `
+                    <span class="font-bold font-mono">${trip.vehicle}</span>
+                    <span class="text-slate-400 font-mono text-[11px]">${trip.trip_number}</span>
+                    <span class="text-amber-700 font-bold font-mono">₹${trip.balance.toLocaleString('en-IN', {minimumFractionDigits: 2})}</span>
+                    <i class="fa-solid ${isSelected ? 'fa-check text-emerald-600' : 'fa-plus text-slate-400'} text-[10px]"></i>
+                `;
+                btn.onclick = () => {
+                    if (isSelected) {
+                        delete selectedMultiTrips[trip.id];
+                    } else {
+                        selectedMultiTrips[trip.id] = {
+                            trip: trip,
+                            payment: trip.balance,
+                            tds: 0,
+                            deduction: 0,
+                            deduction_notes: ''
+                        };
+                    }
+                    renderMultiTripPills();
+                    renderMultiTripCards();
+                };
+                container.appendChild(btn);
+            });
+        }
+
+        function renderMultiTripCards() {
+            const container = document.getElementById('multi-trips-container');
+            const countEl = document.getElementById('multi-selected-count');
+            const tripIds = Object.keys(selectedMultiTrips);
+            if (countEl) countEl.textContent = tripIds.length;
+
+            if (!container) return;
+            container.innerHTML = '';
+
+            if (tripIds.length === 0) {
+                container.innerHTML = '<div class="text-center p-6 bg-white border border-dashed border-slate-300 rounded-xl text-slate-400 text-xs">No trips selected yet. Tap trips above to add them to this settlement.</div>';
+                syncMultiTripTotals();
                 return;
             }
 
-            const billId = associatedBillSelect.value;
-            const percentage = parseFloat(tdsPercentageInput.value);
-            
-            if (billId && !isNaN(percentage)) {
-                fetch(`{% url 'get-bill-balance' %}?bill_id=${billId}`)
-                    .then(response => response.json())
-                    .then(data => {
-                        // Double check: if user started typing while fetch was in progress, stop.
-                        if (isManualAmount && !force) return;
-                        if (isInitialLoad && amountInput.value && amountInput.value !== '0.00' && !force) return;
+            tripIds.forEach(id => {
+                const item = selectedMultiTrips[id];
+                const trip = item.trip;
+                const remaining = Math.round((trip.balance - (parseFloat(item.payment) || 0) - (parseFloat(item.tds) || 0) - (parseFloat(item.deduction) || 0)) * 100) / 100;
+                let remColor = 'text-emerald-600';
+                if (remaining > 0.01) remColor = 'text-amber-600';
+                else if (remaining < -0.01) remColor = 'text-red-600';
 
-                        if (data.subtotal) {
-                            const tdsAmount = (data.subtotal * percentage / 100).toFixed(2);
-                            amountInput.value = tdsAmount;
-                            isManualAmount = false; // Reset because we just did a valid auto-calc
-                            renderSelectedTrips();
-                            if (typeof updateBillBalanceDisplay === 'function') updateBillBalanceDisplay();
-                        }
-                    })
-                    .catch(error => console.error('Error fetching bill subtotal:', error));
+                const card = document.createElement('div');
+                card.className = 'multi-trip-card bg-white border border-slate-200 rounded-xl p-3.5 sm:p-4 shadow-sm space-y-3';
+                card.innerHTML = `
+                    <div class="flex items-start justify-between gap-2 pb-2 border-b border-slate-100">
+                        <div class="min-w-0 flex-1">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <span class="px-2 py-0.5 bg-slate-100 text-slate-800 font-bold font-mono text-xs rounded">${trip.vehicle}</span>
+                                <span class="text-xs font-semibold text-slate-600 font-mono">${trip.trip_number}</span>
+                                <span class="text-[11px] text-slate-400">• ${trip.date}</span>
+                            </div>
+                            <div class="text-xs text-slate-500 mt-0.5 truncate">${trip.route || 'Direct'}</div>
+                        </div>
+                        <div class="flex items-center gap-2 shrink-0">
+                            <span class="px-2 py-0.5 bg-amber-50 text-amber-800 border border-amber-200 rounded text-xs font-bold font-mono whitespace-nowrap">
+                                Due: ₹${trip.balance.toLocaleString('en-IN', {minimumFractionDigits: 2})}
+                            </span>
+                            <button type="button" class="btn-remove-multi text-slate-400 hover:text-red-600 p-1" data-id="${trip.id}">
+                                <i class="fa-solid fa-trash-can text-xs"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                        <div class="space-y-1">
+                            <div class="flex items-center justify-between">
+                                <label class="text-[11px] font-bold text-slate-700 uppercase">Payment</label>
+                                <button type="button" class="btn-multi-card-full text-[10px] font-bold text-emerald-700 hover:underline" data-id="${trip.id}">
+                                    Pay Full
+                                </button>
+                            </div>
+                            <input type="number" step="0.01" min="0" class="input-card-payment w-full min-w-0 px-2.5 py-1.5 border border-slate-300 rounded-md text-xs font-bold text-slate-800 focus:ring-emerald-500 focus:border-emerald-500 bg-white" placeholder="0.00" value="${item.payment}" data-id="${trip.id}">
+                        </div>
+
+                        <div class="space-y-1">
+                            <div class="flex items-center justify-between">
+                                <label class="text-[11px] font-bold text-slate-700 uppercase">TDS</label>
+                                <div class="flex gap-1">
+                                    <button type="button" class="btn-multi-card-tds text-[10px] font-bold text-amber-700 hover:underline" data-id="${trip.id}" data-pct="1">1%</button>
+                                    <button type="button" class="btn-multi-card-tds text-[10px] font-bold text-amber-700 hover:underline" data-id="${trip.id}" data-pct="2">2%</button>
+                                </div>
+                            </div>
+                            <input type="number" step="0.01" min="0" class="input-card-tds w-full min-w-0 px-2.5 py-1.5 border border-slate-300 rounded-md text-xs font-bold text-slate-800 focus:ring-amber-500 focus:border-amber-500 bg-white" placeholder="0.00" value="${item.tds || ''}" data-id="${trip.id}">
+                        </div>
+
+                        <div class="space-y-1">
+                            <div class="flex items-center justify-between">
+                                <label class="text-[11px] font-bold text-slate-700 uppercase">Deduction</label>
+                                <span class="text-[10px] text-purple-700 font-semibold">Shortage/Chg</span>
+                            </div>
+                            <input type="number" step="0.01" min="0" class="input-card-ded w-full min-w-0 px-2.5 py-1.5 border border-slate-300 rounded-md text-xs font-bold text-slate-800 focus:ring-purple-500 focus:border-purple-500 bg-white" placeholder="0.00" value="${item.deduction || ''}" data-id="${trip.id}">
+                        </div>
+
+                        <div class="space-y-1">
+                            <div class="flex items-center justify-between">
+                                <label class="text-[11px] font-bold text-slate-700 uppercase">Reason</label>
+                                <div class="flex gap-1">
+                                    <button type="button" class="btn-multi-card-reason text-[10px] font-medium text-purple-700 hover:underline" data-id="${trip.id}" data-reason="Shortage">Shortage</button>
+                                    <button type="button" class="btn-multi-card-reason text-[10px] font-medium text-purple-700 hover:underline" data-id="${trip.id}" data-reason="Payment Charges">Charges</button>
+                                </div>
+                            </div>
+                            <input type="text" class="input-card-notes w-full min-w-0 px-2.5 py-1.5 border border-slate-300 rounded-md text-xs text-slate-700 focus:ring-purple-500 focus:border-purple-500 bg-white" placeholder="e.g. Shortage, charges" value="${item.deduction_notes || ''}" data-id="${trip.id}">
+                        </div>
+                    </div>
+
+                    <div class="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
+                        <span class="text-slate-500">Trip Balance After:</span>
+                        <span class="font-mono font-bold ${remColor}" id="card-rem-${trip.id}">₹${remaining.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                    </div>
+                `;
+
+                // Wire Card Event Handlers
+                card.querySelector('.btn-remove-multi').onclick = () => {
+                    delete selectedMultiTrips[trip.id];
+                    renderMultiTripPills();
+                    renderMultiTripCards();
+                };
+
+                const pInput = card.querySelector('.input-card-payment');
+                const tInput = card.querySelector('.input-card-tds');
+                const dInput = card.querySelector('.input-card-ded');
+                const nInput = card.querySelector('.input-card-notes');
+
+                const updateCardLive = () => {
+                    item.payment = parseFloat(pInput.value) || 0;
+                    item.tds = parseFloat(tInput.value) || 0;
+                    item.deduction = parseFloat(dInput.value) || 0;
+                    item.deduction_notes = nInput.value;
+
+                    const rem = Math.round((trip.balance - item.payment - item.tds - item.deduction) * 100) / 100;
+                    const remSpan = card.querySelector(`#card-rem-${trip.id}`);
+                    remSpan.textContent = '₹' + rem.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                    if (Math.abs(rem) < 0.01) remSpan.className = 'font-mono font-bold text-emerald-600';
+                    else if (rem > 0) remSpan.className = 'font-mono font-bold text-amber-600';
+                    else remSpan.className = 'font-mono font-bold text-red-600';
+
+                    syncMultiTripTotals();
+                };
+
+                pInput.oninput = updateCardLive;
+                tInput.oninput = updateCardLive;
+                dInput.oninput = updateCardLive;
+                nInput.oninput = updateCardLive;
+
+                card.querySelectorAll('.btn-multi-card-reason').forEach(btn => {
+                    btn.onclick = () => {
+                        nInput.value = btn.dataset.reason;
+                        updateCardLive();
+                    };
+                });
+
+                card.querySelector('.btn-multi-card-full').onclick = () => {
+                    const tds = parseFloat(tInput.value) || 0;
+                    const ded = parseFloat(dInput.value) || 0;
+                    const full = Math.max(0, trip.balance - tds - ded);
+                    pInput.value = full.toFixed(2);
+                    updateCardLive();
+                };
+
+                card.querySelectorAll('.btn-multi-card-tds').forEach(b => {
+                    b.onclick = () => {
+                        const pct = parseFloat(b.dataset.pct);
+                        const tds = Math.round(trip.total * (pct / 100) * 100) / 100;
+                        tInput.value = tds.toFixed(2);
+                        const ded = parseFloat(dInput.value) || 0;
+                        const full = Math.max(0, trip.balance - tds - ded);
+                        pInput.value = full.toFixed(2);
+                        updateCardLive();
+                    };
+                });
+
+                container.appendChild(card);
+            });
+
+            syncMultiTripTotals();
+        }
+
+        function syncMultiTripTotals() {
+            const tripIds = Object.keys(selectedMultiTrips);
+            let totP = 0;
+            let totT = 0;
+            let totD = 0;
+            const distData = [];
+
+            tripIds.forEach(id => {
+                const item = selectedMultiTrips[id];
+                const p = parseFloat(item.payment) || 0;
+                const t = parseFloat(item.tds) || 0;
+                const d = parseFloat(item.deduction) || 0;
+                totP += p;
+                totT += t;
+                totD += d;
+
+                distData.push({
+                    trip_id: parseInt(id),
+                    payment: p,
+                    tds: t,
+                    deduction: d,
+                    deduction_notes: item.deduction_notes || ''
+                });
+            });
+
+            const totAlloc = totP + totT + totD;
+
+            document.getElementById('multi-total-payment').textContent = '₹' + totP.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            document.getElementById('multi-total-tds').textContent = '₹' + totT.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            document.getElementById('multi-total-deductions').textContent = '₹' + totD.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            document.getElementById('multi-total-allocated').textContent = '₹' + totAlloc.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+            if (distributionInput) {
+                distributionInput.value = distData.length > 0 ? JSON.stringify(distData) : '';
             }
+
+            // Sync hidden parent fields
+            if (amountInput) amountInput.value = totP > 0 ? totP.toFixed(2) : '0.00';
+            if (tdsAmountInput) tdsAmountInput.value = totT > 0 ? totT.toFixed(2) : '';
+            if (deductionAmountInput) deductionAmountInput.value = totD > 0 ? totD.toFixed(2) : '';
         }
 
-        if (tdsPercentageInput) {
-            tdsPercentageInput.addEventListener('input', () => calculateTDS(true));
+        // Multi-Trip "Add All" and "Clear All"
+        const btnSelectAll = document.getElementById('btn-select-all-trips');
+        if (btnSelectAll) {
+            btnSelectAll.addEventListener('click', () => {
+                unpaidTrips.forEach(trip => {
+                    if (!selectedMultiTrips[trip.id]) {
+                        selectedMultiTrips[trip.id] = {
+                            trip: trip,
+                            payment: trip.balance,
+                            tds: 0,
+                            deduction: 0,
+                            deduction_notes: ''
+                        };
+                    }
+                });
+                renderMultiTripPills();
+                renderMultiTripCards();
+            });
         }
-        
-        // Bill info panel & balance display references
-        const billInfoPanel = document.getElementById('bill-info-panel');
-        const balanceDisplay = document.getElementById('dynamic-bill-balance');
 
-        function updateBillInfoPanel() {
-            if (!billInfoPanel) return;
-            if (!associatedBillSelect || !associatedBillSelect.value || currentSelectedBillBalance === 0) {
-                billInfoPanel.classList.add('hidden');
+        const btnClearMulti = document.getElementById('btn-clear-multi-trips');
+        if (btnClearMulti) {
+            btnClearMulti.addEventListener('click', () => {
+                selectedMultiTrips = {};
+                renderMultiTripPills();
+                renderMultiTripCards();
+            });
+        }
+
+        // --- Fetch Trips for Party ---
+        function fetchTrips(partyId) {
+            if (!partyId) {
+                unpaidTrips = [];
+                associatedTripSelect.innerHTML = '<option value="">---------</option>';
+                $(associatedTripSelect).val('').trigger('change.select2');
+                renderMultiTripPills();
+                renderMultiTripCards();
+                updateSingleTripBalance();
                 return;
             }
-            billInfoPanel.classList.remove('hidden');
-            document.getElementById('info-taxable-value').textContent = '₹' + currentBillSubtotal.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-            document.getElementById('info-invoice-total').textContent = '₹' + currentBillTotal.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-            document.getElementById('info-received').textContent = '₹' + currentBillReceived.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-            document.getElementById('info-outstanding').textContent = '₹' + currentSelectedBillBalance.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+            const loader = document.getElementById('single-trip-loading');
+            if (loader) loader.classList.remove('hidden');
+
+            fetch(`{% url 'get-party-unpaid-trips' %}?party_id=${partyId}`)
+                .then(r => r.json())
+                .then(data => {
+                    if (loader) loader.classList.add('hidden');
+                    unpaidTrips = data.trips || [];
+
+                    const currentVal = $(associatedTripSelect).val();
+                    associatedTripSelect.innerHTML = '<option value="">---------</option>';
+                    unpaidTrips.forEach(trip => {
+                        const opt = document.createElement('option');
+                        opt.value = trip.id;
+                        opt.textContent = trip.label;
+                        if (trip.id == currentVal) opt.selected = true;
+                        associatedTripSelect.appendChild(opt);
+                    });
+
+                    isInternalChange = true;
+                    $(associatedTripSelect).trigger('change.select2');
+                    isInternalChange = false;
+
+                    renderMultiTripPills();
+                    if (currentTripMode === 'single') {
+                        updateSingleTripBalance();
+                    } else {
+                        renderMultiTripCards();
+                    }
+                })
+                .catch(err => {
+                    if (loader) loader.classList.add('hidden');
+                    console.error('Error fetching unpaid trips:', err);
+                });
         }
 
-        function updateBillBalanceDisplay() {
-            if (!balanceDisplay || !associatedBillSelect || !associatedBillSelect.value || currentSelectedBillBalance === 0) {
-                if (balanceDisplay) balanceDisplay.classList.add('hidden');
-                updateBillInfoPanel();
-                return;
-            }
-            
-            const paidAmount = parseFloat(amountInput.value) || 0;
-            const tdsAmount = tdsAmountInput ? (parseFloat(tdsAmountInput.value) || 0) : 0;
-            const remaining = currentSelectedBillBalance - paidAmount - tdsAmount;
-            
-            updateBillInfoPanel();
-            balanceDisplay.classList.remove('hidden');
-            balanceDisplay.innerHTML = `
-                <div class="flex justify-between items-center text-slate-700 mb-1">
-                    <span class="font-semibold text-xs uppercase tracking-wider">Outstanding:</span>
-                    <span class="font-medium">₹${currentSelectedBillBalance.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
-                </div>
-                <div class="flex justify-between items-center text-slate-500">
-                    <span class="text-xs uppercase tracking-wider">Payment + TDS:</span>
-                    <span>− ₹${(paidAmount + tdsAmount).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
-                </div>
-                <div class="flex justify-between items-center font-bold mt-2 pt-2 border-t border-slate-200 ${remaining < 0 ? 'text-red-600' : 'text-emerald-600'}">
-                    <span class="text-xs uppercase tracking-wider">After This Payment:</span>
-                    <span>₹${remaining.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
-                </div>
-            `;
-        }
-
+        // --- Invoice Payment & Bill Fetching ---
         function fetchBillBalanceForDisplay(billId) {
             if (!billId) {
                 currentSelectedBillBalance = 0;
@@ -663,7 +1279,7 @@
                 return;
             }
             fetch(`{% url 'get-bill-balance' %}?bill_id=${billId}`)
-                .then(response => response.json())
+                .then(r => r.json())
                 .then(data => {
                     if (data.balance !== undefined) {
                         currentSelectedBillBalance = data.balance;
@@ -673,117 +1289,49 @@
                         updateBillBalanceDisplay();
                     }
                 })
-                .catch(error => console.error('Error fetching bill balance:', error));
+                .catch(err => console.error('Error fetching bill balance:', err));
         }
 
-        // --- Inline TDS Calculator ---
-        const inlineTdsPct = document.getElementById('inline-tds-pct');
-        const btnCalcTds = document.getElementById('btn-calc-tds');
-        const calcTdsResult = document.getElementById('calc-tds-result');
-
-        function doInlineTdsCalc() {
-            const pct = parseFloat(inlineTdsPct ? inlineTdsPct.value : 0);
-            // Use bill subtotal if available, otherwise use the outstanding balance
-            const taxableBase = currentBillSubtotal || currentSelectedBillBalance;
-            if (!isNaN(pct) && pct > 0 && taxableBase > 0) {
-                const tds = (taxableBase * pct / 100);
-                const tdsRounded = Math.round(tds * 100) / 100;
-                if (calcTdsResult) calcTdsResult.textContent = '₹' + tdsRounded.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-                // Auto-fill the TDS Amount field
-                if (tdsAmountInput) {
-                    tdsAmountInput.value = tdsRounded.toFixed(2);
-                    updateBillBalanceDisplay();
-                }
-            } else {
-                if (calcTdsResult) calcTdsResult.textContent = '—';
-            }
-        }
-
-        if (btnCalcTds) {
-            btnCalcTds.addEventListener('click', doInlineTdsCalc);
-        }
-        if (inlineTdsPct) {
-            inlineTdsPct.addEventListener('keydown', function(e) {
-                if (e.key === 'Enter') { e.preventDefault(); doInlineTdsCalc(); }
-            });
-            inlineTdsPct.addEventListener('input', function() {
-                // Live preview as user types
-                const pct = parseFloat(this.value);
-                const taxableBase = currentBillSubtotal || currentSelectedBillBalance;
-                if (!isNaN(pct) && pct > 0 && taxableBase > 0) {
-                    const tds = Math.round(taxableBase * pct / 100 * 100) / 100;
-                    if (calcTdsResult) calcTdsResult.textContent = '₹' + tds.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-                } else {
-                    if (calcTdsResult) calcTdsResult.textContent = '—';
-                }
-            });
-        }
-
-        if (associatedBillSelect) {
-            associatedBillSelect.addEventListener('change', function() {
-                fetchBillBalanceForDisplay(this.value);
-
-                // If this is an internal/programmatic change, do NOT force recalculation
-                if (isInternalChange) return;
-
-                const categoryName = categorySelect.options[categorySelect.selectedIndex].text;
-                if (categoryName.includes('TDS')) {
-                    calculateTDS(true);
-                }
-            });
-        }
-
-        // Fetch Trips
-        function fetchTrips(partyId) {
-            if (!partyId) {
-                if (associatedTripWrapper) {
-                    const select = document.getElementById('id_associated_trip');
-                    if (select) {
-                        select.innerHTML = '<option value="">---------</option>';
-                        isInternalChange = true;
-                        $(select).trigger('change');
-                        isInternalChange = false;
-                    }
-                }
+        function updateBillBalanceDisplay() {
+            const billInfoPanel = document.getElementById('bill-info-panel');
+            const balanceDisplay = document.getElementById('dynamic-bill-balance');
+            if (!associatedBillSelect || !associatedBillSelect.value || currentSelectedBillBalance === 0) {
+                if (billInfoPanel) billInfoPanel.classList.add('hidden');
+                if (balanceDisplay) balanceDisplay.classList.add('hidden');
                 return;
             }
 
-            unpaidTripsList.innerHTML = '<div class="text-center p-4"><i class="fa-solid fa-circle-notch fa-spin text-emerald-500 mr-2"></i>Loading...</div>';
+            if (billInfoPanel) {
+                billInfoPanel.classList.remove('hidden');
+                document.getElementById('info-taxable-value').textContent = '₹' + currentBillSubtotal.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                document.getElementById('info-invoice-total').textContent = '₹' + currentBillTotal.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                document.getElementById('info-received').textContent = '₹' + currentBillReceived.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                document.getElementById('info-outstanding').textContent = '₹' + currentSelectedBillBalance.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            }
 
-            fetch(`{% url 'get-party-unpaid-trips' %}?party_id=${partyId}`)
-                .then(response => response.json())
-                .then(data => {
-                    unpaidTrips = data.trips || [];
-                    
-                    // Also populate the standard single selection box for consistency
-                    if (associatedTripWrapper) {
-                        const select = document.getElementById('id_associated_trip');
-                        if (select) {
-                            const currentValue = select.value;
-                            select.innerHTML = '<option value="">---------</option>';
-                            unpaidTrips.forEach(trip => {
-                                const option = document.createElement('option');
-                                option.value = trip.id;
-                                option.textContent = trip.label;
-                                if (trip.id == currentValue) option.selected = true;
-                                select.appendChild(option);
-                            });
-                            isInternalChange = true;
-                            $(select).trigger('change');
-                            isInternalChange = false;
-                        }
-                    }
-                    
-                    renderUnpaidTrips();
-                    renderSelectedTrips();
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    unpaidTripsList.innerHTML = '<div class="text-red-500 p-4 text-sm font-medium">Error loading trips.</div>';
-                });
+            if (balanceDisplay) {
+                balanceDisplay.classList.remove('hidden');
+                const paid = parseFloat(amountInput.value) || 0;
+                const tds = parseFloat(tdsAmountInput.value) || 0;
+                const remaining = currentSelectedBillBalance - paid - tds;
+
+                balanceDisplay.innerHTML = `
+                    <div class="flex justify-between items-center text-slate-700 mb-1">
+                        <span class="font-semibold text-xs uppercase tracking-wider">Outstanding:</span>
+                        <span class="font-medium font-mono">₹${currentSelectedBillBalance.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                    </div>
+                    <div class="flex justify-between items-center text-slate-500">
+                        <span class="text-xs uppercase tracking-wider">Payment + TDS:</span>
+                        <span class="font-mono">− ₹${(paid + tds).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                    </div>
+                    <div class="flex justify-between items-center font-bold mt-2 pt-2 border-t border-slate-200 ${remaining < 0 ? 'text-red-600' : 'text-emerald-600'}">
+                        <span class="text-xs uppercase tracking-wider">After This Payment:</span>
+                        <span class="font-mono">₹${remaining.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                    </div>
+                `;
+            }
         }
 
-        // Fetch Bills
         function fetchBills(partyId) {
             const $billSelect = $(associatedBillSelect);
             if (!$billSelect.length) return;
@@ -798,126 +1346,98 @@
             }
 
             const currentBillId = associatedBillSelect.value;
-            associatedBillSelect.innerHTML = '<option value="">Loading...</option>';
-            $billSelect.trigger('change.select2');
-
             fetch(`{% url 'get-party-bills' %}?party_id=${partyId}&unpaid_only=true&include_bill_id=${currentBillId}`)
-                .then(response => response.json())
+                .then(r => r.json())
                 .then(data => {
                     unpaidBills = data.bills || [];
                     associatedBillSelect.innerHTML = '<option value="">---------</option>';
-                    
                     if (unpaidBills.length > 0) {
-                        unpaidBills.forEach(bill => {
-                            const option = new Option(bill.label, bill.id);
-                            if (bill.id == currentBillId) option.selected = true;
-                            associatedBillSelect.add(option);
+                        unpaidBills.forEach(b => {
+                            const opt = new Option(b.label, b.id);
+                            if (b.id == currentBillId) opt.selected = true;
+                            associatedBillSelect.add(opt);
                         });
-                    } else {
-                        const option = new Option("No pending bills found", "");
-                        option.disabled = true;
-                        associatedBillSelect.add(option);
                     }
-                    
-                    // Trigger Select2 refresh
                     isInternalChange = true;
                     $billSelect.trigger('change.select2');
                     isInternalChange = false;
-                    
-                    if (currentBillId) {
-                        fetchBillBalanceForDisplay(currentBillId);
-                    }
 
+                    if (currentBillId) fetchBillBalanceForDisplay(currentBillId);
                     renderUnpaidBills();
                     renderSelectedBills();
                 })
-                .catch(error => {
-                    console.error('Error fetching bills:', error);
-                    associatedBillSelect.innerHTML = '<option value="">Error loading bills</option>';
-                    $billSelect.trigger('change.select2');
-                    unpaidBillsList.innerHTML = '<div class="text-red-500 p-4 text-sm font-medium">Error loading invoices.</div>';
-                });
+                .catch(err => console.error('Error fetching bills:', err));
         }
 
-        // Render Unpaid List (Left Side)
-        function renderUnpaidTrips() {
-            unpaidTripsList.innerHTML = '';
-            if (unpaidTrips.length === 0) {
-                unpaidTripsList.innerHTML = '<div class="text-slate-400 p-4 text-sm italic">No unpaid trips found.</div>';
-                return;
-            }
-
-            unpaidTrips.forEach(trip => {
-                // If already selected, don't show (or disable)
-                if (selectedTripIds.includes(trip.id)) return;
-
-                const item = document.createElement('button');
-                item.type = 'button';
-                item.className = 'w-full text-left px-4 py-3 hover:bg-slate-50 flex justify-between items-center group transition-colors';
-                item.innerHTML = `
-                    <div class="pr-4">
-                        <p class="font-bold text-slate-800 text-sm leading-tight">${trip.label.split(' - ')[0]}</p>
-                        <p class="text-[10px] text-slate-500 mt-1 uppercase tracking-tight">${trip.label.split(' - ').slice(1).join(' - ')}</p>
-                    </div>
-                    <span class="w-6 h-6 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:bg-emerald-600 group-hover:text-white transition-colors">
-                        <i class="fa-solid fa-plus text-[10px]"></i>
-                    </span>
-                `;
-                item.onclick = () => selectTrip(trip.id);
-                unpaidTripsList.appendChild(item);
-            });
-        }
-
+        // Multi-Bill (Standard Category) Renderers
         function renderUnpaidBills() {
-            unpaidBillsList.innerHTML = '';
+            const list = document.getElementById('unpaid-bills-list');
+            if (!list) return;
+            list.innerHTML = '';
             if (unpaidBills.length === 0) {
-                unpaidBillsList.innerHTML = '<div class="text-slate-400 p-4 text-sm italic">No unpaid invoices found.</div>';
+                list.innerHTML = '<div class="text-slate-400 p-4 text-xs italic">No unpaid invoices found.</div>';
                 return;
             }
-
             unpaidBills.forEach(bill => {
                 if (selectedBillIds.includes(bill.id)) return;
-
                 const item = document.createElement('button');
                 item.type = 'button';
-                item.className = 'w-full text-left px-4 py-3 hover:bg-slate-50 flex justify-between items-center group transition-colors';
+                item.className = 'w-full text-left px-3 py-2 hover:bg-slate-50 flex justify-between items-center transition-colors';
                 item.innerHTML = `
-                    <div class="pr-4">
-                        <p class="font-bold text-slate-800 text-sm leading-tight">${bill.label.split(' - ')[0]}</p>
-                        <p class="text-[10px] text-slate-500 mt-1 uppercase tracking-tight">${bill.label.split(' - ').slice(1).join(' - ')}</p>
+                    <div class="pr-2">
+                        <p class="font-bold text-slate-800 text-xs">${bill.label.split(' - ')[0]}</p>
+                        <p class="text-[10px] text-slate-500 uppercase">${bill.label.split(' - ').slice(1).join(' - ')}</p>
                     </div>
-                    <span class="w-6 h-6 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-colors">
-                        <i class="fa-solid fa-plus text-[10px]"></i>
-                    </span>
+                    <span class="w-5 h-5 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-[10px]"><i class="fa-solid fa-plus"></i></span>
                 `;
-                item.onclick = () => selectBill(bill.id);
-                unpaidBillsList.appendChild(item);
+                item.onclick = () => {
+                    selectedBillIds.push(bill.id);
+                    renderUnpaidBills();
+                    renderSelectedBills();
+                };
+                list.appendChild(item);
             });
         }
 
-        // Select Trip Logic
-        function selectTrip(tripId) {
-            if (!selectedTripIds.includes(tripId)) {
-                selectedTripIds.push(tripId);
-                renderUnpaidTrips(); // Refresh left
-                renderSelectedTrips(); // Refresh right
-            }
-        }
+        function renderSelectedBills() {
+            const body = document.getElementById('selected-bills-body');
+            if (!body) return;
+            body.innerHTML = '';
+            let totalAmount = parseFloat(amountInput.value) || 0;
+            let currentAlloc = 0;
+            let distData = [];
 
-        function selectBill(billId) {
-            if (!selectedBillIds.includes(billId)) {
-                selectedBillIds.push(billId);
-                renderUnpaidBills();
-                renderSelectedBills();
-            }
-        }
+            selectedBillIds.forEach(id => {
+                const bill = unpaidBills.find(b => b.id === id);
+                if (!bill) return;
+                let billBal = 0;
+                try {
+                    billBal = parseFloat(bill.label.split('Pending: ₹')[1].replace(')', '').replace(/,/g, '')) || 0;
+                } catch(e) {}
 
-        // Deselect Trip Logic
-        window.deselectTrip = function(tripId) {
-            selectedTripIds = selectedTripIds.filter(id => id !== tripId);
-            renderUnpaidTrips();
-            renderSelectedTrips();
-        };
+                let alloc = Math.min(Math.max(0, totalAmount - currentAlloc), billBal);
+                alloc = Math.round(alloc * 100) / 100;
+                currentAlloc += alloc;
+
+                distData.push({ bill_id: bill.id, amount: alloc });
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td class="px-3 py-2 font-medium text-slate-900">${bill.label.split(' (Pending')[0]}</td>
+                    <td class="px-3 py-2 text-right text-slate-500 font-mono">₹${billBal.toFixed(2)}</td>
+                    <td class="px-3 py-2 text-right font-bold text-blue-600 font-mono">₹${alloc.toFixed(2)}</td>
+                    <td class="px-3 py-2 text-right">
+                        <button type="button" class="text-slate-400 hover:text-red-600" onclick="deselectBill(${bill.id})"><i class="fa-regular fa-trash-can"></i></button>
+                    </td>
+                `;
+                body.appendChild(row);
+            });
+
+            const totEl = document.getElementById('total-allocated-bills');
+            const remEl = document.getElementById('remaining-amount-bills');
+            if (totEl) totEl.textContent = currentAlloc.toFixed(2);
+            if (remEl) remEl.textContent = (totalAmount - currentAlloc).toFixed(2);
+            if (billDistributionInput) billDistributionInput.value = distData.length > 0 ? JSON.stringify(distData) : '';
+        }
 
         window.deselectBill = function(billId) {
             selectedBillIds = selectedBillIds.filter(id => id !== billId);
@@ -925,213 +1445,49 @@
             renderSelectedBills();
         };
 
-        // Render Selected Trips & Calculate Allocation (Right Side)
-        function renderSelectedTrips() {
-            selectedTripsBody.innerHTML = '';
-            
-            let totalAmount = (parseFloat(amountInput.value) || 0) + (tdsAmountInput ? (parseFloat(tdsAmountInput.value) || 0) : 0);
-            let currentAllocated = 0;
-            let distributionData = [];
-
-            selectedTripIds.forEach(id => {
-                const trip = unpaidTrips.find(t => t.id === id);
-                if (!trip) return; // Should not happen if data synced
-
-                // Allocation Logic
-                let amountForThisTrip = 0;
-                let remainingToAllocate = totalAmount - currentAllocated;
-                
-                if (remainingToAllocate > 0) {
-                    amountForThisTrip = Math.min(remainingToAllocate, trip.balance);
+        // Inline TDS Calculator for Invoices
+        const btnCalcTds = document.getElementById('btn-calc-tds');
+        if (btnCalcTds) {
+            btnCalcTds.addEventListener('click', function() {
+                const pct = parseFloat(document.getElementById('inline-tds-pct').value) || 0;
+                const base = currentBillSubtotal || currentSelectedBillBalance;
+                if (pct > 0 && base > 0) {
+                    const tds = Math.round(base * pct / 100 * 100) / 100;
+                    document.getElementById('calc-tds-result').textContent = '₹' + tds.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                    tdsAmountInput.value = tds.toFixed(2);
+                    updateBillBalanceDisplay();
                 }
-                
-                // Round to 2 decimals
-                amountForThisTrip = Math.round(amountForThisTrip * 100) / 100;
-                currentAllocated += amountForThisTrip;
-
-                distributionData.push({
-                    trip_id: trip.id,
-                    amount: amountForThisTrip
-                });
-
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td class="px-3 py-2 font-medium text-slate-900">${trip.label.split(' (Pending')[0]}</td>
-                    <td class="px-3 py-2 text-right text-slate-500">₹${trip.balance.toFixed(2)}</td>
-                    <td class="px-3 py-2 text-right font-bold text-emerald-600">₹${amountForThisTrip.toFixed(2)}</td>
-                    <td class="px-3 py-2 text-right">
-                        <button type="button" class="text-slate-400 hover:text-red-600 transition-colors" onclick="deselectTrip(${trip.id})">
-                            <i class="fa-regular fa-trash-can"></i>
-                        </button>
-                    </td>
-                `;
-                selectedTripsBody.appendChild(row);
             });
-
-            // Update Totals
-            totalAllocatedEl.textContent = currentAllocated.toFixed(2);
-            let remaining = totalAmount - currentAllocated;
-            remainingAmountEl.textContent = remaining.toFixed(2);
-            
-            // Update Hidden Input
-            if (distributionData.length > 0) {
-                distributionInput.value = JSON.stringify(distributionData);
-            } else {
-                distributionInput.value = '';
-            }
         }
 
-        function renderSelectedBills() {
-            selectedBillsBody.innerHTML = '';
-            
-            let totalAmount = parseFloat(amountInput.value) || 0;
-            let currentAllocated = 0;
-            let distributionData = [];
-
-            selectedBillIds.forEach(id => {
-                const bill = unpaidBills.find(b => b.id === id);
-                if (!bill) return;
-
-                // Extraction of balance from label if not directly available
-                let balanceStr = bill.label.split('Pending: ₹')[1].replace(')', '').replace(/,/g, '');
-                let billBalance = parseFloat(balanceStr);
-
-                let amountForThisBill = 0;
-                let remainingToAllocate = totalAmount - currentAllocated;
-                
-                if (remainingToAllocate > 0) {
-                    amountForThisBill = Math.min(remainingToAllocate, billBalance);
-                }
-                
-                amountForThisBill = Math.round(amountForThisBill * 100) / 100;
-                currentAllocated += amountForThisBill;
-
-                distributionData.push({
-                    bill_id: bill.id,
-                    amount: amountForThisBill
-                });
-
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td class="px-3 py-2 font-medium text-slate-900">${bill.label.split(' (Pending')[0]}</td>
-                    <td class="px-3 py-2 text-right text-slate-500">₹${billBalance.toFixed(2)}</td>
-                    <td class="px-3 py-2 text-right font-bold text-blue-600">₹${amountForThisBill.toFixed(2)}</td>
-                    <td class="px-3 py-2 text-right">
-                        <button type="button" class="text-slate-400 hover:text-red-600 transition-colors" onclick="deselectBill(${bill.id})">
-                            <i class="fa-regular fa-trash-can"></i>
-                        </button>
-                    </td>
-                `;
-                selectedBillsBody.appendChild(row);
-            });
-
-            totalAllocatedBillsEl.textContent = currentAllocated.toFixed(2);
-            let remaining = totalAmount - currentAllocated;
-            remainingAmountBillsEl.textContent = remaining.toFixed(2);
-            
-            if (distributionData.length > 0) {
-                billDistributionInput.value = JSON.stringify(distributionData);
-            } else {
-                billDistributionInput.value = '';
-            }
-        }
-
-        // Restore State from Hidden Input (e.g. after validation error)
-        function restoreState() {
-            if (distributionInput && distributionInput.value) {
-                try {
-                    const data = JSON.parse(distributionInput.value);
-                    if (Array.isArray(data)) {
-                        selectedTripIds = data.map(item => item.trip_id);
-                    }
-                } catch (e) {
-                    console.error("Failed to restore state", e);
-                }
-            }
-
-            if (billDistributionInput && billDistributionInput.value) {
-                try {
-                    const data = JSON.parse(billDistributionInput.value);
-                    if (Array.isArray(data)) {
-                        selectedBillIds = data.map(item => item.bill_id);
-                    }
-                } catch (e) {
-                    console.error("Failed to restore bill state", e);
-                }
-            }
-        }
-
-        if (recordTypeSelect) {
-            recordTypeSelect.addEventListener('change', updateUIState);
-        }
-
+        // --- Core Listeners ---
         if (partySelect) {
             partySelect.addEventListener('change', function() {
                 updateUIState();
-                selectedTripIds = []; // Clear on explicit user change
-                selectedBillIds = []; // Clear on explicit user change
+                selectedMultiTrips = {};
+                selectedBillIds = [];
                 fetchTrips(this.value);
                 fetchBills(this.value);
-            });
-            
-            // Initial load check
-            if (partySelect.value) {
-                updateUIState();
-                restoreState(); // Load saved IDs into selectedTripIds
-                fetchTrips(partySelect.value); // This will trigger render using selectedTripIds
-                fetchBills(partySelect.value);
-
-                // Allow some time for async fetches to finish before disabling initial load protection
-                setTimeout(() => { isInitialLoad = false; }, 2000);
-            } else {
-                isInitialLoad = false;
-            }
-        }
-
-        if (amountInput) {
-            amountInput.addEventListener('input', function() {
-                isManualAmount = true;
-                renderSelectedTrips();
-                renderSelectedBills();
             });
         }
 
         if (categorySelect) {
             categorySelect.addEventListener('change', function() {
                 updateUIState();
-
-                // If switched to TDS, trigger calculation if possible
-                const categoryName = categorySelect.options[categorySelect.selectedIndex].text;
-                if (categoryName.includes('TDS')) {
-                    calculateTDS(true);
-                }
             });
         }
 
-        // Auto-fill amount from Bill balance
+        if (recordTypeSelect) {
+            recordTypeSelect.addEventListener('change', updateUIState);
+        }
+
         if (associatedBillSelect) {
             associatedBillSelect.addEventListener('change', function() {
-                if (this.value) {
-                    const categoryName = categorySelect.options[categorySelect.selectedIndex].text;
-                    if (categoryName.includes('TDS')) {
-                        calculateTDS(true);
-                    } else {
-                        fetch(`{% url 'get-bill-balance' %}?bill_id=${this.value}`)
-                            .then(response => response.json())
-                            .then(data => {
-                                if (data.balance !== undefined && amountInput) {
-                                    amountInput.value = data.balance.toFixed(2);
-                                    // Trigger distribution refresh if multi-trip was somehow active
-                                    renderSelectedTrips();
-                                    renderSelectedBills();
-                                }
-                            });
-                    }
-                }
+                fetchBillBalanceForDisplay(this.value);
             });
         }
 
-        // Auto-resize description box on focus and typing (compact when unselected)
+        // Auto-resize description box on focus and typing
         const descTextarea = document.getElementById('id_description');
         if (descTextarea) {
             function adjustDescHeight() {
@@ -1143,7 +1499,6 @@
                     descTextarea.style.removeProperty('height');
                 }
             }
-
             descTextarea.addEventListener('focus', adjustDescHeight);
             descTextarea.addEventListener('input', adjustDescHeight);
             descTextarea.addEventListener('blur', function() {
@@ -1151,6 +1506,15 @@
             });
         }
 
+        // --- Initial Load Setup ---
+        updateUIState();
+        if (partySelect && partySelect.value) {
+            fetchTrips(partySelect.value);
+            fetchBills(partySelect.value);
+        }
+        if (associatedBillSelect && associatedBillSelect.value) {
+            fetchBillBalanceForDisplay(associatedBillSelect.value);
+        }
     });
 </script>
 {% endblock %}
