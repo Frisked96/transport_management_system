@@ -1155,6 +1155,7 @@ def get_party_unpaid_trips(request):
         data = [{
             'id': trip.id,
             'trip_number': trip.trip_number,
+            'lr_no': trip.lr_no or '',
             'vehicle': trip.vehicle.registration_plate if trip.vehicle else 'No Vehicle',
             'date': trip.date.strftime('%d/%m/%Y') if trip.date else '',
             'route': str(trip.route) if trip.route else (f"{trip.pickup_location} → {trip.delivery_location}" if trip.pickup_location else ''),

@@ -144,15 +144,23 @@
                     <div id="slot-single-trip">
                         <!-- wrapper_id_associated_trip moves here -->
                     </div>
-                    <p class="text-[11px] text-slate-500 italic">Select an unpaid trip for this party. Only pending trips are shown.</p>
+                    <!-- Mobile LR number display (compact, replaces the large info card on mobile to eliminate scrolling) -->
+                    <div id="single-trip-mobile-lr-box" class="hidden sm:hidden items-center justify-between px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-lg text-xs mt-2">
+                        <span class="text-slate-600 font-semibold flex items-center gap-1.5">
+                            <i class="fa-solid fa-file-invoice text-emerald-600"></i> LR Number:
+                        </span>
+                        <span class="font-mono font-bold text-emerald-800" id="single-trip-mobile-lr">—</span>
+                    </div>
+                    <p class="text-[11px] text-slate-500 italic hidden sm:block">Select an unpaid trip for this party. Only pending trips are shown.</p>
                 </div>
 
-                <!-- Selected Trip Info Card -->
-                <div id="single-trip-card" class="hidden bg-white border border-emerald-200 rounded-xl p-4 shadow-sm">
+                <!-- Selected Trip Info Card (Desktop & Tablet only - hidden on mobile to avoid scrolling) -->
+                <div id="single-trip-card" class="hidden sm:block bg-white border border-emerald-200 rounded-xl p-4 shadow-sm">
                     <div class="flex items-center justify-between pb-2.5 border-b border-slate-100">
-                        <div class="flex items-center space-x-2">
+                        <div class="flex items-center space-x-2 flex-wrap gap-y-1">
                             <span class="px-2.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-mono font-bold text-xs uppercase" id="card-vehicle-plate">—</span>
                             <span class="text-xs font-bold text-slate-700 font-mono" id="card-trip-number">—</span>
+                            <span class="px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 font-mono font-bold text-xs" id="card-trip-lr">LR: —</span>
                         </div>
                         <span class="text-xs text-slate-500 flex items-center gap-1" id="card-trip-date">
                             <i class="fa-regular fa-calendar"></i> <span>—</span>
@@ -844,18 +852,38 @@
             const trip = unpaidTrips.find(t => t.id === tripId);
             const summaryCard = document.getElementById('single-trip-balance-summary');
             const infoCard = document.getElementById('single-trip-card');
+            const mobileLrBox = document.getElementById('single-trip-mobile-lr-box');
+            const mobileLrSpan = document.getElementById('single-trip-mobile-lr');
 
             if (!trip) {
                 if (summaryCard) summaryCard.classList.add('hidden');
-                if (infoCard) infoCard.classList.add('hidden');
+                if (infoCard) {
+                    infoCard.classList.add('hidden');
+                    infoCard.classList.remove('sm:block');
+                }
+                if (mobileLrBox) {
+                    mobileLrBox.classList.add('hidden');
+                    mobileLrBox.classList.remove('flex');
+                }
                 return;
             }
 
-            // Populate Info Card
+            // Populate Mobile LR Box (compact, eliminates scrolling on mobile)
+            if (mobileLrBox) {
+                mobileLrBox.classList.remove('hidden');
+                mobileLrBox.classList.add('flex');
+                if (mobileLrSpan) {
+                    mobileLrSpan.textContent = trip.lr_no ? trip.lr_no : 'None';
+                }
+            }
+
+            // Populate Info Card (Desktop & Tablet only - hidden on mobile)
             if (infoCard) {
-                infoCard.classList.remove('hidden');
+                infoCard.classList.add('hidden', 'sm:block');
                 document.getElementById('card-vehicle-plate').textContent = trip.vehicle || 'No Vehicle';
                 document.getElementById('card-trip-number').textContent = trip.trip_number || '';
+                const cardLr = document.getElementById('card-trip-lr');
+                if (cardLr) cardLr.textContent = trip.lr_no ? 'LR: ' + trip.lr_no : 'LR: None';
                 document.getElementById('card-trip-date').querySelector('span').textContent = trip.date || '';
                 document.getElementById('card-trip-route').querySelector('span').textContent = trip.route || 'No route specified';
                 document.getElementById('card-trip-total').textContent = '₹' + trip.total.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
@@ -1021,6 +1049,7 @@
                             <div class="flex items-center gap-2 flex-wrap">
                                 <span class="px-2 py-0.5 bg-slate-100 text-slate-800 font-bold font-mono text-xs rounded">${trip.vehicle}</span>
                                 <span class="text-xs font-semibold text-slate-600 font-mono">${trip.trip_number}</span>
+                                ${trip.lr_no ? `<span class="px-1.5 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 font-mono font-bold text-[11px] rounded">LR: ${trip.lr_no}</span>` : ''}
                                 <span class="text-[11px] text-slate-400">• ${trip.date}</span>
                             </div>
                             <div class="text-xs text-slate-500 mt-0.5 truncate">${trip.route || 'Direct'}</div>
