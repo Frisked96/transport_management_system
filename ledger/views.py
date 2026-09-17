@@ -1307,14 +1307,15 @@ class BillDetailView(LoginRequiredMixin, BaseLedgerPermissionMixin, DetailView):
             # Trip Allocations
             trip_allocations = TripAllocation.objects.filter(
                 trip_id__in=trip_ids
-            ).select_related('financial_record', 'financial_record__category', 'trip')
+            ).select_related('financial_record', 'financial_record__category', 'trip', 'trip__vehicle')
             
             for ta in trip_allocations:
                 if ta.financial_record_id not in seen_records:
+                    vehicle_plate = ta.trip.vehicle.registration_plate if (ta.trip and ta.trip.vehicle) else (ta.trip.trip_number if ta.trip else '')
                     related_payments.append({
                         'financial_record': ta.financial_record,
                         'amount': ta.amount,
-                        'type': f'Trip {ta.trip.registration_plate or ta.trip.pk}'
+                        'type': f"Trip {vehicle_plate or (ta.trip.pk if ta.trip else '')}".strip()
                     })
                     seen_records.add(ta.financial_record_id)
                 else:
@@ -1329,14 +1330,15 @@ class BillDetailView(LoginRequiredMixin, BaseLedgerPermissionMixin, DetailView):
                 Q(record_type='Invoice') |
                 Q(associated_bill=bill) |
                 Q(bill_allocations__bill=bill)
-            ).select_related('category', 'associated_trip')
+            ).select_related('category', 'associated_trip', 'associated_trip__vehicle')
             
             for tr in direct_trip_records:
                 if tr.pk not in seen_records:
+                    vehicle_plate = tr.associated_trip.vehicle.registration_plate if (tr.associated_trip and tr.associated_trip.vehicle) else (tr.associated_trip.trip_number if tr.associated_trip else '')
                     related_payments.append({
                         'financial_record': tr,
                         'amount': tr.amount,
-                        'type': f'Trip {tr.associated_trip.registration_plate or tr.associated_trip.pk}'
+                        'type': f"Trip {vehicle_plate or (tr.associated_trip.pk if tr.associated_trip else '')}".strip()
                     })
                     seen_records.add(tr.pk)
 

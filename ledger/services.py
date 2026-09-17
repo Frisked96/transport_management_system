@@ -2,7 +2,7 @@
 Service layer for Ledger application.
 Handles business logic, complex calculations, and cross-model synchronizations.
 """
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal
 from django.db import transaction, models
 from django.db.models import Sum, Q, F
 
@@ -254,39 +254,16 @@ class BillingService:
             received = BillingService.calculate_bill_received_amount(bill)
             total = bill.total_amount_cached
             
-            if isinstance(received, (int, float, Decimal)):
-                received = Decimal(str(received)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-            else:
-                received = Decimal('0.00')
-
-            diff = (total - received).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-            exact_unrounded = (bill.subtotal_cached + bill.gst_amount_cached).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+            bill.amount_received_cached = received
+            bill.outstanding_balance_cached = total - received
             
-            is_paid = False
             if total <= 0:
-                is_paid = False
-            elif received >= total or diff <= Decimal('0.00'):
-                is_paid = True
-            elif bill.use_roundoff and received >= exact_unrounded:
-                is_paid = True
-            elif bill.use_roundoff and abs(diff) < Decimal('1.00') and bill.trips.exists() and all(t.payment_status_cached == 'Paid' for t in bill.trips.all()):
-                is_paid = True
-
-            if is_paid:
-                bill.amount_received_cached = total
-                bill.outstanding_balance_cached = Decimal('0.00')
-                bill.payment_status_cached = bill.PAYMENT_STATUS_PAID
-            elif total <= 0:
-                bill.amount_received_cached = Decimal('0.00')
-                bill.outstanding_balance_cached = Decimal('0.00')
                 bill.payment_status_cached = bill.PAYMENT_STATUS_UNPAID
+            elif received >= total:
+                bill.payment_status_cached = bill.PAYMENT_STATUS_PAID
             elif received > 0:
-                bill.amount_received_cached = received
-                bill.outstanding_balance_cached = diff
                 bill.payment_status_cached = bill.PAYMENT_STATUS_PARTIAL
             else:
-                bill.amount_received_cached = Decimal('0.00')
-                bill.outstanding_balance_cached = total
                 bill.payment_status_cached = bill.PAYMENT_STATUS_UNPAID
         finally:
             del bill._bypass_cache
@@ -447,27 +424,16 @@ class TripFinancialService:
         received = TripFinancialService.calculate_trip_received_amount(trip)
         total_rev = trip.total_revenue_cached
         
-        if isinstance(received, (int, float, Decimal)):
-            received = Decimal(str(received)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-        else:
-            received = Decimal('0.00')
-            
-        diff = (total_rev - received).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        trip.amount_received_cached = received
+        trip.outstanding_balance_cached = total_rev - received
+        
         if total_rev <= 0:
-            trip.amount_received_cached = Decimal('0.00')
-            trip.outstanding_balance_cached = Decimal('0.00')
             trip.payment_status_cached = trip.PAYMENT_STATUS_UNPAID
-        elif diff <= Decimal('0.00'):
-            trip.amount_received_cached = total_rev
-            trip.outstanding_balance_cached = Decimal('0.00')
+        elif received >= total_rev:
             trip.payment_status_cached = trip.PAYMENT_STATUS_PAID
         elif received > 0:
-            trip.amount_received_cached = received
-            trip.outstanding_balance_cached = diff
             trip.payment_status_cached = trip.PAYMENT_STATUS_PARTIAL
         else:
-            trip.amount_received_cached = Decimal('0.00')
-            trip.outstanding_balance_cached = total_rev
             trip.payment_status_cached = trip.PAYMENT_STATUS_UNPAID
             
         trip._updating_financial_caches = True

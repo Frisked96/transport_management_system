@@ -8,7 +8,6 @@ from django.core.exceptions import ValidationError, ObjectDoesNotExist
 from django.db.models import Sum, Case, When, Value, F, DecimalField, OuterRef, Subquery, ExpressionWrapper
 from django.db.models.functions import Coalesce
 from fleet.models import Vehicle
-from decimal import Decimal, ROUND_HALF_UP
 import re
 
 class TripQuerySet(models.QuerySet):
@@ -447,17 +446,9 @@ class Trip(models.Model):
             self.total_revenue_cached = self.total_revenue
             
             # Recalculate outstanding/status even for existing trips
-            rec = Decimal(str(self.amount_received or 0)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-            tot = Decimal(str(self.total_revenue or 0)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-            diff = (tot - rec).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-            if diff <= Decimal('0.00'):
-                self.amount_received_cached = tot
-                self.outstanding_balance_cached = Decimal('0.00')
-                self.payment_status_cached = self.PAYMENT_STATUS_PAID
-            else:
-                self.amount_received_cached = rec
-                self.outstanding_balance_cached = diff
-                self.payment_status_cached = self.payment_status
+            self.amount_received_cached = self.amount_received
+            self.outstanding_balance_cached = self.outstanding_balance
+            self.payment_status_cached = self.payment_status
         finally:
             del self._bypass_cache
         
@@ -635,26 +626,20 @@ class Trip(models.Model):
 
     def _calculate_payment_status(self):
         """Core logic for payment status"""
-        received = Decimal(str(self.amount_received or 0))
-        total_rev = Decimal(str(self.total_revenue or 0))
+        received = self.amount_received
+        total_rev = self.total_revenue
         if total_rev <= 0: return self.PAYMENT_STATUS_UNPAID
-        
-        diff = (total_rev - received).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-        if diff <= Decimal('0.00'):
-            return self.PAYMENT_STATUS_PAID
-        elif received > 0:
-            return self.PAYMENT_STATUS_PARTIAL
+        if received >= total_rev: return self.PAYMENT_STATUS_PAID
+        elif received > 0: return self.PAYMENT_STATUS_PARTIAL
         return self.PAYMENT_STATUS_UNPAID
 
     @property
     def outstanding_balance(self):
         """Returns outstanding balance, prioritizing cached value"""
         if getattr(self, '_bypass_cache', False):
-            bal = Decimal(str(self.total_revenue or 0)) - Decimal(str(self.amount_received or 0))
-            return max(Decimal('0.00'), bal.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
-        if self.outstanding_balance_cached is not None:
-            return max(Decimal('0.00'), Decimal(str(self.outstanding_balance_cached)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
-        if hasattr(self, 'annotated_outstanding') and self.annotated_outstanding is not None:
-            return max(Decimal('0.00'), Decimal(str(self.annotated_outstanding)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
-        bal = Decimal(str(self.total_revenue or 0)) - Decimal(str(self.amount_received or 0))
-        return max(Decimal('0.00'), bal.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
+            return self.total_revenue - self.amount_received
+        if self.outstanding_balance_cached:
+            return self.outstanding_balance_cached
+        if hasattr(self, 'annotated_outstanding'):
+            return self.annotated_outstanding
+        return self.total_revenue - self.amount_received
