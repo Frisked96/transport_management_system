@@ -22,16 +22,18 @@ class BalanceService:
             # Lock the party row
             party_obj = Party.objects.select_for_update().get(pk=party.pk)
             
-            # 1. Calculate Total Debits
-            # Total Debits: Opening Balance (if positive) + Debits (Revenue/Invoices/Notes)
+            # 1 & 2. Calculate Total Debits & Credits in a single pass
             base_debit = party_obj.opening_balance if party_obj.opening_balance > 0 else Decimal('0')
-            records = party_obj.financial_records.select_related('category', 'associated_bill__category').all()
-            total_debit = base_debit + sum((r.debit_amount or Decimal('0')) for r in records)
-            
-            # 2. Calculate Total Credits
-            # Total Credits: Opening Balance (if negative) + Credits (Payments/Notes)
             base_credit = abs(party_obj.opening_balance) if party_obj.opening_balance < 0 else Decimal('0')
-            total_credit = base_credit + sum((r.credit_amount or Decimal('0')) for r in records)
+            records = party_obj.financial_records.select_related('category', 'associated_bill__category').all()
+            sum_debit = Decimal('0')
+            sum_credit = Decimal('0')
+            for r in records:
+                sum_debit += (r.debit_amount or Decimal('0'))
+                sum_credit += (r.credit_amount or Decimal('0'))
+
+            total_debit = base_debit + sum_debit
+            total_credit = base_credit + sum_credit
             
             # 3. Update cached fields
             party_obj.total_debit_amount = total_debit
@@ -121,34 +123,41 @@ class BillingService:
     def get_next_available_no(issuer, date=None, category=None):
         """
         Finds the next numeric invoice number for the specific prefix series.
+        Uses select_for_update on CompanyAccount to prevent concurrency race conditions.
         """
-        from ledger.models import Bill
+        from ledger.models import Bill, CompanyAccount
         from django.utils import timezone
         
         if not issuer:
             return 1
-        
-        dt = date or timezone.now()
-        year = dt.year
-        
-        if category:
-            if category.name == 'Credit Note':
-                prefix = issuer.cn_prefix.replace("{YYYY}", str(year))
-            elif category.name == 'Debit Note':
-                prefix = issuer.dn_prefix.replace("{YYYY}", str(year))
+            
+        with transaction.atomic():
+            try:
+                issuer_obj = CompanyAccount.objects.select_for_update().get(pk=issuer.pk)
+            except (CompanyAccount.DoesNotExist, Exception):
+                issuer_obj = issuer
+
+            dt = date or timezone.now()
+            year = dt.year
+            
+            if category:
+                if category.name == 'Credit Note':
+                    prefix = issuer_obj.cn_prefix.replace("{YYYY}", str(year))
+                elif category.name == 'Debit Note':
+                    prefix = issuer_obj.dn_prefix.replace("{YYYY}", str(year))
+                else:
+                    prefix = issuer_obj.invoice_prefix.replace("{YYYY}", str(year))
             else:
-                prefix = issuer.invoice_prefix.replace("{YYYY}", str(year))
-        else:
-            prefix = issuer.invoice_prefix.replace("{YYYY}", str(year))
-        
-        max_no = Bill.objects.filter(
-            bill_number__startswith=prefix
-        ).aggregate(max_val=models.Max('bill_no'))['max_val']
-        
-        if max_no is not None:
-            return max_no + 1
-        
-        return issuer.invoice_sequence_start
+                prefix = issuer_obj.invoice_prefix.replace("{YYYY}", str(year))
+            
+            max_no = Bill.objects.filter(
+                bill_number__startswith=prefix
+            ).aggregate(max_val=models.Max('bill_no'))['max_val']
+            
+            if max_no is not None:
+                return max_no + 1
+            
+            return issuer_obj.invoice_sequence_start
 
     @staticmethod
     def sync_bill_to_ledger(bill):
@@ -160,84 +169,85 @@ class BillingService:
         if not bill.pk:
             return
 
-        # 1. Update/Create consolidated record
-        category = bill.category
-        if not category:
-            category, _ = TransactionCategory.objects.get_or_create(
-                name='Trip Payment',
-                type=TransactionCategory.TYPE_INCOME
-            )
+        with transaction.atomic():
+            # 1. Update/Create consolidated record
+            category = bill.category
+            if not category:
+                category, _ = TransactionCategory.objects.get_or_create(
+                    name='Trip Payment',
+                    type=TransactionCategory.TYPE_INCOME
+                )
 
-        total_revenue = bill.rounded_total
+            total_revenue = bill.rounded_total
 
-        if bill.bill_type == bill.TYPE_TRIP:
-            description = f"Invoice {bill.bill_number or 'Draft'} for {bill.trips.count()} trips"
-        else:
-            against_info = ""
-            if category.name in ['Credit Note', 'Debit Note']:
-                if bill.original_bill:
-                    against_info = f"Against Invoice {bill.original_bill.bill_number}: "
-                elif bill.manual_original_bill_number:
-                    against_info = f"Against Invoice {bill.manual_original_bill_number}: "
-            
-            description = f"{against_info}{category.name} {bill.bill_number or 'Draft'}"
-            if bill.item_type:
-                description = f"{description}: {bill.item_type}"
+            if bill.bill_type == bill.TYPE_TRIP:
+                description = f"Invoice {bill.bill_number or 'Draft'} for {bill.trips.count()} trips"
+            else:
+                against_info = ""
+                if category.name in ['Credit Note', 'Debit Note']:
+                    if bill.original_bill:
+                        against_info = f"Against Invoice {bill.original_bill.bill_number}: "
+                    elif bill.manual_original_bill_number:
+                        against_info = f"Against Invoice {bill.manual_original_bill_number}: "
+                
+                description = f"{against_info}{category.name} {bill.bill_number or 'Draft'}"
+                if bill.item_type:
+                    description = f"{description}: {bill.item_type}"
 
-        FinancialRecord.objects.update_or_create(
-            associated_bill=bill,
-            record_type=FinancialRecord.RECORD_TYPE_INVOICE,
-            party=bill.party,
-            defaults={
-                'date': bill.date,
-                'account': bill.issuer,
-                'category': category,
-                'amount': total_revenue,
-                'description': description,
-            }
-        )
-        
-        # 2. Clean up individual trip accruals (both customer and vendor)
-        FinancialRecord.objects.filter(
-            associated_trip__in=bill.trips.all(),
-            record_type=FinancialRecord.RECORD_TYPE_INVOICE
-        ).delete()
-
-        # 3. Create consolidated vendor hire records for attached vehicles
-        # Group trips by vendor to create one entry per vendor
-        from collections import defaultdict
-        vendor_totals = defaultdict(Decimal)
-        for trip in bill.trips.select_related('vehicle__vendor').all():
-            if (trip.vehicle and trip.vehicle.is_attached and 
-                trip.vehicle.vendor and trip.vendor_hire_amount > 0):
-                vendor_totals[trip.vehicle.vendor] += trip.vendor_hire_amount
-        
-        lorry_hire_cat, _ = TransactionCategory.objects.get_or_create(
-            name='Lorry Hire',
-            defaults={'type': TransactionCategory.TYPE_EXPENSE}
-        )
-        
-        # Remove any stale vendor hire records for this bill that are no longer valid
-        existing_vendor_pks = [v.pk for v in vendor_totals.keys()]
-        FinancialRecord.objects.filter(
-            associated_bill=bill,
-            record_type=FinancialRecord.RECORD_TYPE_INVOICE,
-            category=lorry_hire_cat
-        ).exclude(party_id__in=existing_vendor_pks).delete()
-        
-        for vendor, total in vendor_totals.items():
             FinancialRecord.objects.update_or_create(
                 associated_bill=bill,
                 record_type=FinancialRecord.RECORD_TYPE_INVOICE,
-                party=vendor,
-                category=lorry_hire_cat,
+                party=bill.party,
                 defaults={
                     'date': bill.date,
                     'account': bill.issuer,
-                    'amount': total,
-                    'description': f"Lorry Hire for Bill {bill.bill_number or 'Draft'}",
+                    'category': category,
+                    'amount': total_revenue,
+                    'description': description,
                 }
             )
+            
+            # 2. Clean up individual trip accruals (both customer and vendor)
+            FinancialRecord.objects.filter(
+                associated_trip__in=bill.trips.all(),
+                record_type=FinancialRecord.RECORD_TYPE_INVOICE
+            ).delete()
+
+            # 3. Create consolidated vendor hire records for attached vehicles
+            # Group trips by vendor to create one entry per vendor
+            from collections import defaultdict
+            vendor_totals = defaultdict(Decimal)
+            for trip in bill.trips.select_related('vehicle__vendor').all():
+                if (trip.vehicle and trip.vehicle.is_attached and 
+                    trip.vehicle.vendor and trip.vendor_hire_amount > 0):
+                    vendor_totals[trip.vehicle.vendor] += trip.vendor_hire_amount
+            
+            lorry_hire_cat, _ = TransactionCategory.objects.get_or_create(
+                name='Lorry Hire',
+                defaults={'type': TransactionCategory.TYPE_EXPENSE}
+            )
+            
+            # Remove any stale vendor hire records for this bill that are no longer valid
+            existing_vendor_pks = [v.pk for v in vendor_totals.keys()]
+            FinancialRecord.objects.filter(
+                associated_bill=bill,
+                record_type=FinancialRecord.RECORD_TYPE_INVOICE,
+                category=lorry_hire_cat
+            ).exclude(party_id__in=existing_vendor_pks).delete()
+            
+            for vendor, total in vendor_totals.items():
+                FinancialRecord.objects.update_or_create(
+                    associated_bill=bill,
+                    record_type=FinancialRecord.RECORD_TYPE_INVOICE,
+                    party=vendor,
+                    category=lorry_hire_cat,
+                    defaults={
+                        'date': bill.date,
+                        'account': bill.issuer,
+                        'amount': total,
+                        'description': f"Lorry Hire for Bill {bill.bill_number or 'Draft'}",
+                    }
+                )
 
     @staticmethod
     def update_bill_financial_caches(bill):

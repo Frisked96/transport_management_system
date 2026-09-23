@@ -1,0 +1,390 @@
+{% load humanize %}
+{% load ledger_extras %}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title|default:"Statement of Account" }}</title>
+    <style>
+        @page {
+            size: A4 portrait;
+            margin: 10mm;
+        }
+
+        body {
+            background-color: #f1f5f9;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            color: #1e293b;
+            font-size: 11px;
+            line-height: 1.4;
+        }
+
+        .page-container {
+            width: 210mm;
+            max-width: 98%;
+            margin: 20px auto;
+            background: white;
+            padding: 12mm;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            box-sizing: border-box;
+            border-radius: 4px;
+        }
+
+        @media screen and (max-width: 210mm) {
+            .page-container {
+                width: 100%;
+                margin: 0;
+                padding: 6mm;
+                box-shadow: none;
+                border-radius: 0;
+            }
+        }
+
+        @media print {
+            body {
+                background: white;
+            }
+            .page-container {
+                width: 100%;
+                margin: 0;
+                padding: 0;
+                box-shadow: none;
+            }
+            .no-print {
+                display: none !important;
+            }
+        }
+
+        /* Print Controls Bar */
+        .print-controls {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: rgba(15, 23, 42, 0.92);
+            padding: 12px;
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            backdrop-filter: blur(8px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .btn-print {
+            background-color: #10b981;
+            color: white;
+            border: none;
+            padding: 10px 24px;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.2s;
+        }
+        .btn-print:hover {
+            background-color: #059669;
+        }
+
+        .btn-close {
+            background-color: transparent;
+            color: #94a3b8;
+            border: 1px solid #334155;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        .btn-close:hover {
+            background-color: #1e293b;
+            color: white;
+        }
+
+        /* Statement Layout */
+        .header-section {
+            border-bottom: 2px solid #0f172a;
+            padding-bottom: 12px;
+            margin-bottom: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+
+        .company-title {
+            font-size: 18px;
+            font-weight: 800;
+            color: #0f172a;
+            letter-spacing: -0.025em;
+            margin-bottom: 4px;
+            text-transform: uppercase;
+        }
+
+        .statement-badge {
+            font-size: 20px;
+            font-weight: 800;
+            color: #475569;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            text-align: right;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1.2fr 0.8fr;
+            gap: 20px;
+            margin-bottom: 18px;
+            background-color: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 12px 16px;
+        }
+
+        .info-block h3 {
+            margin: 0 0 6px 0;
+            font-size: 11px;
+            font-weight: 700;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .recipient-name {
+            font-size: 14px;
+            font-weight: 700;
+            color: #0f172a;
+            margin-bottom: 4px;
+        }
+
+        .meta-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .meta-table td {
+            padding: 2px 0;
+            font-size: 11px;
+        }
+        .meta-label {
+            color: #64748b;
+            font-weight: 600;
+            width: 40%;
+        }
+        .meta-value {
+            text-align: right;
+            font-weight: 600;
+            color: #0f172a;
+        }
+
+        /* Ledger Table */
+        .statement-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 16px;
+            font-size: 10.5px;
+        }
+
+        .statement-table th {
+            background-color: #0f172a;
+            color: #ffffff;
+            font-weight: 600;
+            padding: 6px 8px;
+            text-align: left;
+            border: 1px solid #0f172a;
+            text-transform: uppercase;
+            font-size: 9.5px;
+            letter-spacing: 0.03em;
+        }
+
+        .statement-table td {
+            padding: 5px 8px;
+            border: 1px solid #cbd5e1;
+            vertical-align: top;
+        }
+
+        .statement-table tr:nth-child(even) td {
+            background-color: #f8fafc;
+        }
+
+        .statement-table tr.opening-row td {
+            background-color: #f1f5f9;
+            font-weight: 700;
+            color: #334155;
+        }
+
+        .statement-table tr.total-row td {
+            background-color: #e2e8f0;
+            font-weight: 800;
+            border-top: 2px solid #0f172a;
+            border-bottom: 2px solid #0f172a;
+            font-size: 11px;
+        }
+
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
+        .font-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+        .font-bold { font-weight: 700; }
+        .nowrap { white-space: nowrap; }
+
+        .balance-dr { color: #b91c1c; font-weight: 700; }
+        .balance-cr { color: #15803d; font-weight: 700; }
+
+        .footer-note {
+            font-size: 9.5px;
+            color: #64748b;
+            display: flex;
+            justify-content: space-between;
+            border-top: 1px solid #e2e8f0;
+            padding-top: 8px;
+            margin-top: 15px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="print-controls no-print">
+        <button onclick="window.print()" class="btn-print">Print Statement</button>
+        <button onclick="window.close()" class="btn-close">Close</button>
+    </div>
+
+    <div class="page-container">
+        <!-- Header Section -->
+        <div class="header-section">
+            <div>
+                <div class="company-title">{{ company.name|default:"TRANSPORT MANAGEMENT SYSTEM" }}</div>
+                <div style="color: #475569;">{{ company.address|linebreaksbr|default:"Transport Hub, Logistics Park" }}</div>
+                <div style="color: #64748b; margin-top: 4px;">
+                    {% if company.gstin %}GSTIN: <strong style="color:#0f172a;">{{ company.gstin }}</strong> | {% endif %}
+                    {% if company.phone_number %}Phone: {{ company.phone_number }}{% endif %}
+                </div>
+            </div>
+            <div>
+                <div class="statement-badge">STATEMENT</div>
+                <div class="text-right" style="color: #64748b; font-size: 10px; margin-top: 4px;">
+                    Date: {{ generated_at|date:"d/m/Y" }}
+                </div>
+            </div>
+        </div>
+
+        <!-- Recipient & Period Details -->
+        <div class="info-grid">
+            <div class="info-block">
+                <h3>STATEMENT FOR: {{ recipient_label|default:"CLIENT / PARTY" }}</h3>
+                <div class="recipient-name">{{ recipient_name|default:party.name }}</div>
+                {% if recipient_address or party.address %}
+                    <div style="color: #475569;">{{ recipient_address|default:party.address|linebreaksbr }}</div>
+                {% endif %}
+                {% if recipient_gstin or party.gstin %}
+                    <div style="margin-top: 3px;">GSTIN: <strong>{{ recipient_gstin|default:party.gstin }}</strong></div>
+                {% endif %}
+                {% if recipient_phone or party.phone_number %}
+                    <div>Phone: {{ recipient_phone|default:party.phone_number }}</div>
+                {% endif %}
+                {% if recipient_extra %}
+                    <div style="color: #64748b; font-size: 10px; margin-top: 2px;">{{ recipient_extra }}</div>
+                {% endif %}
+            </div>
+
+            <div class="info-block">
+                <h3>STATEMENT SUMMARY</h3>
+                <table class="meta-table">
+                    <tr>
+                        <td class="meta-label">Period:</td>
+                        <td class="meta-value">{{ start_date|date:"d/m/Y" }} to {{ end_date|date:"d/m/Y" }}</td>
+                    </tr>
+                    <tr>
+                        <td class="meta-label">Opening Balance:</td>
+                        <td class="meta-value font-mono">{{ opening_balance_formatted }}</td>
+                    </tr>
+                    <tr>
+                        <td class="meta-label">Total Debits (+):</td>
+                        <td class="meta-value font-mono">₹{{ total_debit|intcomma }}</td>
+                    </tr>
+                    <tr>
+                        <td class="meta-label">Total Credits (-):</td>
+                        <td class="meta-value font-mono">₹{{ total_credit|intcomma }}</td>
+                    </tr>
+                    <tr style="border-top: 1px solid #cbd5e1;">
+                        <td class="meta-label" style="font-weight: 800; color: #0f172a; padding-top: 4px;">Closing Balance:</td>
+                        <td class="meta-value font-mono" style="font-size: 13px; font-weight: 800; padding-top: 4px; color: {% if closing_balance > 0 %}#b91c1c{% elif closing_balance < 0 %}#15803d{% else %}#0f172a{% endif %};">
+                            {{ closing_balance_formatted }}
+                        </td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+
+        <!-- Ledger Table -->
+        <table class="statement-table">
+            <thead>
+                <tr>
+                    <th style="width: 75px;">Date</th>
+                    <th style="width: 105px;">Ref / Doc No</th>
+                    <th>Description</th>
+                    <th class="text-right" style="width: 90px;">Debit (Dr)</th>
+                    <th class="text-right" style="width: 90px;">Credit (Cr)</th>
+                    <th class="text-right" style="width: 105px;">Running Balance</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Opening Row -->
+                <tr class="opening-row">
+                    <td>{{ start_date|date:"d/m/Y" }}</td>
+                    <td class="text-center">-</td>
+                    <td><strong>OPENING BALANCE B/F</strong></td>
+                    <td class="text-right font-mono">-</td>
+                    <td class="text-right font-mono">-</td>
+                    <td class="text-right font-mono font-bold">{{ opening_balance_formatted }}</td>
+                </tr>
+
+                {% for row in statement_rows %}
+                <tr>
+                    <td class="nowrap">{{ row.date|date:"d/m/Y" }}</td>
+                    <td class="nowrap font-mono" style="font-size: 9.5px;">{{ row.reference }}</td>
+                    <td>{{ row.description }}</td>
+                    <td class="text-right font-mono">
+                        {% if row.debit > 0 %}₹{{ row.debit|intcomma }}{% else %}-{% endif %}
+                    </td>
+                    <td class="text-right font-mono">
+                        {% if row.credit > 0 %}₹{{ row.credit|intcomma }}{% else %}-{% endif %}
+                    </td>
+                    <td class="text-right font-mono {{ row.balance_class }}">
+                        {{ row.balance_formatted }}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="6" class="text-center" style="padding: 20px; color: #64748b;">
+                        No transactions recorded for the selected date range.
+                    </td>
+                </tr>
+                {% endfor %}
+
+                <!-- Total Row -->
+                <tr class="total-row">
+                    <td colspan="3" class="text-right"><strong>PERIOD TOTALS & CLOSING BALANCE:</strong></td>
+                    <td class="text-right font-mono">₹{{ total_debit|intcomma }}</td>
+                    <td class="text-right font-mono">₹{{ total_credit|intcomma }}</td>
+                    <td class="text-right font-mono font-bold">{{ closing_balance_formatted }}</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- Footer Note -->
+        <div class="footer-note">
+            <div>Generated from Transport Management System on {{ generated_at|date:"d/m/Y H:i" }}</div>
+            <div>This is a computer-generated statement of account.</div>
+        </div>
+    </div>
+
+    <script>
+        window.onload = function() {
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            if (!isMobile) {
+                window.print();
+                window.onafterprint = function() { window.close(); };
+            }
+        }
+    </script>
+</body>
+</html>

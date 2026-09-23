@@ -1,12 +1,31 @@
 """
 Models for Ledger application
 """
-from django.db import models
+from django.db import models, transaction
 from django.core.exceptions import ObjectDoesNotExist
 from django.contrib.auth.models import User
 from trips.models import Trip
 from django.db.models import F, Value, Max
 from decimal import Decimal
+import threading
+
+_bill_thread_local = threading.local()
+
+def is_bill_deleting(bill_id):
+    if not bill_id:
+        return False
+    deleting = getattr(_bill_thread_local, 'deleting_pks', None)
+    return deleting is not None and bill_id in deleting
+
+def mark_bill_deleting(bill_id):
+    if not hasattr(_bill_thread_local, 'deleting_pks'):
+        _bill_thread_local.deleting_pks = set()
+    _bill_thread_local.deleting_pks.add(bill_id)
+
+def unmark_bill_deleting(bill_id):
+    if hasattr(_bill_thread_local, 'deleting_pks'):
+        _bill_thread_local.deleting_pks.discard(bill_id)
+
 
 class Sequence(models.Model):
     """
@@ -117,35 +136,31 @@ class Party(models.Model):
     def total_debit(self):
         return self.total_debit_amount
 
-    def _calculate_total_debit(self):
-        """
-        Total Debits: Opening Balance (if positive) + Debits (Revenue/Invoices/Notes)
-        """
-        base = self.opening_balance if self.opening_balance > 0 else Decimal('0')
-        
-        # We use Python-side summation to ensure accuracy with complex properties
-        # while using select_related to keep it efficient.
+    def _calculate_totals(self):
+        """Single-pass calculation of total debits and credits from financial records."""
+        base_debit = self.opening_balance if self.opening_balance > 0 else Decimal('0')
+        base_credit = abs(self.opening_balance) if self.opening_balance < 0 else Decimal('0')
         records = self.financial_records.select_related('category', 'associated_bill__category').all()
-        debits = sum((r.debit_amount or Decimal('0')) for r in records)
-        
-        return base + debits
+        debit_sum = Decimal('0')
+        credit_sum = Decimal('0')
+        for r in records:
+            debit_sum += (r.debit_amount or Decimal('0'))
+            credit_sum += (r.credit_amount or Decimal('0'))
+        return base_debit + debit_sum, base_credit + credit_sum
+
+    def _calculate_total_debit(self):
+        """Total Debits: Opening Balance (if positive) + Debits (Revenue/Invoices/Notes)"""
+        debits, _ = self._calculate_totals()
+        return debits
 
     @property
     def total_credit(self):
         return self.total_credit_amount
 
     def _calculate_total_credit(self):
-        """
-        Total Credits: Opening Balance (if negative) + Credits (Payments/Notes)
-        """
-        base = abs(self.opening_balance) if self.opening_balance < 0 else Decimal('0')
-        
-        # We use Python-side summation to ensure accuracy with complex properties
-        # while using select_related to keep it efficient.
-        records = self.financial_records.select_related('category', 'associated_bill__category').all()
-        credits = sum((r.credit_amount or Decimal('0')) for r in records)
-        
-        return base + credits
+        """Total Credits: Opening Balance (if negative) + Credits (Payments/Notes)"""
+        _, credits = self._calculate_totals()
+        return credits
 
     @property
     def current_balance_value(self):
@@ -980,37 +995,32 @@ class Bill(models.Model):
         Custom delete for Bill.
         Ensure individual trip accruals are restored and the consolidated record is removed.
         """
-        # Get list of trips before they are unlinked
         if not self.pk:
             return super().delete(*args, **kwargs)
 
-        self._is_being_deleted = True
-        
-        # Track globally so signals know this specific bill is being deleted
-        if not hasattr(Bill, '_deleting_pks'):
-            Bill._deleting_pks = set()
-        Bill._deleting_pks.add(self.pk)
-        
-        try:
-            affected_trips = list(self.trips.all())
+        with transaction.atomic():
+            self._is_being_deleted = True
+            mark_bill_deleting(self.pk)
 
-            # Delete only the consolidated invoice record associated with this bill
-            FinancialRecord.objects.filter(
-                associated_bill=self,
-                record_type=FinancialRecord.RECORD_TYPE_INVOICE
-            ).delete()
+            try:
+                affected_trips = list(self.trips.all())
 
-            super().delete(*args, **kwargs)
+                # Delete only the consolidated invoice record associated with this bill
+                FinancialRecord.objects.filter(
+                    associated_bill=self,
+                    record_type=FinancialRecord.RECORD_TYPE_INVOICE
+                ).delete()
 
-            # Re-sync trips to restore their individual accruals now that they are unbilled
-            for trip in affected_trips:
-                from ledger.services import TripFinancialService
-                TripFinancialService.sync_trip_accrual(trip)
-        finally:
-            if hasattr(self, '_is_being_deleted'):
-                del self._is_being_deleted
-            if hasattr(Bill, '_deleting_pks') and self.pk in Bill._deleting_pks:
-                Bill._deleting_pks.remove(self.pk)
+                super().delete(*args, **kwargs)
+
+                # Re-sync trips to restore their individual accruals now that they are unbilled
+                for trip in affected_trips:
+                    from ledger.services import TripFinancialService
+                    TripFinancialService.sync_trip_accrual(trip)
+            finally:
+                unmark_bill_deleting(self.pk)
+                if hasattr(self, '_is_being_deleted'):
+                    del self._is_being_deleted
 
 
     def sync_to_ledger(self):

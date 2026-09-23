@@ -1,6 +1,6 @@
 from django import forms
 from django.contrib.auth.models import User
-from django.db import models
+from django.db import models, transaction
 import json
 from .models import FinancialRecord, Party, CompanyAccount, Bill
 from trips.models import Trip
@@ -517,60 +517,64 @@ class BillForm(forms.ModelForm):
     def save(self, commit=True):
         instance = super().save(commit=False)
         if commit:
-            instance.save()
-            
-            # Handle BillTrip relationships with LR No and Discount
-            selected_trips = self.cleaned_data.get('trips', [])
-            trips_data_json = self.cleaned_data.get('trips_data', '{}')
-            
-            try:
-                trips_extra = json.loads(trips_data_json) if trips_data_json else {}
-            except json.JSONDecodeError:
-                trips_extra = {}
-
-            # Remove existing trips not in selected
-            instance.bill_trips.exclude(trip__in=selected_trips).delete()
-
-            # Create or update BillTrip for each selected trip
-            from .models import BillTrip
-            trips_to_update = []
-            for trip in selected_trips:
-                extra = trips_extra.get(str(trip.id)) or trips_extra.get(trip.id)
+            with transaction.atomic():
+                # Temporarily suppress post_save on BillTrip from repeatedly saving Bill
+                instance._suppress_billtrip_sync = True
+                instance.save()
                 
-                lr_no = None
-                discount = 0
+                # Handle BillTrip relationships with LR No and Discount
+                selected_trips = self.cleaned_data.get('trips', [])
+                trips_data_json = self.cleaned_data.get('trips_data', '{}')
                 
-                if isinstance(extra, dict):
-                    lr_no = extra.get('lr_no')
-                    discount = extra.get('discount') or 0
-                else:
-                    # Backward compatibility for old trips_data format (just LR No string)
-                    lr_no = extra
+                try:
+                    trips_extra = json.loads(trips_data_json) if trips_data_json else {}
+                except json.JSONDecodeError:
+                    trips_extra = {}
+
+                # Remove existing trips not in selected
+                instance.bill_trips.exclude(trip__in=selected_trips).delete()
+
+                # Create or update BillTrip for each selected trip
+                from .models import BillTrip
+                trips_to_update = []
+                for trip in selected_trips:
+                    extra = trips_extra.get(str(trip.id)) or trips_extra.get(trip.id)
+                    
+                    lr_no = None
                     discount = 0
+                    
+                    if isinstance(extra, dict):
+                        lr_no = extra.get('lr_no')
+                        discount = extra.get('discount') or 0
+                    else:
+                        # Backward compatibility for old trips_data format (just LR No string)
+                        lr_no = extra
+                        discount = 0
 
-                # Fallback to trip.lr_no if not provided in extra data
-                if not lr_no:
-                    lr_no = trip.lr_no
+                    # Fallback to trip.lr_no if not provided in extra data
+                    if not lr_no:
+                        lr_no = trip.lr_no
+                    
+                    # Sync LR No back to Trip if changed
+                    if lr_no and trip.lr_no != lr_no:
+                        trip.lr_no = lr_no
+                        trips_to_update.append(trip)
+
+                    BillTrip.objects.update_or_create(
+                        bill=instance,
+                        trip=trip,
+                        defaults={
+                            'lr_no': lr_no,
+                            'discount': discount
+                        }
+                    )
                 
-                # Sync LR No back to Trip if changed
-                if lr_no and trip.lr_no != lr_no:
-                    trip.lr_no = lr_no
-                    trips_to_update.append(trip)
-
-                # Still need to handle BillTrip per trip, but we've avoided Trip.save() in loop
-                BillTrip.objects.update_or_create(
-                    bill=instance,
-                    trip=trip,
-                    defaults={
-                        'lr_no': lr_no,
-                        'discount': discount
-                    }
-                )
-            
-            if trips_to_update:
-                Trip.objects.bulk_update(trips_to_update, ['lr_no'])
-            
-            # Sync to Ledger (After trips are established)
-            instance.sync_to_ledger()
+                if trips_to_update:
+                    Trip.objects.bulk_update(trips_to_update, ['lr_no'])
+                
+                # Unsuppress, update financial caches and sync to ledger ONCE
+                instance._suppress_billtrip_sync = False
+                instance.update_financial_caches()
+                instance.sync_to_ledger()
             
         return instance

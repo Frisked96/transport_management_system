@@ -3,7 +3,7 @@ Signals for Ledger application.
 """
 from django.db.models.signals import post_save, post_delete, pre_save
 from django.dispatch import receiver
-from ledger.models import Bill, FinancialRecord, BillTrip, Party, CompanyAccount, TripAllocation, BillAllocation
+from ledger.models import Bill, FinancialRecord, BillTrip, Party, CompanyAccount, TripAllocation, BillAllocation, is_bill_deleting
 from trips.models import Trip
 from ledger.services import BalanceService, BillingService, TripFinancialService
 from decimal import Decimal
@@ -114,15 +114,22 @@ def sync_trip_ledger_on_billtrip_save(sender, instance, **kwargs):
     """
     When a trip is linked to a bill, its individual accrual should be deleted.
     """
+    bill = instance.bill
+    if getattr(bill, '_suppress_billtrip_sync', False):
+        return
+
     TripFinancialService.sync_trip_accrual(instance.trip)
     # Refresh the bill's cached totals and sync to ledger
-    instance.bill.save()
+    bill.save()
 
 @receiver(post_delete, sender=BillTrip)
 def sync_trip_ledger_on_billtrip_delete(sender, instance, **kwargs):
     """
     When a trip is unlinked from a bill, its individual accrual should be restored.
     """
+    if getattr(instance, '_suppress_billtrip_sync', False):
+        return
+
     if not instance.trip_id:
         return
 
@@ -150,7 +157,7 @@ def sync_trip_ledger_on_billtrip_delete(sender, instance, **kwargs):
         return
         
     # Also check if there's a global flag or we know it's being deleted
-    if hasattr(Bill, '_deleting_pks') and instance.bill_id in Bill._deleting_pks:
+    if is_bill_deleting(instance.bill_id) or (hasattr(Bill, '_deleting_pks') and instance.bill_id in Bill._deleting_pks):
         return
 
     try:
