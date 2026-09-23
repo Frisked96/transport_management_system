@@ -16,6 +16,8 @@ urlpatterns = [
     # Route URLs
     path('routes/', views.RouteListView.as_view(), name='route-list'),
     path('routes/create/', views.RouteCreateView.as_view(), name='route-create'),
+    path('routes/<int:pk>/', views.RouteDashboardView.as_view(), name='route-detail'),
+    path('routes/<int:pk>/dashboard/', views.RouteDashboardView.as_view(), name='route-dashboard'),
     path('routes/<int:pk>/update/', views.RouteUpdateView.as_view(), name='route-update'),
     path('routes/<int:pk>/delete/', views.RouteDeleteView.as_view(), name='route-delete'),
     

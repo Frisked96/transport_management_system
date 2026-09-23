@@ -79,16 +79,7 @@ def party_statement_pdf(request, pk):
             'balance_class': balance_class,
         })
 
-    account_id = request.GET.get('account') or request.GET.get('issuer')
-    if account_id:
-        company = CompanyAccount.objects.filter(pk=account_id).first()
-    else:
-        company = (
-            CompanyAccount.objects.filter(bills__party=party).first() or
-            CompanyAccount.objects.filter(financial_records__party=party).first() or
-            CompanyAccount.objects.exclude(address='').order_by('id').first() or
-            CompanyAccount.objects.order_by('id').first()
-        )
+    company = CompanyAccount.objects.first()
     context = {
         'party': party,
         'recipient_name': party.name,
@@ -284,10 +275,7 @@ def unified_ledger_pdf(request):
             'balance_class': balance_class,
         })
 
-    company_main = (
-        CompanyAccount.objects.exclude(address='').order_by('id').first() or
-        CompanyAccount.objects.order_by('id').first()
-    )
+    company_main = CompanyAccount.objects.first()
     context = {
         'party': company_main,
         'recipient_name': "All Company Accounts",

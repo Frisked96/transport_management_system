@@ -46,11 +46,11 @@
     {% for route in routes %}
     <div class="bg-white border border-slate-200 rounded-lg p-4 active:bg-slate-50 transition-colors">
         <div class="flex items-center justify-between mb-3">
-            <div class="flex items-center space-x-2 min-w-0">
+            <a href="{% url 'route-dashboard' route.pk %}" class="flex items-center space-x-2 min-w-0 hover:text-emerald-600 transition-colors">
                 <span class="text-sm font-bold text-slate-900 truncate">{{ route.pickup_location }}</span>
                 <i class="fa-solid fa-arrow-right text-slate-400 text-xs flex-shrink-0"></i>
                 <span class="text-sm font-bold text-slate-900 truncate">{{ route.delivery_location }}</span>
-            </div>
+            </a>
         </div>
         <div class="flex items-center justify-between">
             <div class="flex items-center space-x-3">
@@ -60,14 +60,17 @@
                 </span>
                 <span class="text-sm font-bold text-slate-700">₹ {{ route.default_rate|default:"0.00" }}</span>
             </div>
-            <div class="flex items-center space-x-4">
+            <div class="flex items-center space-x-2">
+                <a href="{% url 'route-dashboard' route.pk %}" class="w-10 h-10 inline-flex items-center justify-center text-emerald-600 hover:text-emerald-900 rounded-full hover:bg-emerald-50 transition-colors" title="Route Analytics">
+                    <i class="fa-solid fa-chart-line"></i>
+                </a>
                 {% if perms.trips.change_route %}
-                <a href="{% url 'route-update' route.pk %}" class="w-11 h-11 inline-flex items-center justify-center text-indigo-600 hover:text-indigo-900 rounded-full hover:bg-indigo-50 transition-colors" title="Edit Route">
+                <a href="{% url 'route-update' route.pk %}" class="w-10 h-10 inline-flex items-center justify-center text-indigo-600 hover:text-indigo-900 rounded-full hover:bg-indigo-50 transition-colors" title="Edit Route">
                     <i class="fa-solid fa-pen-to-square"></i>
                 </a>
                 {% endif %}
                 {% if perms.trips.delete_route %}
-                <a href="{% url 'route-delete' route.pk %}" class="w-11 h-11 inline-flex items-center justify-center text-rose-600 hover:text-rose-900 rounded-full hover:bg-rose-50 transition-colors" title="Delete Route">
+                <a href="{% url 'route-delete' route.pk %}" class="w-10 h-10 inline-flex items-center justify-center text-rose-600 hover:text-rose-900 rounded-full hover:bg-rose-50 transition-colors" title="Delete Route">
                     <i class="fa-solid fa-trash"></i>
                 </a>
                 {% endif %}
@@ -93,11 +96,11 @@
                 {% for route in routes %}
                 <tr class="hover:bg-slate-50 transition-colors">
                     <td class="px-6 py-4 whitespace-nowrap">
-                        <div class="flex items-center">
-                            <span class="text-sm font-medium text-slate-900">{{ route.pickup_location }}</span>
-                            <i class="fa-solid fa-arrow-right mx-3 text-slate-400 text-xs"></i>
-                            <span class="text-sm font-medium text-slate-900">{{ route.delivery_location }}</span>
-                        </div>
+                        <a href="{% url 'route-dashboard' route.pk %}" class="flex items-center group">
+                            <span class="text-sm font-bold text-slate-900 group-hover:text-emerald-600 transition-colors">{{ route.pickup_location }}</span>
+                            <i class="fa-solid fa-arrow-right mx-3 text-slate-400 text-xs group-hover:text-emerald-500 transition-colors"></i>
+                            <span class="text-sm font-bold text-slate-900 group-hover:text-emerald-600 transition-colors">{{ route.delivery_location }}</span>
+                        </a>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap">
                         <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
@@ -109,6 +112,10 @@
                         ₹ {{ route.default_rate|default:"0.00" }}
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <a href="{% url 'route-dashboard' route.pk %}" class="inline-flex items-center space-x-1 text-emerald-600 hover:text-emerald-900 mr-3 text-xs font-bold" title="Route Analytics & Rate Trends">
+                            <i class="fa-solid fa-chart-line"></i>
+                            <span class="hidden xl:inline">Analytics</span>
+                        </a>
                         {% if perms.trips.change_route %}
                         <a href="{% url 'route-update' route.pk %}" class="text-indigo-600 hover:text-indigo-900 mr-3" title="Edit Route">
                             <i class="fa-solid fa-pen-to-square"></i>

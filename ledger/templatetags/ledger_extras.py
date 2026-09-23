@@ -228,11 +228,12 @@ def get_trip_total(bill, trip_or_bt):
     gst = get_trip_gst(bill, trip_or_bt)
     return taxable_value + gst
 
+@register.filter(name='abs')
 @register.filter
 def abs_val(value):
     """
     Returns absolute value of a number.
-    Usage: {{ value|abs_val }}
+    Usage: {{ value|abs }} or {{ value|abs_val }}
     """
     try:
         return abs(Decimal(str(value)))

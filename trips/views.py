@@ -7,7 +7,8 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, redirect
 from django.urls import reverse_lazy, reverse
 from django.contrib import messages
-from django.db.models import Q, Sum, F, Case, When, Value, DecimalField, ExpressionWrapper
+from django.db.models import Q, Sum, F, Case, When, Value, DecimalField, ExpressionWrapper, Avg, Min, Max, Count
+from django.db.models.functions import TruncMonth
 from django.db import models
 from django.utils import timezone
 from django import forms
@@ -15,6 +16,7 @@ from django.forms import modelformset_factory
 from django.http import JsonResponse, HttpResponse
 from datetime import datetime, timedelta
 from decimal import Decimal
+import json
 
 try:
     import openpyxl
@@ -627,6 +629,252 @@ class RouteListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
         context = super().get_context_data(**kwargs)
         context['search_term'] = self.request.GET.get('search', '')
         return context
+
+
+class RouteDashboardView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
+    """
+    Route Specific Analytics & Rate Trends Dashboard.
+    Provides deep performance, volume, and rate intelligence for a specific route.
+    Rates and rate trends are calculated dynamically from actual trips executed on the route.
+    """
+    model = Route
+    template_name = 'trips/route_dashboard.html'
+    context_object_name = 'route'
+    permission_required = 'trips.view_route'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        route = self.object
+
+        # 1. Base query for trips on this route (including fallback by location match)
+        trips_qs = Trip.objects.filter(
+            Q(route=route) | (
+                Q(route__isnull=True) & 
+                Q(pickup_location__iexact=route.pickup_location, delivery_location__iexact=route.delivery_location)
+            )
+        )
+
+        # 2. Date Filtering
+        period = self.request.GET.get('period', 'all')
+        start_date_str = self.request.GET.get('start_date')
+        end_date_str = self.request.GET.get('end_date')
+        party_id = self.request.GET.get('party')
+
+        now = timezone.now().date()
+        start_date = None
+        end_date = None
+
+        if period == '30d':
+            start_date = now - timedelta(days=30)
+            end_date = now
+        elif period == '90d':
+            start_date = now - timedelta(days=90)
+            end_date = now
+        elif period == '6m':
+            start_date = now - timedelta(days=180)
+            end_date = now
+        elif period == '1y':
+            start_date = now - timedelta(days=365)
+            end_date = now
+        elif period == 'custom' or (start_date_str and end_date_str):
+            period = 'custom'
+            if start_date_str:
+                try:
+                    start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+                except (ValueError, TypeError):
+                    start_date = None
+            if end_date_str:
+                try:
+                    end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+                except (ValueError, TypeError):
+                    end_date = None
+        else:
+            period = 'all'
+
+        if start_date:
+            trips_qs = trips_qs.filter(date__gte=start_date)
+        if end_date:
+            trips_qs = trips_qs.filter(date__lte=end_date)
+        if party_id:
+            try:
+                trips_qs = trips_qs.filter(party_id=int(party_id))
+            except (ValueError, TypeError):
+                pass
+
+        # 3. Overall Route Aggregate Metrics
+        agg = trips_qs.aggregate(
+            total_trips=Count('id'),
+            total_weight=Sum('weight'),
+            total_revenue=Sum('revenue_cached'),
+            avg_rate=Avg('rate_per_ton'),
+            min_rate=Min('rate_per_ton'),
+            max_rate=Max('rate_per_ton'),
+        )
+
+        total_trips = agg['total_trips'] or 0
+        total_weight = agg['total_weight'] or Decimal('0')
+        total_revenue = agg['total_revenue'] or Decimal('0')
+        avg_rate = agg['avg_rate'] or Decimal('0')
+        min_rate = agg['min_rate'] or Decimal('0')
+        max_rate = agg['max_rate'] or Decimal('0')
+
+        # Weighted Average Rate: Total Revenue / Total Weight (for per-ton trips)
+        per_ton_trips = trips_qs.filter(revenue_type=Trip.REVENUE_PER_TON)
+        per_ton_agg = per_ton_trips.aggregate(
+            rev=Sum('revenue_cached'),
+            wt=Sum('weight')
+        )
+        if per_ton_agg['wt'] and per_ton_agg['wt'] > 0:
+            weighted_avg_rate = (per_ton_agg['rev'] or Decimal('0')) / per_ton_agg['wt']
+        else:
+            weighted_avg_rate = avg_rate
+
+        # Latest trip rate on this route
+        latest_trip = trips_qs.order_by('-date', '-created_at').first()
+        latest_rate = latest_trip.rate_per_ton if latest_trip else (route.default_rate or Decimal('0'))
+
+        # Variance from default/suggested rate
+        default_rate = route.default_rate or Decimal('0')
+        rate_variance = latest_rate - default_rate
+        rate_variance_abs = abs(rate_variance)
+        rate_spread = (max_rate - min_rate) if max_rate and min_rate else Decimal('0')
+        avg_load_per_trip = (total_weight / total_trips) if total_trips > 0 else Decimal('0')
+
+        # 4. Monthly Time Series (Rate Trends, Volume, Revenue)
+        monthly_data = trips_qs.annotate(
+            month=TruncMonth('date')
+        ).values('month').annotate(
+            trips=Count('id'),
+            total_weight=Sum('weight'),
+            total_revenue=Sum('revenue_cached'),
+            avg_rate=Avg('rate_per_ton'),
+            min_rate=Min('rate_per_ton'),
+            max_rate=Max('rate_per_ton')
+        ).order_by('month')
+
+        chart_labels = []
+        chart_avg_rates = []
+        chart_min_rates = []
+        chart_max_rates = []
+        chart_default_rates = []
+        chart_weights = []
+        chart_revenues = []
+        chart_trips = []
+
+        default_rate_val = float(default_rate)
+
+        for m in monthly_data:
+            month_date = m['month']
+            label = month_date.strftime('%b %Y') if month_date else 'Unknown'
+            chart_labels.append(label)
+
+            m_rev = float(m['total_revenue'] or 0)
+            m_wt = float(m['total_weight'] or 0)
+            m_avg = round(float(m['avg_rate'] or 0), 2)
+            if m_wt > 0 and m_rev > 0:
+                weighted_m_rate = round(m_rev / m_wt, 2)
+            else:
+                weighted_m_rate = m_avg
+
+            chart_avg_rates.append(weighted_m_rate)
+            chart_min_rates.append(round(float(m['min_rate'] or 0), 2))
+            chart_max_rates.append(round(float(m['max_rate'] or 0), 2))
+            chart_default_rates.append(default_rate_val)
+            chart_weights.append(round(m_wt, 2))
+            chart_revenues.append(round(m_rev, 2))
+            chart_trips.append(m['trips'])
+
+        # 5. Party Breakdown on this Route
+        parties_data = trips_qs.values('party__id', 'party__name').annotate(
+            trips=Count('id'),
+            total_weight=Sum('weight'),
+            total_revenue=Sum('revenue_cached'),
+            avg_rate=Avg('rate_per_ton'),
+            min_rate=Min('rate_per_ton'),
+            max_rate=Max('rate_per_ton'),
+            latest_date=Max('date')
+        ).order_by('-total_revenue')
+
+        party_stats = []
+        for p in parties_data:
+            p_wt = p['total_weight'] or Decimal('0')
+            p_rev = p['total_revenue'] or Decimal('0')
+            p_avg = (p_rev / p_wt) if p_wt > 0 else (p['avg_rate'] or Decimal('0'))
+            party_stats.append({
+                'id': p['party__id'],
+                'name': p['party__name'],
+                'trips': p['trips'],
+                'total_weight': p_wt,
+                'total_revenue': p_rev,
+                'avg_rate': p_avg,
+                'min_rate': p['min_rate'] or Decimal('0'),
+                'max_rate': p['max_rate'] or Decimal('0'),
+                'latest_date': p['latest_date'],
+            })
+
+        # 6. Fleet Vehicle Breakdown
+        vehicles_data = trips_qs.values(
+            'vehicle__id', 'vehicle__registration_plate', 'vehicle__make_model'
+        ).annotate(
+            trips=Count('id'),
+            total_weight=Sum('weight'),
+            total_revenue=Sum('revenue_cached'),
+            avg_rate=Avg('rate_per_ton')
+        ).order_by('-trips')[:10]
+
+        # 7. Recent Trips
+        recent_trips = trips_qs.select_related(
+            'vehicle', 'party', 'driver__user'
+        ).with_billing_info().order_by('-date', '-created_at')[:15]
+
+        # 8. All routes list for switcher dropdown
+        all_routes = Route.objects.all().order_by('pickup_location', 'delivery_location')
+        
+        # 9. Parties participating in this route for the filter dropdown
+        participating_party_ids = Trip.objects.filter(route=route).values_list('party_id', flat=True).distinct()
+        participating_parties = Party.objects.filter(id__in=participating_party_ids).order_by('name')
+
+        context.update({
+            'period': period,
+            'start_date': start_date_str or (start_date.strftime('%Y-%m-%d') if start_date else ''),
+            'end_date': end_date_str or (end_date.strftime('%Y-%m-%d') if end_date else ''),
+            'selected_party': int(party_id) if party_id and party_id.isdigit() else '',
+            'participating_parties': participating_parties,
+
+            # Metrics
+            'total_trips': total_trips,
+            'total_weight': total_weight,
+            'total_revenue': total_revenue,
+            'avg_rate': avg_rate,
+            'weighted_avg_rate': weighted_avg_rate,
+            'latest_rate': latest_rate,
+            'default_rate': default_rate,
+            'min_rate': min_rate,
+            'max_rate': max_rate,
+            'rate_spread': rate_spread,
+            'rate_variance': rate_variance,
+            'rate_variance_abs': rate_variance_abs,
+            'avg_load_per_trip': avg_load_per_trip,
+
+            # Breakdowns
+            'party_stats': party_stats,
+            'vehicle_stats': vehicles_data,
+            'recent_trips': recent_trips,
+            'all_routes': all_routes,
+
+            # Charts JSON
+            'chart_labels_json': json.dumps(chart_labels),
+            'chart_avg_rates_json': json.dumps(chart_avg_rates),
+            'chart_min_rates_json': json.dumps(chart_min_rates),
+            'chart_max_rates_json': json.dumps(chart_max_rates),
+            'chart_default_rates_json': json.dumps(chart_default_rates),
+            'chart_weights_json': json.dumps(chart_weights),
+            'chart_revenues_json': json.dumps(chart_revenues),
+            'chart_trips_json': json.dumps(chart_trips),
+            'has_chart_data': len(chart_labels) > 0,
+        })
+        return context
+
 
 class RouteCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
     model = Route
