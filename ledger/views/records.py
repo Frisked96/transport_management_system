@@ -7,15 +7,14 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse_lazy
 from django.contrib import messages
-from django.db.models import Q, Sum, F, DecimalField, Value, Case, When, OuterRef, Subquery, Count
-from django.db.models.functions import Coalesce
+from django.db.models import Q, Sum, F, DecimalField, Value, Case, When, OuterRef, Count, Max
 from django.utils import timezone
 from decimal import Decimal, InvalidOperation, DecimalException
 from datetime import datetime
 import json
 from django.http import JsonResponse, HttpResponse
 
-from ledger.models import FinancialRecord, Party, CompanyAccount, TripAllocation, TransactionCategory, Bill, BillTrip
+from ledger.models import FinancialRecord, Party, CompanyAccount, TripAllocation, BillAllocation, TransactionCategory, Bill, BillTrip
 from ledger.forms import FinancialRecordForm
 from trips.models import Trip
 from ledger.views.base import BaseLedgerPermissionMixin
@@ -38,7 +37,7 @@ class FinancialRecordListView(LoginRequiredMixin, BaseLedgerPermissionMixin, Lis
             return FinancialRecord.objects.none()
         
         queryset = FinancialRecord.objects.all().select_related(
-            'category', 'party', 'account', 'driver', 'associated_trip', 'associated_bill', 'associated_tyre'
+            'category', 'party', 'account', 'driver__user', 'associated_trip', 'associated_bill', 'associated_tyre'
         ).prefetch_related('allocations__trip', 'bill_allocations__bill')
         
         # Category filter
@@ -118,25 +117,28 @@ class FinancialRecordListView(LoginRequiredMixin, BaseLedgerPermissionMixin, Lis
             name__in=['Credit Note', 'Debit Note', 'TDS', 'TDS Receivable', 'Opening Balance']
         )
 
+        # Batch fetch last payment date for all parties in a single query
+        last_payments = dict(
+            FinancialRecord.objects.filter(
+                category__in=payment_categories
+            ).exclude(
+                record_type=FinancialRecord.RECORD_TYPE_INVOICE
+            ).values('party_id').annotate(
+                last_date=Max('date')
+            ).values_list('party_id', 'last_date')
+        )
+
         for p in parties:
             bal = p.current_balance_cached
             if p.party_type == Party.TYPE_DEBTOR:
                 total_outstanding += max(Decimal('0'), bal)
-            
-            # Find last actual payment received
-            last_payment = FinancialRecord.objects.filter(
-                party=p,
-                category__in=payment_categories
-            ).exclude(
-                record_type=FinancialRecord.RECORD_TYPE_INVOICE
-            ).order_by('-date', '-created_at').first()
             
             party_dashboard.append({
                 'id': p.id,
                 'name': p.name,
                 'balance': bal,
                 'party_type': p.party_type,
-                'last_payment_date': last_payment.date if last_payment else None
+                'last_payment_date': last_payments.get(p.id)
             })
 
         # Sort by absolute balance descending (most critical accounts first)
@@ -404,7 +406,6 @@ class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, Cre
         # 2. Multi-Bill Distribution Flow
         if bill_distribution_json:
             try:
-                from .models import BillAllocation
                 bill_data = json.loads(bill_distribution_json)
                 self.object = form.save(commit=False)
                 self.object.recorded_by = self.request.user
@@ -612,7 +613,6 @@ class FinancialRecordUpdateView(LoginRequiredMixin, PermissionRequiredMixin, Upd
 
                 # 3. Update Bill Allocations (Delete old ones first)
                 if bill_distribution_json:
-                    from .models import BillAllocation
                     bill_data = json.loads(bill_distribution_json)
                     self.object.bill_allocations.all().delete()
                     for item in bill_data:
@@ -732,30 +732,31 @@ def financial_summary(request):
         date__year=current_year
     ).exclude(record_type='Invoice').aggregate(total=Sum('amount'))['total'] or 0
 
-    # Calculate GST portion from all Bills
-    from .models import Bill
-    monthly_gst = sum(bill.gst_amount for bill in Bill.objects.filter(
+    # Calculate GST portion from all Bills using database-level cached values
+    monthly_gst = Bill.objects.filter(
         date__month=current_month,
         date__year=current_year
-    ))
-    yearly_gst = sum(bill.gst_amount for bill in Bill.objects.filter(
+    ).aggregate(total=Sum('gst_amount_cached'))['total'] or Decimal('0.00')
+    yearly_gst = Bill.objects.filter(
         date__year=current_year
-    ))
+    ).aggregate(total=Sum('gst_amount_cached'))['total'] or Decimal('0.00')
     
-    # Category breakdown for current month
-    category_breakdown = []
-    for cat in TransactionCategory.objects.all():
-        total = FinancialRecord.objects.filter(
-            category=cat,
-            date__month=current_month,
-            date__year=current_year
-        ).exclude(record_type='Invoice').aggregate(total=Sum('amount'))['total'] or 0
-        if total > 0:
-            category_breakdown.append({
-                'name': cat.name,
-                'amount': total,
-                'type': cat.type
-            })
+    # Category breakdown for current month (single SQL GROUP BY query)
+    cat_totals = FinancialRecord.objects.filter(
+        date__month=current_month,
+        date__year=current_year
+    ).exclude(
+        record_type='Invoice'
+    ).values(
+        'category__name', 'category__type'
+    ).annotate(
+        total=Sum('amount')
+    ).filter(total__gt=0).order_by('-total')
+
+    category_breakdown = [
+        {'name': row['category__name'], 'type': row['category__type'], 'amount': row['total']}
+        for row in cat_totals
+    ]
     
     context = {
         'monthly_income': monthly_income,

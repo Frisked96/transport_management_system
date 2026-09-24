@@ -61,14 +61,6 @@ def reference_data(request):
 class BaseTripPermissionMixin:
     """Base mixin for trip permissions"""
     
-    def has_manager_permission(self):
-        """Check if user has manager dashboard permission"""
-        return self.request.user.has_perm('trips.can_view_manager_dashboard')
-    
-    def has_supervisor_permission(self):
-        """Check if user has view all trips permission"""
-        return self.request.user.has_perm('trips.can_view_all_trips')
-    
     def has_driver_profile(self):
         """Check if user has an associated driver profile"""
         return hasattr(self.request.user, 'driver_profile')
@@ -105,7 +97,7 @@ class TripListView(LoginRequiredMixin, BaseTripPermissionMixin, ListView):
     def get_queryset(self):
         """Filter and sort trips based on user input and permissions"""
         queryset = self.get_queryset_for_user().with_payment_info().with_billing_info().select_related(
-            'vehicle', 'party', 'driver', 'route'
+            'vehicle', 'party', 'driver__user', 'route'
         ).prefetch_related(
             'bills',
             'bills__category',

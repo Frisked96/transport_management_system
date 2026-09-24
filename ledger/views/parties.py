@@ -7,8 +7,7 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse_lazy
 from django.contrib import messages
-from django.db.models import Q, Sum, F, DecimalField, Value, Case, When, OuterRef, Subquery, Count
-from django.db.models.functions import Coalesce
+from django.db.models import Q, Sum, F, DecimalField, Value, Case, When, OuterRef, Count
 from django.utils import timezone
 from decimal import Decimal, InvalidOperation, DecimalException
 from datetime import datetime
@@ -304,8 +303,8 @@ def get_party_unbilled_trips(request):
         return JsonResponse({'trips': []})
     
     try:
-        # Show trips for this party
-        qs = Trip.objects.filter(party_id=party_id)
+        # Show trips for this party with vehicle pre-fetched
+        qs = Trip.objects.filter(party_id=party_id).select_related('vehicle')
         
         if bill_id:
             # Include currently selected trips for this bill + unbilled ones
@@ -313,8 +312,14 @@ def get_party_unbilled_trips(request):
         else:
             qs = qs.filter(bills__isnull=True)
             
-        trips = qs.distinct().order_by('-date', '-created_at')
+        trips = list(qs.distinct().order_by('-date', '-created_at'))
         
+        # Batch fetch BillTrip data if bill_id provided to avoid N queries in loop
+        bill_trips_map = {}
+        if bill_id and trips:
+            for bt in BillTrip.objects.filter(bill_id=bill_id, trip__in=trips):
+                bill_trips_map[bt.trip_id] = bt
+
         data = []
         for trip in trips:
             lr_no = trip.lr_no or ''
@@ -322,10 +327,10 @@ def get_party_unbilled_trips(request):
 
             # If editing a bill, get the specific LR No or Discount saved for this bill
             if bill_id:
-                bill_trip = BillTrip.objects.filter(bill_id=bill_id, trip=trip).first()
-                if bill_trip:
-                    lr_no = bill_trip.lr_no or ''
-                    discount = float(bill_trip.discount or 0)
+                bt = bill_trips_map.get(trip.id)
+                if bt:
+                    lr_no = bt.lr_no or ''
+                    discount = float(bt.discount or 0)
 
             data.append({
                 'id': trip.id,
@@ -364,7 +369,6 @@ def get_party_bills(request):
         return JsonResponse({'bills': []})
 
     try:
-        from .models import Bill
         from django.db import models
         
         # We use prefetch_related instead of complex annotations to avoid parser stack overflow

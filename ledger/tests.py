@@ -937,6 +937,76 @@ class FinancialBalanceInvariantTests(TestCase):
         self.assertEqual(bal_final, Decimal('55000.00'))
 
 
+class ViewOptimizationAndEndpointsTests(TestCase):
+    def setUp(self):
+        from django.test import Client
+        self.client = Client()
+        self.admin = User.objects.create_superuser('ops_mgr', 'ops@test.com', 'pass123')
+        self.client.login(username='ops_mgr', password='pass123')
+
+        self.account = CompanyAccount.objects.create(name='Main Operational A/C', invoice_prefix='INV-{YYYY}/')
+        self.party = Party.objects.create(name='Global Freight Corp', party_type=Party.TYPE_DEBTOR)
+        self.cat_income, _ = TransactionCategory.objects.get_or_create(
+            name='Freight Revenue',
+            defaults={'type': TransactionCategory.TYPE_INCOME}
+        )
+        self.cat_payment_in, _ = TransactionCategory.objects.get_or_create(
+            name='Payment In',
+            defaults={'type': TransactionCategory.TYPE_INCOME}
+        )
+
+        self.bill = Bill.objects.create(
+            issuer=self.account,
+            party=self.party,
+            date=timezone.now().date(),
+            bill_type=Bill.TYPE_STANDARD,
+            amount_override=Decimal('25000.00'),
+            category=self.cat_income
+        )
+
+        self.payment = FinancialRecord.objects.create(
+            date=timezone.now().date(),
+            account=self.account,
+            party=self.party,
+            category=self.cat_payment_in,
+            amount=Decimal('10000.00'),
+            associated_bill=self.bill
+        )
+
+    def test_get_party_bills_endpoint(self):
+        """Test AJAX endpoint get-party-bills returns valid JSON with bills and pending balances"""
+        from django.urls import reverse
+        resp = self.client.get(f"{reverse('get-party-bills')}?party_id={self.party.id}")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertIn('bills', data)
+        self.assertTrue(len(data['bills']) > 0)
+        self.assertEqual(data['bills'][0]['id'], self.bill.id)
+
+    def test_financial_summary_report_endpoint(self):
+        """Test financial_summary_report view renders aggregations and category breakdowns correctly"""
+        from django.urls import reverse
+        resp = self.client.get(reverse('financial-summary'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn('monthly_income', resp.context)
+        self.assertIn('category_breakdown', resp.context)
+        self.assertIn('monthly_net_incl_gst', resp.context)
+        # Verify category breakdown includes Payment In
+        cat_names = [c['name'] for c in resp.context['category_breakdown']]
+        self.assertIn('Payment In', cat_names)
+
+    def test_financial_record_list_party_dashboard_optimization(self):
+        """Test FinancialRecordListView party dashboard batch populates last payment date"""
+        from django.urls import reverse
+        resp = self.client.get(reverse('financialrecord-list'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn('party_dashboard', resp.context)
+        dashboard_entry = next((p for p in resp.context['party_dashboard'] if p['id'] == self.party.id), None)
+        self.assertIsNotNone(dashboard_entry)
+        self.assertEqual(dashboard_entry['last_payment_date'], self.payment.date)
+
+
+
 
 
 

@@ -7,8 +7,7 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse_lazy
 from django.contrib import messages
-from django.db.models import Q, Sum, F, DecimalField, Value, Case, When, OuterRef, Subquery, Count
-from django.db.models.functions import Coalesce
+from django.db.models import Q, Sum, F, DecimalField, Value, Case, When, OuterRef, Count
 from django.utils import timezone
 from decimal import Decimal, InvalidOperation, DecimalException
 from datetime import datetime
@@ -96,7 +95,7 @@ class CompanyAccountDetailView(LoginRequiredMixin, BaseLedgerPermissionMixin, De
         records = self.object.financial_records.exclude(
             Q(record_type=FinancialRecord.RECORD_TYPE_INVOICE) | 
             Q(category__name__in=['Deductions', 'TDS', 'Shortage', 'Credit Note', 'Debit Note'])
-        ).select_related('category', 'party', 'driver', 'associated_trip', 'associated_bill', 'associated_tyre')
+        ).select_related('category', 'party', 'driver__user', 'associated_trip', 'associated_bill', 'associated_tyre')
         
         if start_date:
             records = records.filter(date__gte=start_date)

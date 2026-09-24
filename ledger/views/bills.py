@@ -7,14 +7,12 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse_lazy
 from django.contrib import messages
-from django.db.models import Q, Sum, F, DecimalField, Value, Case, When, OuterRef, Subquery, Count
-from django.db.models.functions import Coalesce
+from django.db.models import Q, Sum, F, DecimalField, Value, Case, When, OuterRef, Count
 from django.utils import timezone
 from decimal import Decimal, InvalidOperation, DecimalException
 from datetime import datetime
 import json
 from itertools import groupby
-from operator import attrgetter
 from django.http import JsonResponse, HttpResponse
 
 from ledger.models import FinancialRecord, Party, CompanyAccount, TripAllocation, TransactionCategory, Bill, BillTrip
@@ -185,12 +183,12 @@ class BillDetailView(LoginRequiredMixin, BaseLedgerPermissionMixin, DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         bill = self.object
-        # Add the same summarized items used in the print view
-        invoice_items = group_trips_for_bill(bill)
-        context['invoice_items'] = invoice_items
-        
-        bill_trips = bill.bill_trips.select_related('trip', 'trip__vehicle').order_by('trip__date')
+        bill_trips = list(bill.bill_trips.select_related('trip', 'trip__vehicle', 'trip__vehicle__vendor').order_by('trip__date'))
         context['bill_trips'] = bill_trips
+
+        # Add the same summarized items used in the print view, reusing pre-fetched bill_trips
+        invoice_items = group_trips_for_bill(bill, bill_trips=bill_trips)
+        context['invoice_items'] = invoice_items
 
         # Detect if we should show Discount or LR columns
         has_discount = False
@@ -299,12 +297,14 @@ class BillDetailView(LoginRequiredMixin, BaseLedgerPermissionMixin, DetailView):
 
         return context
 
-def group_trips_for_bill(bill):
-# ... rest of group_trips_for_bill ...
+def group_trips_for_bill(bill, bill_trips=None):
     """
     Groups bill_trips by (Pickup, Delivery, Rate) and returns a list of dictionaries.
     """
-    bill_trips = list(bill.bill_trips.select_related('trip', 'trip__vehicle').all())
+    if bill_trips is None:
+        bill_trips = list(bill.bill_trips.select_related('trip', 'trip__vehicle').all())
+    else:
+        bill_trips = list(bill_trips)
 
     # Pre-calculate sort key values
     def get_sort_key(bt):
@@ -412,7 +412,6 @@ def get_next_invoice_number(request):
     if not issuer_id:
         return JsonResponse({'error': 'No issuer ID provided'}, status=400)
     
-    from .models import CompanyAccount, Bill, TransactionCategory
     import datetime
     
     issuer = CompanyAccount.objects.filter(pk=issuer_id).first()

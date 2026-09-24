@@ -5,10 +5,8 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
 from django.core.exceptions import ValidationError, ObjectDoesNotExist
-from django.db.models import Sum, Case, When, Value, F, DecimalField, OuterRef, Subquery, ExpressionWrapper
-from django.db.models.functions import Coalesce
+from django.db.models import Sum, Case, When, Value, F, DecimalField, OuterRef, ExpressionWrapper
 from fleet.models import Vehicle
-import re
 
 class TripQuerySet(models.QuerySet):
     def with_payment_info(self):
@@ -400,9 +398,6 @@ class Trip(models.Model):
         # Generate Trip Number if not present or cleared
         if not self.trip_number:
             from ledger.models import Sequence
-
-            # Use created_at if available (for re-numbering), else current time
-            ref_date = self.date or timezone.now()
             
             # Using Sequences for robust atomic numbering
             total_count = Sequence.next_value(f"trip_total_{self.vehicle.pk}")

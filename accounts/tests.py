@@ -28,7 +28,7 @@ class UserProfileAndActivityTests(TestCase):
 
     def test_active_user_middleware_throttled_db_write(self):
         """Test that ActiveUserMiddleware updates last_seen and throttles DB writes."""
-        middleware = ActiveUserMiddleware(lambda req: None)
+        middleware = ActiveUserMiddleware(lambda _: None)
         
         request = self.factory.get('/trips/')
         request.user = self.user
