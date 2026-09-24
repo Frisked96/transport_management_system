@@ -168,3 +168,216 @@ class VehicleModelAndFormTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.context['vehicles']), 1)
         self.assertEqual(response.context['vehicles'][0].registration_plate, 'RJ14-SRCH-02')
+
+
+class MaintenanceRecordLifecycleTests(TestCase):
+    def setUp(self):
+        from fleet.models import MaintenanceRecord
+        self.user = User.objects.create_superuser('fleet_admin', 'fleet@example.com', 'password')
+        self.vehicle = Vehicle.objects.create(
+            registration_plate='MH 12 MN 7777',
+            make_model='Tata Prima 4928',
+            current_odometer=50000,
+            status=Vehicle.STATUS_ACTIVE
+        )
+
+    def test_maintenance_overdue_by_date_and_odometer(self):
+        """Test overdue checks by calendar date and odometer threshold"""
+        from fleet.models import MaintenanceRecord
+        from datetime import timedelta
+        today = timezone.now().date()
+
+        # 1. Overdue by date
+        rec_date_overdue = MaintenanceRecord.objects.create(
+            vehicle=self.vehicle,
+            name='Engine Oil Change',
+            expiry_date=today - timedelta(days=5),
+            is_completed=False
+        )
+        self.assertTrue(rec_date_overdue.is_overdue)
+
+        # 2. Not overdue by date (future)
+        rec_future = MaintenanceRecord.objects.create(
+            vehicle=self.vehicle,
+            name='Gearbox Service',
+            expiry_date=today + timedelta(days=15),
+            is_completed=False
+        )
+        self.assertFalse(rec_future.is_overdue)
+
+        # 3. Overdue by odometer (current_odometer 50000 >= expiry_km 48000)
+        rec_km_overdue = MaintenanceRecord.objects.create(
+            vehicle=self.vehicle,
+            name='Differential Oil',
+            expiry_km=48000,
+            is_completed=False
+        )
+        self.assertTrue(rec_km_overdue.is_overdue)
+
+        # 4. Completed records are never overdue
+        rec_date_overdue.is_completed = True
+        rec_date_overdue.save()
+        self.assertFalse(rec_date_overdue.is_overdue)
+
+    def test_maintenance_mark_as_completed_and_auto_recurrence(self):
+        """
+        Test marking maintenance completed saves details and automatically 
+        spawns the next recurring pending record based on intervals.
+        """
+        from fleet.models import MaintenanceRecord
+        from datetime import timedelta
+        from decimal import Decimal
+        today = timezone.now().date()
+
+        rec = MaintenanceRecord.objects.create(
+            vehicle=self.vehicle,
+            name='Major Scheduled Service',
+            expiry_date=today,
+            expiry_km=50000,
+            interval_days=90,
+            interval_km=10000,
+            is_completed=False
+        )
+
+        # Complete service at 52,000 km
+        rec.mark_as_completed(
+            date=today,
+            km=52000,
+            cost=Decimal('12500.00'),
+            provider='Authorized Tata Workshop',
+            notes='All filters replaced',
+            user=self.user
+        )
+
+        rec.refresh_from_db()
+        self.assertTrue(rec.is_completed)
+        self.assertEqual(rec.completion_km, 52000)
+        self.assertEqual(rec.cost, Decimal('12500.00'))
+
+        # Verify vehicle total maintenance cost reflects completed service
+        self.assertEqual(self.vehicle.total_maintenance_cost, Decimal('12500.00'))
+
+        # Verify automatic creation of next pending record
+        next_rec = MaintenanceRecord.objects.filter(
+            vehicle=self.vehicle,
+            name='Major Scheduled Service',
+            is_completed=False
+        ).first()
+
+        self.assertIsNotNone(next_rec)
+        self.assertEqual(next_rec.expiry_date, today + timedelta(days=90))
+        self.assertEqual(next_rec.expiry_km, 62000) # 52000 + 10000
+
+
+class TyreLifecycleAndLedgerTests(TestCase):
+    def setUp(self):
+        from ledger.models import Party
+        self.vendor = Party.objects.create(name='MRF Direct Vendor', party_type=Party.TYPE_CREDITOR)
+        self.vehicle1 = Vehicle.objects.create(registration_plate='MH 12 TY 1001')
+        self.vehicle2 = Vehicle.objects.create(registration_plate='MH 12 TY 2002')
+
+    def test_tyre_initial_mount_and_rotation_and_dismount(self):
+        """
+        Test tyre lifecycle tracking: Initial mount -> Rotation on same vehicle -> Move to another vehicle
+        """
+        from fleet.models import Tyre, TyreLog
+        
+        # 1. Mount on creation
+        tyre = Tyre.objects.create(
+            serial_number='TYRE-SN-001',
+            brand='MRF',
+            size='295/80R22.5',
+            current_vehicle=self.vehicle1,
+            current_position='Front Left'
+        )
+        self.assertEqual(tyre.status, Tyre.STATUS_MOUNTED)
+
+        initial_mount_log = TyreLog.objects.filter(
+            tyre=tyre,
+            action=TyreLog.ACTION_MOUNT,
+            vehicle=self.vehicle1,
+            position='Front Left'
+        ).first()
+        self.assertIsNotNone(initial_mount_log)
+
+        # 2. Rotation on same vehicle
+        tyre.current_position = 'Front Right'
+        tyre.save()
+
+        rotation_log = TyreLog.objects.filter(
+            tyre=tyre,
+            action=TyreLog.ACTION_ROTATION,
+            vehicle=self.vehicle1,
+            position='Front Right'
+        ).first()
+        self.assertIsNotNone(rotation_log)
+
+        # 3. Move to different vehicle (vehicle1 -> vehicle2)
+        tyre.current_vehicle = self.vehicle2
+        tyre.current_position = 'Rear Left'
+        tyre.save()
+
+        dismount_log = TyreLog.objects.filter(
+            tyre=tyre,
+            action=TyreLog.ACTION_DISMOUNT,
+            vehicle=self.vehicle1
+        ).first()
+        self.assertIsNotNone(dismount_log)
+
+        mount2_log = TyreLog.objects.filter(
+            tyre=tyre,
+            action=TyreLog.ACTION_MOUNT,
+            vehicle=self.vehicle2,
+            position='Rear Left'
+        ).first()
+        self.assertIsNotNone(mount2_log)
+
+    def test_tyre_status_transitions_to_repair_and_scrap(self):
+        """Test tyre status changes generate appropriate audit logs"""
+        from fleet.models import Tyre, TyreLog
+        
+        tyre = Tyre.objects.create(
+            serial_number='TYRE-SN-002',
+            brand='Apollo',
+            size='295/80R22.5'
+        )
+        self.assertEqual(tyre.status, Tyre.STATUS_IN_STOCK)
+
+        # Change to Under Repair
+        tyre.status = Tyre.STATUS_REPAIR
+        tyre.save()
+        self.assertTrue(TyreLog.objects.filter(tyre=tyre, action=TyreLog.ACTION_REPAIR).exists())
+
+        # Change to Scrap
+        tyre.status = Tyre.STATUS_SCRAP
+        tyre.save()
+        self.assertTrue(TyreLog.objects.filter(tyre=tyre, action=TyreLog.ACTION_SCRAP).exists())
+
+    def test_tyre_purchase_syncs_to_ledger_expense(self):
+        """Test tyre purchase with vendor and cost automatically creates/updates ledger entry"""
+        from fleet.models import Tyre
+        from ledger.models import FinancialRecord
+        from decimal import Decimal
+
+        tyre = Tyre.objects.create(
+            serial_number='TYRE-SN-003',
+            brand='Bridgestone',
+            vendor=self.vendor,
+            purchase_cost=Decimal('22000.00'),
+            purchase_date=timezone.now().date()
+        )
+
+        rec = FinancialRecord.objects.filter(associated_tyre=tyre).first()
+        self.assertIsNotNone(rec)
+        self.assertEqual(rec.amount, Decimal('22000.00'))
+        self.assertEqual(rec.party, self.vendor)
+        self.assertEqual(rec.category.name, 'Tyre Purchase')
+        self.assertEqual(rec.record_type, FinancialRecord.RECORD_TYPE_INVOICE)
+
+        # Update purchase cost
+        tyre.purchase_cost = Decimal('24000.00')
+        tyre.save()
+
+        rec.refresh_from_db()
+        self.assertEqual(rec.amount, Decimal('24000.00'))
+

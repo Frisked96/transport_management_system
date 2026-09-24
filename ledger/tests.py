@@ -1,8 +1,11 @@
 from django.test import TestCase
 from django.utils import timezone
 from decimal import Decimal
-from ledger.models import Bill, Party, CompanyAccount, TransactionCategory
+from ledger.models import Bill, Party, CompanyAccount, TransactionCategory, FinancialRecord, TripAllocation
+from ledger.services import BalanceService, BillingService, TripFinancialService
 from django.contrib.auth.models import User
+from trips.models import Trip, Route
+from fleet.models import Vehicle
 
 class BillAdjustmentTests(TestCase):
     def setUp(self):
@@ -671,6 +674,268 @@ class TripPaymentWorkflowTests(TestCase):
         # 5. Verify Company Account balance increased only by bank payment
         new_acc_bal = BalanceService.refresh_account_balance(self.account)
         self.assertEqual(new_acc_bal, initial_acc_bal + Decimal('11200.00'))
+
+
+class LedgerHandoffAndAccrualTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_superuser('acc_admin', 'acc@test.com', 'password')
+        self.account = CompanyAccount.objects.create(name='Primary Corp Account', invoice_prefix='INV-{YYYY}/')
+        self.party = Party.objects.create(name='Zenith Logistics', party_type=Party.TYPE_DEBTOR)
+        self.vehicle = Vehicle.objects.create(registration_plate='MH 14 ZZ 1111')
+        self.route = Route.objects.create(
+            pickup_location='Nashik',
+            delivery_location='Surat',
+            route_type=Route.ROUTE_TYPE_LOCAL,
+            default_rate=Decimal('1000.00')
+        )
+
+    def test_unbilled_trip_accrual_lifecycle_and_bill_restoration(self):
+        """
+        Verify the complete hand-off lifecycle:
+        1. Unbilled trip creates individual accrual FinancialRecord.
+        2. Billing the trip deletes individual accrual and creates consolidated Bill accrual.
+        3. Deleting the Bill restores the individual trip accrual.
+        """
+        # 1. Create Trip (20 tons * 1000 = 20,000 revenue + 18% GST = 23,600 total)
+        trip = Trip.objects.create(
+            vehicle=self.vehicle,
+            party=self.party,
+            route=self.route,
+            revenue_type=Trip.REVENUE_PER_TON,
+            weight=Decimal('20.00'),
+            rate_per_ton=Decimal('1000.00')
+        )
+
+        trip_accrual = FinancialRecord.objects.filter(
+            associated_trip=trip,
+            record_type=FinancialRecord.RECORD_TYPE_INVOICE,
+            party=self.party
+        ).first()
+        self.assertIsNotNone(trip_accrual)
+        self.assertEqual(trip_accrual.amount, Decimal('23600.00'))
+
+        # 2. Add Trip to a Bill
+        bill = Bill.objects.create(
+            issuer=self.account,
+            party=self.party,
+            date=timezone.now().date(),
+            bill_type=Bill.TYPE_TRIP,
+            gst_rate=Bill.GST_RATE_18
+        )
+        bill.trips.add(trip)
+        bill.sync_to_ledger()
+
+        # Individual trip accrual should now be DELETED
+        self.assertFalse(
+            FinancialRecord.objects.filter(
+                associated_trip=trip,
+                record_type=FinancialRecord.RECORD_TYPE_INVOICE
+            ).exists()
+        )
+
+        # Consolidated Bill invoice record should now EXIST
+        bill_accrual = FinancialRecord.objects.filter(
+            associated_bill=bill,
+            record_type=FinancialRecord.RECORD_TYPE_INVOICE,
+            party=self.party
+        ).first()
+        self.assertIsNotNone(bill_accrual)
+        self.assertEqual(bill_accrual.amount, bill.rounded_total)
+
+        # 3. Delete the Bill -> Individual trip accrual should be RESTORED
+        bill_id = bill.pk
+        bill.delete()
+
+        # Consolidated Bill record should be DELETED
+        self.assertFalse(
+            FinancialRecord.objects.filter(
+                associated_bill_id=bill_id,
+                record_type=FinancialRecord.RECORD_TYPE_INVOICE
+            ).exists()
+        )
+
+        # Individual trip accrual should be RESTORED
+        restored_trip_accrual = FinancialRecord.objects.filter(
+            associated_trip=trip,
+            record_type=FinancialRecord.RECORD_TYPE_INVOICE,
+            party=self.party
+        ).first()
+        self.assertIsNotNone(restored_trip_accrual)
+        self.assertEqual(restored_trip_accrual.amount, Decimal('23600.00'))
+
+
+class FinancialBalanceInvariantTests(TestCase):
+    def setUp(self):
+        self.account = CompanyAccount.objects.create(
+            name='Treasury Account',
+            opening_balance=Decimal('50000.00'),
+            invoice_prefix='INV-{YYYY}/',
+            cn_prefix='CN-{YYYY}/'
+        )
+        self.debtor = Party.objects.create(
+            name='Debtor Global Traders',
+            party_type=Party.TYPE_DEBTOR,
+            opening_balance=Decimal('10000.00')
+        )
+        self.creditor = Party.objects.create(
+            name='Creditor Fuel Station',
+            party_type=Party.TYPE_CREDITOR,
+            opening_balance=Decimal('5000.00')
+        )
+        self.cat_income, _ = TransactionCategory.objects.get_or_create(
+            name='Standard Income',
+            defaults={'type': TransactionCategory.TYPE_INCOME}
+        )
+        self.cat_expense, _ = TransactionCategory.objects.get_or_create(
+            name='Diesel Expense',
+            defaults={'type': TransactionCategory.TYPE_EXPENSE}
+        )
+        self.cat_payment_in, _ = TransactionCategory.objects.get_or_create(
+            name='Payment In',
+            defaults={'type': TransactionCategory.TYPE_INCOME}
+        )
+        self.cat_payment_out, _ = TransactionCategory.objects.get_or_create(
+            name='Payment Out',
+            defaults={'type': TransactionCategory.TYPE_EXPENSE}
+        )
+        self.cat_tds, _ = TransactionCategory.objects.get_or_create(
+            name='TDS',
+            defaults={'type': TransactionCategory.TYPE_INCOME}
+        )
+        self.cat_deduction, _ = TransactionCategory.objects.get_or_create(
+            name='Deductions',
+            defaults={'type': TransactionCategory.TYPE_INCOME}
+        )
+
+    def test_debtor_party_balance_invariants(self):
+        """
+        Verify debtor balance calculation invariant:
+        Balance = Opening Balance + Invoices (Debits) - Payments/TDS/Deductions/Credit Notes (Credits)
+        """
+        # Initial: opening balance = 10,000
+        self.debtor.refresh_balance()
+        self.assertEqual(self.debtor.current_balance_cached, Decimal('10000.00'))
+
+        # 1. Invoice generated: 40,000 (Debit) -> Balance = 50,000
+        inv = Bill.objects.create(
+            issuer=self.account,
+            party=self.debtor,
+            date=timezone.now().date(),
+            bill_type=Bill.TYPE_STANDARD,
+            amount_override=Decimal('40000.00'),
+            category=self.cat_income
+        )
+        self.debtor.refresh_balance()
+        self.assertEqual(self.debtor.current_balance_cached, Decimal('50000.00'))
+
+        # 2. Bank Payment received: 25,000 (Credit) -> Balance = 25,000
+        FinancialRecord.objects.create(
+            date=timezone.now().date(),
+            account=self.account,
+            party=self.debtor,
+            category=self.cat_payment_in,
+            amount=Decimal('25000.00')
+        )
+        self.debtor.refresh_balance()
+        self.assertEqual(self.debtor.current_balance_cached, Decimal('25000.00'))
+
+        # 3. TDS deduction: 1,000 (Credit) -> Balance = 24,000
+        FinancialRecord.objects.create(
+            date=timezone.now().date(),
+            party=self.debtor,
+            category=self.cat_tds,
+            amount=Decimal('1000.00')
+        )
+        self.debtor.refresh_balance()
+        self.assertEqual(self.debtor.current_balance_cached, Decimal('24000.00'))
+
+        # 4. Shortage/Damage deduction: 500 (Credit) -> Balance = 23,500
+        FinancialRecord.objects.create(
+            date=timezone.now().date(),
+            party=self.debtor,
+            category=self.cat_deduction,
+            amount=Decimal('500.00')
+        )
+        self.debtor.refresh_balance()
+        self.assertEqual(self.debtor.current_balance_cached, Decimal('23500.00'))
+
+        # 5. Credit Note issued against invoice: 3,500 (Credit) -> Balance = 20,000
+        cat_cn, _ = TransactionCategory.objects.get_or_create(
+            name='Credit Note',
+            defaults={'type': TransactionCategory.TYPE_INCOME}
+        )
+        cn = Bill.objects.create(
+            issuer=self.account,
+            party=self.debtor,
+            date=timezone.now().date(),
+            bill_type=Bill.TYPE_STANDARD,
+            amount_override=Decimal('3500.00'),
+            category=cat_cn,
+            original_bill=inv
+        )
+        self.debtor.refresh_balance()
+        self.assertEqual(self.debtor.current_balance_cached, Decimal('20000.00'))
+        self.assertEqual(self.debtor.total_debit_amount - self.debtor.total_credit_amount, Decimal('20000.00'))
+
+    def test_company_account_cash_balance_invariants(self):
+        """
+        Verify Company Account balance invariant:
+        Balance = Opening Balance + Cash Incomes - Cash Expenses.
+        Accrual records (Invoices) and non-cash adjustments (TDS, Deductions) are excluded.
+        """
+        initial_balance = BalanceService.refresh_account_balance(self.account)
+        self.assertEqual(initial_balance, Decimal('50000.00'))
+
+        # 1. Real Cash/Bank Receipt: +20,000
+        FinancialRecord.objects.create(
+            date=timezone.now().date(),
+            account=self.account,
+            party=self.debtor,
+            category=self.cat_payment_in,
+            amount=Decimal('20000.00')
+        )
+        bal_after_inc = BalanceService.refresh_account_balance(self.account)
+        self.assertEqual(bal_after_inc, Decimal('70000.00'))
+
+        # 2. Real Cash/Bank Expense: -15,000
+        FinancialRecord.objects.create(
+            date=timezone.now().date(),
+            account=self.account,
+            party=self.creditor,
+            category=self.cat_expense,
+            amount=Decimal('15000.00')
+        )
+        bal_after_exp = BalanceService.refresh_account_balance(self.account)
+        self.assertEqual(bal_after_exp, Decimal('55000.00'))
+
+        # 3. Create an Accrual Invoice for 100,000 -> MUST NOT affect cash balance
+        Bill.objects.create(
+            issuer=self.account,
+            party=self.debtor,
+            date=timezone.now().date(),
+            bill_type=Bill.TYPE_STANDARD,
+            amount_override=Decimal('100000.00'),
+            category=self.cat_income
+        )
+        bal_after_inv = BalanceService.refresh_account_balance(self.account)
+        self.assertEqual(bal_after_inv, Decimal('55000.00'))
+
+        # 4. TDS and Deductions -> MUST NOT affect cash balance
+        FinancialRecord.objects.create(
+            date=timezone.now().date(),
+            party=self.debtor,
+            category=self.cat_tds,
+            amount=Decimal('2000.00')
+        )
+        FinancialRecord.objects.create(
+            date=timezone.now().date(),
+            party=self.debtor,
+            category=self.cat_deduction,
+            amount=Decimal('1500.00')
+        )
+        bal_final = BalanceService.refresh_account_balance(self.account)
+        self.assertEqual(bal_final, Decimal('55000.00'))
+
 
 
 
