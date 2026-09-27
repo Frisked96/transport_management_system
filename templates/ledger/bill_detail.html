@@ -594,7 +594,14 @@
 
 {% block extra_js %}
 <!-- html2pdf.js bundle (html2canvas + jsPDF) -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWQV46GjG4884TPEi9PJF4myhGMz8PXNOEX5KE6295DKsok5kZu242XB1PbpZw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="{% static 'js/html2pdf.bundle.min.js' %}"></script>
+<script>
+    if (typeof html2pdf === 'undefined') {
+        const fallbackScript = document.createElement('script');
+        fallbackScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+        document.head.appendChild(fallbackScript);
+    }
+</script>
 
 <script>
     let cachedPdfBlob = null;
@@ -681,13 +688,14 @@
         const sandbox = document.createElement('div');
         sandbox.id = 'pdf-render-sandbox';
         sandbox.style.position = 'fixed';
-        sandbox.style.left = '-99999px';
+        sandbox.style.left = '0';
         sandbox.style.top = '0';
         sandbox.style.width = '820px';
         sandbox.style.backgroundColor = '#ffffff';
         sandbox.style.padding = '0';
         sandbox.style.margin = '0';
         sandbox.style.zIndex = '-9999';
+        sandbox.style.pointerEvents = 'none';
         sandbox.appendChild(clone);
         document.body.appendChild(sandbox);
 
@@ -704,7 +712,8 @@
                 useCORS: true,
                 letterRendering: true,
                 logging: false,
-                width: 820,
+                scrollX: 0,
+                scrollY: 0,
                 windowWidth: 820
             },
             jsPDF: {
@@ -791,7 +800,8 @@
             }
         } catch (err) {
             console.error('PDF Generation / Share error:', err);
-            showPdfToast('Failed to generate PDF. Please try Print Invoice.', 'error');
+            const errMsg = err && err.message ? err.message : String(err);
+            showPdfToast('Failed to generate PDF: ' + errMsg, 'error');
             cachedPdfBlob = null;
             pdfGenerationPromise = null;
         } finally {
