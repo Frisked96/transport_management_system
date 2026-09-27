@@ -5,7 +5,7 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
 from django.core.exceptions import ValidationError, ObjectDoesNotExist
-from django.db.models import Sum, Case, When, Value, F, DecimalField, OuterRef, ExpressionWrapper
+from django.db.models import Case, When, Value, F, DecimalField, OuterRef
 from fleet.models import Vehicle
 
 class TripQuerySet(models.QuerySet):

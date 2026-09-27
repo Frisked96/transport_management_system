@@ -8,8 +8,8 @@ from django.utils import timezone
 from django.shortcuts import render, get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.contrib import messages
-from django.db.models import Q, Count, Sum
-from django.http import JsonResponse, HttpResponse
+from django.db.models import Q, Count
+from django.http import HttpResponse
 from ledger.models import Party
 
 from .models import Vehicle, MaintenanceRecord, Tyre, TyreLog, TyreBrand
@@ -18,15 +18,6 @@ from .forms import VehicleForm, MaintenanceRecordForm, MaintenanceCompleteForm, 
 
 class BaseFleetPermissionMixin:
     """Base mixin for fleet permissions"""
-    
-    def has_manager_permission(self):
-        """Check if user has manager dashboard permission"""
-        return self.request.user.has_perm('trips.can_view_manager_dashboard')
-    
-    def has_supervisor_permission(self):
-        """Check if user has supervisor access (can view all vehicles/maintenance)"""
-        # Supervisors generally have change permissions but not necessarily delete
-        return self.request.user.has_perm('fleet.change_vehicle')
     
     def has_driver_profile(self):
         """Check if user has an associated driver profile"""

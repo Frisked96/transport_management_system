@@ -4,7 +4,7 @@ Handles business logic, complex calculations, and cross-model synchronizations.
 """
 from decimal import Decimal
 from django.db import transaction, models
-from django.db.models import Sum, Q, F
+from django.db.models import Sum, Q
 
 class BalanceService:
     """

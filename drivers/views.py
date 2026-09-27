@@ -4,10 +4,9 @@ Views for Drivers application
 from django.views.generic import ListView, DetailView, CreateView, UpdateView
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.urls import reverse_lazy, reverse
-from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import get_object_or_404
 from django.contrib import messages
 from django.db.models import Sum, F, DecimalField
-from django.contrib.auth.models import User
 
 from .models import Driver, DriverTransaction
 from .forms import DriverForm, DriverTransactionForm

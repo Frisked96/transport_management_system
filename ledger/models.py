@@ -5,7 +5,7 @@ from django.db import models, transaction
 from django.core.exceptions import ObjectDoesNotExist
 from django.contrib.auth.models import User
 from trips.models import Trip
-from django.db.models import F, Value, Max
+from django.db.models import F
 from decimal import Decimal
 import threading
 
@@ -1160,11 +1160,6 @@ class Bill(models.Model):
         if not trip.revenue or self.gst_rate == 0:
             return 0
         return trip.revenue * (Decimal(self.gst_rate) / Decimal(100))
-
-    def get_trip_total(self, trip):
-        """Calculate Total amount (Revenue + GST) for a specific trip"""
-        rev = trip.revenue or 0
-        return rev + self.get_trip_gst(trip)
 
     def __str__(self):
         try:

@@ -5,7 +5,7 @@ from django.views.generic import ListView, DetailView, CreateView, UpdateView, D
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, redirect
-from django.urls import reverse_lazy, reverse
+from django.urls import reverse_lazy
 from django.contrib import messages
 from django.db.models import Q, Sum, F, Case, When, Value, DecimalField, ExpressionWrapper, Avg, Min, Max, Count
 from django.db.models.functions import TruncMonth
@@ -24,9 +24,7 @@ try:
 except ImportError:
     openpyxl = None
 
-from django.http import JsonResponse, HttpResponse
-from django.contrib.auth.decorators import login_required
-from ledger.models import Party, FinancialRecord, TransactionCategory, Bill, BillTrip, CompanyAccount
+from ledger.models import Party, FinancialRecord, TransactionCategory, Bill, CompanyAccount
 from fleet.models import Vehicle, MaintenanceRecord, Tyre
 from drivers.models import Driver
 from .models import Trip, Route

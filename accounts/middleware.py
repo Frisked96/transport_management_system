@@ -1,4 +1,3 @@
-import datetime
 import threading
 from django.core.cache import cache
 from django.utils import timezone
