@@ -593,35 +593,8 @@
 {% endblock %}
 
 {% block extra_js %}
-<!-- html2pdf.js bundle (html2canvas + jsPDF) -->
-<script src="{% static 'js/html2pdf.bundle.min.js' %}"></script>
-<script>
-    if (typeof html2pdf === 'undefined') {
-        const fallbackScript = document.createElement('script');
-        fallbackScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
-        document.head.appendChild(fallbackScript);
-    }
-</script>
-
-<style>
-    .exporting-pdf .shadow-2xl,
-    .exporting-pdf .shadow-xl,
-    .exporting-pdf .shadow-lg,
-    .exporting-pdf .shadow-md,
-    .exporting-pdf .shadow-sm {
-        box-shadow: none !important;
-    }
-    .exporting-pdf .d-print-none {
-        display: none !important;
-    }
-    .exporting-pdf #invoice-annexure-card {
-        margin-top: 0 !important;
-    }
-</style>
-
 <script>
     let cachedPdfBlob = null;
-    let pdfGenerationPromise = null;
 
     function showPdfToast(message, type = 'info') {
         const toast = document.getElementById('pdf-toast');
@@ -657,60 +630,6 @@
         setTimeout(() => URL.revokeObjectURL(url), 2000);
     }
 
-    async function generateInvoicePdfBlob() {
-        const sourceWrapper = document.getElementById('invoice-pdf-wrapper');
-        if (!sourceWrapper) {
-            throw new Error('Invoice container element not found.');
-        }
-
-        if (typeof html2pdf === 'undefined') {
-            throw new Error('PDF generator library not loaded yet.');
-        }
-
-        // Wait for web fonts (Inter) to be ready
-        if (document.fonts && document.fonts.ready) {
-            try {
-                await document.fonts.ready;
-            } catch (e) {
-                console.warn('Font loading check bypassed:', e);
-            }
-        }
-
-        // Apply clean print styles (strip drop shadows, hide d-print-none, reset annexure top margin)
-        sourceWrapper.classList.add('exporting-pdf');
-
-        const rawNumber = "{{ bill.bill_number|default:bill.pk|escapejs }}";
-        const safeNumber = rawNumber.replace(/[^a-zA-Z0-9_\-\.]/g, '_');
-        const filename = `Invoice_${safeNumber}.pdf`;
-
-        const opt = {
-            margin: [8, 8, 8, 8],
-            filename: filename,
-            image: { type: 'jpeg', quality: 0.98 },
-            html2canvas: {
-                scale: 2,
-                useCORS: true,
-                letterRendering: true,
-                logging: false,
-                scrollX: 0,
-                scrollY: 0
-            },
-            jsPDF: {
-                unit: 'mm',
-                format: 'a4',
-                orientation: 'portrait'
-            },
-            pagebreak: { mode: ['css', 'legacy'], before: '.html2pdf__page-break' }
-        };
-
-        try {
-            const pdfBlob = await html2pdf().set(opt).from(sourceWrapper).outputPdf('blob');
-            return pdfBlob;
-        } finally {
-            sourceWrapper.classList.remove('exporting-pdf');
-        }
-    }
-
     async function handlePdfAction(action = 'share') {
         const btnShare = document.getElementById('btn-share-pdf');
         const btnDownload = document.getElementById('btn-download-pdf');
@@ -726,18 +645,20 @@
         // Set UI loading state
         if (btnShare) {
             btnShare.disabled = true;
-            btnShare.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i><span>Generating PDF...</span>';
+            btnShare.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i><span>Preparing PDF...</span>';
         }
         if (btnDownload) btnDownload.disabled = true;
 
         try {
-            // Retrieve or generate blob
+            // Retrieve or fetch blob from server using the exact print engine
             let blob = cachedPdfBlob;
             if (!blob) {
-                if (!pdfGenerationPromise) {
-                    pdfGenerationPromise = generateInvoicePdfBlob();
+                const res = await fetch("{% url 'bill-pdf' bill.pk %}");
+                if (!res.ok) {
+                    const errText = await res.text();
+                    throw new Error(errText || 'Failed to generate PDF on server.');
                 }
-                blob = await pdfGenerationPromise;
+                blob = await res.blob();
                 cachedPdfBlob = blob;
             }
 
@@ -766,7 +687,7 @@
                         // User dismissed share modal
                         return;
                     }
-                    console.warn('Native share failed, falling back to download:', shareErr);
+                    console.warn('Native share failed, downloading instead:', shareErr);
                 }
             }
 
@@ -778,9 +699,8 @@
         } catch (err) {
             console.error('PDF Generation / Share error:', err);
             const errMsg = err && err.message ? err.message : String(err);
-            showPdfToast('Failed to generate PDF: ' + errMsg, 'error');
+            showPdfToast('Failed to prepare PDF: ' + errMsg, 'error');
             cachedPdfBlob = null;
-            pdfGenerationPromise = null;
         } finally {
             if (btnShare) {
                 btnShare.disabled = false;

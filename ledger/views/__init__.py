@@ -50,6 +50,7 @@ from ledger.views.bills import (
     parse_number_range,
     get_bulk_invoices_context,
     bulk_print_invoices,
+    bill_pdf_view,
 )
 
 from ledger.views.statements import (
@@ -97,6 +98,7 @@ __all__ = [
     'parse_number_range',
     'get_bulk_invoices_context',
     'bulk_print_invoices',
+    'bill_pdf_view',
     'party_statement_pdf',
     'account_statement_pdf',
     'unified_ledger_pdf',

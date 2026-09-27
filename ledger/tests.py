@@ -1005,6 +1005,16 @@ class ViewOptimizationAndEndpointsTests(TestCase):
         self.assertIsNotNone(dashboard_entry)
         self.assertEqual(dashboard_entry['last_payment_date'], self.payment.date)
 
+    def test_bill_pdf_endpoint(self):
+        """Test bill-pdf endpoint generates valid PDF response for a bill"""
+        from django.urls import reverse
+        resp = self.client.get(reverse('bill-pdf', kwargs={'pk': self.bill.pk}))
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp['Content-Type'], 'application/pdf')
+        self.assertTrue(resp.content.startswith(b'%PDF'))
+        self.assertIn('Invoice_', resp.get('Content-Disposition', ''))
+
+
 
 
 

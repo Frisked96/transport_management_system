@@ -51,5 +51,6 @@ urlpatterns = [
     path('bills/<int:pk>/print/', views.print_invoice, name='print-invoice'),
     path('bills/<int:pk>/annexure/', views.print_annexure, name='print-annexure'),
     path('bills/<int:pk>/print-combined/', views.print_combined_bill, name='print-combined-bill'),
+    path('bills/<int:pk>/pdf/', views.bill_pdf_view, name='bill-pdf'),
     path('bills/bulk-print/', views.bulk_print_invoices, name='bulk-print-invoices'),
 ]
