@@ -5,7 +5,7 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=3.0, user-scalable=yes">
     <title>
         {% if bill.category and bill.category.name == 'Debit Note' %}Debit Note{% elif bill.category and bill.category.name == 'Credit Note' %}Credit Note{% elif bill.category and bill.category.name == 'Halting' %}Halting Invoice{% elif bill.gst_type == 'NONE' %}Commercial Invoice{% else %}Tax Invoice{% endif %} {{ bill.bill_number }}
     </title>
@@ -19,93 +19,178 @@
             background-color: #f1f5f9;
             margin: 0;
             padding: 0;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
         }
 
-        .page-container {
-            width: 210mm;
-            max-width: 98%;
-            margin: 20px auto;
-            background: white;
-            padding: 10mm;
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
-            box-sizing: border-box;
-        }
-
-        @media screen and (max-width: 210mm) {
-            .page-container {
-                width: 100%;
-                margin: 0;
-                padding: 5mm;
-                box-shadow: none;
-            }
-            .invoice-wrapper {
-                zoom: 0.9; /* Slight zoom out for small screens */
-            }
-        }
-
-        @media print {
-            body {
-                background: none;
-            }
-            .page-container {
-                width: auto;
-                margin: 0;
-                padding: 10mm;
-                box-shadow: none;
-            }
-            .no-print {
-                display: none !important;
-            }
-        }
-
-        /* Print Controls */
+        /* Top Controls Bar */
         .print-controls {
             position: sticky;
             top: 0;
-            z-index: 100;
-            background: rgba(15, 23, 42, 0.9);
-            padding: 12px;
+            z-index: 1000;
+            background: rgba(15, 23, 42, 0.92);
+            padding: 10px 16px;
             display: flex;
             justify-content: center;
-            gap: 15px;
+            align-items: center;
+            gap: 12px;
             backdrop-filter: blur(8px);
-            border-bottom: 1px solid rgba(255,255,255,0.1);
+            -webkit-backdrop-filter: blur(8px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .control-icon {
+            width: 15px;
+            height: 15px;
+            display: inline-block;
+            vertical-align: middle;
+            fill: none;
+            stroke: currentColor;
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        .btn-print, .btn-share, .btn-zoom, .btn-close {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 14px;
+            line-height: 1;
+            padding: 9px 18px;
+            transition: all 0.15s ease;
+            white-space: nowrap;
+            text-decoration: none;
         }
 
         .btn-print {
             background-color: #10b981;
             color: white;
             border: none;
-            padding: 10px 24px;
-            border-radius: 6px;
-            font-weight: bold;
-            cursor: pointer;
-            font-size: 14px;
         }
-        
-        .btn-close {
-            background-color: transparent;
-            color: #94a3b8;
-            border: 1px solid #334155;
-            padding: 10px 20px;
-            border-radius: 6px;
-            cursor: pointer;
-        }
+        .btn-print:hover { background-color: #059669; }
 
         .btn-share {
             background-color: #4f46e5;
             color: white;
             border: none;
-            padding: 10px 24px;
-            border-radius: 6px;
-            font-weight: bold;
-            cursor: pointer;
-            font-size: 14px;
+        }
+        .btn-share:hover { background-color: #4338ca; }
+
+        .btn-zoom {
+            background-color: #334155;
+            color: #f8fafc;
+            border: 1px solid #475569;
+        }
+        .btn-zoom:hover { background-color: #475569; }
+
+        .btn-close {
+            background-color: transparent;
+            color: #94a3b8;
+            border: 1px solid #334155;
+        }
+        .btn-close:hover {
+            color: #f8fafc;
+            border-color: #64748b;
         }
 
-        .btn-share:disabled {
-            opacity: 0.7;
-            cursor: not-allowed;
+        /* Document Viewer & Sheet Container */
+        .document-viewer {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            padding: 12px 0 30px;
+            box-sizing: border-box;
+            overflow-x: hidden;
+        }
+
+        .document-scroller {
+            display: inline-block;
+            box-sizing: border-box;
+            transition: width 0.15s ease, height 0.15s ease;
+        }
+
+        .page-container {
+            width: 210mm;
+            min-width: 794px;
+            background: white;
+            padding: 10mm;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+            box-sizing: border-box;
+            margin: 0 auto;
+        }
+
+        @media screen and (min-width: 821px) {
+            .btn-zoom {
+                display: none; /* Desktop already has ample screen width */
+            }
+            .document-viewer {
+                padding: 24px 0 40px;
+                overflow-x: auto;
+            }
+        }
+
+        @media screen and (max-width: 820px) {
+            .print-controls {
+                padding: 8px 10px;
+                gap: 8px;
+            }
+            .btn-print, .btn-share, .btn-zoom, .btn-close {
+                padding: 8px 12px;
+                font-size: 13px;
+                gap: 5px;
+            }
+        }
+
+        @media screen and (max-width: 400px) {
+            .print-controls {
+                padding: 6px 8px;
+                gap: 5px;
+            }
+            .btn-print, .btn-share, .btn-zoom, .btn-close {
+                padding: 7px 9px;
+                font-size: 12px;
+                gap: 4px;
+            }
+            .control-icon {
+                width: 13px;
+                height: 13px;
+            }
+        }
+
+        /* Print Media Styles: 100% native A4 format */
+        @media print {
+            body {
+                background: none !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                overflow: visible !important;
+            }
+            .no-print {
+                display: none !important;
+            }
+            .document-viewer, .document-scroller {
+                display: block !important;
+                width: auto !important;
+                height: auto !important;
+                overflow: visible !important;
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+            .page-container {
+                width: 100% !important;
+                min-width: 0 !important;
+                max-width: none !important;
+                transform: none !important;
+                margin: 0 !important;
+                padding: 10mm !important;
+                box-shadow: none !important;
+            }
         }
     </style>
     {% include "ledger/partials/invoice_styles.html" %}
@@ -113,23 +198,160 @@
 <body>
 
     <div class="print-controls no-print">
-        <button onclick="window.print()" class="btn-print">Print Invoice</button>
-        <button onclick="shareFromPrintView()" class="btn-share" id="btn-share-print">Share</button>
-        <button onclick="window.close()" class="btn-close">Close</button>
+        <button onclick="window.print()" class="btn-print" title="Print invoice or save as PDF">
+            <svg class="control-icon" viewBox="0 0 24 24"><path d="M6 9V2h12v7"></path><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+            <span>Print</span>
+        </button>
+        <button onclick="shareFromPrintView()" class="btn-share" id="btn-share-print" title="Share invoice link">
+            <svg class="control-icon" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
+            <span>Share</span>
+        </button>
+        <button onclick="toggleZoomMode()" class="btn-zoom" id="btn-toggle-zoom" title="Toggle between fit to screen and 100% full width">
+            <svg class="control-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line><line x1="11" y1="8" x2="11" y2="14"></line><line x1="8" y1="11" x2="14" y2="11"></line></svg>
+            <span id="zoom-label">100%</span>
+        </button>
+        <button onclick="handleClose()" class="btn-close" title="Close view">Close</button>
     </div>
 
-    <div class="page-container">
-        {% include "ledger/partials/bill_content.html" %}
+    <div class="document-viewer" id="document-viewer">
+        <div class="document-scroller" id="document-scroller">
+            <div class="page-container" id="invoice-sheet">
+                {% include "ledger/partials/bill_content.html" %}
+            </div>
+        </div>
     </div>
 
     <script>
-        window.onload = function() {
+        let currentZoomMode = 'fit';
+
+        function getSheetWidth() {
+            return 794; // 210mm in standard 96dpi pixels
+        }
+
+        function applyFitMode() {
+            const sheet = document.getElementById('invoice-sheet');
+            const scroller = document.getElementById('document-scroller');
+            const viewer = document.getElementById('document-viewer');
+            const zoomLabel = document.getElementById('zoom-label');
+            if (!sheet || !scroller || !viewer) return;
+
+            currentZoomMode = 'fit';
+            if (zoomLabel) zoomLabel.textContent = '100%';
+
+            if (window.innerWidth <= 820) {
+                const sheetWidth = getSheetWidth();
+                const availableWidth = window.innerWidth - 16; // 8px side margins
+                const scale = Math.min(1, availableWidth / sheetWidth);
+
+                sheet.style.width = sheetWidth + 'px';
+                sheet.style.minWidth = sheetWidth + 'px';
+                sheet.style.transform = `scale(${scale})`;
+                sheet.style.transformOrigin = 'top left';
+                sheet.style.margin = '0';
+
+                const scaledWidth = Math.round(sheetWidth * scale);
+                const scaledHeight = Math.round(sheet.offsetHeight * scale);
+
+                scroller.style.width = scaledWidth + 'px';
+                scroller.style.height = (scaledHeight + 16) + 'px';
+                scroller.style.margin = '0 auto';
+                scroller.style.overflow = 'hidden';
+                viewer.style.overflowX = 'hidden';
+            } else {
+                resetDesktopView();
+            }
+        }
+
+        function applyFullMode() {
+            const sheet = document.getElementById('invoice-sheet');
+            const scroller = document.getElementById('document-scroller');
+            const viewer = document.getElementById('document-viewer');
+            const zoomLabel = document.getElementById('zoom-label');
+            if (!sheet || !scroller || !viewer) return;
+
+            currentZoomMode = '100';
+            if (zoomLabel) zoomLabel.textContent = 'Fit';
+
+            const sheetWidth = getSheetWidth();
+            sheet.style.width = sheetWidth + 'px';
+            sheet.style.minWidth = sheetWidth + 'px';
+            sheet.style.transform = 'none';
+            sheet.style.margin = '10px auto';
+
+            scroller.style.width = 'auto';
+            scroller.style.height = 'auto';
+            scroller.style.overflow = 'visible';
+            scroller.style.margin = '0 auto';
+            viewer.style.overflowX = 'auto';
+        }
+
+        function toggleZoomMode() {
+            if (currentZoomMode === 'fit') {
+                applyFullMode();
+            } else {
+                applyFitMode();
+            }
+        }
+
+        function resetDesktopView() {
+            const sheet = document.getElementById('invoice-sheet');
+            const scroller = document.getElementById('document-scroller');
+            const viewer = document.getElementById('document-viewer');
+            if (!sheet || !scroller || !viewer) return;
+
+            sheet.style.width = '210mm';
+            sheet.style.minWidth = '794px';
+            sheet.style.transform = 'none';
+            sheet.style.margin = '20px auto';
+
+            scroller.style.width = 'auto';
+            scroller.style.height = 'auto';
+            scroller.style.overflow = 'visible';
+            scroller.style.margin = '0 auto';
+            viewer.style.overflowX = 'visible';
+        }
+
+        function handleClose() {
+            if (window.history.length > 1) {
+                window.history.back();
+            } else {
+                window.close();
+            }
+        }
+
+        // Initialize responsive fit on mobile
+        document.addEventListener('DOMContentLoaded', function() {
+            applyFitMode();
+
+            // Observe sheet size changes to keep scroller height accurate
+            const sheet = document.getElementById('invoice-sheet');
+            if (sheet && window.ResizeObserver) {
+                const ro = new ResizeObserver(() => {
+                    if (currentZoomMode === 'fit' && window.innerWidth <= 820) {
+                        applyFitMode();
+                    }
+                });
+                ro.observe(sheet);
+            }
+        });
+
+        window.addEventListener('load', function() {
+            if (currentZoomMode === 'fit') {
+                applyFitMode();
+            }
+
             const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
             if (!isMobile) {
                 window.print();
                 window.onafterprint = function() { window.close(); };
             }
-        };
+        });
+
+        window.addEventListener('resize', function() {
+            if (currentZoomMode === 'fit') {
+                applyFitMode();
+            }
+        });
 
         async function shareFromPrintView() {
             const rawNumber = "{{ bill.bill_number|default:bill.pk|escapejs }}";

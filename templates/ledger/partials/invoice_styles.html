@@ -110,12 +110,39 @@
         font-size: 15px;
     }
 
-    /* Print Controls */
+    /* Print & Screen Page Break Controls */
+    .page-break {
+        display: block;
+    }
+    @media screen {
+        .page-break {
+            margin: 30px -10mm 25px -10mm;
+            padding: 15px 10mm 0 10mm;
+            border-top: 3px dashed #94a3b8;
+            position: relative;
+        }
+        .page-break::after {
+            content: "PAGE BREAK (ANNEXURE)";
+            display: block;
+            text-align: center;
+            font-size: 10px;
+            font-weight: bold;
+            color: #64748b;
+            letter-spacing: 1px;
+            margin-bottom: 15px;
+        }
+    }
     @media print {
         .page-break {
             display: block;
             page-break-before: always;
             break-before: page;
+            margin: 0;
+            padding: 0;
+            border: none;
+        }
+        .page-break::after {
+            display: none;
         }
     }
 </style>
