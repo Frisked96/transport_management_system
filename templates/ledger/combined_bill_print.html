@@ -122,117 +122,45 @@
         {% include "ledger/partials/bill_content.html" %}
     </div>
 
-    <script src="{% static 'js/html2pdf.bundle.min.js' %}"></script>
     <script>
-        let cachedPdfBlob = null;
-        let pdfGenerationPromise = null;
-
-        async function generatePrintPdfBlob() {
-            const el = document.querySelector('.page-container');
-            if (!el || typeof html2pdf === 'undefined') return null;
-
-            const rawNumber = "{{ bill.bill_number|default:bill.pk|escapejs }}";
-            const safeNumber = rawNumber.replace(/[^a-zA-Z0-9_\-\.]/g, '_');
-            const filename = `Invoice_${safeNumber}.pdf`;
-
-            const opt = {
-                margin: [8, 8, 8, 8],
-                filename: filename,
-                image: { type: 'jpeg', quality: 0.98 },
-                html2canvas: {
-                    scale: 2,
-                    useCORS: true,
-                    letterRendering: true,
-                    logging: false,
-                    scrollX: 0,
-                    scrollY: 0
-                },
-                jsPDF: {
-                    unit: 'mm',
-                    format: 'a4',
-                    orientation: 'portrait'
-                },
-                pagebreak: { mode: ['css', 'legacy'] }
-            };
-
-            return await html2pdf().set(opt).from(el).outputPdf('blob');
-        }
-
-        function downloadBlob(blob, filename) {
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            setTimeout(() => URL.revokeObjectURL(url), 2000);
-        }
-
         window.onload = function() {
             const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
             if (!isMobile) {
                 window.print();
                 window.onafterprint = function() { window.close(); };
             }
-
-            // Pre-generate PDF blob quietly in background for instant sharing
-            setTimeout(() => {
-                if (!cachedPdfBlob && !pdfGenerationPromise) {
-                    pdfGenerationPromise = generatePrintPdfBlob()
-                        .then(b => { cachedPdfBlob = b; return b; })
-                        .catch(() => { pdfGenerationPromise = null; });
-                }
-            }, 600);
         };
 
         async function shareFromPrintView() {
             const rawNumber = "{{ bill.bill_number|default:bill.pk|escapejs }}";
-            const safeNumber = rawNumber.replace(/[^a-zA-Z0-9_\-\.]/g, '_');
-            const filename = `Invoice_${safeNumber}.pdf`;
             const partyName = "{{ bill.party.name|escapejs }}";
+            const partyPhone = "{{ bill.party.phone_number|default:''|escapejs }}".replace(/[^0-9]/g, '');
+            const printUrl = window.location.href;
 
-            let blob = cachedPdfBlob;
-            if (!blob) {
-                const btn = document.getElementById('btn-share-print');
-                const originalText = btn ? btn.innerHTML : '';
-                if (btn) {
-                    btn.disabled = true;
-                    btn.innerHTML = 'Generating PDF...';
-                }
-                try {
-                    if (!pdfGenerationPromise) {
-                        pdfGenerationPromise = generatePrintPdfBlob();
-                    }
-                    blob = await pdfGenerationPromise;
-                    cachedPdfBlob = blob;
-                } catch (err) {
-                    alert('Unable to generate PDF: ' + (err.message || err));
-                    return;
-                } finally {
-                    if (btn) {
-                        btn.disabled = false;
-                        btn.innerHTML = originalText;
-                    }
-                }
-            }
+            const text = `*Invoice ${rawNumber}*\n` +
+                         `Party: ${partyName}\n` +
+                         `Date: {{ bill.date|date:"d-m-Y" }}\n` +
+                         `Total Amount: ₹{{ bill.rounded_total|indian_comma }}\n\n` +
+                         `View / Print Invoice:\n${printUrl}`;
 
-            const file = new File([blob], filename, { type: 'application/pdf' });
-            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            if (navigator.share) {
                 try {
                     await navigator.share({
-                        files: [file],
                         title: `Invoice ${rawNumber}`,
-                        text: `Invoice ${rawNumber} for ${partyName}`
+                        text: text,
+                        url: printUrl
                     });
+                    return;
                 } catch (err) {
-                    if (err.name !== 'AbortError') {
-                        downloadBlob(blob, filename);
-                    }
+                    if (err.name === 'AbortError') return;
                 }
-            } else {
-                downloadBlob(blob, filename);
             }
+
+            // Fallback: Open WhatsApp directly
+            const waUrl = partyPhone ? 
+                `https://api.whatsapp.com/send?phone=${partyPhone}&text=${encodeURIComponent(text)}` :
+                `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
+            window.open(waUrl, '_blank');
         }
     </script>
 </body>
