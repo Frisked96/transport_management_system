@@ -14,11 +14,7 @@ from datetime import datetime
 import json
 from itertools import groupby
 from django.http import JsonResponse, HttpResponse
-from django.template.loader import render_to_string
 import os
-import shutil
-import tempfile
-import subprocess
 import logging
 
 logger = logging.getLogger(__name__)
@@ -405,98 +401,6 @@ def print_combined_bill(request, pk):
         'has_lr': has_lr,
     }
     return render(request, 'ledger/combined_bill_print.html', context)
-
-
-@login_required
-def bill_pdf_view(request, pk):
-    """
-    Renders the exact combined_bill_print template to a clean vector PDF
-    using headless Chromium, matching the browser's native print output 1:1.
-    """
-    bill = get_object_or_404(Bill, pk=pk)
-
-    # For invoice section
-    invoice_items = group_trips_for_bill(bill)
-
-    # For annexure
-    bill_trips = bill.bill_trips.select_related('trip', 'trip__vehicle').order_by('trip__date')
-    date_groups = []
-    for date, group in groupby(bill_trips, key=lambda bt: bt.trip.date if bt.trip else None):
-        bt_list = list(group)
-        date_groups.append({
-            'date': date,
-            'bill_trips': bt_list,
-            'total_weight': sum(bt.trip.weight or 0 for bt in bt_list),
-            'total_amount': sum(bt.trip.revenue or 0 for bt in bt_list),
-        })
-
-    # Detect if we should show Discount or LR columns
-    has_discount = False
-    if bill.bill_type == 'Standard':
-        has_discount = (bill.discount or 0) > 0
-    else:
-        has_discount = any((bt.discount or 0) > 0 for bt in bill_trips)
-
-    has_lr = False
-    if bill.bill_type != 'Standard':
-        has_lr = any(bt.lr_no or (bt.trip and bt.trip.lr_no) for bt in bill_trips)
-
-    context = {
-        'bill': bill,
-        'invoice_items': invoice_items,
-        'date_groups': date_groups,
-        'bill_trips': bill_trips,
-        'has_discount': has_discount,
-        'has_lr': has_lr,
-        'is_pdf_render': True,
-    }
-
-    html = render_to_string('ledger/combined_bill_print.html', context, request=request)
-    raw_number = bill.bill_number or str(bill.pk)
-    safe_number = "".join(c if c.isalnum() or c in "-_." else "_" for c in raw_number)
-    filename = f"Invoice_{safe_number}.pdf"
-
-    chrome_path = shutil.which('chromium') or shutil.which('google-chrome') or shutil.which('chromium-browser')
-    if not chrome_path:
-        logger.error("Headless Chromium browser not found on the system.")
-        return HttpResponse("PDF generation engine is not installed on this system.", status=500)
-
-    tmp_html = None
-    tmp_pdf = None
-    try:
-        with tempfile.NamedTemporaryFile('w', suffix='.html', delete=False, encoding='utf-8') as f:
-            f.write(html)
-            tmp_html = f.name
-        tmp_pdf = tmp_html.replace('.html', '.pdf')
-
-        cmd = [
-            chrome_path,
-            '--headless',
-            '--disable-gpu',
-            '--no-sandbox',
-            '--no-pdf-header-footer',
-            f'--print-to-pdf={tmp_pdf}',
-            f'file://{tmp_html}'
-        ]
-        subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=20, check=True)
-        with open(tmp_pdf, 'rb') as f:
-            pdf_bytes = f.read()
-    except Exception as e:
-        logger.error(f"Error generating PDF via Chromium: {e}")
-        return HttpResponse(f"Error generating invoice PDF: {e}", status=500)
-    finally:
-        for p in (tmp_html, tmp_pdf):
-            if p and os.path.exists(p):
-                try:
-                    os.remove(p)
-                except OSError:
-                    pass
-
-    response = HttpResponse(pdf_bytes, content_type='application/pdf')
-    response['Content-Disposition'] = f'inline; filename="{filename}"'
-    return response
-
-
 
 
 def get_next_invoice_number(request):

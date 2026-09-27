@@ -590,11 +590,75 @@
 <!-- Toast Notification -->
 <div id="pdf-toast" class="fixed bottom-5 right-5 z-50 transform transition-all duration-300 translate-y-20 opacity-0 pointer-events-none flex items-center gap-3 px-4 py-3 rounded-lg shadow-xl text-sm font-medium"></div>
 
+<!-- Share Options Modal (Fallback for Desktop / Insecure Contexts) -->
+<div id="share-options-modal" class="fixed inset-0 z-50 hidden bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 animate-in fade-in zoom-in duration-200">
+        <div class="flex items-center justify-between pb-4 border-b border-slate-100">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">
+                    <i class="fa-solid fa-share-nodes text-lg"></i>
+                </div>
+                <div>
+                    <h3 class="font-bold text-slate-800 text-base">Share Invoice</h3>
+                    <p class="text-xs text-slate-500">Invoice {{ bill.bill_number|default:bill.pk }}</p>
+                </div>
+            </div>
+            <button type="button" onclick="closeShareModal()" class="text-slate-400 hover:text-slate-600 p-2 text-lg">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+        <div class="grid grid-cols-1 gap-2.5 py-4">
+            <!-- Retry Native Share (if available) -->
+            <button type="button" id="modal-native-share-btn" onclick="retryNativeShare()" class="hidden flex items-center gap-3.5 p-3 rounded-xl border border-indigo-200 bg-indigo-50/70 hover:bg-indigo-100/70 transition-all text-indigo-900 w-full text-left">
+                <div class="w-9 h-9 rounded-lg bg-indigo-600 text-white flex items-center justify-center shrink-0">
+                    <i class="fa-solid fa-arrow-up-from-bracket"></i>
+                </div>
+                <div class="text-left flex-1">
+                    <div class="text-sm font-bold">Share PDF to Apps</div>
+                    <div class="text-xs text-indigo-700">Open system share sheet with PDF file</div>
+                </div>
+            </button>
+            <!-- WhatsApp Direct -->
+            <a id="modal-whatsapp-link" href="#" target="_blank" class="flex items-center gap-3.5 p-3 rounded-xl border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50/50 transition-all text-slate-700">
+                <div class="w-9 h-9 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                    <i class="fa-brands fa-whatsapp text-lg"></i>
+                </div>
+                <div class="text-left flex-1">
+                    <div class="text-sm font-semibold">Share on WhatsApp</div>
+                    <div class="text-xs text-slate-500">Send invoice details to {{ bill.party.name }}</div>
+                </div>
+            </a>
+            <!-- Download PDF File -->
+            <button type="button" onclick="downloadFromModal()" class="flex items-center gap-3.5 p-3 rounded-xl border border-slate-200 hover:border-blue-500 hover:bg-blue-50/50 transition-all text-slate-700 w-full text-left">
+                <div class="w-9 h-9 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                    <i class="fa-solid fa-download"></i>
+                </div>
+                <div class="text-left flex-1">
+                    <div class="text-sm font-semibold">Download PDF File</div>
+                    <div class="text-xs text-slate-500">Save PDF directly to your device</div>
+                </div>
+            </button>
+            <!-- Print / Save as PDF via Browser -->
+            <a href="{% url 'print-combined-bill' bill.pk %}" target="_blank" class="flex items-center gap-3.5 p-3 rounded-xl border border-slate-200 hover:border-slate-400 hover:bg-slate-50 transition-all text-slate-700">
+                <div class="w-9 h-9 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center shrink-0">
+                    <i class="fa-solid fa-print"></i>
+                </div>
+                <div class="text-left flex-1">
+                    <div class="text-sm font-semibold">Print Invoice</div>
+                    <div class="text-xs text-slate-500">Open browser print preview</div>
+                </div>
+            </a>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block extra_js %}
+<script src="{% static 'js/html2pdf.bundle.min.js' %}"></script>
 <script>
     let cachedPdfBlob = null;
+    let pdfGenerationPromise = null;
 
     function showPdfToast(message, type = 'info') {
         const toast = document.getElementById('pdf-toast');
@@ -630,6 +694,187 @@
         setTimeout(() => URL.revokeObjectURL(url), 2000);
     }
 
+    async function generateInvoicePdfBlob() {
+        const sourceWrapper = document.getElementById('invoice-pdf-wrapper');
+        if (!sourceWrapper) {
+            throw new Error('Invoice container element not found.');
+        }
+
+        if (typeof html2pdf === 'undefined') {
+            throw new Error('PDF generator library not loaded yet.');
+        }
+
+        // Wait for fonts to be ready
+        if (document.fonts && document.fonts.ready) {
+            try {
+                await document.fonts.ready;
+            } catch (e) {
+                console.warn('Font loading check bypassed:', e);
+            }
+        }
+
+        // Clone the wrapper so we can style/sanitize it for clean PDF without altering the live UI
+        const clone = sourceWrapper.cloneNode(true);
+
+        // Remove drop shadows and border artifacts for clean print
+        clone.querySelectorAll('.shadow-2xl, .shadow-xl, .shadow-lg, .shadow-md, .shadow-sm').forEach(el => {
+            el.style.boxShadow = 'none';
+        });
+
+        // Remove screen-only elements (e.g. metadata/debug timestamps)
+        clone.querySelectorAll('.d-print-none').forEach(el => el.remove());
+
+        // Ensure cards have proper responsive widths inside standard A4 container
+        clone.querySelectorAll('#invoice-main-card, #invoice-annexure-card').forEach(el => {
+            el.style.maxWidth = '100%';
+            el.style.minWidth = '0';
+            el.style.margin = '0 auto';
+        });
+
+        const annexureCard = clone.querySelector('#invoice-annexure-card');
+        if (annexureCard) {
+            annexureCard.style.marginTop = '0';
+            annexureCard.classList.remove('mt-10');
+        }
+
+        // Create off-screen sandbox with fixed width (800px) to prevent mobile squishing
+        const sandbox = document.createElement('div');
+        sandbox.id = 'pdf-render-sandbox';
+        sandbox.style.position = 'fixed';
+        sandbox.style.left = '-9999px';
+        sandbox.style.top = '0';
+        sandbox.style.width = '800px';
+        sandbox.style.backgroundColor = '#ffffff';
+        sandbox.style.padding = '0';
+        sandbox.style.margin = '0';
+        sandbox.style.zIndex = '-9999';
+        sandbox.style.pointerEvents = 'none';
+        sandbox.appendChild(clone);
+        document.body.appendChild(sandbox);
+
+        const rawNumber = "{{ bill.bill_number|default:bill.pk|escapejs }}";
+        const safeNumber = rawNumber.replace(/[^a-zA-Z0-9_\-\.]/g, '_');
+        const filename = `Invoice_${safeNumber}.pdf`;
+
+        const opt = {
+            margin: [8, 8, 8, 8],
+            filename: filename,
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: {
+                scale: 2,
+                useCORS: true,
+                letterRendering: true,
+                logging: false,
+                scrollX: 0,
+                scrollY: 0,
+                windowWidth: 800
+            },
+            jsPDF: {
+                unit: 'mm',
+                format: 'a4',
+                orientation: 'portrait'
+            },
+            pagebreak: { mode: ['css', 'legacy'], before: '.html2pdf__page-break' }
+        };
+
+        try {
+            const pdfBlob = await html2pdf().set(opt).from(clone).outputPdf('blob');
+            return pdfBlob;
+        } finally {
+            if (sandbox.parentNode) {
+                sandbox.parentNode.removeChild(sandbox);
+            }
+        }
+    }
+
+    function pregeneratePdf() {
+        if (!cachedPdfBlob && !pdfGenerationPromise) {
+            pdfGenerationPromise = generateInvoicePdfBlob()
+                .then(b => {
+                    cachedPdfBlob = b;
+                    return b;
+                })
+                .catch(e => {
+                    console.warn('Background PDF pre-generation error:', e);
+                    pdfGenerationPromise = null;
+                });
+        }
+    }
+
+    // Automatically pre-generate in background so user click is 100% instant
+    document.addEventListener('DOMContentLoaded', function() {
+        setTimeout(pregeneratePdf, 600);
+    });
+
+    function openShareModal(blob, filename) {
+        const modal = document.getElementById('share-options-modal');
+        if (!modal) return;
+
+        const rawNumber = "{{ bill.bill_number|default:bill.pk|escapejs }}";
+        const partyName = "{{ bill.party.name|escapejs }}";
+        const partyPhone = "{{ bill.party.phone_number|default:''|escapejs }}".replace(/[^0-9]/g, '');
+
+        const message = `*Invoice ${rawNumber}*\nParty: ${partyName}\nDate: {{ bill.date|date:"d-m-Y" }}\nAmount: ₹{{ bill.rounded_total|indian_comma }}\n\n(Please find the invoice PDF attached)`;
+        const encodedText = encodeURIComponent(message);
+        const waUrl = partyPhone ? `https://api.whatsapp.com/send?phone=${partyPhone}&text=${encodedText}` : `https://api.whatsapp.com/send?text=${encodedText}`;
+
+        const waLink = document.getElementById('modal-whatsapp-link');
+        if (waLink) waLink.href = waUrl;
+
+        // Check if native file share is supported for retry
+        const pdfFile = blob ? new File([blob], filename, { type: 'application/pdf' }) : null;
+        const nativeBtn = document.getElementById('modal-native-share-btn');
+        if (nativeBtn) {
+            if (pdfFile && navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
+                nativeBtn.classList.remove('hidden');
+                nativeBtn._file = pdfFile;
+            } else {
+                nativeBtn.classList.add('hidden');
+            }
+        }
+
+        modal.classList.remove('hidden');
+    }
+
+    function closeShareModal() {
+        const modal = document.getElementById('share-options-modal');
+        if (modal) modal.classList.add('hidden');
+    }
+
+    async function retryNativeShare() {
+        const nativeBtn = document.getElementById('modal-native-share-btn');
+        const file = nativeBtn ? nativeBtn._file : null;
+        if (!file) return;
+
+        try {
+            await navigator.share({
+                files: [file],
+                title: `Invoice {{ bill.bill_number|default:bill.pk|escapejs }}`,
+                text: `Invoice {{ bill.bill_number|default:bill.pk|escapejs }} for {{ bill.party.name|escapejs }}`
+            });
+            closeShareModal();
+            showPdfToast('Invoice shared successfully!', 'success');
+        } catch (err) {
+            if (err.name !== 'AbortError') {
+                console.warn('Native share retry error:', err);
+            }
+        }
+    }
+
+    function downloadFromModal() {
+        const rawNumber = "{{ bill.bill_number|default:bill.pk|escapejs }}";
+        const safeNumber = rawNumber.replace(/[^a-zA-Z0-9_\-\.]/g, '_');
+        const filename = `Invoice_${safeNumber}.pdf`;
+
+        if (cachedPdfBlob) {
+            downloadPdfBlob(cachedPdfBlob, filename);
+            closeShareModal();
+            showPdfToast('Invoice PDF downloaded successfully!', 'success');
+        } else {
+            handlePdfAction('download');
+        }
+    }
+
     async function handlePdfAction(action = 'share') {
         const btnShare = document.getElementById('btn-share-pdf');
         const btnDownload = document.getElementById('btn-download-pdf');
@@ -642,72 +887,67 @@
         const shareTitle = `Invoice ${rawNumber}`;
         const shareText = `Invoice ${rawNumber} for ${partyName} (Total: ₹{{ bill.rounded_total|indian_comma }})`;
 
-        // Set UI loading state
-        if (btnShare) {
-            btnShare.disabled = true;
-            btnShare.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i><span>Preparing PDF...</span>';
-        }
-        if (btnDownload) btnDownload.disabled = true;
-
-        try {
-            // Retrieve or fetch blob from server using the exact print engine
-            let blob = cachedPdfBlob;
-            if (!blob) {
-                const res = await fetch("{% url 'bill-pdf' bill.pk %}");
-                if (!res.ok) {
-                    const errText = await res.text();
-                    throw new Error(errText || 'Failed to generate PDF on server.');
-                }
-                blob = await res.blob();
-                cachedPdfBlob = blob;
-            }
-
-            if (action === 'download') {
-                downloadPdfBlob(blob, filename);
-                showPdfToast('Invoice PDF downloaded successfully!', 'success');
-                return;
-            }
-
-            // Action is 'share'
-            const pdfFile = new File([blob], filename, { type: 'application/pdf' });
-            const canShareFiles = navigator.canShare && navigator.canShare({ files: [pdfFile] });
-
-            let shared = false;
-            if (canShareFiles) {
-                try {
-                    await navigator.share({
-                        files: [pdfFile],
-                        title: shareTitle,
-                        text: shareText
-                    });
-                    shared = true;
-                    showPdfToast('Invoice shared successfully!', 'success');
-                } catch (shareErr) {
-                    if (shareErr.name === 'AbortError') {
-                        // User dismissed share modal
-                        return;
-                    }
-                    console.warn('Native share failed, downloading instead:', shareErr);
-                }
-            }
-
-            if (!shared) {
-                // If Web Share with files is not supported (e.g. desktop Chrome) or failed
-                downloadPdfBlob(blob, filename);
-                showPdfToast('PDF downloaded! You can now share or attach it.', 'success');
-            }
-        } catch (err) {
-            console.error('PDF Generation / Share error:', err);
-            const errMsg = err && err.message ? err.message : String(err);
-            showPdfToast('Failed to prepare PDF: ' + errMsg, 'error');
-            cachedPdfBlob = null;
-        } finally {
+        // If not cached yet (e.g. user clicked immediately after page load)
+        let blob = cachedPdfBlob;
+        if (!blob) {
             if (btnShare) {
-                btnShare.disabled = false;
-                btnShare.innerHTML = originalShareHtml;
+                btnShare.disabled = true;
+                btnShare.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i><span>Generating PDF...</span>';
             }
-            if (btnDownload) btnDownload.disabled = false;
+            if (btnDownload) btnDownload.disabled = true;
+
+            try {
+                if (!pdfGenerationPromise) {
+                    pdfGenerationPromise = generateInvoicePdfBlob();
+                }
+                blob = await pdfGenerationPromise;
+                cachedPdfBlob = blob;
+            } catch (err) {
+                console.error('PDF generation error:', err);
+                showPdfToast('Failed to generate PDF: ' + (err.message || err), 'error');
+                cachedPdfBlob = null;
+                pdfGenerationPromise = null;
+                return;
+            } finally {
+                if (btnShare) {
+                    btnShare.disabled = false;
+                    btnShare.innerHTML = originalShareHtml;
+                }
+                if (btnDownload) btnDownload.disabled = false;
+            }
         }
+
+        if (action === 'download') {
+            downloadPdfBlob(blob, filename);
+            showPdfToast('Invoice PDF downloaded successfully!', 'success');
+            return;
+        }
+
+        // Action is 'share'
+        const pdfFile = new File([blob], filename, { type: 'application/pdf' });
+        const canShareFiles = navigator.canShare && navigator.canShare({ files: [pdfFile] });
+
+        if (canShareFiles) {
+            try {
+                // Call navigator.share synchronously within the user tap event
+                await navigator.share({
+                    files: [pdfFile],
+                    title: shareTitle,
+                    text: shareText
+                });
+                showPdfToast('Invoice shared successfully!', 'success');
+                return;
+            } catch (shareErr) {
+                if (shareErr.name === 'AbortError') {
+                    // User closed the share sheet
+                    return;
+                }
+                console.warn('Native share failed or user gesture timed out, opening share modal:', shareErr);
+            }
+        }
+
+        // If native file share is unsupported (e.g. desktop) or failed, open the share options modal
+        openShareModal(blob, filename);
     }
 </script>
 {% endblock %}

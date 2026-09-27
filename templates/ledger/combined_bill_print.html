@@ -1,3 +1,4 @@
+{% load static %}
 {% load humanize %}
 {% load ledger_extras %}
 <!DOCTYPE html>
@@ -107,95 +108,132 @@
             cursor: not-allowed;
         }
     </style>
-    {% if is_pdf_render %}
-    <style>
-        body {
-            background-color: white !important;
-            margin: 0 !important;
-            padding: 0 !important;
-        }
-        .page-container {
-            width: 100% !important;
-            max-width: 100% !important;
-            margin: 0 !important;
-            padding: 10mm !important;
-            box-shadow: none !important;
-            box-sizing: border-box !important;
-        }
-        .print-controls {
-            display: none !important;
-        }
-    </style>
-    {% endif %}
     {% include "ledger/partials/invoice_styles.html" %}
 </head>
 <body>
 
-    {% if not is_pdf_render %}
     <div class="print-controls no-print">
         <button onclick="window.print()" class="btn-print">Print Invoice</button>
         <button onclick="shareFromPrintView()" class="btn-share" id="btn-share-print">Share PDF</button>
         <button onclick="window.close()" class="btn-close">Close</button>
     </div>
-    {% endif %}
 
     <div class="page-container">
         {% include "ledger/partials/bill_content.html" %}
     </div>
 
-    {% if not is_pdf_render %}
+    <script src="{% static 'js/html2pdf.bundle.min.js' %}"></script>
     <script>
+        let cachedPdfBlob = null;
+        let pdfGenerationPromise = null;
+
+        async function generatePrintPdfBlob() {
+            const el = document.querySelector('.page-container');
+            if (!el || typeof html2pdf === 'undefined') return null;
+
+            const rawNumber = "{{ bill.bill_number|default:bill.pk|escapejs }}";
+            const safeNumber = rawNumber.replace(/[^a-zA-Z0-9_\-\.]/g, '_');
+            const filename = `Invoice_${safeNumber}.pdf`;
+
+            const opt = {
+                margin: [8, 8, 8, 8],
+                filename: filename,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: {
+                    scale: 2,
+                    useCORS: true,
+                    letterRendering: true,
+                    logging: false,
+                    scrollX: 0,
+                    scrollY: 0
+                },
+                jsPDF: {
+                    unit: 'mm',
+                    format: 'a4',
+                    orientation: 'portrait'
+                },
+                pagebreak: { mode: ['css', 'legacy'] }
+            };
+
+            return await html2pdf().set(opt).from(el).outputPdf('blob');
+        }
+
+        function downloadBlob(blob, filename) {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(() => URL.revokeObjectURL(url), 2000);
+        }
+
         window.onload = function() {
             const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
             if (!isMobile) {
                 window.print();
                 window.onafterprint = function() { window.close(); };
             }
+
+            // Pre-generate PDF blob quietly in background for instant sharing
+            setTimeout(() => {
+                if (!cachedPdfBlob && !pdfGenerationPromise) {
+                    pdfGenerationPromise = generatePrintPdfBlob()
+                        .then(b => { cachedPdfBlob = b; return b; })
+                        .catch(() => { pdfGenerationPromise = null; });
+                }
+            }, 600);
         };
 
         async function shareFromPrintView() {
-            const btn = document.getElementById('btn-share-print');
-            const originalText = btn ? btn.innerHTML : '';
-            if (btn) {
-                btn.disabled = true;
-                btn.innerHTML = 'Preparing PDF...';
+            const rawNumber = "{{ bill.bill_number|default:bill.pk|escapejs }}";
+            const safeNumber = rawNumber.replace(/[^a-zA-Z0-9_\-\.]/g, '_');
+            const filename = `Invoice_${safeNumber}.pdf`;
+            const partyName = "{{ bill.party.name|escapejs }}";
+
+            let blob = cachedPdfBlob;
+            if (!blob) {
+                const btn = document.getElementById('btn-share-print');
+                const originalText = btn ? btn.innerHTML : '';
+                if (btn) {
+                    btn.disabled = true;
+                    btn.innerHTML = 'Generating PDF...';
+                }
+                try {
+                    if (!pdfGenerationPromise) {
+                        pdfGenerationPromise = generatePrintPdfBlob();
+                    }
+                    blob = await pdfGenerationPromise;
+                    cachedPdfBlob = blob;
+                } catch (err) {
+                    alert('Unable to generate PDF: ' + (err.message || err));
+                    return;
+                } finally {
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.innerHTML = originalText;
+                    }
+                }
             }
-            try {
-                const res = await fetch("{% url 'bill-pdf' bill.pk %}");
-                if (!res.ok) throw new Error('Failed to generate PDF.');
-                const blob = await res.blob();
-                const rawNumber = "{{ bill.bill_number|default:bill.pk|escapejs }}";
-                const safeNumber = rawNumber.replace(/[^a-zA-Z0-9_\-\.]/g, '_');
-                const filename = `Invoice_${safeNumber}.pdf`;
-                const file = new File([blob], filename, { type: 'application/pdf' });
-                if (navigator.canShare && navigator.canShare({ files: [file] })) {
+
+            const file = new File([blob], filename, { type: 'application/pdf' });
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                try {
                     await navigator.share({
                         files: [file],
                         title: `Invoice ${rawNumber}`,
-                        text: `Invoice ${rawNumber} for {{ bill.party.name|escapejs }}`
+                        text: `Invoice ${rawNumber} for ${partyName}`
                     });
-                } else {
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = filename;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    setTimeout(() => URL.revokeObjectURL(url), 2000);
+                } catch (err) {
+                    if (err.name !== 'AbortError') {
+                        downloadBlob(blob, filename);
+                    }
                 }
-            } catch (err) {
-                if (err.name !== 'AbortError') {
-                    alert('Unable to share PDF: ' + (err.message || err));
-                }
-            } finally {
-                if (btn) {
-                    btn.disabled = false;
-                    btn.innerHTML = originalText;
-                }
+            } else {
+                downloadBlob(blob, filename);
             }
         }
     </script>
-    {% endif %}
 </body>
 </html>
