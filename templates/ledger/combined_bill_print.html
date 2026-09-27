@@ -114,7 +114,7 @@
 
     <div class="print-controls no-print">
         <button onclick="window.print()" class="btn-print">Print Invoice</button>
-        <button onclick="shareFromPrintView()" class="btn-share" id="btn-share-print">Share PDF</button>
+        <button onclick="shareFromPrintView()" class="btn-share" id="btn-share-print">Share</button>
         <button onclick="window.close()" class="btn-close">Close</button>
     </div>
 
@@ -135,19 +135,20 @@
             const rawNumber = "{{ bill.bill_number|default:bill.pk|escapejs }}";
             const partyName = "{{ bill.party.name|escapejs }}";
             const partyPhone = "{{ bill.party.phone_number|default:''|escapejs }}".replace(/[^0-9]/g, '');
-            const printUrl = window.location.href;
+            const printUrl = window.location.origin + "{% url 'shared-bill' bill.share_token %}";
 
-            const text = `*Invoice ${rawNumber}*\n` +
-                         `Party: ${partyName}\n` +
-                         `Date: {{ bill.date|date:"d-m-Y" }}\n` +
-                         `Total Amount: ₹{{ bill.rounded_total|indian_comma }}\n\n` +
-                         `View / Print Invoice:\n${printUrl}`;
+            const summaryText = `*Invoice ${rawNumber}*\n` +
+                                `Party: ${partyName}\n` +
+                                `Date: {{ bill.date|date:"d-m-Y" }}\n` +
+                                `Total Amount: ₹{{ bill.rounded_total|indian_comma }}`;
+
+            const fullMessage = `${summaryText}\n\nView / Print Invoice:\n${printUrl}`;
 
             if (navigator.share) {
                 try {
                     await navigator.share({
                         title: `Invoice ${rawNumber}`,
-                        text: text,
+                        text: summaryText,
                         url: printUrl
                     });
                     return;
@@ -158,8 +159,8 @@
 
             // Fallback: Open WhatsApp directly
             const waUrl = partyPhone ? 
-                `https://api.whatsapp.com/send?phone=${partyPhone}&text=${encodeURIComponent(text)}` :
-                `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
+                `https://api.whatsapp.com/send?phone=${partyPhone}&text=${encodeURIComponent(fullMessage)}` :
+                `https://api.whatsapp.com/send?text=${encodeURIComponent(fullMessage)}`;
             window.open(waUrl, '_blank');
         }
     </script>

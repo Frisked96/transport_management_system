@@ -354,18 +354,8 @@ def group_trips_for_bill(bill, bill_trips=None):
 
     return grouped_items
 
-def print_invoice(request, pk):
-    """Render print‑optimized invoice using the combined format."""
-    return print_combined_bill(request, pk)
-
-def print_annexure(request, pk):
-    """Render annexure using the combined format (legacy link support)."""
-    return print_combined_bill(request, pk)
-
-def print_combined_bill(request, pk):
-    """Render a combined invoice and annexure for printing."""
-    bill = get_object_or_404(Bill, pk=pk)
-
+def _get_combined_bill_context(bill):
+    """Helper to construct context for invoice & annexure print view."""
     # For invoice section
     invoice_items = group_trips_for_bill(bill)
 
@@ -392,7 +382,7 @@ def print_combined_bill(request, pk):
     if bill.bill_type != 'Standard':
         has_lr = any(bt.lr_no or (bt.trip and bt.trip.lr_no) for bt in bill_trips)
 
-    context = {
+    return {
         'bill': bill,
         'invoice_items': invoice_items,
         'date_groups': date_groups,
@@ -400,6 +390,38 @@ def print_combined_bill(request, pk):
         'has_discount': has_discount,
         'has_lr': has_lr,
     }
+
+@login_required
+def print_invoice(request, pk):
+    """Render print‑optimized invoice using the combined format."""
+    return print_combined_bill(request, pk)
+
+@login_required
+def print_annexure(request, pk):
+    """Render annexure using the combined format (legacy link support)."""
+    return print_combined_bill(request, pk)
+
+@login_required
+def print_combined_bill(request, pk):
+    """Render a combined invoice and annexure for printing (requires authentication)."""
+    bill = get_object_or_404(Bill, pk=pk)
+    context = _get_combined_bill_context(bill)
+    return render(request, 'ledger/combined_bill_print.html', context)
+
+def shared_bill_view(request, token):
+    """
+    Public view for client invoice sharing using a cryptographically signed token.
+    Does not require login, preventing unauthorized sequential ID guessing (IDOR).
+    """
+    from django.core import signing
+    from django.http import Http404
+    try:
+        bill_pk = signing.loads(token, salt='bill-share')
+        bill = get_object_or_404(Bill, pk=bill_pk)
+    except (signing.BadSignature, signing.SignatureExpired, ValueError, TypeError):
+        raise Http404("Invalid or expired invoice link.")
+
+    context = _get_combined_bill_context(bill)
     return render(request, 'ledger/combined_bill_print.html', context)
 
 

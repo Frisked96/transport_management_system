@@ -17,14 +17,9 @@
             <i class="fa-solid fa-print mr-2"></i>Print Invoice
         </a>
 
-        <!-- Direct WhatsApp Share -->
-        <a id="btn-whatsapp-invoice" href="#" target="_blank" class="flex items-center px-3.5 py-2 bg-emerald-600 text-white rounded-md text-sm font-medium hover:bg-emerald-700 shadow-sm transition-colors" title="Share invoice directly on WhatsApp">
-            <i class="fa-brands fa-whatsapp mr-1.5 text-base"></i><span>WhatsApp</span>
-        </a>
-
-        <!-- Share to Other Apps -->
-        <button type="button" id="btn-share-invoice" onclick="handleShareInvoice()" class="flex items-center px-3.5 py-2 bg-indigo-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700 shadow-sm transition-colors" title="Share invoice via other apps">
-            <i class="fa-solid fa-share-nodes mr-1.5"></i><span>Share</span>
+        <!-- Share Invoice -->
+        <button type="button" id="btn-share-invoice" onclick="handleShareInvoice()" class="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700 shadow-sm transition-colors" title="Share invoice via WhatsApp or other apps">
+            <i class="fa-solid fa-share-nodes mr-2"></i><span>Share</span>
         </button>
 
         {% if perms.ledger.add_financialrecord and not bill.is_adjustment %}
@@ -673,21 +668,25 @@
         const rawNumber = "{{ bill.bill_number|default:bill.pk|escapejs }}";
         const partyName = "{{ bill.party.name|escapejs }}";
         const partyPhone = "{{ bill.party.phone_number|default:''|escapejs }}".replace(/[^0-9]/g, '');
-        const printUrl = window.location.origin + "{% url 'print-combined-bill' bill.pk %}";
+        const printUrl = window.location.origin + "{% url 'shared-bill' bill.share_token %}";
 
-        const text = `*Invoice ${rawNumber}*\n` +
-                     `Party: ${partyName}\n` +
-                     `Date: {{ bill.date|date:"d-m-Y" }}\n` +
-                     `Total Amount: ₹{{ bill.rounded_total|indian_comma }}\n\n` +
-                     `View / Print Invoice:\n${printUrl}`;
+        // Summary without the URL - for navigator.share where the url parameter is appended automatically
+        const summaryText = `*Invoice ${rawNumber}*\n` +
+                            `Party: ${partyName}\n` +
+                            `Date: {{ bill.date|date:"d-m-Y" }}\n` +
+                            `Total Amount: ₹{{ bill.rounded_total|indian_comma }}`;
+
+        // Full message including the URL - for direct WhatsApp or clipboard copy
+        const fullMessage = `${summaryText}\n\nView / Print Invoice:\n${printUrl}`;
 
         const waUrl = partyPhone ? 
-            `https://api.whatsapp.com/send?phone=${partyPhone}&text=${encodeURIComponent(text)}` :
-            `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
+            `https://api.whatsapp.com/send?phone=${partyPhone}&text=${encodeURIComponent(fullMessage)}` :
+            `https://api.whatsapp.com/send?text=${encodeURIComponent(fullMessage)}`;
 
         return {
             title: `Invoice ${rawNumber}`,
-            text: text,
+            text: summaryText,
+            fullMessage: fullMessage,
             url: printUrl,
             waUrl: waUrl
         };
@@ -695,9 +694,6 @@
 
     document.addEventListener('DOMContentLoaded', function() {
         const data = getInvoiceShareData();
-        const waBtn = document.getElementById('btn-whatsapp-invoice');
-        if (waBtn) waBtn.href = data.waUrl;
-
         const modalWa = document.getElementById('modal-whatsapp-link');
         if (modalWa) modalWa.href = data.waUrl;
     });
@@ -734,9 +730,9 @@
 
     function copyInvoiceLink() {
         const data = getInvoiceShareData();
-        navigator.clipboard.writeText(data.url).then(() => {
+        navigator.clipboard.writeText(data.fullMessage).then(() => {
             closeShareModal();
-            showPdfToast('Invoice link copied to clipboard!', 'success');
+            showPdfToast('Invoice details & link copied!', 'success');
         }).catch(() => {
             showPdfToast('Failed to copy link.', 'error');
         });

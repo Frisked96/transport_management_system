@@ -1149,6 +1149,12 @@ class Bill(models.Model):
             return self.gst_amount
         return 0
 
+    @property
+    def share_token(self):
+        """Returns a cryptographically signed unguessable token for public sharing."""
+        from django.core import signing
+        return signing.dumps(self.pk, salt='bill-share')
+
     def get_trip_gst(self, trip):
         """Calculate GST amount for a specific trip in this bill context"""
         if not trip.revenue or self.gst_rate == 0:

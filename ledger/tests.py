@@ -1006,11 +1006,39 @@ class ViewOptimizationAndEndpointsTests(TestCase):
         self.assertEqual(dashboard_entry['last_payment_date'], self.payment.date)
 
     def test_print_combined_bill_endpoint(self):
-        """Test print-combined-bill endpoint renders invoice for printing"""
+        """Test print-combined-bill endpoint renders invoice for printing when authenticated"""
         from django.urls import reverse
         resp = self.client.get(reverse('print-combined-bill', kwargs={'pk': self.bill.pk}))
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, self.bill.bill_number)
+
+    def test_print_combined_bill_requires_login(self):
+        """Ensure unauthenticated access to sequential print-combined-bill is blocked and redirected to login"""
+        from django.test import Client
+        from django.urls import reverse
+        anon_client = Client()
+        resp = anon_client.get(reverse('print-combined-bill', kwargs={'pk': self.bill.pk}))
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn('/accounts/login/', resp.url)
+
+    def test_shared_bill_endpoint_public_access(self):
+        """Ensure recipient can view shared invoice via cryptographically signed token without logging in"""
+        from django.test import Client
+        from django.urls import reverse
+        anon_client = Client()
+        token = self.bill.share_token
+        self.assertTrue(token)
+        resp = anon_client.get(reverse('shared-bill', kwargs={'token': token}))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, self.bill.bill_number)
+
+    def test_shared_bill_invalid_token_returns_404(self):
+        """Ensure invalid or tampered token returns 404 Not Found"""
+        from django.test import Client
+        from django.urls import reverse
+        anon_client = Client()
+        resp = anon_client.get(reverse('shared-bill', kwargs={'token': 'tampered-or-invalid-token'}))
+        self.assertEqual(resp.status_code, 404)
 
 
 
