@@ -356,7 +356,10 @@
         async function shareFromPrintView() {
             const rawNumber = "{{ bill.bill_number|default:bill.pk|escapejs }}";
             const partyName = "{{ bill.party.name|escapejs }}";
-            const partyPhone = "{{ bill.party.phone_number|default:''|escapejs }}".replace(/[^0-9]/g, '');
+            let partyPhone = "{{ bill.party.phone_number|default:''|escapejs }}".replace(/[^0-9]/g, '');
+            if (partyPhone.length === 10) {
+                partyPhone = '91' + partyPhone;
+            }
             const printUrl = window.location.origin + "{% url 'shared-bill' bill.share_token %}";
 
             const summaryText = `*Invoice ${rawNumber}*\n` +
