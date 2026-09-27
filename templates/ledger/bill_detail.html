@@ -603,6 +603,22 @@
     }
 </script>
 
+<style>
+    .exporting-pdf .shadow-2xl,
+    .exporting-pdf .shadow-xl,
+    .exporting-pdf .shadow-lg,
+    .exporting-pdf .shadow-md,
+    .exporting-pdf .shadow-sm {
+        box-shadow: none !important;
+    }
+    .exporting-pdf .d-print-none {
+        display: none !important;
+    }
+    .exporting-pdf #invoice-annexure-card {
+        margin-top: 0 !important;
+    }
+</style>
+
 <script>
     let cachedPdfBlob = null;
     let pdfGenerationPromise = null;
@@ -660,44 +676,8 @@
             }
         }
 
-        // Clone the wrapper so we can style/sanitize it for print without altering the live UI
-        const clone = sourceWrapper.cloneNode(true);
-
-        // Remove drop shadows and border artifacts for clean print
-        clone.querySelectorAll('.shadow-2xl, .shadow-xl, .shadow-lg, .shadow-md, .shadow-sm').forEach(el => {
-            el.style.boxShadow = 'none';
-        });
-
-        // Remove screen-only elements (e.g. metadata/debug timestamps)
-        clone.querySelectorAll('.d-print-none').forEach(el => el.remove());
-
-        // Ensure cards have proper responsive widths inside standard A4 container
-        clone.querySelectorAll('#invoice-main-card, #invoice-annexure-card').forEach(el => {
-            el.style.maxWidth = '100%';
-            el.style.minWidth = '0';
-            el.style.margin = '0 auto';
-        });
-
-        const annexureCard = clone.querySelector('#invoice-annexure-card');
-        if (annexureCard) {
-            annexureCard.style.marginTop = '0';
-            annexureCard.classList.remove('mt-10');
-        }
-
-        // Create off-screen sandbox with fixed width (820px) to prevent mobile squishing
-        const sandbox = document.createElement('div');
-        sandbox.id = 'pdf-render-sandbox';
-        sandbox.style.position = 'fixed';
-        sandbox.style.left = '0';
-        sandbox.style.top = '0';
-        sandbox.style.width = '820px';
-        sandbox.style.backgroundColor = '#ffffff';
-        sandbox.style.padding = '0';
-        sandbox.style.margin = '0';
-        sandbox.style.zIndex = '-9999';
-        sandbox.style.pointerEvents = 'none';
-        sandbox.appendChild(clone);
-        document.body.appendChild(sandbox);
+        // Apply clean print styles (strip drop shadows, hide d-print-none, reset annexure top margin)
+        sourceWrapper.classList.add('exporting-pdf');
 
         const rawNumber = "{{ bill.bill_number|default:bill.pk|escapejs }}";
         const safeNumber = rawNumber.replace(/[^a-zA-Z0-9_\-\.]/g, '_');
@@ -713,8 +693,7 @@
                 letterRendering: true,
                 logging: false,
                 scrollX: 0,
-                scrollY: 0,
-                windowWidth: 820
+                scrollY: 0
             },
             jsPDF: {
                 unit: 'mm',
@@ -725,12 +704,10 @@
         };
 
         try {
-            const pdfBlob = await html2pdf().set(opt).from(clone).outputPdf('blob');
+            const pdfBlob = await html2pdf().set(opt).from(sourceWrapper).outputPdf('blob');
             return pdfBlob;
         } finally {
-            if (sandbox.parentNode) {
-                sandbox.parentNode.removeChild(sandbox);
-            }
+            sourceWrapper.classList.remove('exporting-pdf');
         }
     }
 
@@ -812,19 +789,5 @@
             if (btnDownload) btnDownload.disabled = false;
         }
     }
-
-    // Pre-generate in idle background after page render for instant click response
-    document.addEventListener('DOMContentLoaded', function() {
-        setTimeout(() => {
-            if (!pdfGenerationPromise && !cachedPdfBlob) {
-                pdfGenerationPromise = generateInvoicePdfBlob()
-                    .then(b => { cachedPdfBlob = b; return b; })
-                    .catch(e => {
-                        console.warn('Background PDF pre-generation error:', e);
-                        pdfGenerationPromise = null;
-                    });
-            }
-        }, 1200);
-    });
 </script>
 {% endblock %}
