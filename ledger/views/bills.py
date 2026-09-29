@@ -356,11 +356,11 @@ def group_trips_for_bill(bill, bill_trips=None):
 
 def _get_combined_bill_context(bill):
     """Helper to construct context for invoice & annexure print view."""
-    # For invoice section
-    invoice_items = group_trips_for_bill(bill)
-
     # For annexure
-    bill_trips = bill.bill_trips.select_related('trip', 'trip__vehicle').order_by('trip__date')
+    bill_trips = list(bill.bill_trips.select_related('trip', 'trip__vehicle').order_by('trip__date'))
+
+    # For invoice section
+    invoice_items = group_trips_for_bill(bill, bill_trips=bill_trips)
     date_groups = []
     for date, group in groupby(bill_trips, key=lambda bt: bt.trip.date if bt.trip else None):
         bt_list = list(group)

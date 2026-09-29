@@ -1040,6 +1040,89 @@ class ViewOptimizationAndEndpointsTests(TestCase):
         resp = anon_client.get(reverse('shared-bill', kwargs={'token': 'tampered-or-invalid-token'}))
         self.assertEqual(resp.status_code, 404)
 
+    def test_bill_detail_three_or_fewer_trips_renders_individual_freight_and_no_annexure(self):
+        """
+        Verify that for bills with 3 or fewer trips:
+        - The invoice details show individual freight charges per trip.
+        - Does NOT show consolidated charges text.
+        - Does NOT show the annexure card.
+        """
+        from django.urls import reverse
+        vehicle = Vehicle.objects.create(registration_plate="PB10XY1234")
+        route = Route.objects.create(pickup_location="Delhi", delivery_location="Mumbai")
+        trip1 = Trip.objects.create(
+            vehicle=vehicle,
+            party=self.party,
+            route=route,
+            weight=Decimal('10.00'),
+            rate_per_ton=Decimal('1500.00')
+        )
+        trip2 = Trip.objects.create(
+            vehicle=vehicle,
+            party=self.party,
+            route=route,
+            weight=Decimal('12.00'),
+            rate_per_ton=Decimal('1500.00')
+        )
+        bill = Bill.objects.create(
+            issuer=self.account,
+            party=self.party,
+            date=timezone.now().date(),
+            bill_type=Bill.TYPE_TRIP,
+            category=self.cat_income
+        )
+        bill.trips.add(trip1, trip2)
+        bill.sync_to_ledger()
+
+        resp = self.client.get(reverse('bill-detail', kwargs={'pk': bill.pk}))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "Freight Charges: PB10XY1234")
+        self.assertNotContains(resp, "Consolidated charges")
+        self.assertNotContains(resp, "invoice-annexure-card")
+
+    def test_bill_detail_more_than_three_trips_renders_consolidated_and_annexure(self):
+        """
+        Verify that for bills with more than 3 trips:
+        - The invoice details show consolidated charges summary.
+        - The annexure card is rendered in the bill detail view.
+        - The print-combined-bill view renders the annexure.
+        """
+        from django.urls import reverse
+        vehicle = Vehicle.objects.create(registration_plate="PB10AB5678")
+        route = Route.objects.create(pickup_location="Delhi", delivery_location="Jaipur")
+        trips = [
+            Trip.objects.create(
+                vehicle=vehicle,
+                party=self.party,
+                route=route,
+                weight=Decimal('15.00'),
+                rate_per_ton=Decimal('1200.00')
+            )
+            for _ in range(4)
+        ]
+        bill = Bill.objects.create(
+            issuer=self.account,
+            party=self.party,
+            date=timezone.now().date(),
+            bill_type=Bill.TYPE_TRIP,
+            category=self.cat_income
+        )
+        bill.trips.add(*trips)
+        bill.sync_to_ledger()
+
+        # Web detail view
+        resp = self.client.get(reverse('bill-detail', kwargs={'pk': bill.pk}))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "Consolidated charges for 4 trip(s)")
+        self.assertContains(resp, "invoice-annexure-card")
+        self.assertContains(resp, "Annexure")
+
+        # Print view
+        resp_print = self.client.get(reverse('print-combined-bill', kwargs={'pk': bill.pk}))
+        self.assertEqual(resp_print.status_code, 200)
+        self.assertContains(resp_print, "Annexure to Invoice")
+
+
 
 
 

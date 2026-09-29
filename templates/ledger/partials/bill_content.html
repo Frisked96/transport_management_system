@@ -76,7 +76,7 @@
                 {% if has_discount %}<td class="text-right" style="color: #c00;">{% if bill.discount %}{{ bill.discount|indian_comma }}{% else %}-{% endif %}</td>{% endif %}
                 <td class="text-right font-bold">{{ bill.subtotal|indian_comma }}</td>
             </tr>
-            {% elif bill_trips.count <= 3 %}
+            {% elif bill_trips|length <= 3 %}
             {% for bt in bill_trips %}
             <tr>
                 <td class="text-center">{{ forloop.counter }}</td>
@@ -245,7 +245,7 @@
     </div>
 
     <!-- PAGE 2: ANNEXURE (DETAILS) -->
-    {% if bill.bill_type != 'Standard' and bill_trips.count > 3 %}
+    {% if bill.bill_type != 'Standard' and bill_trips|length > 3 %}
     <div class="page-break"></div>
     
     <div class="annexure-title">Annexure to Invoice #{{ bill.bill_number }}</div>

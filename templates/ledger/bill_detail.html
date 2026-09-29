@@ -323,7 +323,7 @@
                         {% endif %}
                         <td class="border border-slate-900 p-3 text-xs text-right text-slate-900 font-black">₹{{ bill.subtotal|indian_comma }}</td>
                     </tr>
-                    {% elif bill_trips.count <= 3 %}
+                    {% elif bill_trips|length <= 3 %}
                         {% for bt in bill_trips %}
                         <tr>
                             <td class="border border-slate-900 p-3 text-xs text-center text-slate-500">{{ forloop.counter }}</td>
@@ -506,7 +506,7 @@
     </div>
 
     <!-- Annexure Preview (Detailed Breakdown) -->
-    {% if bill.bill_type == 'Trip' and bill_trips.count > 3 %}
+    {% if bill.bill_type != 'Standard' and bill_trips|length > 3 %}
     <div class="html2pdf__page-break"></div>
     <div id="invoice-annexure-card" class="bg-white max-w-[900px] mx-auto shadow-2xl p-6 md:p-12 text-slate-900 border border-slate-900 min-w-[750px] mt-10">
         <div class="text-center border-b border-slate-900 pb-4 mb-6">
