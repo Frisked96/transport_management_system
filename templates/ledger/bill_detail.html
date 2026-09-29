@@ -374,7 +374,7 @@
                     {% endif %}
                     <tr class="bg-slate-50 font-black">
                         <td colspan="{% if has_lr %}4{% else %}3{% endif %}" class="border border-slate-900 p-3 text-[10px] text-right uppercase tracking-widest text-slate-400">Total</td>
-                        <td class="border border-slate-900 p-3 text-xs text-center">{% if bill.total_weight %}{{ bill.total_weight|indian_comma }}{% else %}-{% endif %}</td>
+                        <td class="border border-slate-900 p-3 text-xs text-center">{% if total_weight or bill.total_weight %}{{ total_weight|default:bill.total_weight|indian_comma }}{% else %}-{% endif %}</td>
                         <td class="border border-slate-900 p-3"></td>
                         {% if has_discount %}
                         <td class="border border-slate-900 p-3"></td>
@@ -564,10 +564,10 @@
             <tfoot>
                 <tr class="bg-slate-50 font-black">
                     <td colspan="{% if has_lr %}5{% else %}4{% endif %}" class="border border-slate-900 p-2 text-[10px] text-right uppercase tracking-widest text-slate-400">Annexure Total</td>
-                    <td class="border border-slate-900 p-2 text-[10px] text-center">{{ bill.total_weight|indian_comma }}</td>
-                    <td class="border border-slate-900 p-2 text-[10px] text-right">₹{{ bill.bill_trips.all|sum_attribute:'trip.revenue'|indian_comma }}</td>
+                    <td class="border border-slate-900 p-2 text-[10px] text-center">{{ total_weight|default:bill.total_weight|indian_comma }}</td>
+                    <td class="border border-slate-900 p-2 text-[10px] text-right">₹{{ bill_trips|sum_attribute:'trip.revenue'|indian_comma }}</td>
                     {% if has_discount %}
-                    <td class="border border-slate-900 p-2 text-[10px] text-right">₹{{ bill.bill_trips.all|sum_attribute:'discount'|indian_comma }}</td>
+                    <td class="border border-slate-900 p-2 text-[10px] text-right">₹{{ bill_trips|sum_attribute:'discount'|indian_comma }}</td>
                     {% endif %}
                     {% if bill.gst_type != 'NONE' and bill.gst_rate > 0 %}
                     <td class="border border-slate-900 p-2 text-[10px] text-right">₹{{ bill.gst_amount|indian_comma }}</td>

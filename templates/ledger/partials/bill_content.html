@@ -135,7 +135,7 @@
         <tfoot>
             <tr class="font-bold" style="background-color: #f1f5f9;">
                 <td colspan="{% if has_lr %}4{% else %}3{% endif %}" class="text-right">Total</td>
-                <td class="text-right">{{ bill.total_weight|indian_comma }}</td>
+                <td class="text-right">{{ total_weight|default:bill.total_weight|indian_comma }}</td>
                 <td></td>
                 {% if has_discount %}<td></td>{% endif %}
                 <td class="text-right"><span class="rupee-symbol">Rs.</span> {{ bill.subtotal|indian_comma }}</td>
@@ -297,10 +297,10 @@
         <tfoot>
             <tr class="font-bold" style="background-color: #f1f5f9;">
                 <td colspan="{% if has_lr %}5{% else %}4{% endif %}" class="text-right">Total</td>
-                <td class="text-right">{{ bill.total_weight|indian_comma }}</td>
+                <td class="text-right">{{ total_weight|default:bill.total_weight|indian_comma }}</td>
                 <td></td>
-                <td class="text-right">Rs. {{ bill.bill_trips.all|sum_attribute:'trip.revenue'|indian_comma }}</td>
-                {% if has_discount %}<td class="text-right">Rs. {{ bill.bill_trips.all|sum_attribute:'discount'|indian_comma }}</td>{% endif %}
+                <td class="text-right">Rs. {{ bill_trips|sum_attribute:'trip.revenue'|indian_comma }}</td>
+                {% if has_discount %}<td class="text-right">Rs. {{ bill_trips|sum_attribute:'discount'|indian_comma }}</td>{% endif %}
                 {% if bill.gst_type != 'NONE' and bill.gst_rate > 0 %}
                 <td class="text-right">Rs. {{ bill.rounded_total|indian_comma }}</td>
                 {% endif %}

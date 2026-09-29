@@ -62,6 +62,10 @@ def update_bill_on_trip_change(sender, instance, **kwargs):
     if getattr(instance, '_updating_financial_caches', False):
         return
 
+    # Only sync bills if the trip is actually billed
+    if not instance.is_billed:
+        return
+
     # 1. Sync LR No to BillTrip context
     BillTrip.objects.filter(trip=instance).update(lr_no=instance.lr_no)
 
@@ -233,25 +237,22 @@ def update_balances_on_save(sender, instance, created, **kwargs):
             BalanceService.refresh_party_balance(instance.party)
     else:
         old_party = getattr(instance, '_old_instance').party if getattr(instance, '_old_instance') else None
-        if old_party:
+        if old_party and old_party != instance.party:
             BalanceService.refresh_party_balance(old_party)
-        if instance.party and instance.party != old_party:
-            BalanceService.refresh_party_balance(instance.party)
-        elif instance.party:
+        if instance.party:
             BalanceService.refresh_party_balance(instance.party)
 
-    # 2. Update CompanyAccounts
-    if created:
-        if instance.account:
-            BalanceService.refresh_account_balance(instance.account)
-    else:
-        old_account = getattr(instance, '_old_instance').account if getattr(instance, '_old_instance') else None
-        if old_account:
-            BalanceService.refresh_account_balance(old_account)
-        if instance.account and instance.account != old_account:
-            BalanceService.refresh_account_balance(instance.account)
-        elif instance.account:
-            BalanceService.refresh_account_balance(instance.account)
+    # 2. Update CompanyAccounts (Invoice records are accruals and excluded from account balances)
+    if instance.record_type != FinancialRecord.RECORD_TYPE_INVOICE:
+        if created:
+            if instance.account:
+                BalanceService.refresh_account_balance(instance.account)
+        else:
+            old_account = getattr(instance, '_old_instance').account if getattr(instance, '_old_instance') else None
+            if old_account and old_account != instance.account:
+                BalanceService.refresh_account_balance(old_account)
+            if instance.account:
+                BalanceService.refresh_account_balance(instance.account)
 
 @receiver(post_delete, sender=FinancialRecord)
 def update_balances_on_delete(sender, instance, **kwargs):
@@ -266,7 +267,7 @@ def update_balances_on_delete(sender, instance, **kwargs):
         except Party.DoesNotExist:
             pass
 
-    if instance.account_id:
+    if instance.record_type != FinancialRecord.RECORD_TYPE_INVOICE and instance.account_id:
         try:
             account = instance.account
             if account and not getattr(account, '_is_being_deleted', False):
@@ -278,6 +279,10 @@ def update_balances_on_delete(sender, instance, **kwargs):
 def update_trip_bill_caches_on_save(sender, instance, **kwargs):
     """Update Trip and Bill caches when a payment/deduction is recorded"""
     if getattr(instance, '_updating_financial_caches', False):
+        return
+
+    # Accrual records do not affect cash/deduction payment caches
+    if instance.record_type == FinancialRecord.RECORD_TYPE_INVOICE:
         return
 
     # 1. Update current associations
@@ -299,6 +304,10 @@ def update_trip_bill_caches_on_save(sender, instance, **kwargs):
 def update_trip_bill_caches_on_delete(sender, instance, **kwargs):
     """Update Trip and Bill caches when a payment/deduction is deleted"""
     if getattr(instance, '_updating_financial_caches', False):
+        return
+
+    # Accrual records do not affect cash/deduction payment caches
+    if instance.record_type == FinancialRecord.RECORD_TYPE_INVOICE:
         return
 
     if instance.associated_trip_id:

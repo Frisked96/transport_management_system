@@ -32,6 +32,10 @@ IGNORED_FIELDS = {
     'amount_received_cached',
     'gst_amount_cached',
     'tds_amount_cached',
+    'revenue_cached',
+    'total_revenue_cached',
+    'outstanding_balance_cached',
+    'payment_status_cached',
 }
 
 @receiver(pre_save)
@@ -44,7 +48,8 @@ def snapshot_instance_before_save(sender, instance, **kwargs):
     model_name = sender._meta.model_name.lower()
     if model_name in EXCLUDED_MODELS:
         return
-    if not instance.pk:
+    user = get_current_user()
+    if not user or not user.is_authenticated:
         return
 
     try:
@@ -54,7 +59,7 @@ def snapshot_instance_before_save(sender, instance, **kwargs):
             for field in sender._meta.fields:
                 if field.name in IGNORED_FIELDS:
                     continue
-                snapshot[field.name] = getattr(existing, field.name, None)
+                snapshot[field.name] = getattr(existing, field.attname, None)
             instance._activity_old_snapshot = snapshot
     except Exception:
         pass
@@ -74,7 +79,7 @@ def compute_field_diff(sender, instance):
             continue
 
         old_val = snapshot[fname]
-        new_val = getattr(instance, fname, None)
+        new_val = getattr(instance, field.attname, None)
 
         if old_val != new_val:
             verbose = field.verbose_name.title() if hasattr(field, 'verbose_name') else fname.replace('_', ' ').title()
@@ -92,6 +97,10 @@ def compute_field_diff(sender, instance):
                         rel_obj = getattr(instance, fld.name, None)
                         if rel_obj and getattr(rel_obj, 'pk', None) == val:
                             return str(rel_obj)
+                        rel_model = fld.related_model
+                        rel_instance = rel_model.objects.filter(pk=val).first()
+                        if rel_instance:
+                            return str(rel_instance)
                     except Exception:
                         pass
                 return str(val)

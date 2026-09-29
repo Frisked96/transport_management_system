@@ -284,3 +284,161 @@ class TripBusinessLogicTests(TestCase):
         with self.assertRaises(ValidationError):
             trip.save()
 
+    def test_changing_weight_updates_revenue_and_financial_record_and_party_balance(self):
+        """Test that changing weight updates trip revenue, financial record accrual, and party balance"""
+        trip = Trip.objects.create(
+            vehicle=self.owned_vehicle,
+            party=self.debtor,
+            route=self.route_none,
+            revenue_type=Trip.REVENUE_PER_TON,
+            weight=Decimal('10.00'),
+            rate_per_ton=Decimal('1000.00')
+        )
+        self.assertEqual(trip.revenue, Decimal('10000.00'))
+        self.assertEqual(trip.total_revenue, Decimal('10000.00'))
+
+        # Check accrual record
+        accrual = FinancialRecord.objects.get(associated_trip=trip, record_type=FinancialRecord.RECORD_TYPE_INVOICE)
+        self.assertEqual(accrual.amount, Decimal('10000.00'))
+
+        # Check party balance
+        self.debtor.refresh_from_db()
+        self.assertEqual(self.debtor.current_balance_cached, Decimal('10000.00'))
+
+        # Now update weight
+        trip.weight = Decimal('25.00')
+        trip.save()
+
+        trip.refresh_from_db()
+        self.assertEqual(trip.revenue, Decimal('25000.00'))
+        self.assertEqual(trip.total_revenue, Decimal('25000.00'))
+
+        accrual.refresh_from_db()
+        self.assertEqual(accrual.amount, Decimal('25000.00'))
+
+        self.debtor.refresh_from_db()
+        self.assertEqual(self.debtor.current_balance_cached, Decimal('25000.00'))
+
+    def test_editing_trip_date_updates_sequence_and_financial_record_date(self):
+        """Test that editing a trip's date updates vehicle trip sequence and financial record date"""
+        import datetime
+        date_1 = datetime.date(2026, 9, 10)
+        date_2 = datetime.date(2026, 9, 20)
+        date_early = datetime.date(2026, 9, 5)
+
+        trip1 = Trip.objects.create(
+            vehicle=self.owned_vehicle,
+            party=self.debtor,
+            route=self.route_none,
+            revenue_type=Trip.REVENUE_FIXED,
+            rate_per_ton=Decimal('5000.00'),
+            date=date_1
+        )
+        trip2 = Trip.objects.create(
+            vehicle=self.owned_vehicle,
+            party=self.debtor,
+            route=self.route_none,
+            revenue_type=Trip.REVENUE_FIXED,
+            rate_per_ton=Decimal('5000.00'),
+            date=date_2
+        )
+
+        reg = self.owned_vehicle.registration_plate
+        self.assertEqual(trip1.trip_number, f"{reg}-1")
+        self.assertEqual(trip2.trip_number, f"{reg}-2")
+
+        # Edit trip2 to an earlier date
+        trip2.date = date_early
+        trip2.save()
+
+        trip1.refresh_from_db()
+        trip2.refresh_from_db()
+        # trip2 is now chronologically first
+        self.assertEqual(trip2.trip_number, f"{reg}-1")
+        self.assertEqual(trip1.trip_number, f"{reg}-2")
+
+        # FinancialRecord for trip2 should have the updated date
+        accrual2 = FinancialRecord.objects.get(associated_trip=trip2, record_type=FinancialRecord.RECORD_TYPE_INVOICE)
+        self.assertEqual(accrual2.date, date_early)
+
+    def test_creating_new_trip_on_older_date_updates_newer_trips_sequence(self):
+        """Test that adding a backdated trip re-sequences newer trips for that vehicle"""
+        import datetime
+        date_mid = datetime.date(2026, 9, 10)
+        date_late = datetime.date(2026, 9, 20)
+        date_early = datetime.date(2026, 9, 5)
+
+        trip_mid = Trip.objects.create(
+            vehicle=self.owned_vehicle,
+            party=self.debtor,
+            route=self.route_none,
+            revenue_type=Trip.REVENUE_FIXED,
+            rate_per_ton=Decimal('5000.00'),
+            date=date_mid
+        )
+        trip_late = Trip.objects.create(
+            vehicle=self.owned_vehicle,
+            party=self.debtor,
+            route=self.route_none,
+            revenue_type=Trip.REVENUE_FIXED,
+            rate_per_ton=Decimal('5000.00'),
+            date=date_late
+        )
+
+        reg = self.owned_vehicle.registration_plate
+        self.assertEqual(trip_mid.trip_number, f"{reg}-1")
+        self.assertEqual(trip_late.trip_number, f"{reg}-2")
+
+        # Create a new trip with earlier date
+        trip_early = Trip.objects.create(
+            vehicle=self.owned_vehicle,
+            party=self.debtor,
+            route=self.route_none,
+            revenue_type=Trip.REVENUE_FIXED,
+            rate_per_ton=Decimal('5000.00'),
+            date=date_early
+        )
+
+        trip_early.refresh_from_db()
+        trip_mid.refresh_from_db()
+        trip_late.refresh_from_db()
+
+        self.assertEqual(trip_early.trip_number, f"{reg}-1")
+        self.assertEqual(trip_mid.trip_number, f"{reg}-2")
+        self.assertEqual(trip_late.trip_number, f"{reg}-3")
+
+    def test_user_activity_log_tracks_trip_changes(self):
+        """Test that changes by an authenticated user are logged in LogEntry with readable diffs"""
+        from accounts.middleware import _thread_locals
+        from django.contrib.admin.models import LogEntry, CHANGE
+
+        user = User.objects.create_user(username='editor_user', password='password')
+        _thread_locals.user = user
+        try:
+            trip = Trip.objects.create(
+                vehicle=self.owned_vehicle,
+                party=self.debtor,
+                route=self.route_none,
+                revenue_type=Trip.REVENUE_PER_TON,
+                date=timezone.now().date(),
+                weight=Decimal('10.00'),
+                rate_per_ton=Decimal('1000.00')
+            )
+
+            trip.weight = Decimal('15.00')
+            trip.save()
+
+            trip_ct = ContentType.objects.get_for_model(Trip)
+            log = LogEntry.objects.filter(
+                user=user,
+                action_flag=CHANGE,
+                content_type=trip_ct,
+                object_id=str(trip.pk)
+            ).first()
+
+            self.assertIsNotNone(log)
+            self.assertEqual(log.change_message, 'Weight (Tons): 10.00 → 15.00')
+        finally:
+            _thread_locals.user = None
+
+

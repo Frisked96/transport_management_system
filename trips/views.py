@@ -9,7 +9,7 @@ from django.urls import reverse_lazy
 from django.contrib import messages
 from django.db.models import Q, Sum, F, Case, When, Value, DecimalField, ExpressionWrapper, Avg, Min, Max, Count
 from django.db.models.functions import TruncMonth
-from django.db import models
+from django.db import models, transaction
 from django.utils import timezone
 from django import forms
 from django.forms import modelformset_factory
@@ -287,12 +287,13 @@ class TripBulkCreateView(LoginRequiredMixin, PermissionRequiredMixin, FormView):
         return context
 
     def form_valid(self, form):
-        instances = form.save(commit=False)
-        for instance in instances:
-            instance.created_by = self.request.user
-            if not instance.date:
-                 instance.date = timezone.now().date()
-            instance.save()
+        with transaction.atomic():
+            instances = form.save(commit=False)
+            for instance in instances:
+                instance.created_by = self.request.user
+                if not instance.date:
+                     instance.date = timezone.now().date()
+                instance.save()
         messages.success(self.request, f'{len(instances)} Trips created successfully!')
         return super().form_valid(form)
 

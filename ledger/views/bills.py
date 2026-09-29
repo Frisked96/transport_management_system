@@ -184,11 +184,15 @@ class BillDetailView(LoginRequiredMixin, BaseLedgerPermissionMixin, DetailView):
     template_name = 'ledger/bill_detail.html'
     context_object_name = 'bill'
 
+    def get_queryset(self):
+        return Bill.objects.select_related('party', 'category', 'original_bill', 'created_by')
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         bill = self.object
         bill_trips = list(bill.bill_trips.select_related('trip', 'trip__vehicle', 'trip__vehicle__vendor').order_by('trip__date'))
         context['bill_trips'] = bill_trips
+        context['bill_trips_count'] = len(bill_trips)
 
         # Add the same summarized items used in the print view, reusing pre-fetched bill_trips
         invoice_items = group_trips_for_bill(bill, bill_trips=bill_trips)
@@ -208,6 +212,13 @@ class BillDetailView(LoginRequiredMixin, BaseLedgerPermissionMixin, DetailView):
         context['has_discount'] = has_discount
         context['has_lr'] = has_lr
 
+        # Precompute total weight in memory without extra queries
+        if bill.bill_type == 'Standard':
+            total_weight = bill.standard_weight or 0
+        else:
+            total_weight = sum((bt.trip.weight or 0) for bt in bill_trips if bt.trip)
+        context['total_weight'] = total_weight
+
         # Extract unique vendors for all attached vehicles in this bill
         associated_vendors = set()
         for bt in bill_trips:
@@ -215,11 +226,12 @@ class BillDetailView(LoginRequiredMixin, BaseLedgerPermissionMixin, DetailView):
                 associated_vendors.add(bt.trip.vehicle.vendor)
         context['associated_vendors'] = list(associated_vendors)
 
-        # Related ledger entries for internal summary
-        context['invoice_record'] = bill.financial_records.filter(record_type='Invoice', party=bill.party).first()
+        # Related ledger entries for internal summary - fetch once in a single query
+        all_bill_records = list(bill.financial_records.select_related('category', 'party').all())
+        context['invoice_record'] = next((r for r in all_bill_records if r.record_type == 'Invoice' and r.party_id == bill.party_id), None)
         
         # Get vendor specific invoice records (Lorry Hire accruals)
-        vendor_records = bill.financial_records.filter(record_type='Invoice').exclude(party=bill.party)
+        vendor_records = [r for r in all_bill_records if r.record_type == 'Invoice' and r.party_id != bill.party_id]
         context['vendor_records'] = vendor_records
 
         # Comprehensive list of payments/credits contributing to this bill
@@ -227,7 +239,7 @@ class BillDetailView(LoginRequiredMixin, BaseLedgerPermissionMixin, DetailView):
         seen_records = set()
 
         # 1. Direct Ledger Entries (where associated_bill = bill)
-        direct_records = bill.financial_records.exclude(record_type='Invoice').select_related('category')
+        direct_records = [r for r in all_bill_records if r.record_type != 'Invoice']
         for rec in direct_records:
             related_payments.append({
                 'financial_record': rec,
@@ -253,46 +265,46 @@ class BillDetailView(LoginRequiredMixin, BaseLedgerPermissionMixin, DetailView):
                         p['type'] = 'Direct + Allocated'
 
         # 3. Trip-based Payments (for trip-based bills)
-        if bill.bill_type == 'Trip':
-            trip_ids = bill.trips.values_list('id', flat=True)
-            
-            # Trip Allocations
-            trip_allocations = TripAllocation.objects.filter(
-                trip_id__in=trip_ids
-            ).select_related('financial_record', 'financial_record__category', 'trip', 'trip__vehicle')
-            
-            for ta in trip_allocations:
-                if ta.financial_record_id not in seen_records:
-                    vehicle_plate = ta.trip.vehicle.registration_plate if (ta.trip and ta.trip.vehicle) else (ta.trip.trip_number if ta.trip else '')
-                    related_payments.append({
-                        'financial_record': ta.financial_record,
-                        'amount': ta.amount,
-                        'type': f"Trip {vehicle_plate or (ta.trip.pk if ta.trip else '')}".strip()
-                    })
-                    seen_records.add(ta.financial_record_id)
-                else:
-                    for p in related_payments:
-                        if p['financial_record'].pk == ta.financial_record_id:
-                            p['amount'] += ta.amount
+        if bill.bill_type != 'Standard':
+            trip_ids = [bt.trip_id for bt in bill_trips if bt.trip_id]
+            if trip_ids:
+                # Trip Allocations
+                trip_allocations = TripAllocation.objects.filter(
+                    trip_id__in=trip_ids
+                ).select_related('financial_record', 'financial_record__category', 'trip', 'trip__vehicle')
+                
+                for ta in trip_allocations:
+                    if ta.financial_record_id not in seen_records:
+                        vehicle_plate = ta.trip.vehicle.registration_plate if (ta.trip and ta.trip.vehicle) else (ta.trip.trip_number if ta.trip else '')
+                        related_payments.append({
+                            'financial_record': ta.financial_record,
+                            'amount': ta.amount,
+                            'type': f"Trip {vehicle_plate or (ta.trip.pk if ta.trip else '')}".strip()
+                        })
+                        seen_records.add(ta.financial_record_id)
+                    else:
+                        for p in related_payments:
+                            if p['financial_record'].pk == ta.financial_record_id:
+                                p['amount'] += ta.amount
 
-            # Direct Trip Records
-            direct_trip_records = FinancialRecord.objects.filter(
-                associated_trip_id__in=trip_ids
-            ).exclude(
-                Q(record_type='Invoice') |
-                Q(associated_bill=bill) |
-                Q(bill_allocations__bill=bill)
-            ).select_related('category', 'associated_trip', 'associated_trip__vehicle')
-            
-            for tr in direct_trip_records:
-                if tr.pk not in seen_records:
-                    vehicle_plate = tr.associated_trip.vehicle.registration_plate if (tr.associated_trip and tr.associated_trip.vehicle) else (tr.associated_trip.trip_number if tr.associated_trip else '')
-                    related_payments.append({
-                        'financial_record': tr,
-                        'amount': tr.amount,
-                        'type': f"Trip {vehicle_plate or (tr.associated_trip.pk if tr.associated_trip else '')}".strip()
-                    })
-                    seen_records.add(tr.pk)
+                # Direct Trip Records
+                direct_trip_records = FinancialRecord.objects.filter(
+                    associated_trip_id__in=trip_ids
+                ).exclude(
+                    Q(record_type='Invoice') |
+                    Q(associated_bill=bill) |
+                    Q(bill_allocations__bill=bill)
+                ).select_related('category', 'associated_trip', 'associated_trip__vehicle')
+                
+                for tr in direct_trip_records:
+                    if tr.pk not in seen_records:
+                        vehicle_plate = tr.associated_trip.vehicle.registration_plate if (tr.associated_trip and tr.associated_trip.vehicle) else (tr.associated_trip.trip_number if tr.associated_trip else '')
+                        related_payments.append({
+                            'financial_record': tr,
+                            'amount': tr.amount,
+                            'type': f"Trip {vehicle_plate or (tr.associated_trip.pk if tr.associated_trip else '')}".strip()
+                        })
+                        seen_records.add(tr.pk)
 
         # Sort payments by date
         related_payments.sort(key=lambda x: (x['financial_record'].date, x['financial_record'].created_at), reverse=True)
@@ -382,6 +394,8 @@ def _get_combined_bill_context(bill):
     if bill.bill_type != 'Standard':
         has_lr = any(bt.lr_no or (bt.trip and bt.trip.lr_no) for bt in bill_trips)
 
+    total_weight = bill.standard_weight or 0 if bill.bill_type == 'Standard' else sum(bt.trip.weight or 0 for bt in bill_trips if bt.trip)
+
     return {
         'bill': bill,
         'invoice_items': invoice_items,
@@ -389,6 +403,7 @@ def _get_combined_bill_context(bill):
         'bill_trips': bill_trips,
         'has_discount': has_discount,
         'has_lr': has_lr,
+        'total_weight': total_weight,
     }
 
 @login_required

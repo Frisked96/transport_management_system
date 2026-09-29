@@ -1,6 +1,7 @@
 """
 Models for Trips application
 """
+from decimal import Decimal
 from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
@@ -328,7 +329,10 @@ class Trip(models.Model):
         super().clean()
         if self.pk and self.is_billed:
             try:
-                old_instance = Trip.objects.get(pk=self.pk)
+                old_instance = getattr(self, '_old_instance', None)
+                if old_instance is None:
+                    old_instance = Trip.objects.get(pk=self.pk)
+                    self._old_instance = old_instance
                 
                 financial_fields = ['weight', 'rate_per_ton', 'revenue_type', 'route', 'party']
                 changed_fields = []
@@ -352,6 +356,12 @@ class Trip(models.Model):
             except Trip.DoesNotExist:
                 pass
 
+    def refresh_from_db(self, *args, **kwargs):
+        super().refresh_from_db(*args, **kwargs)
+        for attr in ('_is_billed_cache', '_associated_bill_cache', '_old_instance'):
+            if hasattr(self, attr):
+                delattr(self, attr)
+
     def delete(self, *args, **kwargs):
         """
         Override delete to set a flag that prevents signals from trying to save 
@@ -365,10 +375,11 @@ class Trip(models.Model):
         Override save to handle business logic
         """
         is_new = self._state.adding
-        old_instance = None
-        if not is_new:
+        old_instance = getattr(self, '_old_instance', None)
+        if not is_new and old_instance is None:
             try:
                 old_instance = Trip.objects.get(pk=self.pk)
+                self._old_instance = old_instance
             except Trip.DoesNotExist:
                 # If the trip was deleted, we shouldn't be saving it
                 return
@@ -391,9 +402,15 @@ class Trip(models.Model):
         
         # If trip exists, check if vehicle changed
         vehicle_changed = False
-        if not is_new and old_instance.vehicle != self.vehicle:
-            vehicle_changed = True
-            self.trip_number = "" # Clear to trigger regeneration
+        if not is_new and old_instance:
+            vehicle_changed = (old_instance.vehicle_id != self.vehicle_id)
+            if vehicle_changed:
+                self.trip_number = "" # Clear to trigger regeneration
+            self._date_changed = (old_instance.date != self.date)
+            self._vehicle_changed = vehicle_changed
+        else:
+            self._date_changed = False
+            self._vehicle_changed = False
 
         # Generate Trip Number if not present or cleared
         if not self.trip_number:
@@ -433,19 +450,34 @@ class Trip(models.Model):
                 if old_instance.party != self.party:
                     raise ValidationError(f"Cannot change Party for Trip {self.trip_number} as it is already billed.")
 
-        # Update revenue caches before save
-        self._bypass_cache = True
-        try:
-            self.revenue_cached = self.revenue
-            self.gst_amount_cached = self.gst_amount
-            self.total_revenue_cached = self.total_revenue
-            
-            # Recalculate outstanding/status even for existing trips
-            self.amount_received_cached = self.amount_received
-            self.outstanding_balance_cached = self.outstanding_balance
-            self.payment_status_cached = self.payment_status
-        finally:
-            del self._bypass_cache
+        # Update revenue caches before save unless already updating them
+        if not getattr(self, '_updating_financial_caches', False):
+            self._bypass_cache = True
+            try:
+                rev = self.revenue
+                gst = self.gst_amount
+                total_rev = rev + gst
+                received = self.calculate_amount_received() if self.pk else Decimal('0')
+                outstanding = total_rev - received
+                
+                if total_rev <= 0:
+                    status = self.PAYMENT_STATUS_UNPAID
+                elif received >= total_rev:
+                    status = self.PAYMENT_STATUS_PAID
+                elif received > 0:
+                    status = self.PAYMENT_STATUS_PARTIAL
+                else:
+                    status = self.PAYMENT_STATUS_UNPAID
+
+                self.revenue_cached = rev
+                self.gst_amount_cached = gst
+                self.total_revenue_cached = total_rev
+                self.amount_received_cached = received
+                self.outstanding_balance_cached = outstanding
+                self.payment_status_cached = status
+            finally:
+                del self._bypass_cache
+
         
         # Perform the actual save
         super().save(*args, **kwargs)
@@ -469,6 +501,11 @@ class Trip(models.Model):
 
         # Sync to Ledger
         self.sync_ledger_invoice()
+
+        # Clean up transient instance variables
+        for attr in ('_is_billed_cache', '_associated_bill_cache', '_old_instance', '_date_changed', '_vehicle_changed'):
+            if hasattr(self, attr):
+                delattr(self, attr)
 
     def update_financial_caches(self):
         """
@@ -521,18 +558,23 @@ class Trip(models.Model):
         if hasattr(self, '_prefetched_objects_cache') and 'bills' in self._prefetched_objects_cache:
             return len(self.bills.all()) > 0
             
-        return self.bills.exists()
+        if not hasattr(self, '_is_billed_cache'):
+            self._is_billed_cache = self.bills.exists()
+        return self._is_billed_cache
 
     @property
     def associated_bill(self):
         """Returns the first associated bill (if any)"""
-        if not self.pk:
+        if not self.pk or not self.is_billed:
             return None
             
         if hasattr(self, '_prefetched_objects_cache') and 'bills' in self._prefetched_objects_cache:
             bills = self.bills.all()
             return bills[0] if bills else None
-        return self.bills.first()
+
+        if not hasattr(self, '_associated_bill_cache'):
+            self._associated_bill_cache = self.bills.first()
+        return self._associated_bill_cache
 
     @property
     def revenue(self):
