@@ -87,7 +87,8 @@ class LedgerService:
         """
         Resequence all entry numbers to remove gaps.
         """
-        from ledger.models import FinancialRecord, Sequence, Max
+        from ledger.models import FinancialRecord, Sequence
+        from django.db.models import Max
         
         with transaction.atomic():
             records = list(FinancialRecord.objects.all().order_by('date', 'created_at'))
