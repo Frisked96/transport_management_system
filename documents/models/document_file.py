@@ -1,31 +1,15 @@
+import os
 from django.db import models
-from django.utils import timezone
-from django.contrib.auth.models import User
+from django.db.models.signals import post_delete, pre_save
+from django.dispatch import receiver
+from .document import Document
 
-def document_upload_path(instance, filename):
-    """
-    Determines the upload path for a document.
-    Format: documents/<identifier>/<filename>
-    """
-    import os
-    if instance.vehicle:
-        identifier = str(instance.vehicle.registration_plate).replace(' ', '_').replace('/', '-')
-    elif instance.driver:
-        # Prefer employee ID, fallback to name
-        id_part = instance.driver.employee_id or instance.driver.name
-        identifier = str(id_part).replace(' ', '_').replace('/', '-')
-    else:
-        identifier = 'miscellaneous'
-    
-    # We return the full path. The storage backend will handle folder creation.
-    return os.path.join('documents', identifier, filename)
 
 def document_file_upload_path(instance, filename):
     """
     Determines the upload path for a document file with renaming logic.
     Format: documents/<identifier>/<DocumentName>_<index>.<ext>
     """
-    import os
     document = instance.document
     if document.vehicle:
         identifier = str(document.vehicle.registration_plate).replace(' ', '_').replace('/', '-')
@@ -57,89 +41,6 @@ def document_file_upload_path(instance, filename):
     
     return os.path.join('documents', identifier, new_filename)
 
-class Document(models.Model):
-    """
-    Document model for tracking expirations (Insurance, Permits, Licenses)
-    """
-    vehicle = models.ForeignKey(
-        'fleet.Vehicle',
-        on_delete=models.CASCADE,
-        null=True,
-        blank=True,
-        related_name='documents',
-        verbose_name='Vehicle'
-    )
-    driver = models.ForeignKey(
-        'drivers.Driver',
-        on_delete=models.CASCADE,
-        null=True,
-        blank=True,
-        related_name='documents',
-        verbose_name='Driver'
-    )
-
-    document_name = models.CharField(
-        max_length=100,
-        verbose_name='Document Name'
-    )
-
-    document_number = models.CharField(
-        max_length=100,
-        verbose_name='Document Number',
-        null=True,
-        blank=True
-    )
-
-    expiry_date = models.DateField(
-        verbose_name='Expiry Date',
-        null=True,
-        blank=True
-    )
-
-    never_expires = models.BooleanField(
-        default=False,
-        verbose_name='Never Expires'
-    )
-
-    notes = models.TextField(
-        blank=True,
-        null=True,
-        verbose_name='Notes'
-    )
-
-    added_by = models.ForeignKey(
-        User,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='uploaded_documents',
-        verbose_name='Added By'
-    )
-
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        verbose_name = 'Document'
-        verbose_name_plural = 'Documents'
-        ordering = ['expiry_date', '-created_at']
-
-    def __str__(self):
-        if self.document_number:
-            return f"{self.document_name} - {self.document_number}"
-        return self.document_name
-
-    @property
-    def is_expired(self):
-        if self.never_expires or not self.expiry_date:
-            return False
-        return self.expiry_date < timezone.now().date()
-
-    @property
-    def days_until_expiry(self):
-        if self.never_expires or not self.expiry_date:
-            return None
-        delta = self.expiry_date - timezone.now().date()
-        return delta.days
 
 class DocumentFile(models.Model):
     """
@@ -197,8 +98,6 @@ class DocumentFile(models.Model):
 
 
 # --- Signals ---
-from django.db.models.signals import post_delete, pre_save
-from django.dispatch import receiver
 
 @receiver(pre_save, sender=DocumentFile)
 def delete_old_docfile_on_change(sender, instance, **kwargs):
@@ -211,6 +110,7 @@ def delete_old_docfile_on_change(sender, instance, **kwargs):
     new_file = instance.file
     if old_file and old_file != new_file:
         old_file.delete(save=False)
+
 
 @receiver(post_delete, sender=DocumentFile)
 def delete_docfile_on_delete(sender, instance, **kwargs):
