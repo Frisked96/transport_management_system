@@ -104,12 +104,22 @@
                     <div class="px-4 py-3">
                         <div class="flex items-start justify-between gap-3">
                             <div class="min-w-0 flex-1">
-                                <p class="text-sm font-bold text-slate-900 truncate">{{ doc.document_name }}</p>
-                                <p class="text-xs text-slate-500 mt-0.5">{{ doc.document_number|default:"-" }}</p>
+                                <div class="flex items-center gap-1.5">
+                                    <p class="text-sm font-bold text-slate-900 truncate">{{ doc.document_name }}</p>
+                                    {% if doc.is_base_document %}
+                                    <span class="px-1.5 py-0.2 rounded text-[8px] font-black uppercase bg-slate-100 text-slate-600">Base</span>
+                                    {% endif %}
+                                </div>
+                                <p class="text-xs text-slate-500 mt-0.5">
+                                    Doc #: {{ doc.document_number|default:"-" }}
+                                    {% if doc.cost > 0 %}&bull; ₹{{ doc.cost|floatformat:0 }}{% endif %}
+                                </p>
                             </div>
                             <div class="flex-shrink-0">
                                 {% if doc.never_expires %}
                                 <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-800">Permanent</span>
+                                {% elif doc.status == 'Not Set' %}
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600">Not Set</span>
                                 {% elif doc.is_expired %}
                                 <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-800">Expired</span>
                                 {% elif doc.days_until_expiry <= 30 %}
@@ -124,26 +134,42 @@
                                 <p class="text-xs text-slate-500">
                                     {% if doc.never_expires %}
                                     <span class="italic text-slate-400">No Expiry</span>
+                                    {% elif doc.expiry_date %}
+                                    Validity: {% if doc.valid_from %}{{ doc.valid_from|date:"d/m/y" }} - {% endif %}{{ doc.expiry_date|date:"d/m/y" }}
                                     {% else %}
-                                    Expires: {{ doc.expiry_date|date:"M d, Y" }}
+                                    <span class="italic text-slate-400">Validity not set</span>
                                     {% endif %}
                                 </p>
                                 <p class="text-[9px] text-slate-400 font-black uppercase tracking-tighter mt-0.5">
                                     Added By: {{ doc.added_by.username|default:"System" }} | {{ doc.created_at|date:"M d, H:i" }}
                                 </p>
                             </div>
-                            <div class="flex items-center space-x-3">
+                            <div class="flex items-center space-x-1.5">
+                                {% if doc.latest_renewal and doc.latest_renewal.receipt_file %}
+                                <a href="{% url 'renewal-file-view' doc.latest_renewal.pk %}" target="_blank" class="text-slate-400 hover:text-emerald-600 p-2" title="View Current Scanned Copy">
+                                    <i class="fa-solid fa-file-lines"></i>
+                                </a>
+                                {% else %}
                                 {% for doc_file in doc.files.all %}
-                                <a href="{% url 'document-view' doc_file.pk %}" target="_blank" class="text-slate-400 hover:text-emerald-600 min-h-[44px] min-w-[44px] inline-flex items-center justify-center" title="View Scanned Copy">
+                                <a href="{% url 'document-view' doc_file.pk %}" target="_blank" class="text-slate-400 hover:text-emerald-600 p-2" title="View Scanned Copy">
                                     <i class="fa-solid fa-file-lines"></i>
                                 </a>
                                 {% endfor %}
-                                <a href="{% url 'document-update' doc.pk %}" class="text-slate-400 hover:text-blue-600 min-h-[44px] min-w-[44px] inline-flex items-center justify-center" title="Edit">
+                                {% endif %}
+                                <a href="{% url 'document-renew' doc.pk %}" class="px-2 py-1 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded text-[11px] font-bold" title="Renew">
+                                    <i class="fa-solid fa-arrows-rotate mr-0.5"></i>Renew
+                                </a>
+                                <a href="{% url 'document-history' doc.pk %}" class="text-slate-400 hover:text-blue-600 p-2" title="History">
+                                    <i class="fa-solid fa-clock-rotate-left"></i>
+                                </a>
+                                <a href="{% url 'document-update' doc.pk %}" class="text-slate-400 hover:text-amber-600 p-2" title="Edit">
                                     <i class="fa-solid fa-pen-to-square"></i>
                                 </a>
-                                <a href="{% url 'document-delete' doc.pk %}" class="text-slate-400 hover:text-rose-600 min-h-[44px] min-w-[44px] inline-flex items-center justify-center" title="Delete">
+                                {% if not doc.is_base_document %}
+                                <a href="{% url 'document-delete' doc.pk %}" class="text-slate-400 hover:text-rose-600 p-2" title="Delete">
                                     <i class="fa-solid fa-trash-can"></i>
                                 </a>
+                                {% endif %}
                             </div>
                         </div>
                     </div>
@@ -158,7 +184,8 @@
                             <tr>
                                 <th class="px-4 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-100">Name</th>
                                 <th class="px-4 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-100">Number</th>
-                                <th class="px-4 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-100">Expiry Date</th>
+                                <th class="px-4 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-100">Validity (From - To)</th>
+                                <th class="px-4 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-100 text-right">Cost</th>
                                 <th class="px-4 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-100">Status</th>
                                 <th class="px-4 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-100 text-right">Actions</th>
                             </tr>
@@ -167,22 +194,34 @@
                             {% for doc in vehicle.documents.all %}
                             <tr class="hover:bg-slate-50 transition-colors">
                                 <td class="px-4 py-3">
-                                    <div class="text-sm font-medium text-slate-800">{{ doc.document_name }}</div>
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="text-sm font-medium text-slate-800">{{ doc.document_name }}</span>
+                                        {% if doc.is_base_document %}
+                                        <span class="px-1.5 py-0.2 rounded text-[8px] font-black uppercase bg-slate-100 text-slate-600">Base</span>
+                                        {% endif %}
+                                    </div>
                                     <div class="text-[9px] text-slate-400 font-black uppercase tracking-tighter">
                                         Added By: {{ doc.added_by.username|default:"System" }} | {{ doc.created_at|date:"M d, H:i" }}
                                     </div>
                                 </td>
                                 <td class="px-4 py-3 text-sm text-slate-600">{{ doc.document_number|default:"-" }}</td>
-                                <td class="px-4 py-3 text-sm text-slate-600">
+                                <td class="px-4 py-3 text-sm text-slate-600 whitespace-nowrap">
                                     {% if doc.never_expires %}
                                     <span class="text-slate-400 italic">No Expiry</span>
+                                    {% elif doc.expiry_date %}
+                                    {% if doc.valid_from %}{{ doc.valid_from|date:"d/m/y" }} - {% endif %}<strong>{{ doc.expiry_date|date:"d/m/y" }}</strong>
                                     {% else %}
-                                    {{ doc.expiry_date|date:"M d, Y" }}
+                                    <span class="text-slate-400 italic">Not Set</span>
                                     {% endif %}
+                                </td>
+                                <td class="px-4 py-3 text-sm text-right font-bold text-slate-800 whitespace-nowrap">
+                                    {% if doc.cost > 0 %}₹{{ doc.cost|floatformat:0 }}{% else %}-{% endif %}
                                 </td>
                                 <td class="px-4 py-3">
                                     {% if doc.never_expires %}
                                     <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">Permanent</span>
+                                    {% elif doc.status == 'Not Set' %}
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600">Not Set</span>
                                     {% elif doc.is_expired %}
                                     <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">Expired</span>
                                     {% elif doc.days_until_expiry <= 30 %}
@@ -191,25 +230,39 @@
                                     <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800">Valid</span>
                                     {% endif %}
                                 </td>
-                                <td class="px-4 py-3 text-right text-sm">
-                                    <div class="flex justify-end space-x-2">
+                                <td class="px-4 py-3 text-right text-sm whitespace-nowrap">
+                                    <div class="flex justify-end items-center space-x-1">
+                                        {% if doc.latest_renewal and doc.latest_renewal.receipt_file %}
+                                        <a href="{% url 'renewal-file-view' doc.latest_renewal.pk %}" target="_blank" class="text-slate-400 hover:text-emerald-600 p-1" title="View Current Scanned Copy">
+                                            <i class="fa-solid fa-file-lines"></i>
+                                        </a>
+                                        {% else %}
                                         {% for doc_file in doc.files.all %}
-                                        <a href="{% url 'document-view' doc_file.pk %}" target="_blank" class="text-slate-400 hover:text-emerald-600" title="View Scanned Copy">
+                                        <a href="{% url 'document-view' doc_file.pk %}" target="_blank" class="text-slate-400 hover:text-emerald-600 p-1" title="View Scanned Copy">
                                             <i class="fa-solid fa-file-lines"></i>
                                         </a>
                                         {% endfor %}
-                                        <a href="{% url 'document-update' doc.pk %}" class="text-slate-400 hover:text-blue-600" title="Edit">
+                                        {% endif %}
+                                        <a href="{% url 'document-renew' doc.pk %}" class="px-2 py-1 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded text-xs font-bold" title="Renew Document">
+                                            <i class="fa-solid fa-arrows-rotate mr-1"></i>Renew
+                                        </a>
+                                        <a href="{% url 'document-history' doc.pk %}" class="text-slate-400 hover:text-blue-600 p-1" title="History">
+                                            <i class="fa-solid fa-clock-rotate-left"></i>
+                                        </a>
+                                        <a href="{% url 'document-update' doc.pk %}" class="text-slate-400 hover:text-amber-600 p-1" title="Edit">
                                             <i class="fa-solid fa-pen-to-square"></i>
                                         </a>
-                                        <a href="{% url 'document-delete' doc.pk %}" class="text-slate-400 hover:text-rose-600" title="Delete">
+                                        {% if not doc.is_base_document %}
+                                        <a href="{% url 'document-delete' doc.pk %}" class="text-slate-400 hover:text-rose-600 p-1" title="Delete">
                                             <i class="fa-solid fa-trash-can"></i>
                                         </a>
+                                        {% endif %}
                                     </div>
                                 </td>
                             </tr>
                             {% empty %}
                             <tr>
-                                <td colspan="5" class="px-4 py-4 text-sm text-slate-500 italic text-center">No documents uploaded for this vehicle.</td>
+                                <td colspan="6" class="px-4 py-4 text-sm text-slate-500 italic text-center">No documents uploaded for this vehicle.</td>
                             </tr>
                             {% endfor %}
                         </tbody>

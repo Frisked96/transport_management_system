@@ -161,7 +161,7 @@ class DocumentModelTests(TestCase):
         doc_soon = Document.objects.create(document_name='Soon', expiry_date=today + timedelta(days=5))
         doc_past = Document.objects.create(document_name='Past', expiry_date=today - timedelta(days=10))
 
-        docs = list(Document.objects.all())
+        docs = list(Document.objects.filter(pk__in=[doc_far.pk, doc_soon.pk, doc_past.pk]))
         self.assertEqual(docs[0], doc_past)
         self.assertEqual(docs[1], doc_soon)
         self.assertEqual(docs[2], doc_far)

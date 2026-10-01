@@ -1,0 +1,225 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ document.document_name }} History - TMS{% endblock %}
+
+{% block content %}
+<header class="mb-6">
+    <div class="flex items-center space-x-2 text-sm text-slate-500 mb-2">
+        {% if vehicle %}
+        <a href="{% url 'vehicle-list' %}" class="hover:text-emerald-600 transition-colors">Fleet</a>
+        <i class="fa-solid fa-chevron-right text-[10px]"></i>
+        <a href="{% url 'vehicle-detail' vehicle.pk %}" class="hover:text-emerald-600 transition-colors">{{ vehicle.registration_plate }}</a>
+        {% elif driver %}
+        <a href="{% url 'driver-list' %}" class="hover:text-emerald-600 transition-colors">Drivers</a>
+        <i class="fa-solid fa-chevron-right text-[10px]"></i>
+        <a href="{% url 'driver-detail' driver.pk %}" class="hover:text-emerald-600 transition-colors">{{ driver.user.get_full_name }}</a>
+        {% else %}
+        <a href="{% url 'document-list' %}" class="hover:text-emerald-600 transition-colors">Documents</a>
+        {% endif %}
+        <i class="fa-solid fa-chevron-right text-[10px]"></i>
+        <span class="text-slate-900 font-bold">{{ document.document_name }}</span>
+    </div>
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+            <div class="flex items-center gap-3">
+                <h1 class="text-3xl font-bold text-slate-900 tracking-tight">{{ document.document_name }}</h1>
+                {% if document.is_base_document %}
+                <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-slate-100 text-slate-700 border border-slate-200">
+                    Base Doc
+                </span>
+                {% endif %}
+            </div>
+            <p class="text-sm text-slate-600 mt-1">
+                {% if vehicle %}Vehicle: <strong class="text-slate-800">{{ vehicle.registration_plate }}</strong> ({{ vehicle.make_model }}){% endif %}
+                {% if driver %}Driver: <strong class="text-slate-800">{{ driver.user.get_full_name }}</strong>{% endif %}
+            </p>
+        </div>
+        <div class="flex items-center gap-2">
+            <a href="{% url 'document-renew' document.pk %}" class="px-4 py-2 bg-emerald-600 text-white rounded-md text-sm font-bold hover:bg-emerald-700 shadow-sm transition-colors flex items-center">
+                <i class="fa-solid fa-arrows-rotate mr-2"></i>Renew Document
+            </a>
+            <a href="{% url 'document-update' document.pk %}" class="px-4 py-2 border border-slate-300 rounded-md bg-white text-slate-700 text-sm font-semibold hover:bg-slate-50 transition-colors flex items-center">
+                <i class="fa-regular fa-pen-to-square mr-2"></i>Edit
+            </a>
+            {% if vehicle %}
+            <a href="{% url 'vehicle-detail' vehicle.pk %}" class="px-4 py-2 border border-slate-200 rounded-md bg-slate-100 text-slate-700 text-sm font-semibold hover:bg-slate-200 transition-colors">
+                Back to Vehicle
+            </a>
+            {% endif %}
+        </div>
+    </div>
+</header>
+
+<div class="space-y-6">
+    <!-- Stats / Overview Grid -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+            <span class="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1">Status</span>
+            <div class="flex items-center gap-2">
+                <span class="px-2.5 py-1 rounded-full text-xs font-black uppercase tracking-wider
+                    {% if document.status == 'Valid' %}bg-emerald-100 text-emerald-800
+                    {% elif document.status == 'Expiring Soon' %}bg-amber-100 text-amber-800
+                    {% elif document.status == 'Expired' %}bg-rose-100 text-rose-800
+                    {% else %}bg-slate-100 text-slate-700{% endif %}">
+                    {{ document.status }}
+                </span>
+                {% if document.status == 'Valid' and document.days_until_expiry is not None %}
+                <span class="text-xs text-emerald-700 font-bold">{{ document.days_until_expiry }} days left</span>
+                {% elif document.status == 'Expiring Soon' and document.days_until_expiry is not None %}
+                <span class="text-xs text-amber-700 font-bold">{{ document.days_until_expiry }} days left</span>
+                {% elif document.status == 'Expired' and document.days_until_expiry is not None %}
+                <span class="text-xs text-rose-700 font-bold">Expired</span>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+            <span class="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1">Current Validity</span>
+            <p class="text-sm font-bold text-slate-800">
+                {% if document.valid_from %}{{ document.valid_from|date:"d M Y" }}{% else %}Not set{% endif %}
+                &rarr;
+                {% if document.expiry_date %}{{ document.expiry_date|date:"d M Y" }}{% else %}Not set{% endif %}
+            </p>
+            <p class="text-xs text-slate-500 mt-0.5">Doc #: {{ document.document_number|default:"-" }}</p>
+        </div>
+
+        <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+            <span class="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1">Current Renewal Cost</span>
+            <p class="text-xl font-black text-slate-900">₹{{ document.cost|floatformat:2 }}</p>
+            <p class="text-xs text-slate-400 mt-0.5">Active cycle expense</p>
+        </div>
+
+        <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+            <span class="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1">Total Lifetime Expenses</span>
+            <p class="text-xl font-black text-emerald-700">₹{{ total_cost|floatformat:2 }}</p>
+            <p class="text-xs text-slate-500 mt-0.5">Across {{ renewals.count }} recorded cycle{{ renewals.count|pluralize }}</p>
+        </div>
+    </div>
+
+    <!-- Renewal History Table -->
+    <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+        <div class="bg-slate-50 px-6 py-3.5 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <h2 class="text-xs font-bold text-slate-700 uppercase tracking-widest flex items-center">
+                <i class="fa-solid fa-clock-rotate-left mr-2 text-slate-400"></i>
+                Validity & Renewal Expense History
+            </h2>
+            <span class="text-xs text-slate-500 font-medium">{{ renewals.count }} recorded period{{ renewals.count|pluralize }}</span>
+        </div>
+
+        <!-- Mobile View (Card List) -->
+        <div class="block md:hidden divide-y divide-slate-100">
+            {% for item in renewals %}
+            <div class="p-4 space-y-2">
+                <div class="flex items-start justify-between">
+                    <div>
+                        <span class="text-xs font-bold text-slate-900 block">
+                            {{ item.valid_from|date:"d M Y"|default:"-" }} &rarr; {{ item.valid_to|date:"d M Y"|default:"-" }}
+                        </span>
+                        <span class="text-[11px] text-slate-500 block mt-0.5">Doc #: {{ item.document_number|default:"-" }}</span>
+                    </div>
+                    <span class="text-sm font-black text-emerald-700">₹{{ item.cost|floatformat:2 }}</span>
+                </div>
+                {% if item.notes %}
+                <p class="text-xs text-slate-600 bg-slate-50 p-2 rounded">{{ item.notes }}</p>
+                {% endif %}
+                <div class="flex items-center justify-between pt-1 text-[11px] text-slate-400">
+                    <span>Logged: {{ item.created_at|date:"d M Y, H:i" }}{% if item.renewed_by %} by {{ item.renewed_by.username }}{% endif %}</span>
+                    <div class="flex items-center space-x-2">
+                        {% if item.receipt_file %}
+                        <a href="{% url 'renewal-file-view' item.pk %}" target="_blank" class="text-emerald-600 font-bold p-1"><i class="fa-regular fa-file-lines"></i> Copy</a>
+                        {% endif %}
+                        {% for r_file in item.files.all %}
+                        <a href="{% url 'document-view' r_file.pk %}" target="_blank" class="text-emerald-600 font-bold p-1"><i class="fa-regular fa-file-lines"></i> File</a>
+                        {% endfor %}
+                        <a href="{% url 'document-renewal-update' item.pk %}" class="text-amber-600 font-bold p-1"><i class="fa-regular fa-pen-to-square"></i></a>
+                        <a href="{% url 'document-renewal-delete' item.pk %}" class="text-rose-600 font-bold p-1"><i class="fa-regular fa-trash-can"></i></a>
+                    </div>
+                </div>
+            </div>
+            {% empty %}
+            <div class="p-8 text-center text-slate-400 italic">
+                <i class="fa-regular fa-folder-open text-3xl mb-2 text-slate-300 block"></i>
+                No historical renewals recorded yet. Click "Renew Document" above to log the first cycle.
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Desktop View (Table) -->
+        <div class="hidden md:block overflow-x-auto">
+            <table class="w-full text-sm text-left border-collapse">
+                <thead>
+                    <tr class="bg-slate-50/50 border-b border-slate-100 text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                        <th class="px-6 py-3">Validity Period (From - To)</th>
+                        <th class="px-6 py-3">Doc Number</th>
+                        <th class="px-6 py-3 text-right">Renewal Cost</th>
+                        <th class="px-6 py-3">Logged Date & User</th>
+                        <th class="px-6 py-3">Receipt / Scanned Files</th>
+                        <th class="px-6 py-3">Notes</th>
+                        <th class="px-6 py-3 text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    {% for item in renewals %}
+                    <tr class="hover:bg-slate-50/80 transition-colors">
+                        <td class="px-6 py-3.5 font-bold text-slate-800 whitespace-nowrap">
+                            {{ item.valid_from|date:"d M Y"|default:"-" }}
+                            <span class="text-slate-400 mx-1">&rarr;</span>
+                            {{ item.valid_to|date:"d M Y"|default:"-" }}
+                        </td>
+                        <td class="px-6 py-3.5 text-slate-600 font-medium">
+                            {{ item.document_number|default:"-" }}
+                        </td>
+                        <td class="px-6 py-3.5 text-right font-black text-slate-900 whitespace-nowrap">
+                            ₹{{ item.cost|floatformat:2 }}
+                        </td>
+                        <td class="px-6 py-3.5 text-xs text-slate-500 whitespace-nowrap">
+                            {{ item.created_at|date:"d M Y, H:i" }}
+                            {% if item.renewed_by %}
+                            <span class="block text-[10px] text-slate-400">by {{ item.renewed_by.username }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-3.5">
+                            <div class="flex flex-col gap-1">
+                                {% if item.receipt_file %}
+                                <a href="{% url 'renewal-file-view' item.pk %}" target="_blank" class="inline-flex items-center text-xs font-bold text-emerald-600 hover:text-emerald-700">
+                                    <i class="fa-regular fa-file-lines mr-1.5 text-emerald-500"></i>View Scanned Copy
+                                </a>
+                                {% endif %}
+                                {% for r_file in item.files.all %}
+                                <a href="{% url 'document-view' r_file.pk %}" target="_blank" class="inline-flex items-center text-xs font-bold text-emerald-600 hover:text-emerald-700">
+                                    <i class="fa-regular fa-file-lines mr-1.5 text-emerald-500"></i>Attachment
+                                </a>
+                                {% endfor %}
+                                {% if not item.receipt_file and not item.files.exists %}
+                                <span class="text-slate-300 italic text-xs">None</span>
+                                {% endif %}
+                            </div>
+                        </td>
+                        <td class="px-6 py-3.5 text-xs text-slate-500 max-w-xs truncate" title="{{ item.notes }}">
+                            {{ item.notes|default:"-" }}
+                        </td>
+                        <td class="px-6 py-3.5 text-right whitespace-nowrap">
+                            <div class="inline-flex items-center space-x-2">
+                                <a href="{% url 'document-renewal-update' item.pk %}" class="text-slate-400 hover:text-amber-600 p-1" title="Edit Entry">
+                                    <i class="fa-regular fa-pen-to-square"></i>
+                                </a>
+                                <a href="{% url 'document-renewal-delete' item.pk %}" class="text-slate-400 hover:text-rose-600 p-1" title="Delete Entry">
+                                    <i class="fa-regular fa-trash-can"></i>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="px-6 py-12 text-center text-slate-400 italic">
+                            <i class="fa-regular fa-folder-open text-3xl mb-2 text-slate-300 block"></i>
+                            No renewal history recorded yet. Click "Renew Document" to log a validity period and expense.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

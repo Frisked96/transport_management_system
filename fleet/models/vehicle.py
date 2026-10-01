@@ -3,6 +3,8 @@ Vehicle model for Fleet application
 """
 from django.db import models
 from django.utils import timezone
+from django.db.models.signals import post_save
+from django.dispatch import receiver
 
 
 class Vehicle(models.Model):
@@ -105,6 +107,7 @@ class Vehicle(models.Model):
     
     def delete(self, *args, **kwargs):
         self._is_being_deleted = True
+        self.documents.filter(is_base_document=True).update(is_base_document=False)
         super().delete(*args, **kwargs)
 
     def __str__(self):
@@ -152,3 +155,31 @@ class Vehicle(models.Model):
         ).aggregate(
             total=models.Sum('cost')
         )['total'] or 0
+
+    @property
+    def base_documents(self):
+        """Returns all 7 base compliance documents for this vehicle, creating them if missing"""
+        from documents.models import Document
+        Document.ensure_base_documents(self)
+        return self.documents.filter(is_base_document=True).order_by('id')
+
+    @property
+    def custom_documents(self):
+        """Returns all non-base (custom) documents for this vehicle"""
+        return self.documents.filter(is_base_document=False).order_by('document_name')
+
+    @property
+    def total_compliance_expenses(self):
+        """Calculate total cost of all document renewals and expenses for this vehicle"""
+        from documents.models import DocumentRenewal
+        total = DocumentRenewal.objects.filter(document__vehicle=self).aggregate(
+            total=models.Sum('cost')
+        )['total']
+        return total or 0
+
+
+@receiver(post_save, sender=Vehicle)
+def create_vehicle_base_documents(sender, instance, created, **kwargs):
+    if created:
+        from documents.models import Document
+        Document.ensure_base_documents(instance)

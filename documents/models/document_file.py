@@ -59,6 +59,14 @@ class DocumentFile(models.Model):
         related_name='files',
         verbose_name='Document'
     )
+    renewal = models.ForeignKey(
+        'documents.DocumentRenewal',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='files',
+        verbose_name='Renewal Record'
+    )
     file = models.FileField(
         upload_to=document_file_upload_path,
         verbose_name='File',

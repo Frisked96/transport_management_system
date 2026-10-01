@@ -192,31 +192,119 @@
         <!-- Documents Section -->
         <div class="lg:col-span-4 space-y-6">
             <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-                <div class="bg-slate-50 px-6 py-3 border-b border-slate-200 flex justify-between items-center">
-                    <h3 class="text-xs font-bold text-slate-600 uppercase tracking-widest">Compliance Docs</h3>
+                <div class="bg-slate-50 px-4 sm:px-6 py-3 border-b border-slate-200 flex justify-between items-center">
+                    <div>
+                        <h3 class="text-xs font-bold text-slate-700 uppercase tracking-widest flex items-center">
+                            <i class="fa-solid fa-shield-halved mr-2 text-emerald-600"></i>Compliance Docs
+                        </h3>
+                        <p class="text-[10px] text-slate-400 font-bold uppercase mt-0.5">
+                            Total Expenses: ₹{{ vehicle.total_compliance_expenses|floatformat:2 }}
+                        </p>
+                    </div>
                     {% if perms.documents.add_document %}
-                    <a href="{% url 'document-create-vehicle' vehicle.pk %}" class="text-emerald-600 hover:text-emerald-700">
-                        <i class="fa-solid fa-circle-plus"></i>
+                    <a href="{% url 'document-create-vehicle' vehicle.pk %}" class="inline-flex items-center text-xs font-bold text-emerald-600 hover:text-emerald-700" title="Add Custom Document">
+                        <i class="fa-solid fa-circle-plus mr-1"></i>Custom Doc
                     </a>
                     {% endif %}
                 </div>
-                <div class="p-4 space-y-3">
-                    {% for doc in vehicle.documents.all %}
-                    <div class="p-3 rounded-lg border border-slate-100 bg-slate-50/50 flex justify-between items-center group">
-                        <div class="min-w-0">
-                            <p class="text-xs font-bold text-slate-800 truncate uppercase">{{ doc.document_name }}</p>
-                            <p class="text-[10px] text-slate-400 font-bold uppercase tracking-tight">Exp: {{ doc.expiry_date|date:"d M Y"|default:"N/A" }}</p>
+                <div class="p-3 sm:p-4 space-y-2.5">
+                    {% for doc in vehicle.base_documents %}
+                    <div class="p-3 rounded-lg border border-slate-200/80 bg-slate-50/50 hover:bg-white hover:border-slate-300 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 group">
+                        <div class="min-w-0 flex-1">
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs font-bold text-slate-900 uppercase tracking-tight">{{ doc.document_name }}</span>
+                                <span class="px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider
+                                    {% if doc.status == 'Valid' %}bg-emerald-100 text-emerald-800
+                                    {% elif doc.status == 'Expiring Soon' %}bg-amber-100 text-amber-800
+                                    {% elif doc.status == 'Expired' %}bg-rose-100 text-rose-800
+                                    {% elif doc.status == 'Permanent' %}bg-blue-100 text-blue-800
+                                    {% else %}bg-slate-200 text-slate-600{% endif %}">
+                                    {{ doc.status }}
+                                </span>
+                            </div>
+                            
+                            <div class="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-[11px] text-slate-500 font-medium">
+                                {% if doc.expiry_date %}
+                                <span>
+                                    {% if doc.valid_from %}{{ doc.valid_from|date:"d/m/y" }} &rarr; {% endif %}
+                                    <strong>{{ doc.expiry_date|date:"d/m/y" }}</strong>
+                                </span>
+                                {% if doc.days_until_expiry is not None %}
+                                    {% if doc.is_expired %}
+                                    <span class="text-rose-600 font-bold">({{ doc.days_until_expiry|stringformat:"d"|slice:"1:" }}d ago)</span>
+                                    {% else %}
+                                    <span class="text-emerald-600 font-bold">({{ doc.days_until_expiry }}d left)</span>
+                                    {% endif %}
+                                {% endif %}
+                                {% else %}
+                                <span class="text-slate-400 italic">Validity not set</span>
+                                {% endif %}
+                                
+                                {% if doc.cost > 0 or doc.total_expenses > 0 %}
+                                <span class="text-slate-700 font-bold">Cost: ₹{{ doc.cost|floatformat:0 }}</span>
+                                {% endif %}
+                                {% if doc.document_number %}
+                                <span class="text-slate-400">#{{ doc.document_number }}</span>
+                                {% endif %}
+                            </div>
                         </div>
-                        <div class="flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+
+                        <!-- Action Buttons -->
+                        <div class="flex items-center space-x-1.5 sm:self-center self-end pt-1 sm:pt-0">
+                            {% if doc.latest_renewal and doc.latest_renewal.receipt_file %}
+                            <a href="{% url 'renewal-file-view' doc.latest_renewal.pk %}" target="_blank" class="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded" title="View Scanned Copy">
+                                <i class="fa-regular fa-file-lines text-xs"></i>
+                            </a>
+                            {% else %}
                             {% for doc_file in doc.files.all %}
-                            <a href="{% url 'document-view' doc_file.pk %}" target="_blank" class="text-slate-400 hover:text-emerald-600"><i class="fa-regular fa-eye text-xs"></i></a>
+                            <a href="{% url 'document-view' doc_file.pk %}" target="_blank" class="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded" title="View Scanned File">
+                                <i class="fa-regular fa-file-lines text-xs"></i>
+                            </a>
                             {% endfor %}
-                            <a href="{% url 'document-update' doc.pk %}" class="text-slate-400 hover:text-amber-600"><i class="fa-regular fa-pen-to-square text-xs"></i></a>
+                            {% endif %}
+                            <a href="{% url 'document-renew' doc.pk %}" class="px-2 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 rounded text-[11px] font-bold transition-colors" title="Renew Document">
+                                <i class="fa-solid fa-arrows-rotate mr-1"></i>Renew
+                            </a>
+                            <a href="{% url 'document-history' doc.pk %}" class="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded" title="View History">
+                                <i class="fa-solid fa-clock-rotate-left text-xs"></i>
+                            </a>
+                            <a href="{% url 'document-update' doc.pk %}" class="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded" title="Edit Document">
+                                <i class="fa-regular fa-pen-to-square text-xs"></i>
+                            </a>
                         </div>
                     </div>
-                    {% empty %}
-                    <p class="text-center py-4 text-xs text-slate-400 italic">No documents uploaded.</p>
                     {% endfor %}
+
+                    <!-- Custom Documents (if any) -->
+                    {% if vehicle.custom_documents.exists %}
+                    <div class="pt-3 border-t border-slate-100">
+                        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-2">Additional Documents</span>
+                        {% for doc in vehicle.custom_documents %}
+                        <div class="p-2.5 rounded-lg border border-slate-100 bg-white flex items-center justify-between gap-2 mb-2">
+                            <div class="min-w-0 flex-1">
+                                <p class="text-xs font-bold text-slate-800 truncate uppercase">{{ doc.document_name }}</p>
+                                <p class="text-[10px] text-slate-400 font-medium">
+                                    Exp: {{ doc.expiry_date|date:"d M Y"|default:"N/A" }}
+                                    {% if doc.cost > 0 %}&bull; ₹{{ doc.cost|floatformat:0 }}{% endif %}
+                                </p>
+                            </div>
+                            <div class="flex items-center space-x-1">
+                                {% if doc.latest_renewal and doc.latest_renewal.receipt_file %}
+                                <a href="{% url 'renewal-file-view' doc.latest_renewal.pk %}" target="_blank" class="p-1 text-slate-400 hover:text-emerald-600" title="View Scanned Copy"><i class="fa-regular fa-eye text-xs"></i></a>
+                                {% else %}
+                                {% for doc_file in doc.files.all %}
+                                <a href="{% url 'document-view' doc_file.pk %}" target="_blank" class="p-1 text-slate-400 hover:text-emerald-600" title="View File"><i class="fa-regular fa-eye text-xs"></i></a>
+                                {% endfor %}
+                                {% endif %}
+                                <a href="{% url 'document-renew' doc.pk %}" class="px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded text-[10px] font-bold"><i class="fa-solid fa-arrows-rotate mr-1"></i>Renew</a>
+                                <a href="{% url 'document-history' doc.pk %}" class="p-1 text-slate-400 hover:text-blue-600"><i class="fa-solid fa-clock-rotate-left text-xs"></i></a>
+                                <a href="{% url 'document-update' doc.pk %}" class="p-1 text-slate-400 hover:text-amber-600"><i class="fa-regular fa-pen-to-square text-xs"></i></a>
+                                <a href="{% url 'document-delete' doc.pk %}" class="p-1 text-slate-400 hover:text-rose-600"><i class="fa-regular fa-trash-can text-xs"></i></a>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
                 </div>
             </div>
 
