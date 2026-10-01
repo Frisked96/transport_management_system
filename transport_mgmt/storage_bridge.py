@@ -101,11 +101,13 @@ class GoogleDriveOAuth2Storage(GoogleDriveStorage):
         Helper to find or create a folder in Google Drive.
         Uses in-memory cache to avoid redundant calls.
         """
+        self._ensure_service()
         cache_key = f"{name}_{parent_id}"
         if cache_key in self._folder_id_cache:
             return self._folder_id_cache[cache_key]
 
-        query = f"name = '{name}' and mimeType = 'application/vnd.google-apps.folder'"
+        safe_name = name.replace("'", "\\'")
+        query = f"name = '{safe_name}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
         if parent_id:
             query += f" and '{parent_id}' in parents"
         
@@ -134,6 +136,10 @@ class GoogleDriveOAuth2Storage(GoogleDriveStorage):
         Optimized save method that handles subfolders in Google Drive.
         It parses the Django path and ensures actual GDrive folders exist.
         """
+        self._ensure_service()
+        if hasattr(content, 'seek'):
+            content.seek(0)
+
         # Split path: e.g. documents/ABC_123/license.pdf
         parts = name.split(os.sep if os.sep in name else '/')
         filename = parts[-1]
@@ -155,7 +161,15 @@ class GoogleDriveOAuth2Storage(GoogleDriveStorage):
         if parent_id:
             file_metadata['parents'] = [parent_id]
 
-        file_size = content.size
+        file_size = getattr(content, 'size', None)
+        if file_size is None:
+            try:
+                content.seek(0, os.SEEK_END)
+                file_size = content.tell()
+                content.seek(0)
+            except Exception:
+                file_size = 0
+
         # Use multipart for small files (< 5MB), resumable for larger
         is_resumable = file_size > (5 * 1024 * 1024)
         
@@ -185,3 +199,4 @@ class GoogleDriveOAuth2Storage(GoogleDriveStorage):
                 pass
                 
         return name
+

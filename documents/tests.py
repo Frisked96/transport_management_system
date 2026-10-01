@@ -1,8 +1,14 @@
-from django.test import TestCase, RequestFactory
-from django.contrib.auth.models import User, Permission
-from django.utils import timezone
+import os
+import shutil
+import tempfile
 from datetime import timedelta
-from documents.models import Document, document_upload_path
+from django.conf import settings
+from django.contrib.auth.models import User, Permission
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import TestCase, RequestFactory, override_settings
+from django.urls import reverse
+from django.utils import timezone
+from documents.models import Document, DocumentFile, document_upload_path
 from fleet.models import Vehicle, MaintenanceRecord
 from drivers.models import Driver
 from documents.context_processors import document_alerts
@@ -141,3 +147,108 @@ class DocumentAlertsTests(TestCase):
         req_anon = self.factory.get('/')
         req_anon.user = AnonymousUser()
         self.assertEqual(document_alerts(req_anon), {})
+
+
+class DirectDocumentUploadTests(TestCase):
+    def setUp(self):
+        self.temp_dir = tempfile.mkdtemp()
+        self.user = User.objects.create_user(username='doc_admin', password='password123')
+        add_perm = Permission.objects.get(codename='add_document')
+        change_perm = Permission.objects.get(codename='change_document')
+        self.user.user_permissions.add(add_perm, change_perm)
+        self.client.login(username='doc_admin', password='password123')
+        self.vehicle = Vehicle.objects.create(registration_plate='MH 04 AB 1234')
+
+    def tearDown(self):
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def test_document_create_direct_file_upload(self):
+        """Test creating a document with file uploads saves directly to storage without temp directory."""
+        with override_settings(MEDIA_ROOT=self.temp_dir):
+            url = reverse('document-create-vehicle', kwargs={'vehicle_pk': self.vehicle.pk})
+            uploaded_file = SimpleUploadedFile('rc_book.pdf', b'%PDF-1.4 test rc book content', content_type='application/pdf')
+            
+            data = {
+                'document_name': 'Registration Certificate',
+                'document_number': 'RC-12345',
+                'valid_from': '2026-01-01',
+                'expiry_date': '2030-01-01',
+                'cost': '0.00',
+                'files-TOTAL_FORMS': '1',
+                'files-INITIAL_FORMS': '0',
+                'files-MIN_NUM_FORMS': '0',
+                'files-MAX_NUM_FORMS': '1000',
+                'files-0-file': uploaded_file,
+            }
+
+            response = self.client.post(url, data, follow=True)
+            self.assertEqual(response.status_code, 200)
+
+            # Check document was created
+            doc = Document.objects.filter(vehicle=self.vehicle, document_name='Registration Certificate').first()
+            self.assertIsNotNone(doc)
+
+            # Check DocumentFile was created with completed status and direct storage path
+            self.assertEqual(doc.files.count(), 1)
+            doc_file = doc.files.first()
+            self.assertEqual(doc_file.upload_status, 'completed')
+            self.assertIsNone(doc_file.local_tmp_path)
+            self.assertTrue(doc_file.file)
+            self.assertTrue(os.path.exists(doc_file.file.path))
+
+            # Verify no temp files exist in tmp/uploads
+            tmp_uploads = os.path.join(settings.BASE_DIR, 'tmp', 'uploads')
+            if os.path.exists(tmp_uploads):
+                self.assertEqual(len(os.listdir(tmp_uploads)), 0)
+
+    def test_document_update_direct_file_upload_and_delete(self):
+        """Test updating a document to add new files and delete existing files directly in storage."""
+        with override_settings(MEDIA_ROOT=self.temp_dir):
+            doc = Document.objects.create(
+                vehicle=self.vehicle,
+                document_name='Pollution Under Control',
+                document_number='PUC-9999',
+                cost=0
+            )
+            initial_file = SimpleUploadedFile('old_puc.pdf', b'old content', content_type='application/pdf')
+            existing_doc_file = DocumentFile.objects.create(
+                document=doc,
+                file=initial_file,
+                upload_status='completed'
+            )
+            old_file_path = existing_doc_file.file.path
+            self.assertTrue(os.path.exists(old_file_path))
+
+            url = reverse('document-update', kwargs={'pk': doc.pk})
+            new_uploaded_file = SimpleUploadedFile('new_puc.pdf', b'new content', content_type='application/pdf')
+
+            data = {
+                'document_name': 'Pollution Under Control',
+                'document_number': 'PUC-9999',
+                'valid_from': '2026-01-01',
+                'expiry_date': '2027-01-01',
+                'cost': '0.00',
+                'files-TOTAL_FORMS': '2',
+                'files-INITIAL_FORMS': '1',
+                'files-MIN_NUM_FORMS': '0',
+                'files-MAX_NUM_FORMS': '1000',
+                'files-0-id': str(existing_doc_file.pk),
+                'files-0-DELETE': 'on', # Delete old file
+                'files-1-file': new_uploaded_file, # Add new file
+            }
+
+            response = self.client.post(url, data, follow=True)
+            self.assertEqual(response.status_code, 200)
+
+            # Old doc file should be deleted from DB and disk
+            self.assertFalse(DocumentFile.objects.filter(pk=existing_doc_file.pk).exists())
+            self.assertFalse(os.path.exists(old_file_path))
+
+            # New doc file should exist and be completed
+            self.assertEqual(doc.files.count(), 1)
+            new_file_record = doc.files.first()
+            self.assertEqual(new_file_record.upload_status, 'completed')
+            self.assertIsNone(new_file_record.local_tmp_path)
+            self.assertTrue(new_file_record.file)
+            self.assertTrue(os.path.exists(new_file_record.file.path))
+

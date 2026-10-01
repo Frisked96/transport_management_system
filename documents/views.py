@@ -17,7 +17,6 @@ from django.views.generic import ListView, DetailView, CreateView, UpdateView, D
 
 from .models import Document, DocumentFile, DocumentRenewal
 from .forms import DocumentForm, DocumentFileForm, DocumentRenewalForm, DocumentFileFormSet
-from .services import process_uploads_background
 from fleet.models import Vehicle
 from drivers.models import Driver
 
@@ -132,33 +131,24 @@ class DocumentCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView
             self.object = form.save()
             self.object.sync_to_history(user=self.request.user)
             
-            # Handle files manually to save locally first
-            upload_dir = os.path.join(settings.BASE_DIR, 'tmp', 'uploads')
-            os.makedirs(upload_dir, exist_ok=True)
-            
-            new_doc_file_ids = []
-            
-            for i in range(int(self.request.POST.get('files-TOTAL_FORMS', 0))):
-                file_key = f'files-{i}-file'
-                uploaded_file = self.request.FILES.get(file_key)
+            # Save files directly to storage (Google Drive / default storage)
+            files_formset.instance = self.object
+            instances = files_formset.save(commit=False)
+            try:
+                for i, doc_file in enumerate(instances):
+                    doc_file.document = self.object
+                    doc_file._upload_index = i + 1
+                    doc_file.upload_status = 'completed'
+                    doc_file.local_tmp_path = None
+                    doc_file.save()
                 
-                if uploaded_file:
-                    local_path = os.path.join(upload_dir, f"{self.object.pk}_{i}_{uploaded_file.name}")
-                    with open(local_path, 'wb+') as destination:
-                        for chunk in uploaded_file.chunks():
-                            destination.write(chunk)
-                    
-                    doc_file = DocumentFile.objects.create(
-                        document=self.object,
-                        local_tmp_path=local_path,
-                        upload_status='pending'
-                    )
-                    new_doc_file_ids.append(doc_file.pk)
-            
-            if new_doc_file_ids:
-                process_uploads_background(new_doc_file_ids)
+                for obj in files_formset.deleted_objects:
+                    obj.delete()
 
-            messages.success(self.request, 'Document saved successfully.')
+                messages.success(self.request, 'Document saved successfully.')
+            except Exception as e:
+                messages.error(self.request, f"Document saved, but file upload failed: {str(e)}")
+
             return redirect(self.get_success_url())
         else:
             return self.render_to_response(self.get_context_data(form=form))
@@ -204,36 +194,28 @@ class DocumentUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView
             self.object = form.save()
             self.object.sync_to_history(user=self.request.user)
             
-            upload_dir = os.path.join(settings.BASE_DIR, 'tmp', 'uploads')
-            os.makedirs(upload_dir, exist_ok=True)
-            
-            new_doc_file_ids = []
-            
-            for i in range(int(self.request.POST.get('files-TOTAL_FORMS', 0))):
-                file_key = f'files-{i}-file'
-                uploaded_file = self.request.FILES.get(file_key)
+            # Save files directly to storage (Google Drive / default storage)
+            files_formset.instance = self.object
+            instances = files_formset.save(commit=False)
+            existing_count = self.object.files.exclude(pk__in=[f.pk for f in instances if f.pk]).count()
+            new_file_idx = 0
+            try:
+                for doc_file in instances:
+                    if not doc_file.pk:
+                        new_file_idx += 1
+                        doc_file._upload_index = existing_count + new_file_idx
+                    doc_file.document = self.object
+                    doc_file.upload_status = 'completed'
+                    doc_file.local_tmp_path = None
+                    doc_file.save()
                 
-                if uploaded_file:
-                    local_path = os.path.join(upload_dir, f"{self.object.pk}_{i}_{uploaded_file.name}")
-                    with open(local_path, 'wb+') as destination:
-                        for chunk in uploaded_file.chunks():
-                            destination.write(chunk)
-                    
-                    doc_file = DocumentFile.objects.create(
-                        document=self.object,
-                        local_tmp_path=local_path,
-                        upload_status='pending'
-                    )
-                    new_doc_file_ids.append(doc_file.pk)
+                for obj in files_formset.deleted_objects:
+                    obj.delete()
 
-            if new_doc_file_ids:
-                process_uploads_background(new_doc_file_ids)
-            
-            files_formset.save(commit=False)
-            for obj in files_formset.deleted_objects:
-                obj.delete()
+                messages.success(self.request, 'Document updated successfully.')
+            except Exception as e:
+                messages.error(self.request, f"Document updated, but file upload failed: {str(e)}")
 
-            messages.success(self.request, 'Document updated successfully.')
             return redirect(self.get_success_url())
         else:
             return self.render_to_response(self.get_context_data(form=form))
