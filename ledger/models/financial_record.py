@@ -4,6 +4,7 @@ FinancialRecord model and upload path for Ledger application
 import os
 from decimal import Decimal
 from django.db import models
+from django.utils import timezone
 from django.core.exceptions import ObjectDoesNotExist
 from django.contrib.auth.models import User
 from trips.models import Trip
@@ -16,7 +17,7 @@ from .company import CompanyAccount
 def financial_record_upload_path(instance, filename):
     """
     Determines the upload path for a financial record document.
-    Format: financial_records/<type>/<identifier>/<filename>
+    Format: financial_records/<type>/<identifier>/<safe_root>_<timestamp><ext>
     """
     # Priority-based identification
     if instance.associated_trip:
@@ -37,8 +38,13 @@ def financial_record_upload_path(instance, filename):
 
     # Sanitize identifier for path use
     safe_identifier = str(identifier).replace(' ', '_').replace('/', '-').replace('\\', '-')
+    ext = os.path.splitext(filename)[1]
+    name_root = os.path.splitext(filename)[0]
+    safe_root = "".join([c for c in name_root if c.isalnum() or c in (' ', '_', '-')]).strip().replace(' ', '_')
+    timestamp = timezone.now().strftime('%Y%m%d_%H%M%S')
+    new_filename = f"{safe_root}_{timestamp}{ext}" if safe_root else f"doc_{timestamp}{ext}"
     
-    return os.path.join('financial_records', folder, safe_identifier, filename)
+    return os.path.join('financial_records', folder, safe_identifier, new_filename)
 
 
 class FinancialRecord(models.Model):

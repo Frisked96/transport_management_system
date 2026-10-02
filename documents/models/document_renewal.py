@@ -2,6 +2,8 @@ import os
 from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
+from django.db.models.signals import post_delete, pre_save
+from django.dispatch import receiver
 
 
 def renewal_file_upload_path(instance, filename):
@@ -126,3 +128,24 @@ class DocumentRenewal(models.Model):
             if latest.document_number:
                 doc.document_number = latest.document_number
             doc.save(update_fields=['valid_from', 'expiry_date', 'cost', 'document_number'])
+
+
+# --- Signals ---
+
+@receiver(pre_save, sender=DocumentRenewal)
+def delete_old_renewal_receipt_on_change(sender, instance, **kwargs):
+    if not instance.pk:
+        return False
+    try:
+        old_file = DocumentRenewal.objects.get(pk=instance.pk).receipt_file
+    except DocumentRenewal.DoesNotExist:
+        return False
+    new_file = instance.receipt_file
+    if old_file and old_file != new_file:
+        old_file.delete(save=False)
+
+
+@receiver(post_delete, sender=DocumentRenewal)
+def delete_renewal_receipt_on_delete(sender, instance, **kwargs):
+    if instance.receipt_file:
+        instance.receipt_file.delete(save=False)

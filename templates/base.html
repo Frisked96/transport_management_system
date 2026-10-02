@@ -128,7 +128,7 @@
     <div class="bg-emerald-600 text-white px-4 py-2 shadow-lg flex items-center justify-between">
         <div class="flex items-center space-x-3">
             <div id="upload-spinner" class="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
-            <span id="upload-status-text" class="text-sm font-bold uppercase tracking-wider">Uploading files to Google Drive...</span>
+            <span id="upload-status-text" class="text-sm font-bold uppercase tracking-wider">Uploading files...</span>
         </div>
         <div class="flex items-center space-x-4">
             <span id="upload-stats" class="text-xs font-medium bg-emerald-700 px-2 py-0.5 rounded-full"></span>
@@ -733,7 +733,7 @@
                     // Active uploads
                     $bar.removeClass('-translate-y-full').addClass('translate-y-0');
                     $bar.find('> div').removeClass('bg-red-600 bg-blue-600').addClass('bg-emerald-600');
-                    $text.text(`Uploading ${data.active} files to Google Drive...`);
+                    $text.text(`Uploading ${data.active} files...`);
                     $spinner.show();
                     $stats.text(`${data.active} queued`);
                     lastActiveCount = data.active;

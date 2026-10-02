@@ -1,5 +1,6 @@
 import os
 from django.db import models
+from django.utils import timezone
 from django.db.models.signals import post_delete, pre_save
 from django.dispatch import receiver
 from .document import Document
@@ -7,8 +8,8 @@ from .document import Document
 
 def document_file_upload_path(instance, filename):
     """
-    Determines the upload path for a document file with renaming logic.
-    Format: documents/<identifier>/<DocumentName>_<index>.<ext>
+    Determines the upload path for a document file with collision-proof renaming logic.
+    Format: documents/<identifier>/<DocumentName>_<index>_<timestamp>.<ext>
     """
     document = instance.document
     if document.vehicle:

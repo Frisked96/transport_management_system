@@ -7,6 +7,7 @@ from storages.backends.s3 import S3Storage
 from gdstorage.storage import GoogleDriveStorage
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
+from boto3.s3.transfer import TransferConfig
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
 
@@ -16,15 +17,22 @@ class CloudflareR2Storage(S3Storage):
     S3-compatible storage backend specifically tuned for Cloudflare R2.
     - Zero egress fees.
     - Fast presigned HMAC URLs for private documents.
+    - file_overwrite=True skips redundant pre-upload HEAD/exists checks against R2.
+    - 50MB multipart threshold ensures all standard documents upload via a single atomic PutObject.
     - Supports optional custom domain or pub-xxx.r2.dev.
     """
     default_acl = None
     signature_version = 's3v4'
-    file_overwrite = False
+    file_overwrite = True
     region_name = 'auto'
     addressing_style = 'path'
 
     def __init__(self, **kwargs):
+        if 'transfer_config' not in kwargs:
+            kwargs['transfer_config'] = TransferConfig(
+                multipart_threshold=50 * 1024 * 1024,
+                multipart_chunksize=25 * 1024 * 1024,
+            )
         if 'access_key' not in kwargs and hasattr(settings, 'CLOUDFLARE_R2_ACCESS_KEY_ID'):
             kwargs['access_key'] = getattr(settings, 'CLOUDFLARE_R2_ACCESS_KEY_ID', None)
         if 'secret_key' not in kwargs and hasattr(settings, 'CLOUDFLARE_R2_SECRET_ACCESS_KEY'):

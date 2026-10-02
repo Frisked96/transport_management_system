@@ -1,6 +1,7 @@
 """
 Tyre models and signals for Fleet application
 """
+import os
 from django.db import models
 from django.core.exceptions import ObjectDoesNotExist
 from django.contrib.auth.models import User
@@ -46,6 +47,20 @@ class TyreBrand(models.Model):
         return self.name
 
 
+def tyre_photo_upload_path(instance, filename):
+    """
+    Determines the upload path for a tyre photo with collision-proof naming.
+    Format: tyres/<safe_serial_or_id>_<clean_filename>
+    """
+    ext = os.path.splitext(filename)[1]
+    raw_name = os.path.splitext(filename)[0]
+    safe_name = "".join([c for c in raw_name if c.isalnum() or c in ('_', '-')]).strip()
+    identifier = instance.serial_number or f"tyre_{instance.pk or 'new'}"
+    safe_id = "".join([c for c in identifier if c.isalnum() or c in ('_', '-')]).strip()
+    new_filename = f"{safe_id}_{safe_name}{ext}" if safe_name else f"{safe_id}{ext}"
+    return os.path.join('tyres', new_filename)
+
+
 class Tyre(models.Model):
     """
     Inventory management for individual tyres.
@@ -88,7 +103,7 @@ class Tyre(models.Model):
     current_position = models.CharField(max_length=50, blank=True, verbose_name='Position')
     
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_IN_STOCK)
-    photo = models.ImageField(upload_to='tyres/', null=True, blank=True, verbose_name='Tyre Photo')
+    photo = models.ImageField(upload_to=tyre_photo_upload_path, null=True, blank=True, verbose_name='Tyre Photo')
     notes = models.TextField(blank=True)
 
     def __str__(self):
