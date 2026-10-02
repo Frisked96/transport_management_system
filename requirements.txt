@@ -3,6 +3,8 @@ python-decouple
 whitenoise
 dj-database-url
 gunicorn
+django-storages
+boto3
 django-googledrive-storage==1.6.0
 google-api-python-client
 google-auth-httplib2
