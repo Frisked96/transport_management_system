@@ -41,7 +41,6 @@ INSTALLED_APPS = [
     'ledger',
     'drivers',
     'documents',
-    'gdstorage',
 ]
 
 MIDDLEWARE = [
@@ -116,7 +115,7 @@ STATIC_URL = '/static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
-# Storage Backend Selection: 'r2' (Cloudflare R2), 'gdrive' (Legacy Google Drive), or 'local' (FileSystem)
+# Storage Backend Selection: 'r2' (Cloudflare R2) or 'local' (FileSystem)
 STORAGE_BACKEND = config('STORAGE_BACKEND', default=None)
 if STORAGE_BACKEND:
     STORAGE_BACKEND = STORAGE_BACKEND.lower()
@@ -129,19 +128,11 @@ CLOUDFLARE_R2_BUCKET_NAME = config('CLOUDFLARE_R2_BUCKET_NAME', default=None)
 CLOUDFLARE_R2_CUSTOM_DOMAIN = config('CLOUDFLARE_R2_CUSTOM_DOMAIN', default=None)
 CLOUDFLARE_R2_EXPIRATION_SECS = config('CLOUDFLARE_R2_EXPIRATION_SECS', default=3600, cast=int)
 
-# Legacy Google Drive Storage Configuration
-GOOGLE_DRIVE_STORAGE_JSON_KEY_FILE = None
-GOOGLE_DRIVE_STORAGE_CLIENT_ID = config('GOOGLE_DRIVE_STORAGE_CLIENT_ID', default=None)
-GOOGLE_DRIVE_STORAGE_CLIENT_SECRET = config('GOOGLE_DRIVE_STORAGE_CLIENT_SECRET', default=None)
-GOOGLE_DRIVE_STORAGE_REFRESH_TOKEN = config('GOOGLE_DRIVE_STORAGE_REFRESH_TOKEN', default=None)
-GOOGLE_DRIVE_STORAGE_MEDIA_ROOT = config('GOOGLE_DRIVE_STORAGE_MEDIA_ROOT', default='')
-
 # Configure active storage backend
 is_r2 = (STORAGE_BACKEND == 'r2') or (STORAGE_BACKEND is None and CLOUDFLARE_R2_ACCOUNT_ID and CLOUDFLARE_R2_ACCESS_KEY_ID)
-is_gdrive = (STORAGE_BACKEND == 'gdrive') or (STORAGE_BACKEND is None and not is_r2 and GOOGLE_DRIVE_STORAGE_REFRESH_TOKEN)
 
 # During automated test runs, always use local FileSystemStorage so tests run fast, locally,
-# and never consume external cloud API calls (R2 / Google Drive) or quotas.
+# and never consume external cloud API calls (R2) or quotas.
 if 'test' in sys.argv:
     STORAGES = {
         "default": {
@@ -164,15 +155,6 @@ elif is_r2 and CLOUDFLARE_R2_ACCOUNT_ID and CLOUDFLARE_R2_ACCESS_KEY_ID:
                 "querystring_auth": False if CLOUDFLARE_R2_CUSTOM_DOMAIN else True,
                 "querystring_expire": CLOUDFLARE_R2_EXPIRATION_SECS,
             },
-        },
-        "staticfiles": {
-            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
-        },
-    }
-elif is_gdrive and GOOGLE_DRIVE_STORAGE_REFRESH_TOKEN:
-    STORAGES = {
-        "default": {
-            "BACKEND": "transport_mgmt.storage_bridge.GoogleDriveOAuth2Storage",
         },
         "staticfiles": {
             "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
