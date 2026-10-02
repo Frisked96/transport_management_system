@@ -134,12 +134,18 @@ class Tyre(models.Model):
         elif self.status == self.STATUS_MOUNTED:
             # If no vehicle but status was mounted, set to in stock
             self.status = self.STATUS_IN_STOCK
+            self.current_position = ''
+
+        if not self.current_vehicle:
+            self.current_position = ''
 
         super().save(*args, **kwargs)
 
         # Automatic Logging (skip if explicitly told to)
         if getattr(self, '_skip_auto_log', False):
             return
+
+        current_user = getattr(self, '_user', None)
 
         if is_new:
             if self.current_vehicle:
@@ -150,7 +156,7 @@ class Tyre(models.Model):
                     position=self.current_position,
                     notes="Initial mount on creation",
                     date=self.purchase_date or timezone.now().date(),
-                    logged_by=getattr(self, '_user', None)
+                    logged_by=current_user
                 )
             else:
                 TyreLog.objects.create(
@@ -158,9 +164,8 @@ class Tyre(models.Model):
                     action=TyreLog.ACTION_STOCK,
                     notes="Initial addition to stock",
                     date=self.purchase_date or timezone.now().date(),
-                    logged_by=getattr(self, '_user', None)
+                    logged_by=current_user
                 )
-
 
         else:
             # Check for changes in vehicle or position
@@ -175,7 +180,8 @@ class Tyre(models.Model):
                         action=TyreLog.ACTION_DISMOUNT,
                         vehicle=old_instance.current_vehicle,
                         position=old_instance.current_position,
-                        notes=f"Automatic dismount: vehicle changed to {self.current_vehicle}" if self.current_vehicle else "Automatic dismount"
+                        notes=f"Automatic dismount: vehicle changed to {self.current_vehicle}" if self.current_vehicle else "Automatic dismount",
+                        logged_by=current_user
                     )
                 
                 # Mount to new vehicle if it exists
@@ -185,7 +191,8 @@ class Tyre(models.Model):
                         action=TyreLog.ACTION_MOUNT,
                         vehicle=self.current_vehicle,
                         position=self.current_position,
-                        notes=f"Automatic mount: vehicle changed from {old_instance.current_vehicle}" if old_instance.current_vehicle else "Automatic mount"
+                        notes=f"Automatic mount: vehicle changed from {old_instance.current_vehicle}" if old_instance.current_vehicle else "Automatic mount",
+                        logged_by=current_user
                     )
             elif position_changed and self.current_vehicle:
                 # Same vehicle, different position -> Rotation
@@ -194,29 +201,33 @@ class Tyre(models.Model):
                     action=TyreLog.ACTION_ROTATION,
                     vehicle=self.current_vehicle,
                     position=self.current_position,
-                    notes=f"Position changed from {old_instance.current_position} to {self.current_position}"
+                    notes=f"Position changed from {old_instance.current_position} to {self.current_position}",
+                    logged_by=current_user
                 )
             
             # Check for Status Changes (Repair/Scrap)
             status_changed = old_instance.status != self.status
-            if status_changed and not vehicle_changed: # vehicle_changed already handled Mount/Dismount
+            if status_changed:
                 if self.status == self.STATUS_REPAIR:
                     TyreLog.objects.create(
                         tyre=self,
                         action=TyreLog.ACTION_REPAIR,
-                        notes="Status changed to Under Repair"
+                        notes="Status changed to Under Repair",
+                        logged_by=current_user
                     )
                 elif self.status == self.STATUS_SCRAP:
                     TyreLog.objects.create(
                         tyre=self,
                         action=TyreLog.ACTION_SCRAP,
-                        notes="Status changed to Scrap"
+                        notes="Status changed to Scrap",
+                        logged_by=current_user
                     )
                 elif self.status == self.STATUS_IN_STOCK and old_instance.status == self.STATUS_REPAIR:
                     TyreLog.objects.create(
                         tyre=self,
-                        action=TyreLog.ACTION_DISMOUNT, # Using Dismount as 'Back to Stock'
-                        notes="Repair completed, moved back to stock"
+                        action=TyreLog.ACTION_STOCK,
+                        notes="Repair completed, moved back to stock",
+                        logged_by=current_user
                     )
 
         # Sync financial record for tyre purchase unconditionally

@@ -289,7 +289,7 @@ class TyreModelAndLifecycleTests(TestCase):
         # Change back to Stock
         tyre.status = Tyre.STATUS_IN_STOCK
         tyre.save()
-        self.assertTrue(tyre.logs.filter(action=TyreLog.ACTION_DISMOUNT).exists())
+        self.assertTrue(tyre.logs.filter(action=TyreLog.ACTION_STOCK).exists())
 
         # Change to Scrap
         tyre.status = Tyre.STATUS_SCRAP

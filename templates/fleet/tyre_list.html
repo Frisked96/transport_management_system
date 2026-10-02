@@ -124,8 +124,8 @@
 
             <div class="grid grid-cols-2 gap-4 pt-4 border-t border-slate-100">
                 <div>
-                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">KM Covered</span>
-                    <p class="text-sm font-black text-slate-900">{{ tyre.total_km|default:"0" }} <span class="text-[10px] text-slate-400 ml-0.5">KM</span></p>
+                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">Purchase Cost</span>
+                    <p class="text-sm font-black text-emerald-700">₹{{ tyre.purchase_cost|floatformat:2 }}</p>
                 </div>
                 <div class="text-right">
                     <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">Purchase Date</span>
@@ -157,8 +157,13 @@
                         <a href="{% url 'tyre-log-create' %}?tyre={{ tyre.pk }}&action=Rotation" class="block px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 uppercase">Rotation</a>
                         {% endif %}
                         <hr class="my-1 border-slate-50">
-                        {% if tyre.status != 'Scrap' %}
-                        <a href="{% url 'tyre-action' tyre.pk 'Scrap' %}" class="block px-4 py-2 text-xs font-bold text-rose-600 hover:bg-slate-50 uppercase" onclick="return confirm('Scrap this tyre?')">Scrap</a>
+                        {% if tyre.status != 'Scrap' and perms.fleet.change_tyre %}
+                        <form action="{% url 'tyre-action' tyre.pk 'Scrap' %}" method="post" onsubmit="return confirm('Scrap this tyre?');">
+                            {% csrf_token %}
+                            <button type="submit" class="w-full text-left px-4 py-2 text-xs font-bold text-rose-600 hover:bg-slate-50 uppercase">
+                                Scrap
+                            </button>
+                        </form>
                         {% endif %}
                         {% if perms.fleet.delete_tyre %}
                         <a href="{% url 'tyre-delete' tyre.pk %}" class="block px-4 py-2 text-xs font-bold text-rose-600 hover:bg-slate-50 uppercase">Delete</a>
@@ -180,7 +185,7 @@
                     <th class="px-6 py-4 text-[11px] font-black uppercase tracking-widest text-slate-400">Brand/Size</th>
                     <th class="px-6 py-4 text-[11px] font-black uppercase tracking-widest text-slate-400">Vehicle</th>
                     <th class="px-6 py-4 text-[11px] font-black uppercase tracking-widest text-slate-400">Position</th>
-                    <th class="px-6 py-4 text-[11px] font-black uppercase tracking-widest text-slate-400 text-right">KM</th>
+                    <th class="px-6 py-4 text-[11px] font-black uppercase tracking-widest text-slate-400 text-right">Cost</th>
                     <th class="px-6 py-4 text-[11px] font-black uppercase tracking-widest text-slate-400 text-center">Status</th>
                     <th class="px-6 py-4"></th>
                 </tr>
@@ -206,7 +211,7 @@
                         <span class="text-xs font-bold text-slate-700 uppercase">{{ tyre.current_position|default:"-" }}</span>
                     </td>
                     <td class="px-6 py-4 text-right">
-                        <span class="text-sm font-black text-slate-900">{{ tyre.total_km|default:"0" }}</span>
+                        <span class="text-sm font-black text-emerald-700">₹{{ tyre.purchase_cost|floatformat:2 }}</span>
                     </td>
                     <td class="px-6 py-4 text-center">
                         <span class="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-tighter

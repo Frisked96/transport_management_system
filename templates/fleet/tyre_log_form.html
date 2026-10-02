@@ -40,10 +40,10 @@
                     </p>
                 </div>
                 <div class="text-right">
-                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Current Odo</span>
+                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Current Status</span>
                     <p class="text-sm font-bold text-emerald-600">
                         {% with t=form.instance.tyre|default:form.initial.tyre %}
-                            {{ t.total_km }} KM
+                            {{ t.status }}{% if t.current_vehicle %} ({{ t.current_vehicle.registration_plate }}){% endif %}
                         {% endwith %}
                     </p>
                 </div>

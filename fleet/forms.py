@@ -146,9 +146,14 @@ class TyreForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         
-        # Populate brand choices from TyreBrand model
+        # Populate brand choices from TyreBrand model and existing tyre records
         brand_choices = [('', '---------')]
-        brand_choices.extend([(b.name, b.name) for b in TyreBrand.objects.all().order_by('name')])
+        brands_from_brand = list(TyreBrand.objects.values_list('name', flat=True).order_by('name'))
+        brands_from_tyres = list(Tyre.objects.exclude(brand='').values_list('brand', flat=True).distinct().order_by('brand'))
+        combined_brands = sorted(set(brands_from_brand + brands_from_tyres))
+        brand_choices.extend([(b, b) for b in combined_brands])
+        if self.instance.pk and self.instance.brand and (self.instance.brand, self.instance.brand) not in brand_choices:
+            brand_choices.append((self.instance.brand, self.instance.brand))
         self.fields['brand'].choices = brand_choices
 
         for field in self.fields.values():
@@ -177,6 +182,29 @@ class TyreForm(forms.ModelForm):
         if self.instance.pk:
             return self.instance.status
         return self.cleaned_data.get('status')
+
+    def clean(self):
+        cleaned_data = super().clean()
+        vehicle = cleaned_data.get('current_vehicle')
+        position = (cleaned_data.get('current_position') or '').strip()
+
+        if vehicle and position:
+            collision = Tyre.objects.filter(
+                current_vehicle=vehicle,
+                current_position__iexact=position
+            )
+            if self.instance.pk:
+                collision = collision.exclude(pk=self.instance.pk)
+            if collision.exists():
+                other = collision.first()
+                self.add_error(
+                    'current_position',
+                    f"Position '{position}' is already occupied by Tyre {other.serial_number} ({other.brand}) on vehicle {vehicle.registration_plate}."
+                )
+        elif vehicle and not position:
+            self.add_error('current_position', 'Position is required when assigning a tyre to a vehicle.')
+
+        return cleaned_data
 
 
 class TyreBrandForm(forms.ModelForm):
@@ -228,3 +256,52 @@ class TyreLogForm(forms.ModelForm):
             'date': forms.DateInput(attrs={'type': 'date'}),
             'notes': forms.Textarea(attrs={'rows': 2}),
         }
+
+    def clean(self):
+        cleaned_data = super().clean()
+        action = cleaned_data.get('action')
+        tyre = cleaned_data.get('tyre')
+        vehicle = cleaned_data.get('vehicle')
+        position = (cleaned_data.get('position') or '').strip()
+
+        if action == TyreLog.ACTION_MOUNT:
+            if tyre and tyre.status == Tyre.STATUS_SCRAP:
+                raise forms.ValidationError("Cannot mount a scrapped tyre.")
+            if not vehicle:
+                self.add_error('vehicle', "Vehicle is required when mounting a tyre.")
+            if not position:
+                self.add_error('position', "Position is required when mounting a tyre.")
+            elif vehicle:
+                collision = Tyre.objects.filter(
+                    current_vehicle=vehicle,
+                    current_position__iexact=position
+                )
+                if tyre:
+                    collision = collision.exclude(pk=tyre.pk)
+                if collision.exists():
+                    other = collision.first()
+                    self.add_error(
+                        'position',
+                        f"Position '{position}' on vehicle {vehicle.registration_plate} is already occupied by Tyre {other.serial_number} ({other.brand})."
+                    )
+        elif action == TyreLog.ACTION_ROTATION:
+            if not vehicle and tyre and tyre.current_vehicle:
+                vehicle = tyre.current_vehicle
+                cleaned_data['vehicle'] = vehicle
+            if not position:
+                self.add_error('position', "Target position is required for tyre rotation.")
+            elif vehicle:
+                collision = Tyre.objects.filter(
+                    current_vehicle=vehicle,
+                    current_position__iexact=position
+                )
+                if tyre:
+                    collision = collision.exclude(pk=tyre.pk)
+                if collision.exists():
+                    other = collision.first()
+                    self.add_error(
+                        'position',
+                        f"Position '{position}' on vehicle {vehicle.registration_plate} is already occupied by Tyre {other.serial_number} ({other.brand})."
+                    )
+
+        return cleaned_data

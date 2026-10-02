@@ -30,10 +30,13 @@
             </a>
             {% endif %}
 
-            {% if tyre.status != 'Scrap' %}
-            <a href="{% url 'tyre-action' tyre.pk 'Scrap' %}" class="px-4 py-2 border border-rose-200 rounded-md bg-rose-50 text-rose-700 text-sm font-bold hover:bg-rose-100 transition-colors" onclick="return confirm('SCRAP this tyre? This cannot be undone.')">
-                <i class="fa-solid fa-ban mr-2"></i>Scrap
-            </a>
+            {% if tyre.status != 'Scrap' and perms.fleet.change_tyre %}
+            <form action="{% url 'tyre-action' tyre.pk 'Scrap' %}" method="post" class="inline" onsubmit="return confirm('SCRAP this tyre? This cannot be undone.');">
+                {% csrf_token %}
+                <button type="submit" class="px-4 py-2 border border-rose-200 rounded-md bg-rose-50 text-rose-700 text-sm font-bold hover:bg-rose-100 transition-colors">
+                    <i class="fa-solid fa-ban mr-2"></i>Scrap
+                </button>
+            </form>
             {% endif %}
 
             {% if perms.fleet.delete_tyre %}

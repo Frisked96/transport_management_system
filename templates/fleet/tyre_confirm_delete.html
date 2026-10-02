@@ -54,16 +54,49 @@
                 </div>
             </div>
 
-            <form method="post" class="flex justify-end space-x-3">
+            <form method="post" class="space-y-6">
                 {% csrf_token %}
-                <a href="{% url 'tyre-detail' object.pk %}" 
-                   class="px-6 py-2 border border-slate-300 rounded-md text-slate-700 bg-white hover:bg-slate-50 font-medium transition-colors">
-                    Cancel
-                </a>
-                <button type="submit" 
-                        class="px-6 py-2 bg-red-600 text-white rounded-md font-medium hover:bg-red-700 shadow-sm transition-colors">
-                    <i class="fa-regular fa-trash-can mr-2"></i> Confirm Delete
-                </button>
+
+                {% if associated_records %}
+                <div class="bg-amber-50 border border-amber-200 text-amber-900 p-4 rounded-md">
+                    <div class="flex items-center space-x-2 mb-2">
+                        <i class="fa-solid fa-file-invoice-dollar text-amber-600"></i>
+                        <strong class="font-bold uppercase tracking-wider text-xs text-amber-800">Linked Financial Ledger Record Found</strong>
+                    </div>
+                    <p class="text-sm mb-3">
+                        This tyre has <strong>{{ associated_records.count }}</strong> linked financial ledger entry 
+                        (Invoice: ₹{{ associated_records.first.amount|floatformat:2 }}{% if associated_records.first.party %} from {{ associated_records.first.party.name }}{% endif %}).
+                        How would you like to handle this financial record?
+                    </p>
+                    <div class="space-y-3 bg-white p-3 rounded border border-amber-100 text-sm">
+                        <label class="flex items-start space-x-3 cursor-pointer">
+                            <input type="radio" name="ledger_action" value="keep" checked class="mt-0.5 text-emerald-600 focus:ring-emerald-500">
+                            <div>
+                                <span class="font-bold text-slate-800">Keep Ledger Record</span> <span class="text-xs bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded ml-1">Recommended</span>
+                                <p class="text-xs text-slate-500 mt-0.5">Retains the financial purchase entry in accounts & vendor balances, but unlinks the deleted tyre.</p>
+                            </div>
+                        </label>
+                        <label class="flex items-start space-x-3 cursor-pointer">
+                            <input type="radio" name="ledger_action" value="delete" class="mt-0.5 text-rose-600 focus:ring-rose-500">
+                            <div>
+                                <span class="font-bold text-slate-800">Delete Ledger Record</span>
+                                <p class="text-xs text-slate-500 mt-0.5">Permanently removes the purchase invoice and reverses the expense from the accounting ledger.</p>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+                {% endif %}
+
+                <div class="flex justify-end space-x-3 pt-2">
+                    <a href="{% url 'tyre-detail' object.pk %}" 
+                       class="px-6 py-2 border border-slate-300 rounded-md text-slate-700 bg-white hover:bg-slate-50 font-medium transition-colors">
+                        Cancel
+                    </a>
+                    <button type="submit" 
+                            class="px-6 py-2 bg-red-600 text-white rounded-md font-medium hover:bg-red-700 shadow-sm transition-colors">
+                        <i class="fa-regular fa-trash-can mr-2"></i> Confirm Delete
+                    </button>
+                </div>
             </form>
         </div>
     </div>

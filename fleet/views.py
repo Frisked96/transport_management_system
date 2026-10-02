@@ -10,6 +10,7 @@ from django.urls import reverse_lazy
 from django.contrib import messages
 from django.db.models import Q, Count
 from django.http import HttpResponse, HttpResponseRedirect
+from django.views.decorators.http import require_POST
 from ledger.models import Party
 
 from .models import Vehicle, MaintenanceRecord, Tyre, TyreLog, TyreBrand
@@ -115,6 +116,7 @@ class TyreUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
         return reverse_lazy('tyre-detail', kwargs={'pk': self.object.pk})
 
     def form_valid(self, form):
+        form.instance._user = self.request.user
         try:
             self.object = form.save()
             messages.success(self.request, 'Tyre updated.')
@@ -128,23 +130,47 @@ class TyreDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
     """
     Delete view for Tyres.
     Permission: Only admin and manager can delete tyres.
-    deletes the tyre, its logs, and its photo from storage.
+    Deletes the tyre, its logs, and its photo from storage.
+    Configurable option to delete or keep linked financial ledger entries.
     """
     model = Tyre
     template_name = 'fleet/tyre_confirm_delete.html'
     permission_required = 'fleet.delete_tyre'
     success_url = reverse_lazy('tyre-list')
 
-    def delete(self, request, *args, **kwargs):
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['associated_records'] = self.object.financial_records.all()
+        return context
+
+    def form_valid(self, form):
         tyre = self.get_object()
         serial = tyre.serial_number
+
+        # Handle linked financial records
+        ledger_action = self.request.POST.get('ledger_action', 'keep')
+        associated_records = tyre.financial_records.all()
+        if associated_records.exists():
+            if ledger_action == 'delete':
+                count = associated_records.count()
+                associated_records.delete()
+                messages.info(self.request, f"{count} linked financial ledger entry was deleted.")
+            else:
+                count = associated_records.count()
+                associated_records.update(associated_tyre=None)
+                messages.info(self.request, f"{count} linked financial ledger entry was preserved (unlinked from tyre).")
+
         if tyre.photo:
             try:
                 tyre.photo.delete(save=False)
             except Exception as e:
                 messages.warning(self.request, f"Tyre deleted, but photo deletion from storage encountered: {str(e)}")
         messages.success(self.request, f'Tyre {serial} and all its history have been deleted.')
-        return super().delete(request, *args, **kwargs)
+        return super().form_valid(form)
+
+    def delete(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        return self.form_valid(None)
 
 
 # --- Tyre Brand Views ---
@@ -243,6 +269,19 @@ class TyreLogCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView)
         
         # Synchronize Tyre model status
         if action == TyreLog.ACTION_MOUNT:
+            # If tyre was already mounted on another vehicle, log dismount from old vehicle first
+            old_vehicle = tyre.current_vehicle
+            old_position = tyre.current_position
+            if old_vehicle and old_vehicle != form.instance.vehicle:
+                TyreLog.objects.create(
+                    tyre=tyre,
+                    action=TyreLog.ACTION_DISMOUNT,
+                    vehicle=old_vehicle,
+                    position=old_position,
+                    date=form.instance.date,
+                    notes=f"Auto-dismount prior to mounting on {form.instance.vehicle.registration_plate}",
+                    logged_by=self.request.user
+                )
             tyre.current_vehicle = form.instance.vehicle
             tyre.current_position = form.instance.position
             tyre.status = Tyre.STATUS_MOUNTED
@@ -296,12 +335,16 @@ def tyre_log_delete(request, pk):
     return redirect('tyre-detail', pk=tyre_pk)
 
 
+@require_POST
 @login_required
+@permission_required('fleet.change_tyre', raise_exception=True)
 def tyre_quick_action(request, pk, action):
     """
     Handles simple status changes without a form.
+    Requires POST and change_tyre permission.
     """
     tyre = get_object_or_404(Tyre, pk=pk)
+    tyre._user = request.user
     
     if action == 'Dismount':
         tyre.current_vehicle = None

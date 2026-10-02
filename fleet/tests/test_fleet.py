@@ -381,3 +381,198 @@ class TyreLifecycleAndLedgerTests(TestCase):
         rec.refresh_from_db()
         self.assertEqual(rec.amount, Decimal('24000.00'))
 
+    def test_tyre_delete_keep_ledger_record(self):
+        """Test Point G: Deleting tyre with ledger_action='keep' unlinks record but preserves ledger invoice"""
+        from fleet.models import Tyre
+        from ledger.models import FinancialRecord
+        from decimal import Decimal
+
+        admin_user = User.objects.create_superuser(username='tyre_admin', password='password123')
+        self.client.login(username='tyre_admin', password='password123')
+
+        tyre = Tyre.objects.create(
+            serial_number='TYRE-DEL-KEEP',
+            brand='MRF',
+            vendor=self.vendor,
+            purchase_cost=Decimal('15000.00'),
+            purchase_date=timezone.now().date()
+        )
+        rec = FinancialRecord.objects.filter(associated_tyre=tyre).first()
+        self.assertIsNotNone(rec)
+        rec_id = rec.id
+
+        # Delete with ledger_action='keep'
+        resp = self.client.post(reverse('tyre-delete', kwargs={'pk': tyre.pk}), {'ledger_action': 'keep'})
+        self.assertEqual(resp.status_code, 302)
+
+        # Tyre is deleted
+        self.assertFalse(Tyre.objects.filter(pk=tyre.pk).exists())
+
+        # Financial record is retained and unlinked
+        preserved_rec = FinancialRecord.objects.filter(pk=rec_id).first()
+        self.assertIsNotNone(preserved_rec)
+        self.assertIsNone(preserved_rec.associated_tyre)
+        self.assertEqual(preserved_rec.amount, Decimal('15000.00'))
+        self.assertEqual(preserved_rec.party, self.vendor)
+
+    def test_tyre_delete_cascade_ledger_record(self):
+        """Test Point G: Deleting tyre with ledger_action='delete' removes associated ledger record"""
+        from fleet.models import Tyre
+        from ledger.models import FinancialRecord
+        from decimal import Decimal
+
+        admin_user = User.objects.create_superuser(username='tyre_admin2', password='password123')
+        self.client.login(username='tyre_admin2', password='password123')
+
+        tyre = Tyre.objects.create(
+            serial_number='TYRE-DEL-PURGE',
+            brand='MRF',
+            vendor=self.vendor,
+            purchase_cost=Decimal('18000.00'),
+            purchase_date=timezone.now().date()
+        )
+        rec = FinancialRecord.objects.filter(associated_tyre=tyre).first()
+        self.assertIsNotNone(rec)
+        rec_id = rec.id
+
+        # Delete with ledger_action='delete'
+        resp = self.client.post(reverse('tyre-delete', kwargs={'pk': tyre.pk}), {'ledger_action': 'delete'})
+        self.assertEqual(resp.status_code, 302)
+
+        # Both tyre and record are deleted
+        self.assertFalse(Tyre.objects.filter(pk=tyre.pk).exists())
+        self.assertFalse(FinancialRecord.objects.filter(pk=rec_id).exists())
+
+    def test_tyre_position_collision_validation(self):
+        """Test position collision prevention in TyreForm and TyreLogForm"""
+        from fleet.models import Tyre, TyreBrand
+        from fleet.forms import TyreForm, TyreLogForm
+        from decimal import Decimal
+
+        TyreBrand.objects.get_or_create(name='MRF', defaults={'suggestive_price': Decimal('10000.00')})
+
+        # Tyre 1 mounted at Front Left
+        Tyre.objects.create(
+            serial_number='TYRE-POS-1',
+            brand='MRF',
+            current_vehicle=self.vehicle1,
+            current_position='Front Left'
+        )
+
+        # Form attempting to mount Tyre 2 at Front Left
+        form_data = {
+            'serial_number': 'TYRE-POS-2',
+            'brand': 'MRF',
+            'current_vehicle': self.vehicle1.id,
+            'current_position': 'Front Left',
+            'purchase_cost': '0'
+        }
+        form = TyreForm(data=form_data)
+        self.assertFalse(form.is_valid())
+        self.assertIn('current_position', form.errors)
+        self.assertIn('already occupied', form.errors['current_position'][0])
+
+        # TyreLogForm collision test
+        tyre2 = Tyre.objects.create(serial_number='TYRE-POS-2B', brand='MRF')
+        log_form_data = {
+            'tyre': tyre2.id,
+            'date': timezone.now().date(),
+            'action': 'Mount',
+            'vehicle': self.vehicle1.id,
+            'position': 'Front Left'
+        }
+        log_form = TyreLogForm(data=log_form_data)
+        self.assertFalse(log_form.is_valid())
+        self.assertIn('position', log_form.errors)
+        self.assertIn('already occupied', log_form.errors['position'][0])
+
+    def test_tyre_cannot_mount_scrapped_tyre(self):
+        """Test that TyreLogForm rejects mounting a scrapped tyre"""
+        from fleet.models import Tyre
+        from fleet.forms import TyreLogForm
+
+        scrapped_tyre = Tyre.objects.create(serial_number='TYRE-SCRAP-01', brand='MRF', status=Tyre.STATUS_SCRAP)
+        log_form = TyreLogForm(data={
+            'tyre': scrapped_tyre.id,
+            'date': timezone.now().date(),
+            'action': 'Mount',
+            'vehicle': self.vehicle1.id,
+            'position': 'Rear Right'
+        })
+        self.assertFalse(log_form.is_valid())
+        self.assertIn('Cannot mount a scrapped tyre', str(log_form.errors))
+
+    def test_tyre_quick_action_requires_post_and_logs_user(self):
+        """Test tyre_quick_action requires POST, enforces permissions, and sets user on logs"""
+        from fleet.models import Tyre, TyreLog
+
+        user = User.objects.create_superuser(username='qa_user', password='password123')
+        self.client.login(username='qa_user', password='password123')
+
+        tyre = Tyre.objects.create(
+            serial_number='TYRE-QA-01',
+            brand='Apollo',
+            current_vehicle=self.vehicle1,
+            current_position='Front Left'
+        )
+
+        url = reverse('tyre-action', kwargs={'pk': tyre.pk, 'action': 'Scrap'})
+
+        # GET request should be rejected (405 Method Not Allowed)
+        get_resp = self.client.get(url)
+        self.assertEqual(get_resp.status_code, 405)
+
+        # POST request should succeed
+        post_resp = self.client.post(url)
+        self.assertEqual(post_resp.status_code, 302)
+
+        tyre.refresh_from_db()
+        self.assertEqual(tyre.status, Tyre.STATUS_SCRAP)
+        self.assertIsNone(tyre.current_vehicle)
+        self.assertEqual(tyre.current_position, '')
+
+        # Check logged_by on the generated TyreLog
+        last_log = tyre.logs.filter(action=TyreLog.ACTION_SCRAP).first()
+        self.assertIsNotNone(last_log)
+        self.assertEqual(last_log.logged_by, user)
+
+    def test_tyre_remount_from_different_vehicle_logs_dismount(self):
+        """Test TyreLogCreateView logs auto-dismount when moving from vehicle1 to vehicle2"""
+        from fleet.models import Tyre, TyreLog
+
+        user = User.objects.create_superuser(username='remount_user', password='password123')
+        self.client.login(username='remount_user', password='password123')
+
+        tyre = Tyre.objects.create(
+            serial_number='TYRE-REMOUNT-01',
+            brand='MRF',
+            current_vehicle=self.vehicle1,
+            current_position='Front Left'
+        )
+
+        url = reverse('tyre-log-create')
+        post_data = {
+            'tyre': tyre.pk,
+            'date': timezone.now().date(),
+            'action': 'Mount',
+            'vehicle': self.vehicle2.pk,
+            'position': 'Rear Left 1',
+            'notes': 'Moving to vehicle 2'
+        }
+        resp = self.client.post(url, post_data)
+        self.assertEqual(resp.status_code, 302)
+
+        tyre.refresh_from_db()
+        self.assertEqual(tyre.current_vehicle, self.vehicle2)
+        self.assertEqual(tyre.current_position, 'Rear Left 1')
+
+        # Check that a dismount log was created for vehicle1
+        dismount_log = TyreLog.objects.filter(
+            tyre=tyre,
+            action=TyreLog.ACTION_DISMOUNT,
+            vehicle=self.vehicle1
+        ).first()
+        self.assertIsNotNone(dismount_log)
+        self.assertEqual(dismount_log.logged_by, user)
+
+
