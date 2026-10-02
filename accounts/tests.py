@@ -1,6 +1,7 @@
 from django.test import TestCase, RequestFactory
-from django.contrib.auth.models import User
+from django.contrib.auth.models import User, Group, Permission
 from django.core.cache import cache
+from django.urls import reverse
 from django.utils import timezone
 from django.contrib.admin.models import LogEntry, ADDITION, CHANGE
 from accounts.models import UserProfile
@@ -125,3 +126,132 @@ class UserProfileAndActivityTests(TestCase):
         self.assertEqual(vehicle_activity.frontend_url, f'/fleet/vehicle/{vehicle.pk}/')
         # Ensure it does not contain /admin/
         self.assertNotIn('/admin/', vehicle_activity.frontend_url)
+
+
+class RoleManagementTests(TestCase):
+    def setUp(self):
+        self.superuser = User.objects.create_superuser(username='superadmin', password='password123')
+        self.regular_user = User.objects.create_user(username='regular', password='password123')
+        self.p_view_trip = Permission.objects.get(codename='view_trip')
+        self.p_add_trip = Permission.objects.get(codename='add_trip')
+
+    def test_regular_user_cannot_access_roles(self):
+        """Regular users without superuser flag must receive 403 on role views."""
+        self.client.login(username='regular', password='password123')
+        for url in [reverse('role-list'), reverse('role-create')]:
+            response = self.client.get(url)
+            self.assertEqual(response.status_code, 403)
+
+    def test_superuser_can_create_role(self):
+        """Superusers can create a new role with specific permissions via front-end."""
+        self.client.login(username='superadmin', password='password123')
+        response = self.client.post(reverse('role-create'), {
+            'name': 'Dispatcher',
+            'permissions': [self.p_view_trip.pk, self.p_add_trip.pk]
+        })
+        self.assertRedirects(response, reverse('role-list'))
+        
+        role = Group.objects.filter(name='Dispatcher').first()
+        self.assertIsNotNone(role)
+        self.assertEqual(role.permissions.count(), 2)
+        self.assertTrue(role.permissions.filter(codename='view_trip').exists())
+        self.assertTrue(role.permissions.filter(codename='add_trip').exists())
+
+    def test_superuser_can_update_role(self):
+        """Superusers can update an existing role and modify permissions."""
+        role = Group.objects.create(name='Accountant')
+        role.permissions.add(self.p_view_trip)
+        
+        self.client.login(username='superadmin', password='password123')
+        response = self.client.post(reverse('role-update', kwargs={'pk': role.pk}), {
+            'name': 'Senior Accountant',
+            'permissions': [self.p_add_trip.pk]
+        })
+        self.assertRedirects(response, reverse('role-list'))
+        
+        role.refresh_from_db()
+        self.assertEqual(role.name, 'Senior Accountant')
+        self.assertFalse(role.permissions.filter(codename='view_trip').exists())
+        self.assertTrue(role.permissions.filter(codename='add_trip').exists())
+
+    def test_superuser_can_delete_role(self):
+        """Superusers can delete a role."""
+        role = Group.objects.create(name='Temp Role')
+        self.client.login(username='superadmin', password='password123')
+        response = self.client.post(reverse('role-delete', kwargs={'pk': role.pk}))
+        self.assertRedirects(response, reverse('role-list'))
+        self.assertFalse(Group.objects.filter(pk=role.pk).exists())
+
+
+class DirectURLPermissionEnforcementTests(TestCase):
+    def setUp(self):
+        self.unprivileged_user = User.objects.create_user(username='guest_staff', password='password123')
+        self.client.login(username='guest_staff', password='password123')
+
+    def test_route_create_blocked_without_permission(self):
+        """Visiting /routes/create/ directly without trips.add_route redirects or returns 403."""
+        response = self.client.get(reverse('route-create'))
+        self.assertIn(response.status_code, [302, 403])
+        if response.status_code == 302:
+            self.assertIn('/accounts/login/', response.url)
+
+    def test_party_views_blocked_without_permission(self):
+        """Visiting /ledger/parties/ and /ledger/parties/create/ directly without permissions is blocked."""
+        response_list = self.client.get(reverse('party-list'))
+        self.assertIn(response_list.status_code, [302, 403])
+
+        response_create = self.client.get(reverse('party-create'))
+        self.assertIn(response_create.status_code, [302, 403])
+
+    def test_document_list_blocked_without_permission(self):
+        """Visiting /documents/ directly without documents.view_document is blocked."""
+        response = self.client.get(reverse('document-list'))
+        self.assertIn(response.status_code, [302, 403])
+
+    def test_vehicle_list_blocked_without_permission(self):
+        """Visiting /fleet/vehicles/ directly without fleet.view_vehicle is blocked."""
+        response = self.client.get(reverse('vehicle-list'))
+        self.assertIn(response.status_code, [302, 403])
+
+    def test_financial_records_blocked_without_permission(self):
+        """Visiting /ledger/records/ directly without ledger.can_view_financial_records is blocked."""
+        response = self.client.get(reverse('financialrecord-list'))
+        self.assertIn(response.status_code, [302, 403])
+
+    def test_user_without_route_permissions_can_create_trips_but_cannot_access_routes(self):
+        """User with trips.add_trip can create trips using existing routes, but cannot view/modify routes."""
+        add_trip_perm = Permission.objects.get(codename='add_trip')
+        view_trip_perm = Permission.objects.get(codename='view_trip')
+        self.unprivileged_user.user_permissions.add(add_trip_perm, view_trip_perm)
+
+        # 1. Routes endpoints must be blocked
+        self.assertIn(self.client.get(reverse('route-list')).status_code, [302, 403])
+        self.assertIn(self.client.get(reverse('route-create')).status_code, [302, 403])
+
+        # 2. Navigation must not contain routes link
+        resp_home = self.client.get(reverse('trip-list'))
+        self.assertNotIn(f'href="{reverse("route-list")}"', resp_home.content.decode('utf-8'))
+
+        # 3. Trip create form is accessible
+        vehicle = Vehicle.objects.create(registration_plate='RJ 14 TC 0001', status=Vehicle.STATUS_ACTIVE)
+        party = Party.objects.create(name='Test Logistics Party')
+        route = Route.objects.create(pickup_location='Kolkata', delivery_location='Ranchi', default_rate=1200)
+
+        resp_create = self.client.get(reverse('trip-create'))
+        self.assertEqual(resp_create.status_code, 200)
+
+        # 4. Trip can be successfully created with pre-existing route
+        post_data = {
+            'date': timezone.now().date().strftime('%Y-%m-%d'),
+            'lr_no': 'TEST-LR-NO-ROUTE-PERM',
+            'vehicle': vehicle.pk,
+            'party': party.pk,
+            'route': route.pk,
+            'revenue_type': 'fixed',
+            'weight': '20.00',
+            'rate_per_ton': '1200.00',
+            'vendor_hire_amount': '0.00',
+        }
+        post_resp = self.client.post(reverse('trip-create'), post_data)
+        self.assertRedirects(post_resp, reverse('trip-list'))
+        self.assertTrue(Trip.objects.filter(lr_no='TEST-LR-NO-ROUTE-PERM').exists())

@@ -25,10 +25,11 @@ from trips.models import Trip
 from ledger.views.base import BaseLedgerPermissionMixin
 from ledger.utils import format_indian_comma, format_balance
 
-class BillListView(LoginRequiredMixin, BaseLedgerPermissionMixin, ListView):
+class BillListView(LoginRequiredMixin, PermissionRequiredMixin, BaseLedgerPermissionMixin, ListView):
     model = Bill
     template_name = 'ledger/bill_list.html'
     context_object_name = 'bills'
+    permission_required = 'ledger.view_bill'
     paginate_by = 25
     
     def get_queryset(self):
@@ -111,7 +112,7 @@ class BillCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
     model = Bill
     form_class = BillForm
     template_name = 'ledger/bill_form.html'
-    permission_required = 'ledger.add_financialrecord'
+    permission_required = 'ledger.add_bill'
     success_url = reverse_lazy('bill-list')
 
     def get_form_kwargs(self):
@@ -143,7 +144,7 @@ class BillUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
     model = Bill
     form_class = BillForm
     template_name = 'ledger/bill_form.html'
-    permission_required = 'ledger.change_financialrecord'
+    permission_required = 'ledger.change_bill'
 
     def get_success_url(self):
         return reverse_lazy('bill-detail', kwargs={'pk': self.object.pk})
@@ -161,7 +162,7 @@ class BillUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
 class BillDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
     model = Bill
     template_name = 'ledger/bill_confirm_delete.html'
-    permission_required = 'ledger.delete_financialrecord'
+    permission_required = 'ledger.delete_bill'
     success_url = reverse_lazy('bill-list')
 
     def get_context_data(self, **kwargs):
@@ -179,10 +180,11 @@ class BillDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
         context['impact_statements'] = impact
         return context
 
-class BillDetailView(LoginRequiredMixin, BaseLedgerPermissionMixin, DetailView):
+class BillDetailView(LoginRequiredMixin, PermissionRequiredMixin, BaseLedgerPermissionMixin, DetailView):
     model = Bill
     template_name = 'ledger/bill_detail.html'
     context_object_name = 'bill'
+    permission_required = 'ledger.view_bill'
 
     def get_queryset(self):
         return Bill.objects.select_related('party', 'category', 'original_bill', 'created_by')

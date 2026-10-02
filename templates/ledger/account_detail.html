@@ -17,12 +17,12 @@
         <a href="{% url 'account-statement-pdf' account.pk %}?start_date={{ request.GET.start_date }}&end_date={{ request.GET.end_date }}" target="_blank" class="px-4 py-2 border border-red-200 rounded-md bg-red-50 text-red-700 text-sm font-medium hover:bg-red-100 transition-colors shadow-sm">
             <i class="fa-regular fa-file-pdf mr-2"></i>Statement
         </a>
-        {% if perms.ledger.change_financialrecord %}
+        {% if perms.ledger.change_companyaccount %}
         <a href="{% url 'account-update' account.pk %}" class="px-4 py-2 border border-slate-300 rounded-md bg-white text-slate-700 text-sm font-medium hover:bg-slate-50 transition-colors">
             <i class="fa-regular fa-pen-to-square mr-2"></i>Edit
         </a>
         {% endif %}
-        {% if perms.ledger.delete_financialrecord %}
+        {% if perms.ledger.delete_companyaccount %}
         <a href="{% url 'account-delete' account.pk %}" class="px-4 py-2 border border-red-200 rounded-md bg-red-50 text-red-700 text-sm font-medium hover:bg-red-100 transition-colors">
             <i class="fa-regular fa-trash-can mr-2"></i>Delete
         </a>

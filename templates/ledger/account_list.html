@@ -11,7 +11,7 @@
         <p class="text-sm text-slate-600 mt-1">Manage your internal company bank accounts and firms</p>
     </div>
     <div class="mt-4 md:mt-0 flex space-x-3">
-        {% if perms.ledger.add_financialrecord %}
+        {% if perms.ledger.add_companyaccount %}
         <a href="{% url 'account-create' %}" class="flex items-center space-x-2 px-4 py-2 bg-emerald-600 text-white rounded-md text-sm font-medium hover:bg-emerald-700 shadow-sm transition-colors">
             <i class="fa-solid fa-plus"></i>
             <span>Add New Account</span>

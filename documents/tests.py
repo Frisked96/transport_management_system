@@ -155,7 +155,8 @@ class DirectDocumentUploadTests(TestCase):
         self.user = User.objects.create_user(username='doc_admin', password='password123')
         add_perm = Permission.objects.get(codename='add_document')
         change_perm = Permission.objects.get(codename='change_document')
-        self.user.user_permissions.add(add_perm, change_perm)
+        view_veh_perm = Permission.objects.get(codename='view_vehicle')
+        self.user.user_permissions.add(add_perm, change_perm, view_veh_perm)
         self.client.login(username='doc_admin', password='password123')
         self.vehicle = Vehicle.objects.create(registration_plate='MH 04 AB 1234')
 

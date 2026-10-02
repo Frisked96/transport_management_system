@@ -20,13 +20,14 @@ from trips.models import Trip
 from ledger.views.base import BaseLedgerPermissionMixin
 from ledger.utils import format_indian_comma, format_balance
 
-class CompanyAccountListView(LoginRequiredMixin, BaseLedgerPermissionMixin, ListView):
+class CompanyAccountListView(LoginRequiredMixin, PermissionRequiredMixin, BaseLedgerPermissionMixin, ListView):
     """
     List view for company accounts
     """
     model = CompanyAccount
     template_name = 'ledger/account_list.html'
     context_object_name = 'accounts'
+    permission_required = 'ledger.view_companyaccount'
     paginate_by = 25
     
     def get_queryset(self):
@@ -43,7 +44,7 @@ class CompanyAccountCreateView(LoginRequiredMixin, PermissionRequiredMixin, Crea
     model = CompanyAccount
     form_class = CompanyAccountForm
     template_name = 'ledger/account_form.html'
-    permission_required = 'ledger.add_financialrecord'
+    permission_required = 'ledger.add_companyaccount'
     success_url = reverse_lazy('account-list')
     
     def form_valid(self, form):
@@ -57,7 +58,7 @@ class CompanyAccountUpdateView(LoginRequiredMixin, PermissionRequiredMixin, Upda
     model = CompanyAccount
     form_class = CompanyAccountForm
     template_name = 'ledger/account_form.html'
-    permission_required = 'ledger.change_financialrecord'
+    permission_required = 'ledger.change_companyaccount'
     success_url = reverse_lazy('account-list')
 
     def form_valid(self, form):
@@ -70,20 +71,21 @@ class CompanyAccountDeleteView(LoginRequiredMixin, PermissionRequiredMixin, Dele
     """
     model = CompanyAccount
     template_name = 'ledger/account_confirm_delete.html'
-    permission_required = 'ledger.delete_financialrecord'
+    permission_required = 'ledger.delete_companyaccount'
     success_url = reverse_lazy('account-list')
     
     def delete(self, request, *args, **kwargs):
         messages.success(self.request, 'Account deleted successfully!')
         return super().delete(request, *args, **kwargs)
 
-class CompanyAccountDetailView(LoginRequiredMixin, BaseLedgerPermissionMixin, DetailView):
+class CompanyAccountDetailView(LoginRequiredMixin, PermissionRequiredMixin, BaseLedgerPermissionMixin, DetailView):
     """
     Detail view for an account (showing transaction history)
     """
     model = CompanyAccount
     template_name = 'ledger/account_detail.html'
     context_object_name = 'account'
+    permission_required = 'ledger.view_companyaccount'
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)

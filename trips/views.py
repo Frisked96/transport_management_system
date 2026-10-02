@@ -3,7 +3,7 @@ Views for Trips application with permission checks
 """
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.decorators import login_required, permission_required
 from django.shortcuts import render, redirect
 from django.urls import reverse_lazy
 from django.contrib import messages
@@ -901,6 +901,7 @@ class RouteDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
 
 
 @login_required
+@permission_required('trips.view_trip', raise_exception=True)
 def trip_export_excel(request):
     """
     Generates an Excel sheet for billed trips with vehicle and firm selection.

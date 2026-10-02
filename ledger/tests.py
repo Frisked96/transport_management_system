@@ -3,7 +3,7 @@ from django.utils import timezone
 from decimal import Decimal
 from ledger.models import Bill, Party, CompanyAccount, TransactionCategory, FinancialRecord, TripAllocation
 from ledger.services import BalanceService, BillingService, TripFinancialService
-from django.contrib.auth.models import User
+from django.contrib.auth.models import User, Permission
 from trips.models import Trip, Route
 from fleet.models import Vehicle
 
@@ -365,6 +365,8 @@ class FinancialRecordDisplayTests(TestCase):
 
         # 2. As non-superuser staff: 'Recorded By' is NOT present
         normal_user = User.objects.create_user(username='staffuser', password='password123')
+        perm = Permission.objects.get(codename='can_view_financial_records')
+        normal_user.user_permissions.add(perm)
         self.client.login(username='staffuser', password='password123')
         resp_normal = self.client.get(detail_url)
         self.assertEqual(resp_normal.status_code, 200)

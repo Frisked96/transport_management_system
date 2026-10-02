@@ -3,7 +3,7 @@ FinancialRecord CRUD views and Financial Summary dashboard.
 """
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.decorators import login_required, permission_required
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse_lazy
 from django.contrib import messages
@@ -20,7 +20,7 @@ from trips.models import Trip
 from ledger.views.base import BaseLedgerPermissionMixin
 from ledger.utils import format_indian_comma, format_balance
 
-class FinancialRecordListView(LoginRequiredMixin, BaseLedgerPermissionMixin, ListView):
+class FinancialRecordListView(LoginRequiredMixin, PermissionRequiredMixin, BaseLedgerPermissionMixin, ListView):
     """
     List view for financial records with permission-based filtering.
     Acts as a Financial Dashboard.
@@ -28,6 +28,7 @@ class FinancialRecordListView(LoginRequiredMixin, BaseLedgerPermissionMixin, Lis
     model = FinancialRecord
     template_name = 'ledger/financialrecord_list.html'
     context_object_name = 'financial_records'
+    permission_required = 'ledger.can_view_financial_records'
     paginate_by = 25
     
     def get_queryset(self):
@@ -151,13 +152,14 @@ class FinancialRecordListView(LoginRequiredMixin, BaseLedgerPermissionMixin, Lis
         return context
 
 
-class FinancialRecordDetailView(LoginRequiredMixin, BaseLedgerPermissionMixin, DetailView):
+class FinancialRecordDetailView(LoginRequiredMixin, PermissionRequiredMixin, BaseLedgerPermissionMixin, DetailView):
     """
     Detail view for a single financial record
     """
     model = FinancialRecord
     template_name = 'ledger/financialrecord_detail.html'
     context_object_name = 'record'
+    permission_required = 'ledger.can_view_financial_records'
     
     def get_queryset(self):
         """Ensure user has permission to view financial records"""
@@ -686,6 +688,7 @@ class FinancialRecordDeleteView(LoginRequiredMixin, PermissionRequiredMixin, Del
 
 
 @login_required
+@permission_required('ledger.can_view_financial_records', raise_exception=True)
 def financial_summary(request):
     """
     Financial summary report view

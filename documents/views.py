@@ -6,7 +6,7 @@ from datetime import timedelta
 from django import forms
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.decorators import login_required, permission_required
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.db.models import Q, Count
 from django.http import HttpResponseRedirect, JsonResponse
@@ -21,9 +21,10 @@ from fleet.models import Vehicle
 from drivers.models import Driver
 
 
-class DocumentListView(LoginRequiredMixin, ListView):
+class DocumentListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
     template_name = 'documents/document_list.html'
     paginate_by = 10
+    permission_required = 'documents.view_document'
 
     def get_queryset(self):
         self.doc_type = self.request.GET.get('type', 'vehicles')
@@ -235,6 +236,8 @@ class DocumentDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView
     object: Document
 
     def dispatch(self, request, *args, **kwargs):
+        if not self.has_permission():
+            return self.handle_no_permission()
         self.object = self.get_object()
         if self.object.is_base_document:
             messages.error(request, f"Base compliance document '{self.object.document_name}' cannot be deleted.")
@@ -293,13 +296,14 @@ class DocumentRenewView(LoginRequiredMixin, PermissionRequiredMixin, CreateView)
         return redirect('document-history', pk=self.document.pk)
 
 
-class DocumentHistoryView(LoginRequiredMixin, DetailView):
+class DocumentHistoryView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
     """
     Detail view showing full renewal history, validity periods, and expenses for a document.
     """
     model = Document
     template_name = 'documents/document_history.html'
     context_object_name = 'document'
+    permission_required = 'documents.view_document'
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -354,6 +358,7 @@ class DocumentRenewalDeleteView(LoginRequiredMixin, PermissionRequiredMixin, Del
 
 
 @login_required
+@permission_required('documents.view_document', raise_exception=True)
 def get_upload_status(request):
     """
     Returns counts of active and recently completed background uploads.
@@ -371,6 +376,7 @@ def get_upload_status(request):
 
 
 @login_required
+@permission_required('documents.view_document', raise_exception=True)
 def document_download_proxy(request, pk):
     """
     Proxy view to handle document URL generation for a specific DocumentFile.
@@ -394,6 +400,7 @@ def document_download_proxy(request, pk):
 
 
 @login_required
+@permission_required('documents.view_document', raise_exception=True)
 def renewal_download_proxy(request, pk):
     """
     Proxy view to handle document URL generation for a DocumentRenewal's receipt_file.

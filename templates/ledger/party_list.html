@@ -11,7 +11,7 @@
         <p class="text-sm text-slate-600 mt-1">Total {{ paginator.count }} parties found</p>
     </div>
     <div class="mt-4 md:mt-0 flex space-x-3">
-        {% if perms.ledger.add_financialrecord %}
+        {% if perms.ledger.add_party %}
         <a href="{% url 'party-create' %}" class="flex items-center space-x-2 px-4 py-2 bg-emerald-600 text-white rounded-md text-sm font-medium hover:bg-emerald-700 shadow-sm transition-colors">
             <i class="fa-solid fa-plus"></i>
             <span>Add New Party</span>
@@ -88,7 +88,7 @@
                         <div class="absolute right-0 mt-2 w-48 z-20 dropdown-menu hidden">
                             <div class="bg-white rounded-md shadow-lg py-1 border border-slate-100">
                                 <a href="{% url 'party-detail' party.pk %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"><i class="fa-regular fa-eye mr-2"></i>View Details</a>
-                                {% if perms.ledger.change_financialrecord %}
+                                {% if perms.ledger.change_party %}
                                 <a href="{% url 'party-update' party.pk %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"><i class="fa-regular fa-pen-to-square mr-2"></i>Edit Party</a>
                                 {% endif %}
                             </div>
@@ -167,7 +167,7 @@
     </div>
     <h2 class="text-xl font-bold text-slate-900 mb-2">No parties found</h2>
     <p class="text-slate-600 mb-6 max-w-xs mx-auto">We couldn't find any parties matching your search.</p>
-    {% if perms.ledger.add_financialrecord %}
+    {% if perms.ledger.add_party %}
     <a href="{% url 'party-create' %}" class="inline-flex items-center space-x-2 px-6 py-3 bg-emerald-600 text-white rounded-md font-medium hover:bg-emerald-700 shadow-sm transition-colors">
         <i class="fa-solid fa-plus"></i>
         <span>Add Your First Party</span>
@@ -176,7 +176,7 @@
 </div>
 {% endif %}
 
-{% if perms.ledger.add_financialrecord %}
+{% if perms.ledger.add_party %}
 <a href="{% url 'party-create' %}" class="fixed bottom-24 right-6 z-40 lg:hidden w-14 h-14 bg-emerald-600 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-emerald-700 active:scale-95 transition-all" title="Add Party">
     <i class="fa-solid fa-plus text-xl"></i>
 </a>

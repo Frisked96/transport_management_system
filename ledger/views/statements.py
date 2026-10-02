@@ -4,7 +4,7 @@ Optimized for clean A4 printing and browser Save-to-PDF.
 """
 from decimal import Decimal
 from django.shortcuts import render, get_object_or_404
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.decorators import login_required, permission_required
 from django.db.models import Q, Sum
 from django.utils import timezone
 
@@ -13,6 +13,7 @@ from ledger.utils import format_balance, parse_date_range
 
 
 @login_required
+@permission_required('ledger.view_party', raise_exception=True)
 def party_statement_pdf(request, pk):
     """
     Renders print-optimized statement of account for a specific party within a date range.
@@ -105,6 +106,7 @@ def party_statement_pdf(request, pk):
 
 
 @login_required
+@permission_required('ledger.view_companyaccount', raise_exception=True)
 def account_statement_pdf(request, pk):
     """
     Renders print-optimized statement for a company account within a date range.
@@ -201,6 +203,7 @@ def account_statement_pdf(request, pk):
 
 
 @login_required
+@permission_required('ledger.can_view_financial_records', raise_exception=True)
 def unified_ledger_pdf(request):
     """
     Renders print-optimized statement for all Company Accounts combined.

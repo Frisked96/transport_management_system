@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+
+{% block title %}Delete Role - TMS{% endblock %}
+
+{% block content %}
+<div class="max-w-xl mx-auto mt-8">
+    <div class="bg-white rounded-xl shadow-sm border border-rose-200 overflow-hidden">
+        <div class="bg-rose-50 px-6 py-4 border-b border-rose-100 flex items-center">
+            <div class="flex-shrink-0 bg-rose-100 p-2.5 rounded-full mr-4 text-rose-600">
+                <i class="fa-solid fa-shield-halved text-xl"></i>
+            </div>
+            <div>
+                <h1 class="text-xl font-bold text-rose-800">Delete Role</h1>
+                <p class="text-sm text-rose-600 mt-0.5">This action cannot be undone.</p>
+            </div>
+        </div>
+
+        <div class="p-6">
+            <p class="text-slate-700 text-base mb-6">
+                Are you sure you want to delete the role 
+                <strong class="text-slate-900 bg-slate-100 px-2 py-1 rounded border border-slate-200">
+                    {{ object.name }}
+                </strong>?
+            </p>
+
+            <div class="bg-slate-50 border border-slate-200 rounded-lg p-4 mb-6">
+                <div class="flex items-center justify-between text-sm text-slate-600 mb-2">
+                    <span class="font-medium">Assigned Users:</span>
+                    <span class="font-bold text-slate-800">{{ object.user_set.count }}</span>
+                </div>
+                <div class="flex items-center justify-between text-sm text-slate-600">
+                    <span class="font-medium">Total Permissions:</span>
+                    <span class="font-bold text-slate-800">{{ object.permissions.count }}</span>
+                </div>
+                {% if object.user_set.exists %}
+                <div class="mt-4 pt-3 border-t border-slate-200 text-xs text-amber-700 flex items-start">
+                    <i class="fa-solid fa-triangle-exclamation mr-2 mt-0.5 flex-shrink-0"></i>
+                    <span>Users currently assigned to this role ({{ object.user_set.all|join:", " }}) will lose the permissions granted by this role.</span>
+                </div>
+                {% endif %}
+            </div>
+
+            <form method="post" class="flex flex-col sm:flex-row justify-end gap-3">
+                {% csrf_token %}
+                <a href="{% url 'role-list' %}" class="inline-flex justify-center items-center px-4 py-2 border border-slate-300 shadow-sm text-sm font-medium rounded-md text-slate-700 bg-white hover:bg-slate-50 transition-colors">
+                    Cancel
+                </a>
+                <button type="submit" class="inline-flex justify-center items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-rose-600 hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rose-500 transition-colors">
+                    <i class="fa-solid fa-trash-can mr-2"></i>Delete Role
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

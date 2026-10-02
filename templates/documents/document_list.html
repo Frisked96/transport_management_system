@@ -156,16 +156,20 @@
                                 </a>
                                 {% endfor %}
                                 {% endif %}
+                                {% if perms.documents.change_document %}
                                 <a href="{% url 'document-renew' doc.pk %}" class="px-2 py-1 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded text-[11px] font-bold" title="Renew">
                                     <i class="fa-solid fa-arrows-rotate mr-0.5"></i>Renew
                                 </a>
+                                {% endif %}
                                 <a href="{% url 'document-history' doc.pk %}" class="text-slate-400 hover:text-blue-600 p-2" title="History">
                                     <i class="fa-solid fa-clock-rotate-left"></i>
                                 </a>
+                                {% if perms.documents.change_document %}
                                 <a href="{% url 'document-update' doc.pk %}" class="text-slate-400 hover:text-amber-600 p-2" title="Edit">
                                     <i class="fa-solid fa-pen-to-square"></i>
                                 </a>
-                                {% if not doc.is_base_document %}
+                                {% endif %}
+                                {% if not doc.is_base_document and perms.documents.delete_document %}
                                 <a href="{% url 'document-delete' doc.pk %}" class="text-slate-400 hover:text-rose-600 p-2" title="Delete">
                                     <i class="fa-solid fa-trash-can"></i>
                                 </a>
@@ -243,16 +247,20 @@
                                         </a>
                                         {% endfor %}
                                         {% endif %}
+                                        {% if perms.documents.change_document %}
                                         <a href="{% url 'document-renew' doc.pk %}" class="px-2 py-1 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded text-xs font-bold" title="Renew Document">
                                             <i class="fa-solid fa-arrows-rotate mr-1"></i>Renew
                                         </a>
+                                        {% endif %}
                                         <a href="{% url 'document-history' doc.pk %}" class="text-slate-400 hover:text-blue-600 p-1" title="History">
                                             <i class="fa-solid fa-clock-rotate-left"></i>
                                         </a>
+                                        {% if perms.documents.change_document %}
                                         <a href="{% url 'document-update' doc.pk %}" class="text-slate-400 hover:text-amber-600 p-1" title="Edit">
                                             <i class="fa-solid fa-pen-to-square"></i>
                                         </a>
-                                        {% if not doc.is_base_document %}
+                                        {% endif %}
+                                        {% if not doc.is_base_document and perms.documents.delete_document %}
                                         <a href="{% url 'document-delete' doc.pk %}" class="text-slate-400 hover:text-rose-600 p-1" title="Delete">
                                             <i class="fa-solid fa-trash-can"></i>
                                         </a>
@@ -391,12 +399,16 @@
                                     <i class="fa-solid fa-file-lines"></i>
                                 </a>
                                 {% endfor %}
+                                {% if perms.documents.change_document %}
                                 <a href="{% url 'document-update' doc.pk %}" class="text-slate-400 hover:text-blue-600 min-h-[44px] min-w-[44px] inline-flex items-center justify-center" title="Edit">
                                     <i class="fa-solid fa-pen-to-square"></i>
                                 </a>
+                                {% endif %}
+                                {% if perms.documents.delete_document %}
                                 <a href="{% url 'document-delete' doc.pk %}" class="text-slate-400 hover:text-rose-600 min-h-[44px] min-w-[44px] inline-flex items-center justify-center" title="Delete">
                                     <i class="fa-solid fa-trash-can"></i>
                                 </a>
+                                {% endif %}
                             </div>
                         </div>
                     </div>
@@ -451,12 +463,16 @@
                                             <i class="fa-solid fa-file-lines"></i>
                                         </a>
                                         {% endfor %}
+                                        {% if perms.documents.change_document %}
                                         <a href="{% url 'document-update' doc.pk %}" class="text-slate-400 hover:text-blue-600" title="Edit">
                                             <i class="fa-solid fa-pen-to-square"></i>
                                         </a>
+                                        {% endif %}
+                                        {% if perms.documents.delete_document %}
                                         <a href="{% url 'document-delete' doc.pk %}" class="text-slate-400 hover:text-rose-600" title="Delete">
                                             <i class="fa-solid fa-trash-can"></i>
                                         </a>
+                                        {% endif %}
                                     </div>
                                 </td>
                             </tr>

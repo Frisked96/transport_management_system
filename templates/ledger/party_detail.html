@@ -19,7 +19,7 @@
             </span>
         </div>
         <div class="flex items-center gap-2">
-            {% if perms.ledger.change_financialrecord %}
+            {% if perms.ledger.change_party %}
             <a href="{% url 'party-update' party.pk %}" class="px-4 py-2 border border-slate-300 rounded-md bg-white text-slate-700 text-sm font-bold hover:bg-slate-50 transition-colors">
                 <i class="fa-regular fa-pen-to-square mr-2"></i>Edit Profile
             </a>
@@ -468,14 +468,17 @@
 </div>
 
 <script>
-function switchTab(tabId) {
+function switchTab(tabId, updateHistory = true) {
+    const targetContent = document.getElementById('content-' + tabId);
+    if (!targetContent) return;
+
     document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.add('hidden'));
     document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.classList.remove('border-emerald-600', 'text-emerald-700');
         btn.classList.add('border-transparent', 'text-slate-400');
     });
     
-    document.getElementById('content-' + tabId).classList.remove('hidden');
+    targetContent.classList.remove('hidden');
     const activeBtn = document.getElementById('tab-' + tabId);
     if (activeBtn) {
         activeBtn.classList.add('border-emerald-600', 'text-emerald-700');
@@ -492,23 +495,35 @@ function switchTab(tabId) {
         }
     }
 
-    // Update URL without reload to persist tab on refresh/pagination
-    const url = new URL(window.location);
-    url.searchParams.set('tab', tabId);
-    window.history.pushState({}, '', url);
+    // Update URL with replaceState so browser Back button navigates to previous page, not previous tab
+    if (updateHistory) {
+        const url = new URL(window.location);
+        if (url.searchParams.get('tab') !== tabId) {
+            url.searchParams.set('tab', tabId);
+            window.history.replaceState({}, '', url);
+        }
+    }
 }
 
+// Re-render tab when browser navigating forward/backward
+window.addEventListener('popstate', function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const fallbackTab = {% if party.party_type == 'Creditor' %}'ledger'{% else %}'trips'{% endif %};
+    const activeTab = urlParams.get('tab') || fallbackTab;
+    switchTab(activeTab, false);
+});
+
 document.addEventListener('DOMContentLoaded', function() {
-    // Tab persistence logic
+    // Tab persistence logic - do not push history on initial load
     const urlParams = new URLSearchParams(window.location.search);
     const activeTab = urlParams.get('tab');
     if (activeTab && document.getElementById('tab-' + activeTab)) {
-        switchTab(activeTab);
+        switchTab(activeTab, false);
     } else {
         {% if party.party_type == 'Creditor' %}
-        switchTab('ledger');
+        switchTab('ledger', false);
         {% else %}
-        switchTab('trips');
+        switchTab('trips', false);
         {% endif %}
     }
 

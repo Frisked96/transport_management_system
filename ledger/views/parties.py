@@ -20,13 +20,14 @@ from trips.models import Trip
 from ledger.views.base import BaseLedgerPermissionMixin
 from ledger.utils import format_indian_comma, format_balance
 
-class PartyListView(LoginRequiredMixin, BaseLedgerPermissionMixin, ListView):
+class PartyListView(LoginRequiredMixin, PermissionRequiredMixin, BaseLedgerPermissionMixin, ListView):
     """
     List view for parties
     """
     model = Party
     template_name = 'ledger/party_list.html'
     context_object_name = 'parties'
+    permission_required = 'ledger.view_party'
     paginate_by = 25
     
     def get_queryset(self):
@@ -63,13 +64,14 @@ class PartyListView(LoginRequiredMixin, BaseLedgerPermissionMixin, ListView):
 
 from django.core.paginator import Paginator
 
-class PartyDetailView(LoginRequiredMixin, BaseLedgerPermissionMixin, DetailView):
+class PartyDetailView(LoginRequiredMixin, PermissionRequiredMixin, BaseLedgerPermissionMixin, DetailView):
     """
     Detail view for a party
     """
     model = Party
     template_name = 'ledger/party_detail.html'
     context_object_name = 'party'
+    permission_required = 'ledger.view_party'
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -160,7 +162,7 @@ class PartyCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
     model = Party
     form_class = PartyForm
     template_name = 'ledger/party_form.html'
-    permission_required = 'ledger.add_financialrecord'
+    permission_required = 'ledger.add_party'
     
     def get_success_url(self):
         return reverse_lazy('party-detail', kwargs={'pk': self.object.pk})
@@ -176,7 +178,7 @@ class PartyUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
     model = Party
     form_class = PartyForm
     template_name = 'ledger/party_form.html'
-    permission_required = 'ledger.change_financialrecord'
+    permission_required = 'ledger.change_party'
     
     def get_success_url(self):
         return reverse_lazy('party-detail', kwargs={'pk': self.object.pk})
@@ -191,7 +193,7 @@ class PartyDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
     """
     model = Party
     template_name = 'ledger/party_confirm_delete.html'
-    permission_required = 'ledger.delete_financialrecord'
+    permission_required = 'ledger.delete_party'
     success_url = reverse_lazy('party-list')
     
     def delete(self, request, *args, **kwargs):

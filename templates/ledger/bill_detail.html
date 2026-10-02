@@ -30,13 +30,13 @@
     </div>
 
     <div class="flex items-center gap-3">
-        {% if perms.ledger.change_financialrecord %}
+        {% if perms.ledger.change_bill %}
         <a href="{% url 'bill-update' bill.pk %}" class="px-4 py-2 border border-slate-300 rounded-md bg-white text-slate-700 text-sm font-medium hover:bg-slate-50 transition-colors">
             <i class="fa-regular fa-pen-to-square mr-2"></i>Edit Invoice
         </a>
         {% endif %}
         
-        {% if perms.ledger.delete_financialrecord %}
+        {% if perms.ledger.delete_bill %}
         <a href="{% url 'bill-delete' bill.pk %}" class="px-4 py-2 border border-rose-200 rounded-md bg-rose-50 text-rose-700 text-sm font-bold hover:bg-rose-100 transition-colors">
             <i class="fa-solid fa-trash-can mr-2"></i>Delete
         </a>

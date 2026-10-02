@@ -152,40 +152,65 @@
                     </a>
                     
                     {% if user.is_authenticated %}
+                    {% if user.is_superuser or perms.trips.view_route or perms.fleet.view_vehicle or perms.documents.view_document or perms.fleet.view_maintenancerecord or perms.fleet.view_tyre %}
                     <div class="relative dropdown-container">
                         <button class="flex items-center space-x-2 px-3 py-2 rounded-md text-slate-300 hover:bg-slate-700 hover:text-white focus:outline-none dropdown-toggle">
                             <i class="fa-solid fa-truck-fast"></i><span>Fleet</span><i class="fa-solid fa-chevron-down text-xs ml-1"></i>
                         </button>
                         <div class="absolute left-0 mt-1 w-48 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5 hidden dropdown-menu">
+                            {% if user.is_superuser or perms.trips.view_route %}
                             <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'route-list' %}">Routes</a>
+                            {% endif %}
+                            {% if user.is_superuser or perms.fleet.view_vehicle %}
                             <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'vehicle-list' %}">Vehicles</a>
+                            {% endif %}
+                            {% if user.is_superuser or perms.documents.view_document %}
                             <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'document-list' %}">Documents</a>
+                            {% endif %}
+                            {% if user.is_superuser or perms.fleet.view_maintenancerecord %}
                             <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'maintenance-list' %}">Maintenance</a>
+                            {% endif %}
+                            {% if user.is_superuser or perms.fleet.view_tyre %}
                             <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'tyre-list' %}">Tyre Inventory</a>
+                            {% endif %}
                         </div>
                     </div>
+                    {% endif %}
                     
                     {% if user.is_superuser or perms.trips.can_view_manager_dashboard %}
                     <a class="px-3 py-2 rounded-md {% if request.resolver_match.url_name == 'manager-dashboard' %}bg-slate-900 text-white{% else %}text-slate-300 hover:bg-slate-700 hover:text-white{% endif %}" href="{% url 'manager-dashboard' %}">
                         <i class="fa-solid fa-gauge mr-2"></i>Dashboard
                     </a>
+                    {% endif %}
+
+                    {% if user.is_superuser or perms.drivers.can_view_all_drivers %}
                     <a class="px-3 py-2 rounded-md {% if request.resolver_match.url_name == 'driver-list' %}bg-slate-900 text-white{% else %}text-slate-300 hover:bg-slate-700 hover:text-white{% endif %}" href="{% url 'driver-list' %}">
                         <i class="fa-solid fa-users mr-2"></i>Drivers
                     </a>
                     {% endif %}
 
-                    {% if user.is_superuser or perms.ledger.can_view_financial_records %}
+                    {% if user.is_superuser or perms.ledger.can_view_financial_records or perms.ledger.view_bill or perms.ledger.view_party or perms.ledger.view_companyaccount %}
                     <div class="relative dropdown-container">
                         <button class="flex items-center space-x-2 px-3 py-2 rounded-md text-slate-300 hover:bg-slate-700 hover:text-white focus:outline-none dropdown-toggle">
                             <i class="fa-solid fa-wallet"></i><span>Finance</span><i class="fa-solid fa-chevron-down text-xs ml-1"></i>
                         </button>
                         <div class="absolute left-0 mt-1 w-48 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5 hidden dropdown-menu">
+                            {% if user.is_superuser or perms.ledger.view_bill %}
                             <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'bill-list' %}">Invoices</a>
+                            {% endif %}
+                            {% if user.is_superuser or perms.ledger.can_view_financial_records %}
                             <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'financialrecord-list' %}">Ledger</a>
+                            {% endif %}
+                            {% if user.is_superuser or perms.ledger.view_party %}
                             <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'party-list' %}">Parties</a>
+                            {% endif %}
+                            {% if user.is_superuser or perms.ledger.view_companyaccount %}
                             <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'account-list' %}">Company Accounts</a>
+                            {% endif %}
+                            {% if user.is_superuser or perms.ledger.can_view_financial_records %}
                             <hr class="my-1 border-slate-200"/>
                             <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'financial-summary' %}">Reports</a>
+                            {% endif %}
                         </div>
                     </div>
                     {% endif %}
@@ -366,53 +391,78 @@
             </a>
 
             <!-- Fleet Section -->
+            {% if user.is_superuser or perms.trips.view_route or perms.fleet.view_vehicle or perms.documents.view_document or perms.fleet.view_maintenancerecord or perms.fleet.view_tyre %}
             <div class="pt-3">
                 <p class="px-3 py-1 text-[10px] font-black text-slate-500 uppercase tracking-widest">Fleet</p>
+                {% if user.is_superuser or perms.trips.view_route %}
                 <a class="flex items-center px-3 py-3 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-700 hover:text-white transition-colors" href="{% url 'route-list' %}">
                     <i class="fa-solid fa-route mr-3 w-5 text-center text-slate-500"></i>Routes
                 </a>
+                {% endif %}
+                {% if user.is_superuser or perms.fleet.view_vehicle %}
                 <a class="flex items-center px-3 py-3 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-700 hover:text-white transition-colors" href="{% url 'vehicle-list' %}">
                     <i class="fa-solid fa-car mr-3 w-5 text-center text-slate-500"></i>Vehicles
                 </a>
+                {% endif %}
+                {% if user.is_superuser or perms.documents.view_document %}
                 <a class="flex items-center px-3 py-3 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-700 hover:text-white transition-colors" href="{% url 'document-list' %}">
                     <i class="fa-solid fa-file-lines mr-3 w-5 text-center text-slate-500"></i>Documents
                 </a>
+                {% endif %}
+                {% if user.is_superuser or perms.fleet.view_maintenancerecord %}
                 <a class="flex items-center px-3 py-3 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-700 hover:text-white transition-colors" href="{% url 'maintenance-list' %}">
                     <i class="fa-solid fa-wrench mr-3 w-5 text-center text-slate-500"></i>Maintenance
                 </a>
+                {% endif %}
+                {% if user.is_superuser or perms.fleet.view_tyre %}
                 <a class="flex items-center px-3 py-3 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-700 hover:text-white transition-colors" href="{% url 'tyre-list' %}">
                     <i class="fa-solid fa-circle-dot mr-3 w-5 text-center text-slate-500"></i>Tyre Inventory
                 </a>
+                {% endif %}
             </div>
+            {% endif %}
 
             {% if user.is_superuser or perms.trips.can_view_manager_dashboard %}
             <a class="flex items-center px-3 py-3 rounded-lg text-sm font-bold {% if request.resolver_match.url_name == 'manager-dashboard' %}bg-emerald-600/20 text-emerald-400{% else %}text-slate-300 hover:bg-slate-700 hover:text-white{% endif %} transition-colors" href="{% url 'manager-dashboard' %}">
                 <i class="fa-solid fa-gauge mr-3 w-5 text-center"></i>Dashboard
             </a>
+            {% endif %}
+
+            {% if user.is_superuser or perms.drivers.can_view_all_drivers %}
             <a class="flex items-center px-3 py-3 rounded-lg text-sm font-bold {% if request.resolver_match.url_name == 'driver-list' %}bg-emerald-600/20 text-emerald-400{% else %}text-slate-300 hover:bg-slate-700 hover:text-white{% endif %} transition-colors" href="{% url 'driver-list' %}">
                 <i class="fa-solid fa-users mr-3 w-5 text-center"></i>Drivers
             </a>
             {% endif %}
 
-            {% if user.is_superuser or perms.ledger.can_view_financial_records %}
+            {% if user.is_superuser or perms.ledger.can_view_financial_records or perms.ledger.view_bill or perms.ledger.view_party or perms.ledger.view_companyaccount %}
             <!-- Finance Section -->
             <div class="pt-3">
                 <p class="px-3 py-1 text-[10px] font-black text-slate-500 uppercase tracking-widest">Finance</p>
+                {% if user.is_superuser or perms.ledger.view_bill %}
                 <a class="flex items-center px-3 py-3 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-700 hover:text-white transition-colors" href="{% url 'bill-list' %}">
                     <i class="fa-solid fa-file-invoice mr-3 w-5 text-center text-slate-500"></i>Invoices
                 </a>
+                {% endif %}
+                {% if user.is_superuser or perms.ledger.can_view_financial_records %}
                 <a class="flex items-center px-3 py-3 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-700 hover:text-white transition-colors" href="{% url 'financialrecord-list' %}">
                     <i class="fa-solid fa-book mr-3 w-5 text-center text-slate-500"></i>Ledger
                 </a>
+                {% endif %}
+                {% if user.is_superuser or perms.ledger.view_party %}
                 <a class="flex items-center px-3 py-3 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-700 hover:text-white transition-colors" href="{% url 'party-list' %}">
                     <i class="fa-solid fa-handshake mr-3 w-5 text-center text-slate-500"></i>Parties
                 </a>
+                {% endif %}
+                {% if user.is_superuser or perms.ledger.view_companyaccount %}
                 <a class="flex items-center px-3 py-3 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-700 hover:text-white transition-colors" href="{% url 'account-list' %}">
                     <i class="fa-solid fa-building-columns mr-3 w-5 text-center text-slate-500"></i>Company Accounts
                 </a>
+                {% endif %}
+                {% if user.is_superuser or perms.ledger.can_view_financial_records %}
                 <a class="flex items-center px-3 py-3 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-700 hover:text-white transition-colors" href="{% url 'financial-summary' %}">
                     <i class="fa-solid fa-chart-pie mr-3 w-5 text-center text-slate-500"></i>Reports
                 </a>
+                {% endif %}
             </div>
             {% endif %}
 
@@ -497,11 +547,19 @@
             <i class="fa-solid fa-truck text-lg"></i>
             <span class="text-[9px] font-bold mt-1 uppercase tracking-wider">Trips</span>
         </a>
+        {% if user.is_superuser or perms.fleet.view_vehicle %}
         <!-- Fleet -->
         <a href="{% url 'vehicle-list' %}" class="btm-nav-item flex flex-col items-center justify-center flex-1 relative text-slate-400 hover:text-emerald-600 transition-colors" data-nav="fleet">
             <i class="fa-solid fa-truck-fast text-lg"></i>
             <span class="text-[9px] font-bold mt-1 uppercase tracking-wider">Fleet</span>
         </a>
+        {% elif perms.trips.view_route %}
+        <a href="{% url 'route-list' %}" class="btm-nav-item flex flex-col items-center justify-center flex-1 relative text-slate-400 hover:text-emerald-600 transition-colors" data-nav="fleet">
+            <i class="fa-solid fa-route text-lg"></i>
+            <span class="text-[9px] font-bold mt-1 uppercase tracking-wider">Routes</span>
+        </a>
+        {% endif %}
+
         {% if user.is_superuser or perms.trips.can_view_manager_dashboard %}
         <!-- Dashboard -->
         <a href="{% url 'manager-dashboard' %}" class="btm-nav-item flex flex-col items-center justify-center flex-1 relative text-slate-400 hover:text-emerald-600 transition-colors" data-nav="dashboard">
@@ -509,11 +567,22 @@
             <span class="text-[9px] font-bold mt-1 uppercase tracking-wider">Home</span>
         </a>
         {% endif %}
+
         {% if user.is_superuser or perms.ledger.can_view_financial_records %}
         <!-- Finance -->
         <a href="{% url 'financialrecord-list' %}" class="btm-nav-item flex flex-col items-center justify-center flex-1 relative text-slate-400 hover:text-emerald-600 transition-colors" data-nav="finance">
             <i class="fa-solid fa-wallet text-lg"></i>
             <span class="text-[9px] font-bold mt-1 uppercase tracking-wider">Finance</span>
+        </a>
+        {% elif perms.ledger.view_bill %}
+        <a href="{% url 'bill-list' %}" class="btm-nav-item flex flex-col items-center justify-center flex-1 relative text-slate-400 hover:text-emerald-600 transition-colors" data-nav="finance">
+            <i class="fa-solid fa-file-invoice text-lg"></i>
+            <span class="text-[9px] font-bold mt-1 uppercase tracking-wider">Invoices</span>
+        </a>
+        {% elif perms.ledger.view_party %}
+        <a href="{% url 'party-list' %}" class="btm-nav-item flex flex-col items-center justify-center flex-1 relative text-slate-400 hover:text-emerald-600 transition-colors" data-nav="finance">
+            <i class="fa-solid fa-handshake text-lg"></i>
+            <span class="text-[9px] font-bold mt-1 uppercase tracking-wider">Parties</span>
         </a>
         {% endif %}
         <!-- More (opens drawer) -->

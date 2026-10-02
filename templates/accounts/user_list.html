@@ -13,6 +13,16 @@
     </a>
 </div>
 
+<!-- Tabs Navigation -->
+<div class="flex border-b border-slate-200 mb-6 space-x-8">
+    <a href="{% url 'user-list' %}" class="py-2.5 px-1 text-sm font-bold text-emerald-600 border-b-2 border-emerald-600 transition-colors flex items-center">
+        <i class="fa-solid fa-users mr-2"></i>Users
+    </a>
+    <a href="{% url 'role-list' %}" class="py-2.5 px-1 text-sm font-bold text-slate-500 hover:text-slate-700 border-b-2 border-transparent transition-colors flex items-center">
+        <i class="fa-solid fa-shield-halved mr-2"></i>Roles & Permissions
+    </a>
+</div>
+
 <div class="bg-white shadow overflow-hidden sm:rounded-lg border border-slate-200">
     <!-- Desktop Table (Hidden on Mobile) -->
     <div class="hidden sm:block overflow-x-auto">

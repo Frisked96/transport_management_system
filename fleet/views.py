@@ -28,10 +28,11 @@ class BaseFleetPermissionMixin:
         return self.has_driver_profile()
 
 
-class TyreListView(LoginRequiredMixin, ListView):
+class TyreListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
     model = Tyre
     template_name = 'fleet/tyre_list.html'
     context_object_name = 'tyres'
+    permission_required = 'fleet.view_tyre'
     paginate_by = 20
 
     def get_queryset(self):
@@ -62,10 +63,11 @@ class TyreListView(LoginRequiredMixin, ListView):
         return context
 
 
-class TyreDetailView(LoginRequiredMixin, DetailView):
+class TyreDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
     model = Tyre
     template_name = 'fleet/tyre_detail.html'
     context_object_name = 'tyre'
+    permission_required = 'fleet.view_tyre'
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -73,10 +75,11 @@ class TyreDetailView(LoginRequiredMixin, DetailView):
         return context
 
 
-class TyreCreateView(LoginRequiredMixin, CreateView):
+class TyreCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
     model = Tyre
     form_class = TyreForm
     template_name = 'fleet/tyre_form.html'
+    permission_required = 'fleet.add_tyre'
     success_url = reverse_lazy('tyre-list')
 
     def get_context_data(self, **kwargs):
@@ -91,10 +94,11 @@ class TyreCreateView(LoginRequiredMixin, CreateView):
         return super().form_valid(form)
 
 
-class TyreUpdateView(LoginRequiredMixin, UpdateView):
+class TyreUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
     model = Tyre
     form_class = TyreForm
     template_name = 'fleet/tyre_form.html'
+    permission_required = 'fleet.change_tyre'
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -129,11 +133,12 @@ class TyreDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
 
 
 # --- Tyre Brand Views ---
-
-class TyreBrandListView(LoginRequiredMixin, ListView):
+ 
+class TyreBrandListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
     model = TyreBrand
     template_name = 'fleet/tyre_brand_list.html'
     context_object_name = 'brands'
+    permission_required = 'fleet.view_tyrebrand'
     paginate_by = 25
 
     def get_queryset(self):
@@ -149,10 +154,11 @@ class TyreBrandListView(LoginRequiredMixin, ListView):
         return context
 
 
-class TyreBrandCreateView(LoginRequiredMixin, CreateView):
+class TyreBrandCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
     model = TyreBrand
     form_class = TyreBrandForm
     template_name = 'fleet/tyre_brand_form.html'
+    permission_required = 'fleet.add_tyrebrand'
     success_url = reverse_lazy('tyre-brand-list')
 
     def form_valid(self, form):
@@ -160,10 +166,11 @@ class TyreBrandCreateView(LoginRequiredMixin, CreateView):
         return super().form_valid(form)
 
 
-class TyreBrandUpdateView(LoginRequiredMixin, UpdateView):
+class TyreBrandUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
     model = TyreBrand
     form_class = TyreBrandForm
     template_name = 'fleet/tyre_brand_form.html'
+    permission_required = 'fleet.change_tyrebrand'
     success_url = reverse_lazy('tyre-brand-list')
 
     def form_valid(self, form):
@@ -171,9 +178,10 @@ class TyreBrandUpdateView(LoginRequiredMixin, UpdateView):
         return super().form_valid(form)
 
 
-class TyreBrandDeleteView(LoginRequiredMixin, DeleteView):
+class TyreBrandDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
     model = TyreBrand
     template_name = 'fleet/tyre_brand_confirm_delete.html'
+    permission_required = 'fleet.delete_tyrebrand'
     success_url = reverse_lazy('tyre-brand-list')
 
     def delete(self, request, *args, **kwargs):
@@ -181,10 +189,11 @@ class TyreBrandDeleteView(LoginRequiredMixin, DeleteView):
         return super().delete(request, *args, **kwargs)
 
 
-class TyreLogCreateView(LoginRequiredMixin, CreateView):
+class TyreLogCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
     model = TyreLog
     form_class = TyreLogForm
     template_name = 'fleet/tyre_log_form.html'
+    permission_required = 'fleet.change_tyre'
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -304,13 +313,14 @@ def tyre_quick_action(request, pk, action):
     return redirect('tyre-detail', pk=pk)
 
 
-class VehicleListView(LoginRequiredMixin, BaseFleetPermissionMixin, ListView):
+class VehicleListView(LoginRequiredMixin, PermissionRequiredMixin, BaseFleetPermissionMixin, ListView):
     """
     List view for vehicles with permission-based filtering
     """
     model = Vehicle
     template_name = 'fleet/vehicle_list.html'
     context_object_name = 'vehicles'
+    permission_required = 'fleet.view_vehicle'
     paginate_by = 15
     
     def get_queryset(self):
@@ -352,13 +362,14 @@ class VehicleListView(LoginRequiredMixin, BaseFleetPermissionMixin, ListView):
         return context
 
 
-class VehicleDetailView(LoginRequiredMixin, BaseFleetPermissionMixin, DetailView):
+class VehicleDetailView(LoginRequiredMixin, PermissionRequiredMixin, BaseFleetPermissionMixin, DetailView):
     """
     Detail view for a single vehicle
     """
     model = Vehicle
     template_name = 'fleet/vehicle_detail.html'
     context_object_name = 'vehicle'
+    permission_required = 'fleet.view_vehicle'
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -463,13 +474,14 @@ class VehicleDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView)
         return super().delete(request, *args, **kwargs)
 
 
-class MaintenanceListView(LoginRequiredMixin, BaseFleetPermissionMixin, ListView):
+class MaintenanceListView(LoginRequiredMixin, PermissionRequiredMixin, BaseFleetPermissionMixin, ListView):
     """
     Unified list view for maintenance records (both pending and completed)
     """
     model = MaintenanceRecord
     template_name = 'fleet/maintenance_list.html'
     context_object_name = 'maintenance_records'
+    permission_required = 'fleet.view_maintenancerecord'
     paginate_by = 20
     
     def get_queryset(self):
@@ -539,10 +551,11 @@ class MaintenanceRecordUpdateView(LoginRequiredMixin, PermissionRequiredMixin, U
         return reverse_lazy('maintenance-list')
 
 
-class MaintenanceRecordDetailView(LoginRequiredMixin, DetailView):
+class MaintenanceRecordDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
     model = MaintenanceRecord
     template_name = 'fleet/maintenance_detail.html'
     context_object_name = 'record'
+    permission_required = 'fleet.view_maintenancerecord'
 
 
 class MaintenanceRecordDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
