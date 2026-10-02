@@ -90,8 +90,13 @@ class TyreCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
 
     def form_valid(self, form):
         form.instance._user = self.request.user
-        messages.success(self.request, 'Tyre added to inventory.')
-        return super().form_valid(form)
+        try:
+            self.object = form.save()
+            messages.success(self.request, 'Tyre added to inventory.')
+            return redirect(self.get_success_url())
+        except Exception as e:
+            messages.error(self.request, f"Storage upload failed: {str(e)}. Please check cloud credentials.")
+            return self.form_invalid(form)
 
 
 class TyreUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
@@ -110,8 +115,13 @@ class TyreUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
         return reverse_lazy('tyre-detail', kwargs={'pk': self.object.pk})
 
     def form_valid(self, form):
-        messages.success(self.request, 'Tyre updated.')
-        return super().form_valid(form)
+        try:
+            self.object = form.save()
+            messages.success(self.request, 'Tyre updated.')
+            return redirect(self.get_success_url())
+        except Exception as e:
+            messages.error(self.request, f"Storage upload failed: {str(e)}. Please check cloud credentials.")
+            return self.form_invalid(form)
 
 
 class TyreDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
@@ -128,6 +138,11 @@ class TyreDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
     def delete(self, request, *args, **kwargs):
         tyre = self.get_object()
         serial = tyre.serial_number
+        if tyre.photo:
+            try:
+                tyre.photo.delete(save=False)
+            except Exception as e:
+                messages.warning(self.request, f"Tyre deleted, but photo deletion from storage encountered: {str(e)}")
         messages.success(self.request, f'Tyre {serial} and all its history have been deleted.')
         return super().delete(request, *args, **kwargs)
 

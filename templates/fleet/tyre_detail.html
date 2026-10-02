@@ -158,6 +158,7 @@
                         <div id="photo-error" class="hidden text-center p-4">
                             <i class="fa-solid fa-cloud-bolt text-rose-300 text-xl mb-1"></i>
                             <p class="text-[10px] text-slate-400 font-bold uppercase">Image Offline</p>
+                            <a id="photo-error-link" href="{% url 'tyre-photo-serve' tyre.pk %}" target="_blank" class="text-[9px] text-emerald-600 underline font-semibold mt-1 block">Check Storage Link</a>
                         </div>
                         <!-- Actual Image -->
                         <img id="tyre-photo" src="" alt="Tyre Photo" class="hidden w-full h-full object-cover">
