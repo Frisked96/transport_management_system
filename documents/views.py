@@ -392,7 +392,7 @@ def document_download_proxy(request, pk):
         if url:
             return HttpResponseRedirect(str(url))
         else:
-            messages.error(request, "Google Drive storage returned an empty URL.")
+            messages.error(request, "Cloud storage returned an empty URL.")
     except Exception as e:
         messages.error(request, f"Error accessing document storage: {str(e)}")
     

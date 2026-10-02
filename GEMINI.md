@@ -47,7 +47,7 @@ To assist in understanding the application architecture:
 
 ## Performance Optimizations
 
-*   **On-Demand Storage Access**: To prevent slow page loads when using Google Drive storage, document URLs are generated via a proxy view (`document-view`) only when clicked. Avoid calling `.url` on many file fields within a single template loop.
+*   **On-Demand Storage Access**: Document URLs are generated on-demand via proxy views (`document-view`, `renewal-file-view`) when clicked, generating instant presigned URLs for Cloudflare R2 object storage. Avoid calling `.url` on many file fields within a single template loop.
 *   **Database Annotations**: Document list counts (Total, Expired, Expiring) are calculated using SQL-level `Count` and `Q` filters in `get_queryset` to avoid N+1 issues and Python-side loop overhead.
 *   **Query Prefetching**: Always use `select_related` and `prefetch_related` for nested attributes (e.g., `driver__user`, `documents`) especially in global context processors like `document_alerts`.
 

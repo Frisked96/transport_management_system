@@ -253,22 +253,3 @@ class DirectDocumentUploadTests(TestCase):
             self.assertTrue(new_file_record.file)
             self.assertTrue(os.path.exists(new_file_record.file.path))
 
-    def test_storage_bridge_fallback_when_gdrive_unreachable(self):
-        """Test GoogleDriveOAuth2Storage automatically falls back to local storage when network fails."""
-        from transport_mgmt.storage_bridge import GoogleDriveOAuth2Storage
-        from unittest.mock import patch
-
-        with override_settings(MEDIA_ROOT=self.temp_dir):
-            storage = GoogleDriveOAuth2Storage()
-            # Simulate network unreachable error on GDrive _ensure_service
-            with patch.object(storage, '_ensure_service', side_effect=OSError(101, 'Network is unreachable')):
-                test_file = SimpleUploadedFile('network_test.pdf', b'sample content', content_type='application/pdf')
-                saved_path = storage._save('documents/test_offline.pdf', test_file)
-                self.assertEqual(saved_path, 'documents/test_offline.pdf')
-                self.assertTrue(storage.exists(saved_path))
-                self.assertEqual(storage.url(saved_path), '/media/documents/test_offline.pdf')
-                self.assertTrue(os.path.exists(storage.path(saved_path)))
-                storage.delete(saved_path)
-                self.assertFalse(storage.exists(saved_path))
-
-
