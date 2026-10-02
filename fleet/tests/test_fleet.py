@@ -2,8 +2,8 @@ from django.test import TestCase, Client
 from django.urls import reverse
 from django.contrib.auth.models import User, Permission
 from django.utils import timezone
-from .models import Vehicle
-from .forms import VehicleForm
+from fleet.models import Vehicle
+from fleet.forms import VehicleForm
 
 
 class VehicleModelAndFormTest(TestCase):
