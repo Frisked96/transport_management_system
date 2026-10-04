@@ -104,6 +104,7 @@ class VehicleModelAndFormTest(TestCase):
         self.assertEqual(vehicle.chassis_number, 'CHASSIS-VIEW-01')
         self.assertEqual(vehicle.engine_number, 'ENGINE-VIEW-01')
         self.assertIsNone(vehicle.purchase_date)
+        self.assertEqual(vehicle.created_by, self.user)
 
         # Update
         update_url = reverse('vehicle-update', kwargs={'pk': vehicle.pk})
@@ -122,6 +123,7 @@ class VehicleModelAndFormTest(TestCase):
         self.assertEqual(vehicle.chassis_number, 'CHASSIS-UPDATED')
         self.assertEqual(vehicle.engine_number, 'ENGINE-UPDATED')
         self.assertEqual(str(vehicle.purchase_date), '2024-06-10')
+        self.assertEqual(vehicle.created_by, self.user)
 
     def test_vehicle_detail_view_renders_chassis_and_engine(self):
         """Test vehicle detail view displays chassis and engine numbers"""
@@ -139,6 +141,33 @@ class VehicleModelAndFormTest(TestCase):
         self.assertIn('ENG-DETAIL-888', content)
         self.assertIn('Chassis No.', content)
         self.assertIn('Engine No.', content)
+
+    def test_vehicle_detail_view_renders_created_by(self):
+        """Test vehicle detail view displays creator when present and handles null gracefully"""
+        # Vehicle with created_by
+        vehicle_with_creator = Vehicle.objects.create(
+            registration_plate='RJ14-DETAIL-02',
+            make_model='Tata Signa',
+            created_by=self.user
+        )
+        url = reverse('vehicle-detail', kwargs={'pk': vehicle_with_creator.pk})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode('utf-8')
+        self.assertIn('Created By', content)
+        self.assertIn('adminuser', content)
+
+        # Vehicle without created_by (e.g. historical data)
+        vehicle_without_creator = Vehicle.objects.create(
+            registration_plate='RJ14-DETAIL-03',
+            make_model='BharatBenz',
+            created_by=None
+        )
+        url_no_creator = reverse('vehicle-detail', kwargs={'pk': vehicle_without_creator.pk})
+        response_no_creator = self.client.get(url_no_creator)
+        self.assertEqual(response_no_creator.status_code, 200)
+        content_no_creator = response_no_creator.content.decode('utf-8')
+        self.assertIn('Created By', content_no_creator)
 
     def test_vehicle_search_by_chassis_and_engine(self):
         """Test vehicle list search finds vehicles by chassis or engine number"""

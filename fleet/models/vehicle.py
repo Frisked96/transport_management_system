@@ -5,6 +5,7 @@ from django.db import models
 from django.utils import timezone
 from django.db.models.signals import post_save
 from django.dispatch import receiver
+from django.contrib.auth.models import User
 
 
 class Vehicle(models.Model):
@@ -95,6 +96,28 @@ class Vehicle(models.Model):
         related_name='attached_vehicles',
         verbose_name='Vendor / Owner',
         help_text='Required if Ownership Type is Attached'
+    )
+    
+    # Audit fields
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_vehicles',
+        verbose_name='Created By'
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        null=True,
+        blank=True,
+        verbose_name='Created At'
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        null=True,
+        blank=True,
+        verbose_name='Updated At'
     )
     
     # Deletion flag to prevent signals from trying to update a deleted object

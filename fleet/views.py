@@ -383,7 +383,7 @@ class VehicleListView(LoginRequiredMixin, PermissionRequiredMixin, BaseFleetPerm
     
     def get_queryset(self):
         """Filter vehicles based on user permissions"""
-        queryset = Vehicle.objects.all()
+        queryset = Vehicle.objects.all().select_related('vendor', 'created_by')
         
         # Drivers can only view active vehicles
         if self.has_driver_permission():
@@ -428,6 +428,9 @@ class VehicleDetailView(LoginRequiredMixin, PermissionRequiredMixin, BaseFleetPe
     template_name = 'fleet/vehicle_detail.html'
     context_object_name = 'vehicle'
     permission_required = 'fleet.view_vehicle'
+
+    def get_queryset(self):
+        return super().get_queryset().select_related('vendor', 'created_by')
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -455,6 +458,7 @@ class VehicleCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView)
     permission_required = 'fleet.add_vehicle'
     
     def form_valid(self, form):
+        form.instance.created_by = self.request.user
         messages.success(self.request, 'Vehicle created successfully!')
         return super().form_valid(form)
     

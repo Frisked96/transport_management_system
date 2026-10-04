@@ -60,6 +60,22 @@ class VehicleModelTests(TestCase):
         veh.delete()
         self.assertTrue(veh._is_being_deleted)
 
+    def test_vehicle_created_by_relationship(self):
+        """Verify created_by relationship, timestamps, and SET_NULL on user deletion."""
+        user = User.objects.create_user(username='creator_test', password='password')
+        vehicle = Vehicle.objects.create(
+            registration_plate='DL 04 CB 3333',
+            make_model='Tata Signa',
+            created_by=user
+        )
+        self.assertEqual(vehicle.created_by, user)
+        self.assertIsNotNone(vehicle.created_at)
+        self.assertIsNotNone(vehicle.updated_at)
+        
+        user.delete()
+        vehicle.refresh_from_db()
+        self.assertIsNone(vehicle.created_by)
+
 
 class MaintenanceRecordModelTests(TestCase):
     def setUp(self):

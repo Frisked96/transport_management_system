@@ -92,6 +92,16 @@
                                 </td>
                             </tr>
                             {% endif %}
+                            <tr class="border-t border-slate-50">
+                                <td class="py-2 text-slate-500 font-medium whitespace-nowrap pr-4">Created By</td>
+                                <td class="py-2 text-slate-900 font-bold">
+                                    {% if vehicle.created_by %}
+                                        {{ vehicle.created_by.get_full_name|default:vehicle.created_by.username }}
+                                    {% else %}
+                                        <span class="text-slate-400 font-medium italic">-</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
                         </table>
                     </div>
                 </div>
@@ -326,5 +336,22 @@
             </div>
         </div>
     </div>
+
+    {% if vehicle.created_at or vehicle.created_by %}
+    <!-- Metadata Footer -->
+    <div class="flex items-center justify-between px-2 text-[10px] text-slate-400 uppercase font-bold tracking-widest pt-2">
+        <div class="flex items-center gap-2">
+            {% if vehicle.created_at %}
+            <i class="fa-solid fa-clock-rotate-left"></i>
+            Created {{ vehicle.created_at|date:"M d, Y H:i" }}
+            {% endif %}
+        </div>
+        <div>
+            {% if vehicle.created_by %}
+            By {{ vehicle.created_by.get_full_name|default:vehicle.created_by.username }}
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
 </div>
 {% endblock %}
