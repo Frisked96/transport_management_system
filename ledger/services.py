@@ -165,13 +165,49 @@ class BillingService:
         """
         Synchronize the bill to the ledger by creating/updating a consolidated invoice record.
         """
-        from ledger.models import FinancialRecord, TransactionCategory
+        from ledger.models import FinancialRecord, TransactionCategory, BillTrip, Bill, Party
         
         if not bill.pk:
             return
 
         with transaction.atomic():
-            # 1. Update/Create consolidated record
+            lorry_hire_cat, _ = TransactionCategory.objects.get_or_create(
+                name='Lorry Hire',
+                defaults={'type': TransactionCategory.TYPE_EXPENSE}
+            )
+
+            # Case A: If this bill is a Creditor Bill or Creditor Debit Note (linked to a customer bill)
+            if bill.customer_bill:
+                cat = bill.category or lorry_hire_cat
+                inv_disp = bill.creditor_invoice_number or bill.bill_number or 'Pending'
+                cust_ref = bill.customer_bill.bill_number or f"Draft-{bill.customer_bill.pk}"
+                if cat.name == 'Debit Note':
+                    parent_ref = bill.original_bill.bill_number if bill.original_bill else cust_ref
+                    desc = f"Debit Note #{inv_disp} (Against Bill {parent_ref})"
+                    if bill.item_type:
+                        desc += f": {bill.item_type}"
+                else:
+                    desc = f"Lorry Hire Inv #{inv_disp} (Against Bill {cust_ref})"
+
+                FinancialRecord.objects.update_or_create(
+                    associated_bill=bill,
+                    record_type=FinancialRecord.RECORD_TYPE_INVOICE,
+                    party=bill.party,
+                    defaults={
+                        'date': bill.date,
+                        'account': bill.issuer,
+                        'category': cat,
+                        'amount': bill.rounded_total,
+                        'description': desc,
+                    }
+                )
+                if bill.original_bill:
+                    BillingService.update_bill_financial_caches(bill.original_bill)
+                bill.party.refresh_balance()
+                return
+
+            # Case B: Customer / Standard Bill
+            # 1. Update/Create consolidated record for Customer
             category = bill.category
             if not category:
                 category, _ = TransactionCategory.objects.get_or_create(
@@ -207,48 +243,158 @@ class BillingService:
                     'description': description,
                 }
             )
-            
+
+            # Auto-mirror Customer Credit Notes as Debit Notes for Creditors of attached vehicles
+            if bill.category and bill.category.name == 'Credit Note' and bill.original_bill:
+                parent_cust_bill = bill.original_bill
+                debit_note_cat, _ = TransactionCategory.objects.get_or_create(
+                    name='Debit Note',
+                    defaults={'type': TransactionCategory.TYPE_INCOME}
+                )
+                for cr_bill in parent_cust_bill.creditor_bills.all():
+                    cr_dn = Bill.objects.filter(customer_bill=bill, party=cr_bill.party).first()
+                    base_no = bill.bill_number or f"DRAFT-{bill.pk}"
+                    cr_dn_number = f"DN-{base_no}"
+                    if not cr_dn:
+                        cr_dn = Bill(
+                            customer_bill=bill,
+                            party=cr_bill.party,
+                            original_bill=cr_bill,
+                            bill_type=Bill.TYPE_STANDARD,
+                            category=debit_note_cat,
+                            date=bill.date,
+                            issuer=bill.issuer,
+                            bill_number=cr_dn_number,
+                            item_type=bill.item_type or "Shortage",
+                            amount_override=bill.subtotal,
+                            gst_rate=bill.gst_rate,
+                            gst_type=bill.gst_type,
+                            use_roundoff=bill.use_roundoff,
+                        )
+                        cr_dn.save()
+                    else:
+                        cr_dn.original_bill = cr_bill
+                        cr_dn.date = bill.date
+                        cr_dn.item_type = bill.item_type or "Shortage"
+                        cr_dn.amount_override = bill.subtotal
+                        cr_dn.gst_rate = bill.gst_rate
+                        cr_dn.gst_type = bill.gst_type
+                        cr_dn.use_roundoff = bill.use_roundoff
+                        if not cr_dn.bill_number or cr_dn.bill_number.startswith("DN-DRAFT-"):
+                            cr_dn.bill_number = cr_dn_number
+                        cr_dn.save()
+
+                    BillingService.update_bill_financial_caches(cr_dn)
+                    cr_dn.sync_to_ledger()
+                    BillingService.update_bill_financial_caches(cr_bill)
+                    cr_bill.party.refresh_balance()
+
+            if bill.category and bill.category.name in ['Credit Note', 'Debit Note']:
+                return
+
+            if bill.bill_type != Bill.TYPE_TRIP:
+                return
+
             # 2. Clean up individual trip accruals (both customer and vendor)
             FinancialRecord.objects.filter(
                 associated_trip__in=bill.trips.all(),
                 record_type=FinancialRecord.RECORD_TYPE_INVOICE
             ).delete()
 
-            # 3. Create consolidated vendor hire records for attached vehicles
-            # Group trips by vendor to create one entry per vendor
-            from collections import defaultdict
-            vendor_totals = defaultdict(Decimal)
-            for trip in bill.trips.select_related('vehicle__vendor').all():
-                if (trip.vehicle and trip.vehicle.is_attached and 
-                    trip.vehicle.vendor and trip.vendor_hire_amount > 0):
-                    vendor_totals[trip.vehicle.vendor] += trip.vendor_hire_amount
-            
-            lorry_hire_cat, _ = TransactionCategory.objects.get_or_create(
-                name='Lorry Hire',
-                defaults={'type': TransactionCategory.TYPE_EXPENSE}
-            )
-            
-            # Remove any stale vendor hire records for this bill that are no longer valid
-            existing_vendor_pks = [v.pk for v in vendor_totals.keys()]
+            # Clean up any legacy direct-linked vendor records on customer bill
             FinancialRecord.objects.filter(
                 associated_bill=bill,
                 record_type=FinancialRecord.RECORD_TYPE_INVOICE,
                 category=lorry_hire_cat
-            ).exclude(party_id__in=existing_vendor_pks).delete()
-            
-            for vendor, total in vendor_totals.items():
+            ).delete()
+
+            # 3. Create or update linked Creditor Bills for attached vehicles
+            from collections import defaultdict
+            vendor_trips = defaultdict(list)
+            for trip in bill.trips.select_related('vehicle__vendor').all():
+                if (trip.vehicle and trip.vehicle.is_attached and 
+                    trip.vehicle.vendor and trip.vendor_hire_amount > 0):
+                    vendor_trips[trip.vehicle.vendor].append(trip)
+
+            # Remove stale creditor bills if vendors were removed
+            current_vendor_pks = [v.pk for v in vendor_trips.keys()]
+            stale_creditor_bills = list(bill.creditor_bills.exclude(party_id__in=current_vendor_pks))
+            for stale_cb in stale_creditor_bills:
+                stale_cb.delete()
+
+            for vendor, trips_list in vendor_trips.items():
+                base_no = bill.bill_number or f"DRAFT-{bill.pk}"
+                creditor_bill_no = f"CR-{base_no}" if len(vendor_trips) == 1 else f"CR-{vendor.pk}-{base_no}"
+
+                creditor_bill = Bill.objects.filter(customer_bill=bill, party=vendor).first()
+                if not creditor_bill:
+                    creditor_bill = Bill(
+                        customer_bill=bill,
+                        party=vendor,
+                        bill_type=Bill.TYPE_TRIP,
+                        category=lorry_hire_cat,
+                        date=bill.creditor_invoice_date or bill.date,
+                        issuer=bill.issuer,
+                        creditor_invoice_number=bill.creditor_invoice_number,
+                        creditor_invoice_date=bill.creditor_invoice_date or bill.date,
+                        bill_number=creditor_bill_no,
+                        use_roundoff=bill.use_roundoff,
+                        gst_rate=bill.gst_rate,
+                        gst_type=bill.gst_type,
+                    )
+                    creditor_bill.save()
+                else:
+                    creditor_bill.date = bill.creditor_invoice_date or bill.date
+                    creditor_bill.creditor_invoice_date = bill.creditor_invoice_date or bill.date
+                    creditor_bill.creditor_invoice_number = bill.creditor_invoice_number
+                    creditor_bill.issuer = bill.issuer
+                    creditor_bill.use_roundoff = bill.use_roundoff
+                    creditor_bill.gst_rate = bill.gst_rate
+                    creditor_bill.gst_type = bill.gst_type
+                    if not creditor_bill.bill_number or creditor_bill.bill_number.startswith("CR-DRAFT-"):
+                        creditor_bill.bill_number = creditor_bill_no
+                    creditor_bill.save()
+
+                # Sync BillTrip relationships for creditor bill
+                creditor_bill._suppress_billtrip_sync = True
+                try:
+                    creditor_bill.bill_trips.exclude(trip__in=trips_list).delete()
+                    for t in trips_list:
+                        cust_bt = bill.bill_trips.filter(trip=t).first()
+                        lr_no = cust_bt.lr_no if cust_bt else t.lr_no
+                        BillTrip.objects.update_or_create(
+                            bill=creditor_bill,
+                            trip=t,
+                            defaults={
+                                'lr_no': lr_no,
+                                'discount': Decimal('0'),
+                            }
+                        )
+                finally:
+                    del creditor_bill._suppress_billtrip_sync
+
+                # Recalculate creditor bill caches
+                BillingService.update_bill_financial_caches(creditor_bill)
+
+                # Create or update consolidated financial record for vendor
+                inv_disp = creditor_bill.creditor_invoice_number or creditor_bill.bill_number or 'Pending'
+                cust_ref = bill.bill_number or f"Draft-{bill.pk}"
                 FinancialRecord.objects.update_or_create(
-                    associated_bill=bill,
+                    associated_bill=creditor_bill,
                     record_type=FinancialRecord.RECORD_TYPE_INVOICE,
                     party=vendor,
-                    category=lorry_hire_cat,
                     defaults={
-                        'date': bill.date,
+                        'date': creditor_bill.date,
                         'account': bill.issuer,
-                        'amount': total,
-                        'description': f"Lorry Hire for Bill {bill.bill_number or 'Draft'}",
+                        'category': lorry_hire_cat,
+                        'amount': creditor_bill.rounded_total,
+                        'description': f"Lorry Hire Inv #{inv_disp} (Against Bill {cust_ref})",
                     }
                 )
+
+                # Mirror any customer credit notes against this bill as debit notes on creditor_bill
+                for cust_cn in bill.adjustment_bills.filter(category__name='Credit Note'):
+                    cust_cn.sync_to_ledger()
 
     @staticmethod
     def update_bill_financial_caches(bill):
@@ -294,14 +440,42 @@ class BillingService:
     @staticmethod
     def calculate_bill_received_amount(bill):
         """
-        Helper to calculate amount received.
+        Helper to calculate amount received/paid against a bill.
+        For debtor bills: income, deductions, TDS, shortage, credit note/debit note.
+        For creditor bills: payment out, deductions, TDS, shortage, debit note.
         """
-        from ledger.models import FinancialRecord, TransactionCategory, TripAllocation
+        from ledger.models import FinancialRecord, TransactionCategory, TripAllocation, Party
         
         if not bill.pk:
             return Decimal('0')
 
-        # Direct links
+        is_creditor = bool(bill.customer_bill_id or (bill.party and bill.party.party_type == Party.TYPE_CREDITOR))
+
+        if is_creditor:
+            # Direct links for creditor bill
+            direct = bill.financial_records.exclude(
+                record_type=FinancialRecord.RECORD_TYPE_INVOICE
+            ).filter(
+                Q(category__name='Payment Out') |
+                Q(category__type=TransactionCategory.TYPE_INCOME) |
+                Q(category__name__in=["Deductions", "TDS", "Shortage", "Debit Note"])
+            ).aggregate(total=Sum('amount'))['total'] or 0
+
+            # Bill allocations
+            bill_allocations = bill.payment_allocations.aggregate(total=Sum('amount'))['total'] or 0
+
+            # Adjustments
+            adjustments = 0
+            for adj in bill.adjustment_bills.select_related('category').all():
+                if adj.category:
+                    if adj.category.name == 'Debit Note':
+                        adjustments += adj.total_amount_cached
+                    elif adj.category.name == 'Credit Note':
+                        adjustments -= adj.total_amount_cached
+
+            return Decimal(str(direct)) + Decimal(str(bill_allocations)) + Decimal(str(adjustments))
+
+        # Direct links for debtor bill
         direct = bill.financial_records.exclude(
             record_type=FinancialRecord.RECORD_TYPE_INVOICE
         ).filter(
@@ -340,7 +514,7 @@ class BillingService:
                 elif adj.category.name == 'Debit Note':
                     adjustments -= adj.total_amount_cached
 
-        return direct + bill_allocations + trip_payments + adjustments
+        return Decimal(str(direct)) + Decimal(str(bill_allocations)) + Decimal(str(trip_payments)) + Decimal(str(adjustments))
 
 class TripFinancialService:
     """

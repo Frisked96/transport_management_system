@@ -4,11 +4,24 @@
 <div class="invoice-wrapper">
     <!-- PAGE 1: TAX INVOICE -->
     <div class="header-title">
-        {% if bill.category and bill.category.name == 'Debit Note' %}Debit Note{% elif bill.category and bill.category.name == 'Credit Note' %}Credit Note{% elif bill.category and bill.category.name == 'Halting' %}Halting Charges{% elif bill.gst_type == 'NONE' %}Commercial Invoice{% else %}Tax Invoice{% endif %}
+        {% if bill.is_creditor_bill %}Vendor Bill / Lorry Hire Invoice{% elif bill.category and bill.category.name == 'Debit Note' %}Debit Note{% elif bill.category and bill.category.name == 'Credit Note' %}Credit Note{% elif bill.category and bill.category.name == 'Halting' %}Halting Charges{% elif bill.gst_type == 'NONE' %}Commercial Invoice{% else %}Tax Invoice{% endif %}
     </div>
 
     <table class="invoice-table" style="border-top: none;">
         <tr>
+            {% if bill.is_creditor_bill %}
+            <td width="70" style="padding: 10px; border-top: none;">
+                <div class="company-logo-box" style="background: #1e3a8a;">{{ bill.party.name|make_list|first }}</div>
+            </td>
+            <td style="padding: 10px; border-top: none;">
+                <div style="font-size: 9px; font-weight: bold; color: #2563eb; text-transform: uppercase;">Service Provider / Attached Vehicle Vendor</div>
+                <div class="company-name">{{ bill.party.name }}</div>
+                <div style="font-size: 10px;">{{ bill.party.address|linebreaksbr|default:"-" }}</div>
+                <div style="margin-top: 6px; font-weight: bold; font-size: 10px;">
+                    GSTIN: {{ bill.party.gstin|default:"URP / Unregistered" }} | Mobile: {{ bill.party.phone_number|default:"-" }}
+                </div>
+            </td>
+            {% else %}
             <td width="70" style="padding: 10px; border-top: none;">
                 <div class="company-logo-box">{{ bill.invoice_company_name|make_list|first }}</div>
             </td>
@@ -19,30 +32,39 @@
                     GSTIN: {{ bill.invoice_company_gstin }} | Mobile: {{ bill.invoice_company_mobile }}
                 </div>
             </td>
+            {% endif %}
         </tr>
     </table>
 
     <table class="invoice-table" style="border-top: none;">
         <tr>
             <td width="60%" style="padding: 0; border-top: none;">
-                <div class="section-header">Details of Receiver (Billed To)</div>
+                <div class="section-header">{% if bill.is_creditor_bill %}Details of Receiver (Billed To Firm){% else %}Details of Receiver (Billed To){% endif %}</div>
                 <div style="padding: 10px; line-height: 1.5;">
+                    {% if bill.is_creditor_bill %}
+                    <strong style="font-size: 12px;">{{ bill.invoice_company_name }}</strong><br>
+                    {{ bill.invoice_company_address|linebreaksbr }}<br>
+                    GSTIN: <strong>{{ bill.invoice_company_gstin }}</strong>, Mobile: <strong>{{ bill.invoice_company_mobile }}</strong>
+                    {% else %}
                     <strong style="font-size: 12px;">{{ bill.party.name }}</strong><br>
                     {{ bill.party.address|linebreaksbr }}<br>
                     State: <strong>{{ bill.party.state }}</strong>, GSTIN: <strong>{{ bill.party.gstin }}</strong>
+                    {% endif %}
                 </div>
             </td>
             <td width="40%" style="padding: 0; border-top: none; background-color: #f8fafc;">
-                <div class="section-header">Invoice Details</div>
+                <div class="section-header">{% if bill.is_creditor_bill %}Bill Details{% else %}Invoice Details{% endif %}</div>
                 <div style="padding: 10px; line-height: 1.5;">
-                    Invoice No: <strong>{{ bill.bill_number }}</strong><br>
-                    Invoice Date: <strong>{{ bill.date|date:"d-m-Y" }}</strong><br>
-                    {% if bill.original_bill %}
+                    Invoice No: <strong>{{ bill.display_invoice_number }}</strong><br>
+                    Invoice Date: <strong>{% if bill.is_creditor_bill %}{{ bill.creditor_invoice_date|default:bill.date|date:"d-m-Y" }}{% else %}{{ bill.date|date:"d-m-Y" }}{% endif %}</strong><br>
+                    {% if bill.customer_bill %}
+                    Against Customer Inv: <strong>#{{ bill.customer_bill.bill_number }}</strong> dated <strong>{{ bill.customer_bill.date|date:"d-m-Y" }}</strong><br>
+                    {% elif bill.original_bill %}
                     Against Inv: <strong>{{ bill.original_bill.bill_number }}</strong> dated <strong>{{ bill.original_bill.date|date:"d-m-Y" }}</strong><br>
                     {% elif bill.manual_original_bill_number %}
                     Against Inv: <strong>{{ bill.manual_original_bill_number }}</strong> dated <strong>{{ bill.manual_original_bill_date|date:"d-m-Y" }}</strong><br>
                     {% endif %}
-                    Place of Supply: <strong>{{ bill.party.state }}</strong>
+                    Place of Supply: <strong>{{ bill.party.state|default:"-" }}</strong>
                 </div>
             </td>
         </tr>
@@ -81,7 +103,7 @@
             <tr>
                 <td class="text-center">{{ forloop.counter }}</td>
                 <td>
-                    <strong>Freight Charges: {{ bt.trip.vehicle.registration_plate }}</strong><br>
+                    <strong>{% if bill.is_creditor_bill %}Lorry Hire:{% else %}Freight Charges:{% endif %} {{ bt.trip.vehicle.registration_plate }}</strong><br>
                     <span style="font-size: 9px; color: #666;">
                         {{ bt.trip.pickup_location }} to {{ bt.trip.delivery_location }} | {{ bt.trip.date|date:"d/m/y" }}
                     </span>
@@ -93,9 +115,15 @@
                 {% endif %}
                 <td class="text-center">{{ bill.hsn_code }}</td>
                 <td class="text-right">{{ bt.trip.weight|indian_comma }}</td>
-                <td class="text-right">{{ bt.trip.rate_per_ton|indian_comma }}</td>
+                <td class="text-right">{% if bill.is_creditor_bill %}-{% else %}{{ bt.trip.rate_per_ton|indian_comma }}{% endif %}</td>
                 {% if has_discount %}<td class="text-right" style="color: #c00;">{% if bt.discount %}{{ bt.discount|indian_comma }}{% else %}-{% endif %}</td>{% endif %}
-                <td class="text-right font-bold">{{ bt.trip.revenue|subtract:bt.discount|indian_comma }}</td>
+                <td class="text-right font-bold">
+                    {% if bill.is_creditor_bill %}
+                        {{ bt.trip.vendor_hire_amount|subtract:bt.discount|indian_comma }}
+                    {% else %}
+                        {{ bt.trip.revenue|subtract:bt.discount|indian_comma }}
+                    {% endif %}
+                </td>
             </tr>
             {% endfor %}
             {% else %}
@@ -225,18 +253,26 @@
     <table class="invoice-table" style="border-top: none;">
         <tr>
             <td width="50%" style="padding: 0; border-top: none;">
-                <div class="section-header">Bank Account Details</div>
+                <div class="section-header">Bank Account Details {% if bill.is_creditor_bill %}(Payee Account){% endif %}</div>
                 <div style="padding: 10px; font-size: 10px; line-height: 1.4;">
+                    {% if bill.is_creditor_bill %}
+                    Account Name: <strong>{{ bill.party.name }}</strong><br>
+                    Bank Name: <strong>{{ bill.party.bank_name|default:"-" }}</strong><br>
+                    Branch: <strong>{{ bill.party.bank_branch|default:"-" }}</strong><br>
+                    Account No: <strong>{{ bill.party.account_number|default:"-" }}</strong><br>
+                    IFSC Code: <strong>{{ bill.party.ifsc_code|default:"-" }}</strong>
+                    {% else %}
                     Account Name: <strong>{{ bill.invoice_company_name }}</strong><br>
                     Bank Name: <strong>{{ bill.invoice_bank_name }}</strong><br>
                     Branch: <strong>{{ bill.invoice_bank_branch }}</strong><br>
                     Account No: <strong>{{ bill.invoice_bank_account }}</strong><br>
                     IFSC Code: <strong>{{ bill.invoice_bank_ifsc }}</strong>
+                    {% endif %}
                 </div>
             </td>
             <td width="50%" class="signature-box" style="border-top: none;">
-                <div style="font-size: 10px; font-weight: bold; margin-bottom: 40px;">For {{ bill.invoice_company_name|upper }}</div>
-                <div style="font-size: 10px;">Authorized Signatory</div>
+                <div style="font-size: 10px; font-weight: bold; margin-bottom: 40px;">For {% if bill.is_creditor_bill %}{{ bill.party.name|upper }}{% else %}{{ bill.invoice_company_name|upper }}{% endif %}</div>
+                <div style="font-size: 10px;">{% if bill.is_creditor_bill %}Vehicle Owner / Transporter{% else %}Authorized Signatory{% endif %}</div>
             </td>
         </tr>
     </table>
@@ -248,7 +284,7 @@
     {% if bill.bill_type != 'Standard' and bill_trips|length > 3 %}
     <div class="page-break"></div>
     
-    <div class="annexure-title">Annexure to Invoice #{{ bill.bill_number }}</div>
+    <div class="annexure-title">Annexure to {% if bill.is_creditor_bill %}Vendor Bill #{{ bill.display_invoice_number }}{% else %}Invoice #{{ bill.bill_number }}{% endif %}</div>
     
     <table class="invoice-table" style="border-top: none;">
         <tr>
@@ -269,7 +305,7 @@
                 <th width="{% if has_lr %}18%{% else %}28%{% endif %}">From - To</th>
                 <th width="8%">Qty</th>
                 <th width="10%">Rate</th>
-                <th width="10%">Revenue</th>
+                <th width="10%">{% if bill.is_creditor_bill %}Hire Amount{% else %}Revenue{% endif %}</th>
                 {% if has_discount %}<th width="8%">Disc.</th>{% endif %}
                 {% if bill.gst_type != 'NONE' and bill.gst_rate > 0 %}
                 <th width="10%">Total</th>
@@ -285,8 +321,14 @@
                 {% if has_lr %}<td class="text-center">{{ bt.lr_no|default:bt.trip.lr_no|default:"-" }}</td>{% endif %}
                 <td>{{ bt.trip.pickup_location|truncatechars:20 }} - {{ bt.trip.delivery_location|truncatechars:20 }}</td>
                 <td class="text-right">{{ bt.trip.weight|indian_comma }}</td>
-                <td class="text-right">{{ bt.trip.rate_per_ton|indian_comma }}</td>
-                <td class="text-right font-bold">{{ bt.trip.revenue|indian_comma }}</td>
+                <td class="text-right">{% if bill.is_creditor_bill %}-{% else %}{{ bt.trip.rate_per_ton|indian_comma }}{% endif %}</td>
+                <td class="text-right font-bold">
+                    {% if bill.is_creditor_bill %}
+                        {{ bt.trip.vendor_hire_amount|indian_comma }}
+                    {% else %}
+                        {{ bt.trip.revenue|indian_comma }}
+                    {% endif %}
+                </td>
                 {% if has_discount %}<td class="text-right" style="color: #c00;">{{ bt.discount|indian_comma }}</td>{% endif %}
                 {% if bill.gst_type != 'NONE' and bill.gst_rate > 0 %}
                 <td class="text-right font-bold">{{ bill|get_trip_total:bt|indian_comma }}</td>
@@ -299,7 +341,14 @@
                 <td colspan="{% if has_lr %}5{% else %}4{% endif %}" class="text-right">Total</td>
                 <td class="text-right">{{ total_weight|default:bill.total_weight|indian_comma }}</td>
                 <td></td>
-                <td class="text-right">Rs. {{ bill_trips|sum_attribute:'trip.revenue'|indian_comma }}</td>
+                <td class="text-right">
+                    Rs. 
+                    {% if bill.is_creditor_bill %}
+                        {{ bill_trips|sum_attribute:'trip.vendor_hire_amount'|indian_comma }}
+                    {% else %}
+                        {{ bill_trips|sum_attribute:'trip.revenue'|indian_comma }}
+                    {% endif %}
+                </td>
                 {% if has_discount %}<td class="text-right">Rs. {{ bill_trips|sum_attribute:'discount'|indian_comma }}</td>{% endif %}
                 {% if bill.gst_type != 'NONE' and bill.gst_rate > 0 %}
                 <td class="text-right">Rs. {{ bill.rounded_total|indian_comma }}</td>

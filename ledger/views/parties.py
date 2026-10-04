@@ -78,10 +78,17 @@ class PartyDetailView(LoginRequiredMixin, PermissionRequiredMixin, BaseLedgerPer
         
         # 1. Trips Pagination (Operations Tab)
         # Optimized with prefetching for bills and allocations to support accurate Python-side balance calculations
-        trips_qs = Trip.objects.filter(party=self.object).select_related(
-            'vehicle', 'route'
+        is_creditor = (self.object.party_type == Party.TYPE_CREDITOR)
+        if is_creditor:
+            trips_base_qs = Trip.objects.filter(vehicle__vendor=self.object)
+        else:
+            trips_base_qs = Trip.objects.filter(party=self.object)
+
+        trips_qs = trips_base_qs.select_related(
+            'vehicle', 'route', 'party'
         ).prefetch_related(
             'bills',
+            'bills__party',
             'bills__category',
             'bills__adjustment_bills',
             'bills__adjustment_bills__category',
@@ -94,9 +101,15 @@ class PartyDetailView(LoginRequiredMixin, PermissionRequiredMixin, BaseLedgerPer
 
         billed_filter = self.request.GET.get('billed')
         if billed_filter == 'unbilled':
-            trips_qs = trips_qs.filter(annotated_is_billed=False)
+            if is_creditor:
+                trips_qs = trips_qs.exclude(bills__party=self.object)
+            else:
+                trips_qs = trips_qs.filter(annotated_is_billed=False)
         elif billed_filter == 'billed':
-            trips_qs = trips_qs.filter(annotated_is_billed=True)
+            if is_creditor:
+                trips_qs = trips_qs.filter(bills__party=self.object)
+            else:
+                trips_qs = trips_qs.filter(annotated_is_billed=True)
 
         trips_paginator = Paginator(trips_qs, 25)
         trips_page_num = self.request.GET.get('page')
@@ -134,7 +147,7 @@ class PartyDetailView(LoginRequiredMixin, PermissionRequiredMixin, BaseLedgerPer
         context['ledger_page_obj'] = ledger_page
 
         # Get Bills with prefetching
-        bills_qs = self.object.bills.select_related('issuer', 'category').prefetch_related(
+        bills_qs = self.object.bills.select_related('issuer', 'category', 'customer_bill').prefetch_related(
             'trips',
             'trips__payment_allocations',
             'financial_records',
@@ -143,7 +156,7 @@ class PartyDetailView(LoginRequiredMixin, PermissionRequiredMixin, BaseLedgerPer
             'bill_trips__trip',
             'adjustment_bills',
             'adjustment_bills__category'
-        ).order_by('-date', '-category__name', '-bill_no')
+        ).with_payment_info().order_by('-date', '-category__name', '-bill_no')
         
         bills_page_num = self.request.GET.get('bills_page', 1)
         bills_paginator = Paginator(bills_qs, 25)
@@ -152,6 +165,7 @@ class PartyDetailView(LoginRequiredMixin, PermissionRequiredMixin, BaseLedgerPer
         context['total_revenue'] = self.object.total_billed
         context['total_received'] = self.object.total_received
         context['balance'] = self.object.current_balance
+        context['payment_out_category'] = TransactionCategory.objects.filter(name='Payment Out').first()
         
         return context
 
@@ -305,8 +319,8 @@ def get_party_unbilled_trips(request):
         return JsonResponse({'trips': []})
     
     try:
-        # Show trips for this party with vehicle pre-fetched
-        qs = Trip.objects.filter(party_id=party_id).select_related('vehicle')
+        # Show trips for this party with vehicle and vendor pre-fetched
+        qs = Trip.objects.filter(party_id=party_id).select_related('vehicle', 'vehicle__vendor')
         
         if bill_id:
             # Include currently selected trips for this bill + unbilled ones
@@ -334,6 +348,11 @@ def get_party_unbilled_trips(request):
                     lr_no = bt.lr_no or ''
                     discount = float(bt.discount or 0)
 
+            is_attached = bool(trip.vehicle and trip.vehicle.is_attached)
+            vendor_name = trip.vehicle.vendor.name if (is_attached and trip.vehicle.vendor) else ''
+            vendor_id = trip.vehicle.vendor_id if (is_attached and trip.vehicle.vendor) else None
+            vendor_hire_amount = float(trip.vendor_hire_amount or 0)
+
             data.append({
                 'id': trip.id,
                 'date': trip.date.strftime('%d %b %Y') if trip.date else '',
@@ -346,6 +365,10 @@ def get_party_unbilled_trips(request):
                 'gst_type': trip.gst_type, # IGST or GST
                 'lr_no': lr_no,
                 'discount': discount,
+                'is_attached': is_attached,
+                'vendor_id': vendor_id,
+                'vendor_name': vendor_name,
+                'vendor_hire_amount': vendor_hire_amount,
             })        
         return JsonResponse({'trips': data})
     except Exception as e:

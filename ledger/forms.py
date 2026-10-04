@@ -111,17 +111,35 @@ class FinancialRecordForm(forms.ModelForm):
                 del self.fields['driver']
             
             if party.party_type == Party.TYPE_CREDITOR:
-                # Creditors: No trips or bills (except manual entries)
+                # Creditors: No per-trip allocations, but support bill settlements
                 if 'associated_trip' in self.fields: del self.fields['associated_trip']
-                if 'associated_bill' in self.fields: del self.fields['associated_bill']
                 if 'payment_distribution' in self.fields: del self.fields['payment_distribution']
-                if 'bill_distribution' in self.fields: del self.fields['bill_distribution']
                 
+                # Filter bills for this creditor: Exclude CN/DN and already Paid bills
+                bills_qs = Bill.objects.with_payment_info().filter(party=party).filter(
+                    models.Q(category__isnull=True) | ~models.Q(category__name__in=['Credit Note', 'Debit Note'])
+                )
+                unpaid_bill_ids = [b.id for b in bills_qs if b.payment_status != Bill.PAYMENT_STATUS_PAID]
+                if self.instance and self.instance.associated_bill:
+                    if self.instance.associated_bill.pk not in unpaid_bill_ids:
+                        unpaid_bill_ids.append(self.instance.associated_bill.pk)
+                initial_bill = kwargs.get('initial', {}).get('associated_bill')
+                if initial_bill and initial_bill.pk not in unpaid_bill_ids:
+                    unpaid_bill_ids.append(initial_bill.pk)
+
+                self.fields['associated_bill'].queryset = Bill.objects.with_payment_info().filter(id__in=unpaid_bill_ids).order_by('-date')
+
                 # Filter categories for Creditor
                 from .models import TransactionCategory
                 self.fields['category'].queryset = TransactionCategory.objects.filter(
-                    models.Q(name__in=['Payment Out', 'Expense', 'Deductions', 'Debit Note', 'Credit Note'])
+                    models.Q(name__in=['Payment Out', 'Expense', 'Deductions', 'TDS', 'Debit Note', 'Credit Note'])
                 ).order_by('name')
+
+                # Default to Payment Out if not set
+                if not self.initial.get('category'):
+                    p_out = TransactionCategory.objects.filter(name='Payment Out').first()
+                    if p_out:
+                        self.fields['category'].initial = p_out.id
             else:
                 # Setup trips for debtor party using dynamic payment info
                 # Allow all trips that are not fully paid
@@ -225,6 +243,19 @@ class FinancialRecordForm(forms.ModelForm):
                         cleaned_data['tds_amount'] = total_tds
                     if total_ded > 0 and (not cleaned_data.get('deduction_amount') or cleaned_data.get('deduction_amount') == 0):
                         cleaned_data['deduction_amount'] = total_ded
+            except Exception:
+                pass
+
+        bill_distribution_json = cleaned_data.get('bill_distribution')
+        if bill_distribution_json:
+            try:
+                import json
+                from decimal import Decimal
+                b_dist_data = json.loads(bill_distribution_json)
+                if b_dist_data:
+                    total_b = sum(Decimal(str(item.get('amount', 0) or 0)) for item in b_dist_data)
+                    if not cleaned_data.get('amount') or cleaned_data.get('amount') == 0:
+                        cleaned_data['amount'] = total_b
             except Exception:
                 pass
 
@@ -357,6 +388,8 @@ class BillForm(forms.ModelForm):
             'issuer',
             'party',
             'date',
+            'creditor_invoice_number',
+            'creditor_invoice_date',
             'item_type',
             'standard_weight',
             'standard_rate',
@@ -371,6 +404,8 @@ class BillForm(forms.ModelForm):
         widgets = {
             'date': forms.DateInput(attrs={'type': 'date', 'id': 'id_date'}),
             'manual_original_bill_date': forms.DateInput(attrs={'type': 'date', 'id': 'id_manual_original_bill_date'}),
+            'creditor_invoice_date': forms.DateInput(attrs={'type': 'date', 'id': 'id_creditor_invoice_date', 'class': 'block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white'}),
+            'creditor_invoice_number': forms.TextInput(attrs={'id': 'id_creditor_invoice_number', 'placeholder': 'e.g. CR-INV-001 or Vendor Bill #', 'class': 'block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white'}),
             'trips': forms.CheckboxSelectMultiple(),
             'bill_no': forms.NumberInput(attrs={
                 'id': 'id_bill_no',

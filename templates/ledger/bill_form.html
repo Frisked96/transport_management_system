@@ -157,6 +157,33 @@
                                 <p class="text-[10px] text-slate-500 italic"><i class="fa-solid fa-circle-info mr-1"></i>Use this for historical bills not in the system.</p>
                             </div>
                         </div>
+
+                        <!-- Creditor Vendor Reference Document (Vendor CN/Invoice #) -->
+                        <div id="creditorDocFields" class="space-y-3 bg-amber-50/70 p-4 rounded-lg border border-amber-200 col-span-full {% if not form.instance.is_creditor_bill and not form.instance.party.party_type == 'Creditor' %}hidden{% endif %}">
+                            <div class="flex items-center justify-between">
+                                <label class="block text-xs font-black text-amber-900 uppercase tracking-widest">
+                                    <i class="fa-solid fa-file-invoice mr-1 text-amber-700"></i>Vendor Reference Document Details
+                                </label>
+                                <span class="text-[10px] text-amber-700 font-bold">Physical Document # & Date</span>
+                            </div>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-[10px] font-black text-amber-800 uppercase tracking-wider mb-1">
+                                        Vendor Credit Note / Invoice Number:
+                                    </label>
+                                    {{ form.creditor_invoice_number }}
+                                    <p class="text-[10px] text-amber-600 mt-1 italic">The number printed on the vendor's physical Credit Note or Invoice.</p>
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] font-black text-amber-800 uppercase tracking-wider mb-1">
+                                        Vendor Document Date:
+                                    </label>
+                                    {{ form.creditor_invoice_date }}
+                                    <p class="text-[10px] text-amber-600 mt-1 italic">Date of the vendor's document.</p>
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="space-y-2">
                             <label class="block text-xs font-bold text-slate-500 uppercase">Item Description / Type</label>
                             {{ form.item_type }}
@@ -192,6 +219,50 @@
                 <div id="tripsSelectionArea" class="mb-10">
                     <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 pb-2 border-b border-slate-100">Included Trips</h3>
                     
+                    <!-- BEGIN: Attached Vehicle / Creditor Billing Banner -->
+                    <div id="creditorBillingBanner" class="hidden mb-6 p-5 bg-amber-50/90 border border-amber-200 rounded-xl shadow-sm">
+                        <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-4 border-b border-amber-200/60">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-lg bg-amber-500 text-white flex items-center justify-center font-black text-lg shadow-sm">
+                                    <i class="fa-solid fa-truck-ramp-box"></i>
+                                </div>
+                                <div>
+                                    <h4 class="text-sm font-black text-amber-900 uppercase tracking-wider">Attached Vehicle Vendor Billing</h4>
+                                    <p class="text-xs text-amber-700">Selected trips contain attached vehicle(s). A linked Creditor Bill will be generated automatically for the vendor.</p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-4 bg-white/90 px-4 py-2 rounded-lg border border-amber-200 shadow-sm">
+                                <div>
+                                    <span class="text-[10px] font-black uppercase text-amber-800 tracking-wider">Vendor(s):</span>
+                                    <span id="creditorVendorNames" class="text-xs font-bold text-slate-800 ml-1">-</span>
+                                </div>
+                                <div class="h-4 w-px bg-amber-200"></div>
+                                <div>
+                                    <span class="text-[10px] font-black uppercase text-amber-800 tracking-wider">Vendor Hire Total:</span>
+                                    <span id="creditorTotalHire" class="text-xs font-black text-amber-900 ml-1">₹0.00</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+                            <div>
+                                <label class="block text-xs font-bold text-amber-900 uppercase tracking-wider mb-1">
+                                    Creditor Invoice Number (Vendor Bill #):
+                                </label>
+                                {{ form.creditor_invoice_number }}
+                                <p class="text-[10px] text-amber-700 mt-1 italic">Enter the invoice # from the truck vendor's physical bill (optional, can be updated later).</p>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-amber-900 uppercase tracking-wider mb-1">
+                                    Creditor Invoice Date:
+                                </label>
+                                {{ form.creditor_invoice_date }}
+                                <p class="text-[10px] text-amber-700 mt-1 italic">Date of the vendor's bill (defaults to invoice date).</p>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- END: Attached Vehicle / Creditor Billing Banner -->
+
                     <div id="tripsContainer" class="{% if not form.trips.field.queryset.exists %}hidden{% endif %}">
                         <div class="overflow-x-auto border border-slate-200 rounded-lg">
                             <table class="w-full text-left border-collapse">
@@ -218,6 +289,9 @@
                                                    name="trips" value="{{ trip.pk }}" 
                                                    id="trip_{{ trip.pk }}"
                                                    data-gst-type="{{ trip.gst_type }}"
+                                                   data-is-attached="{% if trip.vehicle.is_attached and trip.vehicle.vendor %}true{% else %}false{% endif %}"
+                                                   data-vendor-name="{{ trip.vehicle.vendor.name|default:'' }}"
+                                                   data-vendor-hire="{{ trip.vendor_hire_amount|default:'0' }}"
                                                    {% if trip.pk in form.trips.value %}checked{% endif %}>
                                         </td>
                                         <td class="px-6 py-4">
@@ -480,6 +554,9 @@
                                                name="trips" value="${trip.id}" 
                                                id="trip_${trip.id}"
                                                data-gst-type="${trip.gst_type}"
+                                               data-is-attached="${trip.is_attached ? 'true' : 'false'}"
+                                               data-vendor-name="${trip.vendor_name || ''}"
+                                               data-vendor-hire="${trip.vendor_hire_amount || 0}"
                                                ${isChecked ? 'checked' : ''}>
                                     </td>
                                     <td class="px-6 py-4">
@@ -673,6 +750,7 @@
             // Trip selection change
             $('.trip-checkbox').off('change').on('change', function() {
                 suggestGstType();
+                checkAttachedVehicles();
             });
 
             // Re-bind select all
@@ -682,13 +760,43 @@
                     const checkboxes = document.querySelectorAll('.trip-checkbox');
                     checkboxes.forEach(cb => cb.checked = this.checked);
                     suggestGstType();
+                    checkAttachedVehicles();
                 });
+            }
+
+            checkAttachedVehicles();
+        }
+
+        function checkAttachedVehicles() {
+            const selectedTrips = $('.trip-checkbox:checked');
+            let totalVendorHire = 0;
+            const vendorNames = new Set();
+            let hasAttached = false;
+
+            selectedTrips.each(function() {
+                const isAttached = $(this).data('is-attached') === true || $(this).data('is-attached') === 'true';
+                if (isAttached) {
+                    hasAttached = true;
+                    const vendor = $(this).data('vendor-name');
+                    if (vendor) vendorNames.add(vendor);
+                    const hire = parseFloat($(this).data('vendor-hire')) || 0;
+                    totalVendorHire += hire;
+                }
+            });
+
+            if (hasAttached) {
+                $('#creditorBillingBanner').removeClass('hidden');
+                $('#creditorVendorNames').text(Array.from(vendorNames).join(', ') || 'Attached Vendor');
+                $('#creditorTotalHire').text('₹' + totalVendorHire.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2}));
+            } else {
+                $('#creditorBillingBanner').addClass('hidden');
             }
         }
 
         $('#id_bill_type').on('change', function() {
             updateBillTypeUI();
             suggestGstType();
+            checkAttachedVehicles();
         });
 
         // Initial run for invoice number (for NEW invoices)

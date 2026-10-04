@@ -140,6 +140,9 @@ class Bill(models.Model):
     original_bill = models.ForeignKey('self', null=True, blank=True, on_delete=models.SET_NULL, related_name='adjustment_bills', verbose_name="Against Invoice")
     manual_original_bill_number = models.CharField(max_length=100, blank=True, null=True, verbose_name="Manual Against Invoice No")
     manual_original_bill_date = models.DateField(blank=True, null=True, verbose_name="Manual Against Invoice Date")
+    creditor_invoice_number = models.CharField(max_length=100, blank=True, null=True, verbose_name="Creditor Invoice Number")
+    creditor_invoice_date = models.DateField(blank=True, null=True, verbose_name="Creditor Invoice Date")
+    customer_bill = models.ForeignKey('self', null=True, blank=True, on_delete=models.CASCADE, related_name='creditor_bills', verbose_name="Customer Bill Reference")
     discount = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name="Discount")
     use_roundoff = models.BooleanField(default=True, verbose_name="Use Round Off")
 
@@ -188,9 +191,20 @@ class Bill(models.Model):
             self.invoice_bank_ifsc = self.issuer.ifsc_code
         
         # 2. Handle Invoice Numbering
-        if self.issuer:
+        if self.customer_bill:
+            cust_no = self.customer_bill.bill_number or f"DRAFT-{self.customer_bill.pk}"
+            if not self.bill_number or self.bill_number.startswith("CR-DRAFT-"):
+                candidate_no = f"CR-{cust_no}"
+                if self.party_id and Bill.objects.filter(bill_number=candidate_no).exclude(pk=self.pk).exists():
+                    self.bill_number = f"CR-{self.party_id}-{cust_no}"
+                else:
+                    self.bill_number = candidate_no
+        elif self.party and self.party.party_type == Party.TYPE_CREDITOR:
+            if not self.bill_number:
+                self.bill_number = f"CR-{self.pk or 'NEW'}"
+        elif self.issuer:
             if not self.bill_no:
-                self.bill_no = self.get_next_available_no(self.issuer, self.date)
+                self.bill_no = self.get_next_available_no(self.issuer, self.date, self.category)
             
             # Update the full string representation
             prefix = self.get_prefix()
@@ -264,6 +278,13 @@ class Bill(models.Model):
             mark_bill_deleting(self.pk)
 
             try:
+                orig_bill = self.original_bill
+                party = self.party
+
+                # If this is a customer bill, delete linked creditor bills first
+                for cb in list(self.creditor_bills.all()):
+                    cb.delete()
+
                 affected_trips = list(self.trips.all())
 
                 # Delete only the consolidated invoice record associated with this bill
@@ -278,6 +299,12 @@ class Bill(models.Model):
                 for trip in affected_trips:
                     from ledger.services import TripFinancialService
                     TripFinancialService.sync_trip_accrual(trip)
+
+                if orig_bill:
+                    from ledger.services import BillingService
+                    BillingService.update_bill_financial_caches(orig_bill)
+                if party:
+                    party.refresh_balance()
             finally:
                 unmark_bill_deleting(self.pk)
                 if hasattr(self, '_is_being_deleted'):
@@ -289,6 +316,18 @@ class Bill(models.Model):
         """
         from ledger.services import BillingService
         return BillingService.sync_bill_to_ledger(self)
+
+    @property
+    def is_creditor_bill(self):
+        """Returns True if the bill is for a creditor/vendor or linked to a customer bill."""
+        return bool(self.customer_bill_id or (self.party and self.party.party_type == Party.TYPE_CREDITOR))
+
+    @property
+    def display_invoice_number(self):
+        """Returns creditor invoice number if present, otherwise bill number or Draft."""
+        if self.is_creditor_bill:
+            return self.creditor_invoice_number or self.bill_number or "Draft"
+        return self.bill_number or "Draft"
 
     @property
     def is_adjustment(self):
@@ -319,10 +358,15 @@ class Bill(models.Model):
         if not self.pk:
             return Decimal('0')
 
-        trip_subtotal = 0
-        for bt in self.bill_trips.all():
-            trip_subtotal += (bt.trip.revenue - (bt.discount or 0))
-        return max(0, trip_subtotal - (self.discount or 0))
+        is_creditor = self.is_creditor_bill
+
+        trip_subtotal = Decimal('0')
+        for bt in self.bill_trips.select_related('trip').all():
+            if is_creditor:
+                trip_subtotal += (Decimal(str(bt.trip.vendor_hire_amount or 0)) - Decimal(str(bt.discount or 0)))
+            else:
+                trip_subtotal += (Decimal(str(bt.trip.revenue or 0)) - Decimal(str(bt.discount or 0)))
+        return max(Decimal('0'), trip_subtotal - (Decimal(str(self.discount or 0))))
 
     @property
     def gst_amount(self):
@@ -426,7 +470,7 @@ class Bill(models.Model):
             party_name = self.party.name if self.party else 'No Party'
         except ObjectDoesNotExist:
             party_name = 'Deleted Party'
-        return f"{self.bill_number or 'Draft'} - {party_name}"
+        return f"{self.display_invoice_number} - {party_name}"
     
     description = models.TextField(blank=True, verbose_name="Item Description",
                                    help_text="Description shown on invoice (e.g., destination/material)")

@@ -62,10 +62,10 @@ class Command(BaseCommand):
                 self.stdout.write(f'  {vehicle.registration_plate}: No trips found. Skipping.')
                 continue
             
-            vehicle_total = trips.aggregate(total=Sum('total_revenue_cached'))['total'] or Decimal('0')
+            vehicle_total = trips.aggregate(total=Sum('revenue_cached'))['total'] or Decimal('0')
             
             if not dry_run:
-                trips.update(vendor_hire_amount=F('total_revenue_cached'))
+                trips.filter(vendor_hire_amount=0).update(vendor_hire_amount=F('revenue_cached'))
             
             total_trips_updated += trip_count
             total_hire_amount += vehicle_total
@@ -96,9 +96,10 @@ class Command(BaseCommand):
                 TripFinancialService.sync_trip_accrual(trip)
             self.stdout.write(f'  Synced {unbilled_count} unbilled trip accruals.')
             
-            # 3b. Re-sync bills (creates consolidated vendor accruals)
+            # 3b. Re-sync customer bills (creates linked creditor bills)
             affected_bills = Bill.objects.filter(
-                trips__vehicle__in=attached_vehicles
+                trips__vehicle__in=attached_vehicles,
+                customer_bill__isnull=True
             ).distinct()
             
             affected_bills_count = affected_bills.count()

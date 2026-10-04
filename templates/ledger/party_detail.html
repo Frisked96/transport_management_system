@@ -94,15 +94,13 @@
         <!-- Tabs Navigation -->
         <div class="bg-slate-50 border-b border-slate-200 px-2 flex flex-col sm:flex-row items-stretch sm:items-center justify-between">
             <nav class="flex overflow-x-auto no-scrollbar" aria-label="Tabs">
-                {% if party.party_type != 'Creditor' %}
                 <button onclick="switchTab('trips')" id="tab-trips" class="tab-btn py-3 px-4 sm:px-6 text-[9px] sm:text-[10px] font-black uppercase tracking-widest border-b-2 border-emerald-600 text-emerald-700 transition-all whitespace-nowrap">
                     Operations
                 </button>
                 <button onclick="switchTab('invoices')" id="tab-invoices" class="tab-btn py-3 px-4 sm:px-6 text-[9px] sm:text-[10px] font-black uppercase tracking-widest border-b-2 border-transparent text-slate-400 hover:text-slate-600 transition-all whitespace-nowrap">
                     Invoices
                 </button>
-                {% endif %}
-                <button onclick="switchTab('ledger')" id="tab-ledger" class="tab-btn py-3 px-4 sm:px-6 text-[9px] sm:text-[10px] font-black uppercase tracking-widest border-b-2 {% if party.party_type == 'Creditor' %}border-emerald-600 text-emerald-700{% else %}border-transparent text-slate-400{% endif %} hover:text-slate-600 transition-all whitespace-nowrap">
+                <button onclick="switchTab('ledger')" id="tab-ledger" class="tab-btn py-3 px-4 sm:px-6 text-[9px] sm:text-[10px] font-black uppercase tracking-widest border-b-2 border-transparent text-slate-400 hover:text-slate-600 transition-all whitespace-nowrap">
                     Ledger
                 </button>
                 <button onclick="switchTab('profile')" id="tab-profile" class="tab-btn py-3 px-4 sm:px-6 text-[9px] sm:text-[10px] font-black uppercase tracking-widest border-b-2 border-transparent text-slate-400 hover:text-slate-600 transition-all whitespace-nowrap">
@@ -110,7 +108,7 @@
                 </button>
             </nav>
 
-            <div id="statement-action" class="{% if party.party_type != 'Creditor' %}hidden{% endif %} px-4 py-2 sm:py-0 border-t sm:border-t-0 border-slate-200">
+            <div id="statement-action" class="px-4 py-2 sm:py-0 border-t sm:border-t-0 border-slate-200">
                 <form action="{% url 'party-statement-pdf' party.pk %}" method="GET" target="_blank" class="flex items-center justify-between sm:justify-start gap-2">
                     <input type="date" name="start_date" class="text-[9px] font-bold border-slate-200 rounded py-1 px-1 h-7 w-24">
                     <input type="date" name="end_date" class="text-[9px] font-bold border-slate-200 rounded py-1 px-1 h-7 w-24">
@@ -122,7 +120,6 @@
         </div>
 
         <div id="tab-content" class="min-h-[400px]">
-            {% if party.party_type != 'Creditor' %}
             <!-- TRIPS TAB -->
             <div id="content-trips" class="tab-pane">
                 <form method="GET" action="{% url 'bill-create' %}" id="create-bill-form">
@@ -131,31 +128,46 @@
                         <div class="flex items-center gap-4">
                             <p class="text-[10px] font-black text-emerald-700 uppercase whitespace-nowrap">Trips View:</p>
                             <div class="flex bg-white border border-emerald-200 rounded-md p-0.5">
-                                <a href="?billed=unbilled" class="px-3 py-1 text-[9px] font-black uppercase rounded {% if billed_filter == 'unbilled' %}bg-emerald-600 text-white{% else %}text-emerald-600 hover:bg-emerald-50{% endif %} transition-all">Unbilled</a>
-                                <a href="?billed=billed" class="px-3 py-1 text-[9px] font-black uppercase rounded {% if billed_filter == 'billed' %}bg-emerald-600 text-white{% else %}text-emerald-600 hover:bg-emerald-50{% endif %} transition-all">Billed</a>
-                                <a href="?" class="px-3 py-1 text-[9px] font-black uppercase rounded {% if not billed_filter %}bg-emerald-600 text-white{% else %}text-emerald-600 hover:bg-emerald-50{% endif %} transition-all">All</a>
+                                <a href="?billed=unbilled&tab=trips" class="px-3 py-1 text-[9px] font-black uppercase rounded {% if billed_filter == 'unbilled' %}bg-emerald-600 text-white{% else %}text-emerald-600 hover:bg-emerald-50{% endif %} transition-all">Unbilled</a>
+                                <a href="?billed=billed&tab=trips" class="px-3 py-1 text-[9px] font-black uppercase rounded {% if billed_filter == 'billed' %}bg-emerald-600 text-white{% else %}text-emerald-600 hover:bg-emerald-50{% endif %} transition-all">Billed</a>
+                                <a href="?tab=trips" class="px-3 py-1 text-[9px] font-black uppercase rounded {% if not billed_filter %}bg-emerald-600 text-white{% else %}text-emerald-600 hover:bg-emerald-50{% endif %} transition-all">All</a>
                             </div>
                         </div>
+                        {% if party.party_type != 'Creditor' %}
                         <button type="submit" id="btn-create-invoice" disabled class="bg-emerald-600 text-white text-[10px] font-black uppercase px-4 py-1.5 rounded-lg hover:bg-emerald-700 disabled:opacity-30 disabled:grayscale transition-all shadow-sm">
                             <i class="fa-solid fa-plus-circle mr-1.5"></i>Generate Invoice
                         </button>
+                        {% else %}
+                        <span class="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase bg-amber-100 text-amber-800 border border-amber-200">
+                            <i class="fa-solid fa-truck-ramp-box mr-1.5"></i>Attached Vehicle Trips
+                        </span>
+                        {% endif %}
                     </div>
                     <div class="overflow-x-auto">
                         <table class="w-full text-left border-collapse">
                             <thead>
                                 <tr class="bg-slate-50/50 border-b border-slate-100">
+                                    {% if party.party_type != 'Creditor' %}
                                     <th class="px-6 py-3 w-10"><input type="checkbox" id="select-all-trips" class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"></th>
+                                    {% endif %}
                                     <th class="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider">Date</th>
                                     <th class="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider">Trip Number / LR No</th>
                                     <th class="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider">Vehicle</th>
+                                    {% if party.party_type == 'Creditor' %}
+                                    <th class="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider">Customer</th>
+                                    <th class="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider text-right">Vendor Hire Amount</th>
+                                    <th class="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">Billing Status</th>
+                                    {% else %}
                                     <th class="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider text-right">Revenue (Total)</th>
                                     <th class="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider text-right">Pending</th>
                                     <th class="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">Status</th>
+                                    {% endif %}
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-100">
                                 {% for trip in trips %}
                                 <tr class="hover:bg-slate-50/80 transition-colors {% if not trip.is_billed %}bg-amber-50/20{% endif %}">
+                                    {% if party.party_type != 'Creditor' %}
                                     <td class="px-6 py-3">
                                         {% if not trip.is_billed and trip.revenue > 0 %}
                                         <input type="checkbox" name="trip_ids" value="{{ trip.pk }}" class="trip-checkbox rounded border-slate-300 text-emerald-600 focus:ring-emerald-500">
@@ -163,12 +175,32 @@
                                         <i class="fa-solid fa-lock text-slate-200 text-xs"></i>
                                         {% endif %}
                                     </td>
+                                    {% endif %}
                                     <td class="px-6 py-3 text-xs font-bold text-slate-500">{{ trip.date|date:"d/m/Y" }}</td>
                                     <td class="px-6 py-3">
                                         <a href="{% url 'trip-detail' trip.pk %}" class="text-sm font-black text-slate-900 hover:text-emerald-600 block">{{ trip.trip_number }}</a>
                                         {% if trip.lr_no %}<span class="text-[10px] font-bold text-slate-400">LR: {{ trip.lr_no }}</span>{% endif %}
                                     </td>
                                     <td class="px-6 py-3 text-xs font-black text-slate-700 uppercase">{{ trip.vehicle.registration_plate }}</td>
+                                    {% if party.party_type == 'Creditor' %}
+                                    <td class="px-6 py-3 text-xs font-bold text-slate-600">
+                                        {{ trip.party.name|default:"-" }}
+                                    </td>
+                                    <td class="px-6 py-3 text-right">
+                                        <p class="text-sm font-black text-slate-900 leading-none">₹{{ trip.vendor_hire_amount|indian_comma }}</p>
+                                    </td>
+                                    <td class="px-6 py-3 text-center">
+                                        {% if trip.creditor_bill %}
+                                        <a href="{% url 'bill-detail' trip.creditor_bill.pk %}" class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-tight bg-blue-50 text-blue-700 border border-blue-100 hover:bg-blue-100">
+                                            <i class="fa-solid fa-file-invoice"></i> {{ trip.creditor_bill.display_invoice_number }}
+                                        </a>
+                                        {% else %}
+                                        <span class="inline-flex px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-tight bg-amber-100 text-amber-700">
+                                            Unbilled
+                                        </span>
+                                        {% endif %}
+                                    </td>
+                                    {% else %}
                                     <td class="px-6 py-3 text-right">
                                         <p class="text-sm font-black text-slate-900 leading-none">₹{{ trip.total_revenue|indian_comma }}</p>
                                         {% if trip.gst_amount > 0 %}
@@ -186,16 +218,17 @@
                                             {{ trip.payment_status }}
                                         </span>
                                     </td>
+                                    {% endif %}
                                 </tr>
                                 {% empty %}
-                                <tr><td colspan="7" class="px-6 py-12 text-center text-slate-400 italic text-xs">No trips found for this party.</td></tr>
+                                <tr><td colspan="{% if party.party_type == 'Creditor' %}6{% else %}7{% endif %}" class="px-6 py-12 text-center text-slate-400 italic text-xs">No trips found for this party.</td></tr>
                                 {% endfor %}
                             </tbody>
                         </table>
                     </div>
                 </form>
 
-                <!-- TRIP PAGINATION -->
+                <!-- TRIPS PAGINATION -->
                 {% if trips.has_other_pages %}
                 <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
                     <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">
@@ -222,11 +255,17 @@
                     <table class="w-full text-left border-collapse">
                         <thead>
                             <tr class="bg-slate-50/50 border-b border-slate-100">
-                                <th class="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider">Invoice #</th>
+                                <th class="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                                    {% if party.party_type == 'Creditor' %}Vendor Bill #{% else %}Invoice #{% endif %}
+                                </th>
                                 <th class="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider">Date</th>
+                                {% if party.party_type == 'Creditor' %}
+                                <th class="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider">Against Invoice</th>
+                                {% endif %}
                                 <th class="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">Trips</th>
                                 <th class="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider text-right">Amount</th>
                                 <th class="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider text-right">Balance</th>
+                                <th class="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">Status</th>
                                 <th class="px-6 py-3"></th>
                             </tr>
                         </thead>
@@ -235,9 +274,15 @@
                             <tr class="hover:bg-slate-50/80 transition-colors">
                                 <td class="px-6 py-3">
                                     <div class="flex flex-col">
-                                        <a href="{% url 'bill-detail' bill.pk %}" class="text-sm font-black text-slate-900 hover:text-emerald-600 block leading-tight">{{ bill.bill_number|default:"Draft" }}</a>
-                                        <div class="mt-1">
-                                            {% if bill.category and bill.category.name == 'Credit Note' %}
+                                        <a href="{% url 'bill-detail' bill.pk %}" class="text-sm font-black text-slate-900 hover:text-emerald-600 block leading-tight">
+                                            {{ bill.display_invoice_number }}
+                                        </a>
+                                        <div class="mt-1 flex items-center gap-1">
+                                            {% if bill.customer_bill %}
+                                            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-tighter bg-amber-50 text-amber-700 border border-amber-200">
+                                                PURCHASE BILL
+                                            </span>
+                                            {% elif bill.category and bill.category.name == 'Credit Note' %}
                                             <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-tighter bg-purple-50 text-purple-700 border border-purple-100">
                                                 CN
                                             </span>
@@ -254,6 +299,17 @@
                                     </div>
                                 </td>
                                 <td class="px-6 py-3 text-xs font-bold text-slate-500">{{ bill.date|date:"d M Y" }}</td>
+                                {% if party.party_type == 'Creditor' %}
+                                <td class="px-6 py-3">
+                                    {% if bill.customer_bill %}
+                                    <a href="{% url 'bill-detail' bill.customer_bill.pk %}" class="text-xs font-bold text-blue-600 hover:underline">
+                                        {{ bill.customer_bill.bill_number|default:"Customer Bill" }}
+                                    </a>
+                                    {% else %}
+                                    <span class="text-slate-400 text-xs">-</span>
+                                    {% endif %}
+                                </td>
+                                {% endif %}
                                 <td class="px-6 py-3 text-center">
                                     <span class="bg-blue-50 text-blue-700 text-[10px] font-black px-2 py-0.5 rounded border border-blue-100 uppercase">{{ bill.trips.count }} TRP</span>
                                 </td>
@@ -265,15 +321,28 @@
                                     ₹{{ bill.outstanding_balance|indian_comma }}
                                     {% endif %}
                                 </td>
+                                <td class="px-6 py-3 text-center">
+                                    <span class="inline-flex px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-tight
+                                        {% if bill.payment_status == 'Paid' %}bg-emerald-100 text-emerald-700
+                                        {% elif bill.payment_status == 'Partially Paid' %}bg-amber-100 text-amber-700
+                                        {% else %}bg-rose-100 text-rose-700{% endif %}">
+                                        {{ bill.payment_status }}
+                                    </span>
+                                </td>
                                 <td class="px-6 py-3 text-right">
-                                    <div class="flex items-center justify-end space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <a href="{% url 'print-combined-bill' bill.pk %}" target="_blank" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-print text-xs"></i></a>
-                                        <a href="{% url 'bill-update' bill.pk %}" class="text-slate-400 hover:text-emerald-600"><i class="fa-regular fa-pen-to-square text-xs"></i></a>
+                                    <div class="flex items-center justify-end space-x-2">
+                                        {% if party.party_type == 'Creditor' and bill.outstanding_balance > 0 %}
+                                        <a href="{% url 'financialrecord-create' %}?party={{ party.pk }}&associated_bill={{ bill.pk }}{% if payment_out_category %}&category={{ payment_out_category.pk }}{% endif %}" class="px-2.5 py-1 bg-emerald-600 text-white rounded text-[10px] font-black uppercase hover:bg-emerald-700 transition-all shadow-sm flex items-center">
+                                            <i class="fa-solid fa-money-bill-wave mr-1"></i>Pay
+                                        </a>
+                                        {% endif %}
+                                        <a href="{% url 'print-combined-bill' bill.pk %}" target="_blank" class="text-slate-400 hover:text-slate-600" title="Print"><i class="fa-solid fa-print text-xs"></i></a>
+                                        <a href="{% url 'bill-update' bill.pk %}" class="text-slate-400 hover:text-emerald-600" title="Edit"><i class="fa-regular fa-pen-to-square text-xs"></i></a>
                                     </div>
                                 </td>
                             </tr>
                             {% empty %}
-                            <tr><td colspan="6" class="px-6 py-12 text-center text-slate-400 italic text-xs">No invoices generated yet.</td></tr>
+                            <tr><td colspan="{% if party.party_type == 'Creditor' %}8{% else %}7{% endif %}" class="px-6 py-12 text-center text-slate-400 italic text-xs">No invoices generated yet.</td></tr>
                             {% endfor %}
                         </tbody>
                     </table>
@@ -299,7 +368,6 @@
                 </div>
                 {% endif %}
             </div>
-            {% endif %}
 
             <!-- LEDGER TAB -->
             <div id="content-ledger" class="tab-pane {% if party.party_type == 'Creditor' %}{% else %}hidden{% endif %}">
@@ -508,7 +576,7 @@ function switchTab(tabId, updateHistory = true) {
 // Re-render tab when browser navigating forward/backward
 window.addEventListener('popstate', function() {
     const urlParams = new URLSearchParams(window.location.search);
-    const fallbackTab = {% if party.party_type == 'Creditor' %}'ledger'{% else %}'trips'{% endif %};
+    const fallbackTab = {% if party.party_type == 'Creditor' and not trips %}'ledger'{% else %}'trips'{% endif %};
     const activeTab = urlParams.get('tab') || fallbackTab;
     switchTab(activeTab, false);
 });
@@ -520,7 +588,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (activeTab && document.getElementById('tab-' + activeTab)) {
         switchTab(activeTab, false);
     } else {
-        {% if party.party_type == 'Creditor' %}
+        {% if party.party_type == 'Creditor' and not trips %}
         switchTab('ledger', false);
         {% else %}
         switchTab('trips', false);

@@ -39,7 +39,7 @@ class BillListView(LoginRequiredMixin, PermissionRequiredMixin, BaseLedgerPermis
         # We use prefetch_related to solve the N+1 problem without complex SQL annotations 
         # that cause 'parser stack overflow' on some SQLite configurations.
         queryset = Bill.objects.all().select_related(
-            'party', 'issuer', 'category'
+            'party', 'issuer', 'category', 'customer_bill'
         ).prefetch_related(
             'trips',
             'trips__payment_allocations',
@@ -66,10 +66,18 @@ class BillListView(LoginRequiredMixin, PermissionRequiredMixin, BaseLedgerPermis
         if search:
             queryset = queryset.filter(
                 Q(bill_number__icontains=search) |
+                Q(creditor_invoice_number__icontains=search) |
                 Q(party__name__icontains=search) |
                 Q(issuer__name__icontains=search)
             )
             
+        # Filter by Bill Nature (Customer Invoices vs Vendor Bills)
+        bill_kind = self.request.GET.get('bill_kind')
+        if bill_kind == 'customer':
+            queryset = queryset.filter(customer_bill__isnull=True)
+        elif bill_kind == 'vendor':
+            queryset = queryset.filter(customer_bill__isnull=False)
+
         # Filter by Category (Invoice Type)
         cat_filter = self.request.GET.get('category')
         if cat_filter == 'invoice':
@@ -103,6 +111,7 @@ class BillListView(LoginRequiredMixin, PermissionRequiredMixin, BaseLedgerPermis
         context['current_issuer'] = self.request.GET.get('issuer', '')
         context['current_party'] = self.request.GET.get('party', '')
         context['current_status'] = self.request.GET.get('payment_status', '')
+        context['current_bill_kind'] = self.request.GET.get('bill_kind', '')
         context['search'] = self.request.GET.get('search', '')
         context['start_date'] = self.request.GET.get('start_date', '')
         context['end_date'] = self.request.GET.get('end_date', '')
@@ -187,11 +196,15 @@ class BillDetailView(LoginRequiredMixin, PermissionRequiredMixin, BaseLedgerPerm
     permission_required = 'ledger.view_bill'
 
     def get_queryset(self):
-        return Bill.objects.select_related('party', 'category', 'original_bill', 'created_by')
+        return Bill.objects.select_related('party', 'issuer', 'category', 'original_bill', 'customer_bill', 'created_by')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         bill = self.object
+        if not bill.is_creditor_bill:
+            context['creditor_bills'] = list(bill.creditor_bills.select_related('party').all())
+        else:
+            context['creditor_bills'] = []
         bill_trips = list(bill.bill_trips.select_related('trip', 'trip__vehicle', 'trip__vehicle__vendor').order_by('trip__date'))
         context['bill_trips'] = bill_trips
         context['bill_trips_count'] = len(bill_trips)
@@ -343,18 +356,31 @@ def group_trips_for_bill(bill, bill_trips=None):
         pickup, delivery, rate = key
 
         # Build Description
-        if pickup and delivery:
-            desc = f"Freight charges from {pickup} to {delivery}"
-        elif pickup:
-            desc = f"Freight charges from {pickup}"
-        elif delivery:
-            desc = f"Freight charges to {delivery}"
+        if bill.is_creditor_bill:
+            if pickup and delivery:
+                desc = f"Lorry Hire: {pickup} to {delivery}"
+            elif pickup:
+                desc = f"Lorry Hire from {pickup}"
+            elif delivery:
+                desc = f"Lorry Hire to {delivery}"
+            else:
+                desc = "Lorry Hire Charges"
         else:
-            desc = "Transportation Charges"
+            if pickup and delivery:
+                desc = f"Freight charges from {pickup} to {delivery}"
+            elif pickup:
+                desc = f"Freight charges from {pickup}"
+            elif delivery:
+                desc = f"Freight charges to {delivery}"
+            else:
+                desc = "Transportation Charges"
 
         total_weight = sum((bt.trip.weight or 0) for bt in items)
         total_discount = sum((bt.discount or 0) for bt in items)
-        total_amount = sum((bt.trip.revenue or 0) for bt in items) - total_discount
+        if bill.is_creditor_bill:
+            total_amount = sum((bt.trip.vendor_hire_amount or 0) for bt in items) - total_discount
+        else:
+            total_amount = sum((bt.trip.revenue or 0) for bt in items) - total_discount
 
         grouped_items.append({
             'description': desc,
@@ -382,7 +408,10 @@ def _get_combined_bill_context(bill):
             'date': date,
             'bill_trips': bt_list,
             'total_weight': sum(bt.trip.weight or 0 for bt in bt_list),
-            'total_amount': sum(bt.trip.revenue or 0 for bt in bt_list),
+            'total_amount': sum(
+                ((bt.trip.vendor_hire_amount if bill.is_creditor_bill else bt.trip.revenue) or 0)
+                for bt in bt_list
+            ),
         })
 
     # Detect if we should show Discount or LR columns

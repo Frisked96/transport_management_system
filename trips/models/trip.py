@@ -34,7 +34,12 @@ class TripQuerySet(models.QuerySet):
 
         return self.annotate(
             annotated_is_billed=Exists(
-                Bill.objects.filter(trips=OuterRef('pk'))
+                Bill.objects.filter(trips=OuterRef('pk'), customer_bill__isnull=True).exclude(party__party_type='Creditor')
+            ),
+            annotated_is_creditor_billed=Exists(
+                Bill.objects.filter(trips=OuterRef('pk')).filter(
+                    models.Q(customer_bill__isnull=False) | models.Q(party__party_type='Creditor')
+                )
             ),
             annotated_gst_type=Case(
                 When(gst_type_snapshot__gt='', then=F('gst_type_snapshot')),
@@ -317,7 +322,7 @@ class Trip(models.Model):
 
     def refresh_from_db(self, *args, **kwargs):
         super().refresh_from_db(*args, **kwargs)
-        for attr in ('_is_billed_cache', '_associated_bill_cache', '_old_instance'):
+        for attr in ('_is_billed_cache', '_associated_bill_cache', '_creditor_bill_cache', '_old_instance'):
             if hasattr(self, attr):
                 delattr(self, attr)
 
@@ -462,7 +467,7 @@ class Trip(models.Model):
         self.sync_ledger_invoice()
 
         # Clean up transient instance variables
-        for attr in ('_is_billed_cache', '_associated_bill_cache', '_old_instance', '_date_changed', '_vehicle_changed'):
+        for attr in ('_is_billed_cache', '_associated_bill_cache', '_creditor_bill_cache', '_old_instance', '_date_changed', '_vehicle_changed'):
             if hasattr(self, attr):
                 delattr(self, attr)
 
@@ -507,7 +512,7 @@ class Trip(models.Model):
 
     @property
     def is_billed(self):
-        """Check if this trip is associated with any bill"""
+        """Check if this trip is associated with any customer bill"""
         if not self.pk:
             return False
             
@@ -515,25 +520,53 @@ class Trip(models.Model):
             return self.annotated_is_billed
         
         if hasattr(self, '_prefetched_objects_cache') and 'bills' in self._prefetched_objects_cache:
-            return len(self.bills.all()) > 0
+            return any(b.customer_bill_id is None and getattr(getattr(b, 'party', None), 'party_type', None) != 'Creditor' for b in self.bills.all())
             
         if not hasattr(self, '_is_billed_cache'):
-            self._is_billed_cache = self.bills.exists()
+            self._is_billed_cache = self.bills.filter(customer_bill__isnull=True).exclude(party__party_type='Creditor').exists()
         return self._is_billed_cache
 
     @property
+    def is_creditor_billed(self):
+        """Check if this trip is associated with a creditor bill"""
+        if hasattr(self, 'annotated_is_creditor_billed'):
+            return self.annotated_is_creditor_billed
+        return bool(self.creditor_bill)
+
+    @property
     def associated_bill(self):
-        """Returns the first associated bill (if any)"""
+        """Returns the customer bill associated with this trip"""
         if not self.pk or not self.is_billed:
             return None
             
         if hasattr(self, '_prefetched_objects_cache') and 'bills' in self._prefetched_objects_cache:
-            bills = self.bills.all()
-            return bills[0] if bills else None
+            for b in self.bills.all():
+                if b.customer_bill_id is None and getattr(getattr(b, 'party', None), 'party_type', None) != 'Creditor':
+                    return b
+            return self.bills.all()[0] if self.bills.all() else None
 
         if not hasattr(self, '_associated_bill_cache'):
-            self._associated_bill_cache = self.bills.first()
+            self._associated_bill_cache = self.bills.filter(customer_bill__isnull=True).exclude(party__party_type='Creditor').first() or self.bills.first()
         return self._associated_bill_cache
+
+    @property
+    def creditor_bill(self):
+        """Returns the creditor bill associated with this trip (if attached vehicle)"""
+        if not self.pk:
+            return None
+            
+        if hasattr(self, '_prefetched_objects_cache') and 'bills' in self._prefetched_objects_cache:
+            for b in self.bills.all():
+                if b.customer_bill_id is not None or getattr(getattr(b, 'party', None), 'party_type', None) == 'Creditor':
+                    return b
+            return None
+
+        if not hasattr(self, '_creditor_bill_cache'):
+            from django.db.models import Q
+            self._creditor_bill_cache = self.bills.filter(
+                Q(customer_bill__isnull=False) | Q(party__party_type='Creditor')
+            ).first()
+        return self._creditor_bill_cache
 
     @property
     def revenue(self):

@@ -229,6 +229,10 @@ class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, Cre
                 initial['associated_bill'] = bill
                 if 'party' not in initial and bill.party:
                     initial['party'] = bill.party
+                if 'category' not in initial and bill.party and bill.party.party_type == Party.TYPE_CREDITOR:
+                    p_out = TransactionCategory.objects.filter(name='Payment Out').first()
+                    if p_out:
+                        initial['category'] = p_out
             except Bill.DoesNotExist:
                 pass
 
