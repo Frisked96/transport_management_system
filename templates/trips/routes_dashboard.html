@@ -1,0 +1,794 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% load ledger_extras %}
+
+{% block title %}Routes Network Analytics - Transport Management System{% endblock %}
+
+{% block content %}
+<div class="space-y-6 pb-16">
+
+    <!-- 1. Breadcrumbs & Header -->
+    <div>
+        <nav class="flex text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2" aria-label="Breadcrumb">
+            <ol class="inline-flex items-center space-x-2">
+                <li><a href="{% url 'route-list' %}" class="hover:text-emerald-600 transition-colors">Routes</a></li>
+                <li><i class="fa-solid fa-chevron-right text-[10px] text-slate-400"></i></li>
+                <li class="text-slate-900 font-bold">Network Analytics</li>
+            </ol>
+        </nav>
+
+        <header class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+            <div class="space-y-2">
+                <div class="flex flex-wrap items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600 shadow-inner">
+                        <i class="fa-solid fa-route text-lg"></i>
+                    </div>
+                    <h1 class="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">
+                        Routes Network Intelligence
+                    </h1>
+                    <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-200">
+                        {{ active_routes_count }} of {{ all_routes_count }} Active Corridors
+                    </span>
+                </div>
+                <p class="text-xs md:text-sm text-slate-500 font-medium">
+                    Fleet-wide operational volume, revenue generated, pricing benchmarks, and corridor profitability
+                </p>
+            </div>
+
+            <!-- Quick Action Links -->
+            <div class="flex flex-wrap items-center gap-2">
+                <a href="{% url 'route-list' %}" class="inline-flex items-center space-x-1.5 px-3.5 py-2 border border-slate-300 rounded-lg bg-white text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors shadow-sm">
+                    <i class="fa-solid fa-table-list text-slate-500"></i>
+                    <span>Manage Routes</span>
+                </a>
+
+                {% if perms.trips.add_route %}
+                <a href="{% url 'route-create' %}" class="inline-flex items-center space-x-1.5 px-3.5 py-2 border border-slate-300 rounded-lg bg-white text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors shadow-sm">
+                    <i class="fa-solid fa-plus text-slate-500"></i>
+                    <span>Add New Route</span>
+                </a>
+                {% endif %}
+
+                {% if perms.trips.add_trip %}
+                <a href="{% url 'trip-create' %}" class="inline-flex items-center space-x-1.5 px-4 py-2 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 transition-colors shadow-sm">
+                    <i class="fa-solid fa-truck"></i>
+                    <span>Create Trip</span>
+                </a>
+                {% endif %}
+            </div>
+        </header>
+    </div>
+
+    <!-- 2. Filter Bar -->
+    <section class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+        <form method="get" class="flex flex-wrap items-center justify-between gap-4">
+            <!-- Period Quick Pills -->
+            <div class="flex flex-wrap items-center gap-1.5">
+                <span class="text-xs font-bold text-slate-500 uppercase tracking-wider mr-1">Period:</span>
+                <a href="?period=all{% if selected_route_type %}&route_type={{ selected_route_type }}{% endif %}{% if selected_party %}&party={{ selected_party }}{% endif %}" 
+                   class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all {% if period == 'all' %}bg-emerald-600 text-white shadow-sm{% else %}bg-slate-100 text-slate-600 hover:bg-slate-200{% endif %}">
+                    All Time
+                </a>
+                <a href="?period=1y{% if selected_route_type %}&route_type={{ selected_route_type }}{% endif %}{% if selected_party %}&party={{ selected_party }}{% endif %}" 
+                   class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all {% if period == '1y' %}bg-emerald-600 text-white shadow-sm{% else %}bg-slate-100 text-slate-600 hover:bg-slate-200{% endif %}">
+                    Last 12M
+                </a>
+                <a href="?period=6m{% if selected_route_type %}&route_type={{ selected_route_type }}{% endif %}{% if selected_party %}&party={{ selected_party }}{% endif %}" 
+                   class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all {% if period == '6m' %}bg-emerald-600 text-white shadow-sm{% else %}bg-slate-100 text-slate-600 hover:bg-slate-200{% endif %}">
+                    Last 6M
+                </a>
+                <a href="?period=90d{% if selected_route_type %}&route_type={{ selected_route_type }}{% endif %}{% if selected_party %}&party={{ selected_party }}{% endif %}" 
+                   class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all {% if period == '90d' %}bg-emerald-600 text-white shadow-sm{% else %}bg-slate-100 text-slate-600 hover:bg-slate-200{% endif %}">
+                    Last 90D
+                </a>
+                <a href="?period=30d{% if selected_route_type %}&route_type={{ selected_route_type }}{% endif %}{% if selected_party %}&party={{ selected_party }}{% endif %}" 
+                   class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all {% if period == '30d' %}bg-emerald-600 text-white shadow-sm{% else %}bg-slate-100 text-slate-600 hover:bg-slate-200{% endif %}">
+                    Last 30D
+                </a>
+            </div>
+
+            <!-- Granular Selectors & Custom Date Range -->
+            <div class="flex flex-wrap items-center gap-3">
+                <!-- Route Type Filter -->
+                <div class="w-40">
+                    <select name="route_type" onchange="this.form.submit()" class="block w-full py-1.5 px-3 border border-slate-300 rounded-lg text-xs font-medium focus:ring-emerald-500 focus:border-emerald-500 bg-white">
+                        <option value="">All Route Types</option>
+                        {% for val, label in route_type_choices %}
+                        <option value="{{ val }}" {% if selected_route_type == val %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Party Filter -->
+                {% if all_parties %}
+                <div class="w-44">
+                    <select name="party" onchange="this.form.submit()" class="block w-full py-1.5 px-3 border border-slate-300 rounded-lg text-xs font-medium focus:ring-emerald-500 focus:border-emerald-500 bg-white">
+                        <option value="">All Parties</option>
+                        {% for p in all_parties %}
+                        <option value="{{ p.id }}" {% if selected_party == p.id %}selected{% endif %}>{{ p.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% endif %}
+
+                <!-- Custom Date Range -->
+                <input type="hidden" name="period" value="custom">
+                <div class="flex items-center space-x-1.5 text-xs text-slate-500">
+                    <input type="date" name="start_date" value="{{ start_date }}" 
+                           class="py-1 px-2 border border-slate-300 rounded-md text-xs focus:ring-emerald-500 focus:border-emerald-500 bg-white" placeholder="Start Date">
+                    <span>to</span>
+                    <input type="date" name="end_date" value="{{ end_date }}" 
+                           class="py-1 px-2 border border-slate-300 rounded-md text-xs focus:ring-emerald-500 focus:border-emerald-500 bg-white" placeholder="End Date">
+                    <button type="submit" class="px-2.5 py-1 bg-slate-800 text-white rounded-md text-xs font-bold hover:bg-slate-700 transition-colors">
+                        Filter
+                    </button>
+                    {% if period != 'all' or selected_route_type or selected_party %}
+                    <a href="{% url 'routes-dashboard' %}" class="text-xs text-rose-600 hover:underline ml-1">Reset</a>
+                    {% endif %}
+                </div>
+            </div>
+        </form>
+    </section>
+
+    <!-- 3. Primary KPI Summary Cards -->
+    <section class="grid grid-cols-2 lg:grid-cols-6 gap-4">
+        <!-- Active Corridors -->
+        <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm border-l-4 border-l-emerald-600">
+            <div class="flex items-center justify-between text-slate-400 mb-1">
+                <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Active Corridors</span>
+                <i class="fa-solid fa-map-location-dot text-emerald-600 opacity-60"></i>
+            </div>
+            <div class="text-xl md:text-2xl font-black text-slate-900">
+                {{ active_routes_count }}<span class="text-xs text-slate-400 font-semibold"> / {{ all_routes_count }}</span>
+            </div>
+            <p class="text-[10px] text-slate-500 mt-1">
+                <strong class="text-emerald-700">{{ active_percentage }}%</strong> network utilization
+            </p>
+        </div>
+
+        <!-- Gross Freight Revenue -->
+        <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm border-l-4 border-l-amber-500">
+            <div class="flex items-center justify-between text-slate-400 mb-1">
+                <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Gross Revenue</span>
+                <i class="fa-solid fa-indian-rupee-sign text-amber-500 opacity-60"></i>
+            </div>
+            <div class="text-xl md:text-2xl font-black text-slate-900 truncate">
+                ₹{{ total_revenue|floatformat:0|intcomma }}
+            </div>
+            <p class="text-[10px] text-slate-500 mt-1">
+                Total Freight Billed/Earned
+            </p>
+        </div>
+
+        <!-- Total Network Volume -->
+        <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm border-l-4 border-l-indigo-600">
+            <div class="flex items-center justify-between text-slate-400 mb-1">
+                <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Total Volume</span>
+                <i class="fa-solid fa-weight-hanging text-indigo-600 opacity-60"></i>
+            </div>
+            <div class="text-xl md:text-2xl font-black text-slate-900 truncate">
+                {{ total_weight|floatformat:1|intcomma }}<span class="text-xs text-slate-400 font-semibold"> MT</span>
+            </div>
+            <p class="text-[10px] text-slate-500 mt-1">
+                Avg Load: <strong class="text-slate-700">{{ avg_load_per_trip|floatformat:1 }} MT/Trip</strong>
+            </p>
+        </div>
+
+        <!-- Total Trips Dispatched -->
+        <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm border-l-4 border-l-purple-600">
+            <div class="flex items-center justify-between text-slate-400 mb-1">
+                <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Total Trips</span>
+                <i class="fa-solid fa-truck-moving text-purple-600 opacity-60"></i>
+            </div>
+            <div class="text-xl md:text-2xl font-black text-slate-900">
+                {{ total_trips|intcomma }}
+            </div>
+            <p class="text-[10px] text-slate-500 mt-1">
+                Dispatched Across Routes
+            </p>
+        </div>
+
+        <!-- Network Weighted Avg Rate -->
+        <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm border-l-4 border-l-blue-600">
+            <div class="flex items-center justify-between text-slate-400 mb-1">
+                <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Weighted Avg Rate</span>
+                <i class="fa-solid fa-scale-balanced text-blue-600 opacity-60"></i>
+            </div>
+            <div class="text-xl md:text-2xl font-black text-slate-900">
+                ₹{{ weighted_avg_rate|floatformat:2|intcomma }}<span class="text-xs text-slate-400 font-semibold">/Ton</span>
+            </div>
+            <p class="text-[10px] text-slate-500 mt-1">
+                Across All Per-Ton Trips
+            </p>
+        </div>
+
+        <!-- Dormant / Inactive Corridors -->
+        <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm border-l-4 border-l-slate-400">
+            <div class="flex items-center justify-between text-slate-400 mb-1">
+                <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Dormant Routes</span>
+                <i class="fa-regular fa-clock text-slate-400"></i>
+            </div>
+            <div class="text-xl md:text-2xl font-black text-slate-700">
+                {{ inactive_routes_count }}
+            </div>
+            <p class="text-[10px] text-slate-500 mt-1">
+                Routes with 0 trips in period
+            </p>
+        </div>
+    </section>
+
+    <!-- 4. Interactive Visual Analytics (Chart.js) -->
+    {% if has_chart_data %}
+    <section class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <!-- Chart 1: Top Corridors by Volume & Gross Revenue -->
+        <div class="lg:col-span-8 bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+                <div>
+                    <h2 class="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                        <i class="fa-solid fa-chart-column text-emerald-600"></i>
+                        Top Corridors Comparison (Revenue & Volume)
+                    </h2>
+                    <p class="text-xs text-slate-500 mt-0.5">Top performing routes ranked by gross freight earnings</p>
+                </div>
+                <span class="text-[11px] font-semibold text-slate-400 self-start sm:self-auto">Top 10 Routes</span>
+            </div>
+            <div class="relative h-72 w-full">
+                <canvas id="topRoutesChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Chart 2: Route Type Distribution -->
+        <div class="lg:col-span-4 bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
+            <div class="mb-4">
+                <h2 class="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                    <i class="fa-solid fa-chart-pie text-indigo-600"></i>
+                    Tax / Route Type Share
+                </h2>
+                <p class="text-xs text-slate-500 mt-0.5">Trip dispatch volume by tax jurisdiction</p>
+            </div>
+            <div class="relative h-56 w-full flex items-center justify-center">
+                <canvas id="routeTypeChart"></canvas>
+            </div>
+            <div class="mt-4 pt-3 border-t border-slate-100 grid grid-cols-3 gap-2 text-center text-xs">
+                <div>
+                    <span class="block text-[10px] font-bold text-blue-600 uppercase">Local (GST)</span>
+                    <strong class="font-mono text-slate-800">{{ type_counts.local }} trips</strong>
+                </div>
+                <div>
+                    <span class="block text-[10px] font-bold text-purple-600 uppercase">Intra (IGST)</span>
+                    <strong class="font-mono text-slate-800">{{ type_counts.intra }} trips</strong>
+                </div>
+                <div>
+                    <span class="block text-[10px] font-bold text-slate-600 uppercase">Non-GST</span>
+                    <strong class="font-mono text-slate-800">{{ type_counts.none }} trips</strong>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chart 3: Monthly Network Volume & Revenue Progression -->
+        <div class="lg:col-span-12 bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+                <div>
+                    <h2 class="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                        <i class="fa-solid fa-chart-line text-amber-600"></i>
+                        Network Monthly Tonnage Volume & Revenue Trends
+                    </h2>
+                    <p class="text-xs text-slate-500 mt-0.5">Month-over-month aggregated volume hauled (MT) vs gross revenue (₹)</p>
+                </div>
+                <div class="flex items-center gap-3 text-xs">
+                    <span class="inline-flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-indigo-500 inline-block"></span> Volume (MT)</span>
+                    <span class="inline-flex items-center gap-1.5"><span class="w-3 h-1.5 bg-amber-600 inline-block"></span> Revenue (₹)</span>
+                </div>
+            </div>
+            <div class="relative h-72 w-full">
+                <canvas id="networkMonthlyChart"></canvas>
+            </div>
+        </div>
+    </section>
+    {% endif %}
+
+    <!-- 5. Leaderboards: Top Revenue Corridors & Top Volume Corridors -->
+    <section class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Top Revenue Corridors -->
+        <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden flex flex-col justify-between">
+            <div>
+                <div class="p-5 border-b border-slate-100 flex items-center justify-between">
+                    <div>
+                        <h2 class="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                            <i class="fa-solid fa-trophy text-amber-500"></i>
+                            Top 5 Revenue Generating Corridors
+                        </h2>
+                        <p class="text-xs text-slate-500 mt-0.5">Routes contributing the largest freight earnings</p>
+                    </div>
+                    <span class="text-xs font-bold text-slate-400">By Revenue</span>
+                </div>
+                <div class="divide-y divide-slate-100">
+                    {% for item in top_by_revenue %}
+                    <div class="p-4 hover:bg-slate-50 transition-colors flex items-center justify-between gap-4">
+                        <div class="min-w-0 flex items-center gap-3">
+                            <span class="w-6 h-6 rounded-full bg-slate-100 text-slate-700 font-black text-xs flex items-center justify-center flex-shrink-0">
+                                {{ forloop.counter }}
+                            </span>
+                            <div class="min-w-0">
+                                <a href="{% url 'route-dashboard' item.route.pk %}" class="text-sm font-bold text-slate-900 hover:text-emerald-600 truncate block transition-colors">
+                                    {{ item.route.pickup_location }} → {{ item.route.delivery_location }}
+                                </a>
+                                <div class="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
+                                    <span class="px-1.5 py-0.2 rounded text-[10px] font-bold uppercase
+                                        {% if item.route.route_type == 'local' %}bg-blue-100 text-blue-800
+                                        {% elif item.route.route_type == 'intra' %}bg-purple-100 text-purple-800
+                                        {% else %}bg-slate-100 text-slate-700{% endif %}">
+                                        {{ item.route.get_route_type_display }}
+                                    </span>
+                                    <span>•</span>
+                                    <span>{{ item.trips }} Trips</span>
+                                    <span>•</span>
+                                    <span>{{ item.total_weight|floatformat:1 }} MT</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="text-right flex-shrink-0">
+                            <div class="text-sm font-black text-slate-900">
+                                ₹{{ item.total_revenue|floatformat:0|intcomma }}
+                            </div>
+                            <div class="text-[10px] text-emerald-700 font-bold">
+                                {{ item.revenue_share }}% of network
+                            </div>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="p-8 text-center text-xs text-slate-400">No route performance data recorded yet.</div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Top Volume Corridors -->
+        <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden flex flex-col justify-between">
+            <div>
+                <div class="p-5 border-b border-slate-100 flex items-center justify-between">
+                    <div>
+                        <h2 class="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                            <i class="fa-solid fa-weight-hanging text-indigo-500"></i>
+                            Top 5 High-Volume Corridors
+                        </h2>
+                        <p class="text-xs text-slate-500 mt-0.5">Routes handling the highest freight tonnage</p>
+                    </div>
+                    <span class="text-xs font-bold text-slate-400">By Tonnage</span>
+                </div>
+                <div class="divide-y divide-slate-100">
+                    {% for item in top_by_volume %}
+                    <div class="p-4 hover:bg-slate-50 transition-colors flex items-center justify-between gap-4">
+                        <div class="min-w-0 flex items-center gap-3">
+                            <span class="w-6 h-6 rounded-full bg-slate-100 text-slate-700 font-black text-xs flex items-center justify-center flex-shrink-0">
+                                {{ forloop.counter }}
+                            </span>
+                            <div class="min-w-0">
+                                <a href="{% url 'route-dashboard' item.route.pk %}" class="text-sm font-bold text-slate-900 hover:text-emerald-600 truncate block transition-colors">
+                                    {{ item.route.pickup_location }} → {{ item.route.delivery_location }}
+                                </a>
+                                <div class="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
+                                    <span>{{ item.trips }} Trips</span>
+                                    <span>•</span>
+                                    <span class="font-bold text-slate-700">₹{{ item.weighted_avg_rate|floatformat:2 }}/Ton avg</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="text-right flex-shrink-0">
+                            <div class="text-sm font-black text-slate-900">
+                                {{ item.total_weight|floatformat:1|intcomma }} MT
+                            </div>
+                            <div class="text-[10px] text-slate-500">
+                                ₹{{ item.total_revenue|floatformat:0|intcomma }} Freight
+                            </div>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="p-8 text-center text-xs text-slate-400">No route performance data recorded yet.</div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 6. Complete Route Network Matrix Table -->
+    <section class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+        <div class="p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+                <h2 class="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                    <i class="fa-solid fa-network-wired text-emerald-600"></i>
+                    All Routes Performance Matrix
+                </h2>
+                <p class="text-xs text-slate-500 mt-0.5">Complete operational breakdown of active corridors for the selected period</p>
+            </div>
+            <span class="text-xs font-semibold text-slate-400">{{ route_performance_list|length }} Active Routes</span>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-slate-200 text-left text-xs">
+                <thead class="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
+                    <tr>
+                        <th class="px-5 py-3">Route Corridor</th>
+                        <th class="px-5 py-3">Type</th>
+                        <th class="px-5 py-3 text-right">Trips</th>
+                        <th class="px-5 py-3 text-right">Volume (MT)</th>
+                        <th class="px-5 py-3 text-right">Realized Rate</th>
+                        <th class="px-5 py-3 text-right">Suggested Rate</th>
+                        <th class="px-5 py-3 text-right">Rate Variance</th>
+                        <th class="px-5 py-3 text-right">Gross Revenue</th>
+                        <th class="px-5 py-3 text-right">Share (%)</th>
+                        <th class="px-5 py-3 text-right">Last Trip</th>
+                        <th class="px-5 py-3 text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 bg-white">
+                    {% for item in route_performance_list %}
+                    <tr class="hover:bg-slate-50 transition-colors">
+                        <td class="px-5 py-3.5 font-bold text-slate-900 whitespace-nowrap">
+                            <a href="{% url 'route-dashboard' item.route.pk %}" class="flex items-center gap-2 group hover:text-emerald-600">
+                                <span>{{ item.route.pickup_location }}</span>
+                                <i class="fa-solid fa-arrow-right text-[10px] text-slate-400 group-hover:text-emerald-600"></i>
+                                <span>{{ item.route.delivery_location }}</span>
+                            </a>
+                        </td>
+                        <td class="px-5 py-3.5 whitespace-nowrap">
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase
+                                {% if item.route.route_type == 'local' %}bg-blue-100 text-blue-800
+                                {% elif item.route.route_type == 'intra' %}bg-purple-100 text-purple-800
+                                {% else %}bg-slate-100 text-slate-800{% endif %}">
+                                {{ item.route.get_route_type_display }}
+                            </span>
+                        </td>
+                        <td class="px-5 py-3.5 text-right font-semibold text-slate-700">{{ item.trips }}</td>
+                        <td class="px-5 py-3.5 text-right font-mono font-medium text-slate-700 whitespace-nowrap">
+                            {{ item.total_weight|floatformat:1|intcomma }} MT
+                        </td>
+                        <td class="px-5 py-3.5 text-right font-mono font-black text-emerald-700 whitespace-nowrap">
+                            ₹{{ item.weighted_avg_rate|floatformat:2|intcomma }}
+                        </td>
+                        <td class="px-5 py-3.5 text-right font-mono text-slate-500 whitespace-nowrap">
+                            ₹{{ item.default_rate|floatformat:2|intcomma }}
+                        </td>
+                        <td class="px-5 py-3.5 text-right font-mono text-xs whitespace-nowrap">
+                            {% if item.rate_variance > 0 %}
+                                <span class="text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded inline-flex items-center gap-1">
+                                    <i class="fa-solid fa-arrow-trend-up text-[9px]"></i> +₹{{ item.rate_variance|floatformat:2 }}
+                                </span>
+                            {% elif item.rate_variance < 0 %}
+                                <span class="text-rose-700 font-bold bg-rose-50 px-1.5 py-0.5 rounded inline-flex items-center gap-1">
+                                    <i class="fa-solid fa-arrow-trend-down text-[9px]"></i> -₹{{ item.rate_variance_abs|floatformat:2 }}
+                                </span>
+                            {% else %}
+                                <span class="text-slate-400 font-medium">0.00</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-5 py-3.5 text-right font-mono font-bold text-slate-900 whitespace-nowrap">
+                            ₹{{ item.total_revenue|floatformat:0|intcomma }}
+                        </td>
+                        <td class="px-5 py-3.5 text-right font-mono text-slate-600">
+                            {{ item.revenue_share }}%
+                        </td>
+                        <td class="px-5 py-3.5 text-right text-slate-500 whitespace-nowrap">
+                            {{ item.latest_date|date:"d M Y"|default:"-" }}
+                        </td>
+                        <td class="px-5 py-3.5 text-right whitespace-nowrap">
+                            <div class="flex items-center justify-end space-x-2">
+                                <a href="{% url 'route-dashboard' item.route.pk %}" class="inline-flex items-center space-x-1 text-emerald-600 hover:text-emerald-900 font-bold" title="Route Deep Analytics">
+                                    <i class="fa-solid fa-chart-line"></i>
+                                    <span>Analytics</span>
+                                </a>
+                                {% if perms.trips.change_route %}
+                                <a href="{% url 'route-update' item.route.pk %}" class="text-slate-400 hover:text-slate-700" title="Edit Route">
+                                    <i class="fa-solid fa-pen-to-square"></i>
+                                </a>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="11" class="px-5 py-10 text-center text-slate-400">
+                            No active trips found on defined routes for the selected criteria.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- 7. Dormant / Inactive Corridors Section -->
+    {% if inactive_routes_list %}
+    <section class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+        <div class="p-5 border-b border-slate-100 flex items-center justify-between">
+            <div>
+                <h2 class="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                    <i class="fa-regular fa-circle-pause text-amber-500"></i>
+                    Dormant Corridors (Zero Trips in Period)
+                </h2>
+                <p class="text-xs text-slate-500 mt-0.5">Defined routes with no recorded trips during the active filter window</p>
+            </div>
+            <span class="text-xs font-bold text-slate-500">{{ inactive_routes_list|length }} Dormant</span>
+        </div>
+        <div class="p-5 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+            {% for item in inactive_routes_list %}
+            <div class="p-3.5 bg-slate-50 rounded-lg border border-slate-200/80 hover:bg-white hover:border-slate-300 transition-all flex flex-col justify-between space-y-2">
+                <div>
+                    <div class="flex items-center justify-between text-[10px] text-slate-400 font-bold uppercase mb-1">
+                        <span>{{ item.route.get_route_type_display }}</span>
+                        <span>₹{{ item.default_rate|floatformat:0 }}/Ton</span>
+                    </div>
+                    <div class="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                        <span class="truncate">{{ item.route.pickup_location }}</span>
+                        <i class="fa-solid fa-arrow-right text-[9px] text-slate-400 flex-shrink-0"></i>
+                        <span class="truncate">{{ item.route.delivery_location }}</span>
+                    </div>
+                </div>
+                <div class="pt-2 border-t border-slate-200/50 flex items-center justify-between text-[11px]">
+                    <a href="{% url 'route-dashboard' item.route.pk %}" class="text-slate-500 hover:text-emerald-600 font-semibold">
+                        View Details
+                    </a>
+                    {% if perms.trips.add_trip %}
+                    <a href="{% url 'trip-create' %}?route={{ item.route.pk }}" class="text-emerald-600 hover:text-emerald-700 font-bold">
+                        + New Trip
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{% if has_chart_data %}
+<!-- Chart.js for Interactive Visual Analytics -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+(function() {
+    function initNetworkCharts() {
+        if (typeof Chart === 'undefined') {
+            console.error('Chart.js library is not available.');
+            return;
+        }
+
+        const topRouteLabels = {{ chart_route_labels_json|safe }};
+        const topRouteRevenues = {{ chart_route_revenues_json|safe }};
+        const topRouteWeights = {{ chart_route_weights_json|safe }};
+
+        const monthlyLabels = {{ chart_monthly_labels_json|safe }};
+        const monthlyWeights = {{ chart_monthly_weights_json|safe }};
+        const monthlyRevenues = {{ chart_monthly_revenues_json|safe }};
+
+        const typeCounts = {{ type_counts_json|safe }};
+
+        // 1. Top Routes Revenue & Volume Comparison Bar Chart
+        const ctxTop = document.getElementById('topRoutesChart');
+        if (ctxTop && topRouteLabels.length > 0) {
+            new Chart(ctxTop, {
+                type: 'bar',
+                data: {
+                    labels: topRouteLabels,
+                    datasets: [
+                        {
+                            label: 'Gross Revenue (₹)',
+                            data: topRouteRevenues,
+                            backgroundColor: 'rgba(16, 185, 129, 0.8)',
+                            borderColor: '#10b981',
+                            borderWidth: 1,
+                            borderRadius: 4,
+                            yAxisID: 'yRevenue'
+                        },
+                        {
+                            label: 'Volume (MT)',
+                            data: topRouteWeights,
+                            backgroundColor: 'rgba(99, 102, 241, 0.8)',
+                            borderColor: '#6366f1',
+                            borderWidth: 1,
+                            borderRadius: 4,
+                            yAxisID: 'yVolume'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: { boxWidth: 12, font: { family: 'Inter', size: 10 } }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    if (context.dataset.yAxisID === 'yRevenue') {
+                                        return `Revenue: ₹${Number(context.parsed.y).toLocaleString('en-IN')}`;
+                                    }
+                                    return `Volume: ${Number(context.parsed.y).toLocaleString('en-IN')} MT`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        yRevenue: {
+                            type: 'linear',
+                            position: 'left',
+                            beginAtZero: true,
+                            grace: '10%',
+                            title: { display: true, text: 'Revenue (₹)', font: { size: 10 } },
+                            ticks: {
+                                callback: function(value) {
+                                    if (value >= 100000) return '₹' + (value/100000).toFixed(1) + 'L';
+                                    return '₹' + Number(value).toLocaleString('en-IN');
+                                },
+                                font: { family: 'Inter', size: 10 }
+                            },
+                            grid: { color: '#f1f5f9' }
+                        },
+                        yVolume: {
+                            type: 'linear',
+                            position: 'right',
+                            beginAtZero: true,
+                            grace: '10%',
+                            title: { display: true, text: 'Volume (MT)', font: { size: 10 } },
+                            ticks: { font: { family: 'Inter', size: 10 } },
+                            grid: { display: false }
+                        },
+                        x: {
+                            grid: { display: false },
+                            ticks: {
+                                font: { family: 'Inter', size: 9 },
+                                maxRotation: 25,
+                                minRotation: 0,
+                                callback: function(val, index) {
+                                    const raw = this.getLabelForValue(val);
+                                    return raw.length > 20 ? raw.substr(0, 18) + '...' : raw;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // 2. Route Type Donut Chart
+        const ctxType = document.getElementById('routeTypeChart');
+        if (ctxType) {
+            new Chart(ctxType, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Local (GST)', 'Intra/Interstate (IGST)', 'Non-GST'],
+                    datasets: [{
+                        data: [typeCounts.local || 0, typeCounts.intra || 0, typeCounts.none || 0],
+                        backgroundColor: ['#3b82f6', '#8b5cf6', '#64748b'],
+                        borderWidth: 2,
+                        borderColor: '#ffffff',
+                        hoverOffset: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: { boxWidth: 10, font: { family: 'Inter', size: 10 } }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return `${context.label}: ${context.parsed} trips`;
+                                }
+                            }
+                        }
+                    },
+                    cutout: '65%'
+                }
+            });
+        }
+
+        // 3. Monthly Network Progression Chart
+        const ctxMonthly = document.getElementById('networkMonthlyChart');
+        if (ctxMonthly && monthlyLabels.length > 0) {
+            new Chart(ctxMonthly, {
+                data: {
+                    labels: monthlyLabels,
+                    datasets: [
+                        {
+                            type: 'bar',
+                            label: 'Volume (MT)',
+                            data: monthlyWeights,
+                            backgroundColor: 'rgba(99, 102, 241, 0.75)',
+                            borderColor: '#6366f1',
+                            borderRadius: 4,
+                            borderWidth: 1,
+                            yAxisID: 'yVol'
+                        },
+                        {
+                            type: 'line',
+                            label: 'Gross Revenue (₹)',
+                            data: monthlyRevenues,
+                            borderColor: '#d97706',
+                            backgroundColor: '#d97706',
+                            borderWidth: 2.5,
+                            tension: 0.3,
+                            pointRadius: 4,
+                            pointHoverRadius: 7,
+                            yAxisID: 'yRev'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: { boxWidth: 12, font: { family: 'Inter', size: 10 } }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    if (context.dataset.yAxisID === 'yRev') {
+                                        return `Revenue: ₹${Number(context.parsed.y).toLocaleString('en-IN')}`;
+                                    }
+                                    return `Volume: ${Number(context.parsed.y).toLocaleString('en-IN')} MT`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        yVol: {
+                            type: 'linear',
+                            position: 'left',
+                            beginAtZero: true,
+                            grace: '10%',
+                            title: { display: true, text: 'Volume (MT)', font: { size: 10 } },
+                            ticks: { font: { family: 'Inter', size: 10 } },
+                            grid: { color: '#f1f5f9' }
+                        },
+                        yRev: {
+                            type: 'linear',
+                            position: 'right',
+                            beginAtZero: true,
+                            grace: '10%',
+                            title: { display: true, text: 'Gross Revenue (₹)', font: { size: 10 } },
+                            ticks: {
+                                callback: function(value) {
+                                    if (value >= 100000) return '₹' + (value/100000).toFixed(1) + 'L';
+                                    return '₹' + Number(value).toLocaleString('en-IN');
+                                },
+                                font: { family: 'Inter', size: 10 }
+                            },
+                            grid: { display: false }
+                        },
+                        x: {
+                            grid: { display: false },
+                            ticks: { font: { family: 'Inter', size: 10 } }
+                        }
+                    }
+                }
+            });
+        }
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initNetworkCharts);
+    } else {
+        initNetworkCharts();
+    }
+})();
+</script>
+{% endif %}
+{% endblock %}

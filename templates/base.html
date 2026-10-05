@@ -160,6 +160,7 @@
                         <div class="absolute left-0 mt-1 w-48 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5 hidden dropdown-menu">
                             {% if user.is_superuser or perms.trips.view_route %}
                             <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'route-list' %}">Routes</a>
+                            <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'routes-dashboard' %}">Route Analytics</a>
                             {% endif %}
                             {% if user.is_superuser or perms.fleet.view_vehicle %}
                             <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'vehicle-list' %}">Vehicles</a>
@@ -397,6 +398,9 @@
                 {% if user.is_superuser or perms.trips.view_route %}
                 <a class="flex items-center px-3 py-3 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-700 hover:text-white transition-colors" href="{% url 'route-list' %}">
                     <i class="fa-solid fa-route mr-3 w-5 text-center text-slate-500"></i>Routes
+                </a>
+                <a class="flex items-center px-3 py-3 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-700 hover:text-white transition-colors" href="{% url 'routes-dashboard' %}">
+                    <i class="fa-solid fa-chart-pie mr-3 w-5 text-center text-slate-500"></i>Route Analytics
                 </a>
                 {% endif %}
                 {% if user.is_superuser or perms.fleet.view_vehicle %}

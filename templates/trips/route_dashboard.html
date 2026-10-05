@@ -13,6 +13,8 @@
             <ol class="inline-flex items-center space-x-2">
                 <li><a href="{% url 'route-list' %}" class="hover:text-emerald-600 transition-colors">Routes</a></li>
                 <li><i class="fa-solid fa-chevron-right text-[10px] text-slate-400"></i></li>
+                <li><a href="{% url 'routes-dashboard' %}" class="hover:text-emerald-600 transition-colors">Network Analytics</a></li>
+                <li><i class="fa-solid fa-chevron-right text-[10px] text-slate-400"></i></li>
                 <li class="text-slate-900 font-bold">Route Analytics</li>
             </ol>
         </nav>
@@ -51,6 +53,11 @@
                         {% endfor %}
                     </select>
                 </div>
+
+                <a href="{% url 'routes-dashboard' %}" class="inline-flex items-center space-x-1.5 px-3 py-2 border border-slate-300 rounded-lg bg-white text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors shadow-sm" title="View Network Analytics">
+                    <i class="fa-solid fa-network-wired text-emerald-600"></i>
+                    <span>Network</span>
+                </a>
 
                 {% if perms.trips.change_route %}
                 <a href="{% url 'route-update' route.pk %}" class="inline-flex items-center space-x-1.5 px-3 py-2 border border-slate-300 rounded-lg bg-white text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors shadow-sm">
