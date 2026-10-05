@@ -80,7 +80,20 @@ def party_statement_pdf(request, pk):
             'balance_class': balance_class,
         })
 
-    company = CompanyAccount.objects.first()
+    company_accounts = CompanyAccount.objects.all().order_by('name')
+    account_id = request.GET.get('account') or request.GET.get('company_account') or request.GET.get('company')
+    custom_header_name = request.GET.get('header_name', '').strip()
+
+    company = None
+    if account_id:
+        try:
+            company = company_accounts.get(pk=account_id)
+        except (CompanyAccount.DoesNotExist, ValueError):
+            company = None
+
+    if not company:
+        company = company_accounts.first()
+
     context = {
         'party': party,
         'recipient_name': party.name,
@@ -100,6 +113,9 @@ def party_statement_pdf(request, pk):
         'closing_balance_formatted': format_balance(current_running_bal, party.party_type),
         'generated_at': timezone.now(),
         'company': company,
+        'company_accounts': company_accounts,
+        'selected_account': company,
+        'custom_header_name': custom_header_name,
     }
 
     return render(request, 'ledger/statement_print.html', context)

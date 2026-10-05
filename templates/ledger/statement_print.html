@@ -243,6 +243,19 @@
 <body>
 
     <div class="print-controls no-print">
+        {% if company_accounts and recipient_label != 'COMPANY ACCOUNT' and recipient_label != 'CONSOLIDATED FIRMS' %}
+        <form method="GET" style="display: inline-flex; align-items: center; gap: 8px; margin: 0;">
+            {% if request.GET.start_date %}<input type="hidden" name="start_date" value="{{ request.GET.start_date }}">{% endif %}
+            {% if request.GET.end_date %}<input type="hidden" name="end_date" value="{{ request.GET.end_date }}">{% endif %}
+            {% if request.GET.header_name %}<input type="hidden" name="header_name" value="{{ request.GET.header_name }}">{% endif %}
+            <label style="color: #94a3b8; font-size: 13px; font-weight: 600;">Firm Header:</label>
+            <select name="account" onchange="this.form.submit()" style="background: #1e293b; color: #f8fafc; border: 1px solid #334155; padding: 7px 12px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; outline: none;">
+                {% for acc in company_accounts %}
+                    <option value="{{ acc.pk }}" {% if company.pk == acc.pk %}selected{% endif %}>{{ acc.name }}</option>
+                {% endfor %}
+            </select>
+        </form>
+        {% endif %}
         <button onclick="window.print()" class="btn-print">Print Statement</button>
         <button onclick="window.close()" class="btn-close">Close</button>
     </div>
@@ -251,7 +264,7 @@
         <!-- Header Section -->
         <div class="header-section">
             <div>
-                <div class="company-title">{{ company.name|default:"TRANSPORT MANAGEMENT SYSTEM" }}</div>
+                <div class="company-title">{{ custom_header_name|default:company.name|default:"TRANSPORT MANAGEMENT SYSTEM" }}</div>
                 <div style="color: #475569;">{{ company.address|linebreaksbr|default:"Transport Hub, Logistics Park" }}</div>
                 <div style="color: #64748b; margin-top: 4px;">
                     {% if company.gstin %}GSTIN: <strong style="color:#0f172a;">{{ company.gstin }}</strong> | {% endif %}

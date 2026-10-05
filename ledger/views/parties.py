@@ -166,6 +166,7 @@ class PartyDetailView(LoginRequiredMixin, PermissionRequiredMixin, BaseLedgerPer
         context['total_received'] = self.object.total_received
         context['balance'] = self.object.current_balance
         context['payment_out_category'] = TransactionCategory.objects.filter(name='Payment Out').first()
+        context['company_accounts'] = CompanyAccount.objects.all().order_by('name')
         
         return context
 

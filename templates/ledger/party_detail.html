@@ -19,6 +19,9 @@
             </span>
         </div>
         <div class="flex items-center gap-2">
+            <button type="button" onclick="switchTab('ledger'); const el = document.getElementById('statement-account-select'); if (el) el.focus();" class="px-4 py-2 border border-slate-300 rounded-md bg-white text-slate-700 text-sm font-bold hover:bg-slate-50 transition-colors">
+                <i class="fa-regular fa-file-lines mr-2 text-slate-500"></i>Statement
+            </button>
             {% if perms.ledger.change_party %}
             <a href="{% url 'party-update' party.pk %}" class="px-4 py-2 border border-slate-300 rounded-md bg-white text-slate-700 text-sm font-bold hover:bg-slate-50 transition-colors">
                 <i class="fa-regular fa-pen-to-square mr-2"></i>Edit Profile
@@ -109,11 +112,21 @@
             </nav>
 
             <div id="statement-action" class="px-4 py-2 sm:py-0 border-t sm:border-t-0 border-slate-200">
-                <form action="{% url 'party-statement-pdf' party.pk %}" method="GET" target="_blank" class="flex items-center justify-between sm:justify-start gap-2">
-                    <input type="date" name="start_date" class="text-[9px] font-bold border-slate-200 rounded py-1 px-1 h-7 w-24">
-                    <input type="date" name="end_date" class="text-[9px] font-bold border-slate-200 rounded py-1 px-1 h-7 w-24">
-                    <button type="submit" class="bg-slate-800 text-white text-[9px] font-black uppercase px-2 py-1 rounded hover:bg-slate-900 transition-all h-7 flex items-center shrink-0">
-                        <i class="fa-solid fa-file-pdf mr-1"></i>PDF
+                <form action="{% url 'party-statement-pdf' party.pk %}" method="GET" target="_blank" class="flex flex-wrap items-center justify-between sm:justify-start gap-2">
+                    {% if company_accounts %}
+                    <div class="flex items-center gap-1.5">
+                        <label for="statement-account-select" class="text-[9px] font-black uppercase text-slate-500 hidden md:inline">Firm:</label>
+                        <select id="statement-account-select" name="account" title="Select Firm Header for Statement" class="text-[9px] font-bold border-slate-200 rounded py-1 px-1.5 h-7 bg-white text-slate-700 focus:ring-emerald-500 focus:border-emerald-500 max-w-[130px] sm:max-w-[170px] truncate">
+                            {% for acc in company_accounts %}
+                                <option value="{{ acc.pk }}">{{ acc.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    {% endif %}
+                    <input type="date" name="start_date" class="text-[9px] font-bold border-slate-200 rounded py-1 px-1.5 h-7 w-24" title="Start Date">
+                    <input type="date" name="end_date" class="text-[9px] font-bold border-slate-200 rounded py-1 px-1.5 h-7 w-24" title="End Date">
+                    <button type="submit" class="bg-slate-800 text-white text-[9px] font-black uppercase px-2.5 py-1 rounded hover:bg-slate-900 transition-all h-7 flex items-center shrink-0">
+                        <i class="fa-solid fa-file-pdf mr-1"></i>Statement
                     </button>
                 </form>
             </div>
