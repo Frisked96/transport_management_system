@@ -9,7 +9,7 @@
     <style>
         @page {
             size: A4 portrait;
-            margin: 10mm;
+            margin: 0;
         }
 
         body {
@@ -44,14 +44,18 @@
         }
 
         @media print {
-            body {
-                background: white;
+            html, body {
+                background: white !important;
+                margin: 0 !important;
+                padding: 0 !important;
             }
             .page-container {
-                width: 100%;
-                margin: 0;
-                padding: 0;
-                box-shadow: none;
+                width: 100% !important;
+                max-width: 100% !important;
+                margin: 0 !important;
+                padding: 10mm 12mm !important;
+                box-shadow: none !important;
+                border-radius: 0 !important;
             }
             .no-print {
                 display: none !important;
@@ -182,6 +186,16 @@
             border-collapse: collapse;
             margin-bottom: 16px;
             font-size: 10.5px;
+            page-break-inside: auto;
+        }
+
+        .statement-table thead {
+            display: table-header-group;
+        }
+
+        .statement-table tr {
+            page-break-inside: avoid;
+            page-break-after: auto;
         }
 
         .statement-table th {
@@ -394,8 +408,8 @@
         window.onload = function() {
             const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
             if (!isMobile) {
+                // Auto trigger print preview without closing the tab
                 window.print();
-                window.onafterprint = function() { window.close(); };
             }
         }
     </script>
