@@ -6,7 +6,6 @@ from django.urls import path, include
 from django.contrib.auth import views as auth_views
 from django.conf import settings
 from django.conf.urls.static import static
-from django.views.generic import TemplateView
 
 urlpatterns = [
     # Admin interface
@@ -20,6 +19,7 @@ urlpatterns = [
     
     # App URLs
     path('', include('trips.urls')),
+    path('accounts/', include('accounts.urls')),
     path('fleet/', include('fleet.urls')),
     path('ledger/', include('ledger.urls')),
     path('drivers/', include('drivers.urls')),

@@ -26,7 +26,10 @@ urlpatterns = [
     path('ajax/get-party-unbilled-trips/', views.get_party_unbilled_trips, name='get-party-unbilled-trips'),
     path('ajax/get-party-bills/', views.get_party_bills, name='get-party-bills'),
     path('ajax/get-bill-balance/', views.get_bill_balance, name='get-bill-balance'),
+    path('ajax/get-trip-balance/', views.get_trip_balance, name='get-trip-balance'),
     path('ajax/get-next-invoice-number/', views.get_next_invoice_number, name='get-next-invoice-number'),
+    path('global-resync/', views.global_resync, name='global-resync'),
+
 
     # Account URLs
     path('accounts/', views.CompanyAccountListView.as_view(), name='account-list'),
@@ -48,4 +51,6 @@ urlpatterns = [
     path('bills/<int:pk>/print/', views.print_invoice, name='print-invoice'),
     path('bills/<int:pk>/annexure/', views.print_annexure, name='print-annexure'),
     path('bills/<int:pk>/print-combined/', views.print_combined_bill, name='print-combined-bill'),
+    path('bills/shared/<str:token>/', views.shared_bill_view, name='shared-bill'),
+    path('bills/bulk-print/', views.bulk_print_invoices, name='bulk-print-invoices'),
 ]

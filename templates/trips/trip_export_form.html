@@ -30,6 +30,23 @@
 
             <div class="mb-6">
                 <div class="flex items-center justify-between mb-4">
+                    <label class="text-xs font-bold text-slate-700 uppercase tracking-wider">Select Firms (Optional)</label>
+                    <button type="button" id="selectAllIssuers" class="text-xs font-bold text-emerald-600 hover:text-emerald-700 transition-colors">Select All</button>
+                </div>
+                
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-48 overflow-y-auto p-2 border border-slate-100 rounded-lg bg-slate-50">
+                    {% for issuer in issuers %}
+                    <label class="flex items-center p-3 bg-white border border-slate-200 rounded-lg cursor-pointer hover:border-emerald-500 transition-all group">
+                        <input type="checkbox" name="issuers" value="{{ issuer.id }}" class="issuer-checkbox h-4 w-4 text-emerald-600 focus:ring-emerald-500 border-slate-300 rounded mr-3">
+                        <span class="text-xs font-black text-slate-700 group-hover:text-emerald-600 uppercase">{{ issuer.name }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+                <p class="mt-2 text-[10px] text-slate-400 font-bold uppercase tracking-wider italic">Leave unselected to export trips for all firms.</p>
+            </div>
+
+            <div class="mb-6">
+                <div class="flex items-center justify-between mb-4">
                     <label class="text-xs font-bold text-slate-700 uppercase tracking-wider">Select Vehicles to Include</label>
                     <button type="button" id="selectAllVehicles" class="text-xs font-bold text-emerald-600 hover:text-emerald-700 transition-colors">Select All</button>
                 </div>
@@ -81,6 +98,17 @@
         $('.vehicle-checkbox').on('change', function() {
             const allChecked = $('.vehicle-checkbox:checked').length === $('.vehicle-checkbox').length;
             $('#selectAllVehicles').text(allChecked ? 'Deselect All' : 'Select All');
+        });
+
+        $('#selectAllIssuers').on('click', function() {
+            const allChecked = $('.issuer-checkbox:checked').length === $('.issuer-checkbox').length;
+            $('.issuer-checkbox').prop('checked', !allChecked);
+            $(this).text(allChecked ? 'Select All' : 'Deselect All');
+        });
+
+        $('.issuer-checkbox').on('change', function() {
+            const allChecked = $('.issuer-checkbox:checked').length === $('.issuer-checkbox').length;
+            $('#selectAllIssuers').text(allChecked ? 'Deselect All' : 'Select All');
         });
     });
 </script>

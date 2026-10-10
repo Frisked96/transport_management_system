@@ -22,76 +22,91 @@
             </div>
         {% endif %}
 
-        <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-            <div class="bg-slate-800 px-6 py-3">
+        <div class="bg-white border border-slate-200 rounded-xl shadow-sm">
+            <div class="bg-slate-800 px-3 sm:px-6 py-3">
                 <h2 class="text-white font-bold flex items-center uppercase tracking-wider text-xs">
                     <i class="fa-solid fa-file-pen mr-2 opacity-70"></i>
                     Trip Assignment & Cargo
                 </h2>
             </div>
             
-            <div class="p-6">
+            <div class="p-3 sm:p-6">
                 <!-- Main Grid -->
-                <div class="grid grid-cols-1 md:grid-cols-12 gap-x-6 gap-y-5">
+                <div class="grid grid-cols-1 md:grid-cols-12 gap-x-3 sm:gap-x-6 gap-y-5">
                     <!-- Row 1: Primary Identifiers -->
                     <div class="md:col-span-3">
-                        <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Date</label>
+                        <label class="block text-xs sm:text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Date <span class="text-rose-500">*</span></label>
                         {{ form.date }}
                         {% if form.date.errors %}<p class="text-rose-600 text-[10px] mt-1 font-bold">{{ form.date.errors.0 }}</p>{% endif %}
                     </div>
                     <div class="md:col-span-3">
-                        <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">LR Number</label>
+                        <label class="block text-xs sm:text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">LR Number</label>
                         {{ form.lr_no }}
                         {% if form.lr_no.errors %}<p class="text-rose-600 text-[10px] mt-1 font-bold">{{ form.lr_no.errors.0 }}</p>{% endif %}
                     </div>
                     <div class="md:col-span-3">
-                        <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Vehicle</label>
-                        {{ form.vehicle }}
+                        <label class="block text-xs sm:text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Vehicle</label>
+                        <div class="relative select2-parent">
+                            {{ form.vehicle }}
+                        </div>
                         {% if form.vehicle.errors %}<p class="text-rose-600 text-[10px] mt-1 font-bold">{{ form.vehicle.errors.0 }}</p>{% endif %}
                     </div>
                     <div class="md:col-span-3">
-                        <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Driver</label>
-                        {{ form.driver }}
+                        <label class="block text-xs sm:text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Driver</label>
+                        <div class="relative select2-parent">
+                            {{ form.driver }}
+                        </div>
                         {% if form.driver.errors %}<p class="text-rose-600 text-[10px] mt-1 font-bold">{{ form.driver.errors.0 }}</p>{% endif %}
                     </div>
 
                     <!-- Row 2: Billing & Route -->
                     <div class="md:col-span-6">
-                        <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Party / Client</label>
-                        {{ form.party }}
+                        <label class="block text-xs sm:text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Party / Client <span class="text-rose-500">*</span></label>
+                        <div class="relative select2-parent">
+                            {{ form.party }}
+                        </div>
                         {% if form.party.errors %}<p class="text-rose-600 text-[10px] mt-1 font-bold">{{ form.party.errors.0 }}</p>{% endif %}
                     </div>
                     <div class="md:col-span-6">
-                        <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Route Selection</label>
-                        {{ form.route }}
+                        <label class="block text-xs sm:text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Route Selection</label>
+                        <div class="relative select2-parent">
+                            {{ form.route }}
+                        </div>
                         {% if form.route.errors %}<p class="text-rose-600 text-[10px] mt-1 font-bold">{{ form.route.errors.0 }}</p>{% endif %}
                     </div>
 
                     <!-- Row 3: Revenue & Weight -->
                     <div class="md:col-span-3">
-                        <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Revenue Type</label>
+                        <label class="block text-xs sm:text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Revenue Type</label>
                         {{ form.revenue_type }}
                     </div>
                     <div class="md:col-span-3" id="weight-container">
-                        <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Weight (MT)</label>
+                        <label class="block text-xs sm:text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Weight (MT)</label>
                         {{ form.weight }}
                         {% if form.weight.errors %}<p class="text-rose-600 text-[10px] mt-1 font-bold">{{ form.weight.errors.0 }}</p>{% endif %}
                     </div>
                     <div class="md:col-span-3">
-                        <label id="rate-label" class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Rate</label>
+                        <label id="rate-label" class="block text-xs sm:text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Rate</label>
                         {{ form.rate_per_ton }}
                         {% if form.rate_per_ton.errors %}<p class="text-rose-600 text-[10px] mt-1 font-bold">{{ form.rate_per_ton.errors.0 }}</p>{% endif %}
                     </div>
                     <div class="md:col-span-3">
-                        <label class="block text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1.5">Est. Revenue</label>
-                        <div id="est-revenue" class="bg-emerald-50 border border-emerald-100 rounded-md px-3 py-2 text-sm font-black text-emerald-700 h-[38px] flex items-center shadow-inner">
+                        <label class="block text-xs sm:text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1.5">Est. Revenue</label>
+                        <div id="est-revenue" class="bg-emerald-50 border border-emerald-100 rounded-md px-3 py-2 text-xs sm:text-sm font-black text-emerald-700 min-h-[38px] flex items-center shadow-inner">
                             ₹ 0.00
                         </div>
                     </div>
 
+                    <!-- Row 3b: Vendor Hire (only for attached vehicles) -->
+                    <div class="md:col-span-3" id="vendor-hire-container" style="display: none;">
+                        <label class="block text-xs sm:text-[10px] font-black text-orange-500 uppercase tracking-widest mb-1.5">Vendor Hire (₹)</label>
+                        {{ form.vendor_hire_amount }}
+                        {% if form.vendor_hire_amount.errors %}<p class="text-rose-600 text-[10px] mt-1 font-bold">{{ form.vendor_hire_amount.errors.0 }}</p>{% endif %}
+                    </div>
+
                     <!-- Row 4: Notes -->
                     <div class="md:col-span-12">
-                        <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Remarks / Notes</label>
+                        <label class="block text-xs sm:text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Remarks / Notes</label>
                         {{ form.notes }}
                     </div>
                 </div>
@@ -102,14 +117,26 @@
             </div>
 
             <!-- Footer Actions -->
-            <div class="bg-slate-50 px-6 py-4 border-t border-slate-200 flex items-center justify-between">
-                <a href="{% if object %}{% url 'trip-detail' object.pk %}{% else %}{% url 'trip-list' %}{% endif %}" class="text-sm font-bold text-slate-400 hover:text-slate-600 transition-colors">
+            <div class="bg-slate-50 px-3 sm:px-6 py-4 border-t border-slate-200 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-2 sticky bottom-16 z-30 -mx-px md:relative md:bottom-auto md:z-auto md:mx-0">
+                <a href="{% if object %}{% url 'trip-detail' object.pk %}{% else %}{% url 'trip-list' %}{% endif %}" class="text-xs sm:text-sm font-bold text-slate-400 hover:text-slate-600 transition-colors text-center sm:text-left py-2 sm:py-0">
                     <i class="fa-solid fa-xmark mr-1"></i> Discard Changes
                 </a>
-                <button type="submit" class="flex items-center space-x-2 px-8 py-2.5 bg-emerald-600 text-white rounded-lg text-sm font-black hover:bg-emerald-700 shadow-lg shadow-emerald-100 transition-all active:scale-95 uppercase tracking-widest">
-                    <i class="fa-solid fa-circle-check"></i>
-                    <span>{% if object %}Update Trip Record{% else %}Save New Trip{% endif %}</span>
-                </button>
+                <div class="flex flex-col sm:flex-row gap-2">
+                    {% if not object %}
+                    <button type="submit" name="_save_new_date" class="flex items-center justify-center space-x-2 px-4 py-2.5 bg-slate-600 text-white rounded-lg text-xs font-black hover:bg-slate-700 transition-all active:scale-95 uppercase tracking-widest">
+                        <i class="fa-solid fa-calendar-plus"></i>
+                        <span>Same Date</span>
+                    </button>
+                    <button type="submit" name="_save_new_party" class="flex items-center justify-center space-x-2 px-4 py-2.5 bg-slate-600 text-white rounded-lg text-xs font-black hover:bg-slate-700 transition-all active:scale-95 uppercase tracking-widest">
+                        <i class="fa-solid fa-user-plus"></i>
+                        <span>Same Party</span>
+                    </button>
+                    {% endif %}
+                    <button type="submit" class="flex items-center justify-center space-x-2 px-6 sm:px-8 py-2.5 bg-emerald-600 text-white rounded-lg text-xs sm:text-sm font-black hover:bg-emerald-700 shadow-lg shadow-emerald-100 transition-all active:scale-95 uppercase tracking-widest">
+                        <i class="fa-solid fa-circle-check"></i>
+                        <span>{% if object %}Update Trip Record{% else %}Save New Trip{% endif %}</span>
+                    </button>
+                </div>
             </div>
         </div>
     </form>
@@ -117,14 +144,72 @@
 {% endblock %}
 
 {% block extra_js %}
+<style>
+    /* No max-height and no overflow on the dropdown – it grows fully, no internal scrollbar */
+    .select2-dropdown {
+        max-height: none !important;
+        overflow-y: visible !important;
+        border-radius: 0.375rem !important;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.1) !important;
+        z-index: 9999;
+    }
+
+    /* Larger search field for easy tapping */
+    .select2-search__field {
+        height: 40px !important;
+        font-size: 16px !important;  /* prevents iOS zoom on focus */
+    }
+
+    .select2-container--bootstrap-5 .select2-selection {
+        min-height: 38px;
+        display: flex;
+        align-items: center;
+    }
+
+    /* Keep full width on phones */
+    @media (max-width: 640px) {
+        .select2-container {
+            width: 100% !important;
+        }
+        .select2-selection__rendered {
+            font-size: 14px;
+        }
+    }
+</style>
+
 <script>
 $(document).ready(function() {
-    // Initialize Select2
-    $('#id_vehicle, #id_driver, #id_party, #id_route').select2({
-        theme: 'bootstrap-5',
-        width: '100%'
+    // Initialize Select2 with dropdown attached to body for correct viewport positioning
+    $('#id_vehicle, #id_driver, #id_party, #id_route').each(function() {
+        $(this).select2({
+            theme: 'bootstrap-5',
+            width: '100%',
+            dropdownParent: $('body'),
+            dropdownAutoWidth: false,
+        });
+
+        // Scroll the field into a comfortable position when the dropdown opens
+        // This ensures the dropdown + search box appear above the keyboard on mobile.
+        $(this).on('select2:open', function(e) {
+            var $select = $(this);
+            // Small delay to allow the dropdown to render so its height is known
+            setTimeout(function() {
+                // Get the position of the select container relative to the viewport
+                var rect = $select[0].getBoundingClientRect();
+                var viewHeight = window.innerHeight;
+                // Approximate keyboard height on mobile (half the viewport is usually safe)
+                var keyboardSpace = viewHeight * 0.5;
+
+                // If the bottom of the select is near or below the keyboard zone, scroll up
+                if (rect.bottom > keyboardSpace) {
+                    // Scroll the window so that the select is about 60px from the top of the viewport
+                    window.scrollBy(0, rect.bottom - keyboardSpace + 60);
+                }
+            }, 50);
+        });
     });
 
+    // Revenue logic (unchanged)
     const $revenueType = $('#id_revenue_type');
     const $weight = $('#id_weight');
     const $rate = $('#id_rate_per_ton');
@@ -155,6 +240,72 @@ $(document).ready(function() {
     $weight.on('input', updateRevenue);
     $rate.on('input', updateRevenue);
     updateRevenue();
+
+    // Route default rate logic
+    let routeRates = {{ route_rates|safe }};
+    const $routeSelect = $('#id_route');
+    
+    // Refresh if data syncs in background
+    $(document).on('tms:data-synced', function(e, data) {
+        if (data.routes) {
+            data.routes.forEach(r => {
+                routeRates[r.id] = parseFloat(r.default_rate) || 0;
+            });
+        }
+    });
+    
+    $routeSelect.on('change', function() {
+        const routeId = $(this).val();
+        if (routeId && routeRates[routeId]) {
+            const defaultRate = routeRates[routeId];
+            // Only update if current rate is 0 or empty (to avoid overwriting manual edits)
+            const currentRate = parseFloat($rate.val()) || 0;
+            if (currentRate === 0) {
+                $rate.val(defaultRate);
+                updateRevenue();
+            }
+        }
+    });
+
+    // Vendor Hire visibility toggle based on vehicle ownership
+    const $vehicleSelect = $('#id_vehicle');
+    const $vendorHireContainer = $('#vendor-hire-container');
+    
+    // Build a map of vehicle ID -> ownership from cached reference data
+    let vehicleOwnership = {};
+    try {
+        const cached = localStorage.getItem('tms_reference_data');
+        if (cached) {
+            const data = JSON.parse(cached);
+            if (data.vehicles) {
+                data.vehicles.forEach(v => {
+                    vehicleOwnership[v.id] = v.ownership;
+                });
+            }
+        }
+    } catch(e) {}
+    
+    function toggleVendorHire() {
+        const vehicleId = $vehicleSelect.val();
+        const ownership = vehicleOwnership[vehicleId];
+        if (ownership === 'Attached') {
+            $vendorHireContainer.show();
+        } else {
+            $vendorHireContainer.hide();
+        }
+    }
+    
+    $vehicleSelect.on('change', toggleVendorHire);
+    // Also update on data sync
+    $(document).on('tms:data-synced', function(e, data) {
+        if (data.vehicles) {
+            data.vehicles.forEach(v => {
+                vehicleOwnership[v.id] = v.ownership;
+            });
+            toggleVendorHire();
+        }
+    });
+    toggleVendorHire();
 });
 </script>
 {% endblock %}

@@ -1,0 +1,164 @@
+{% extends 'base.html' %}
+
+{% block title %}My Profile - TMS{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <div class="mb-6 flex justify-between items-center">
+        <div>
+            <h1 class="text-2xl font-bold text-slate-800">
+                {% if profile_user == request.user %}My Profile{% else %}User Profile: {{ profile_user.username }}{% endif %}
+            </h1>
+            <p class="text-sm text-slate-600">View account details and recent activity.</p>
+        </div>
+        {% if request.user.is_superuser %}
+        <a href="{% url 'user-list' %}" class="inline-flex items-center px-3 py-2 border border-slate-300 rounded-md shadow-sm text-sm font-medium text-slate-700 bg-white hover:bg-slate-50">
+            <i class="fa-solid fa-arrow-left mr-2"></i> User Management
+        </a>
+        {% endif %}
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <!-- Account Info -->
+        <div class="md:col-span-1 space-y-6">
+            <div class="bg-white shadow rounded-lg border border-slate-200 p-6 text-center">
+                <div class="relative inline-block mb-4">
+                    <div class="inline-flex items-center justify-center w-20 h-20 rounded-full bg-emerald-100 text-emerald-600">
+                        <i class="fa-solid fa-user text-4xl"></i>
+                    </div>
+                    {% if is_online %}
+                    <span class="absolute bottom-0 right-0 block h-5 w-5 rounded-full bg-green-500 border-4 border-white" title="Online Now"></span>
+                    {% else %}
+                    <span class="absolute bottom-0 right-0 block h-5 w-5 rounded-full bg-slate-300 border-4 border-white" title="Offline"></span>
+                    {% endif %}
+                </div>
+                <h2 class="text-xl font-bold text-slate-900">{{ profile_user.username }}</h2>
+                <p class="text-sm text-slate-500 mb-4">{{ profile_user.get_full_name|default:"No Name Set" }}</p>
+                <div class="text-xs font-semibold uppercase tracking-wider text-slate-400 border-t border-slate-100 pt-4 mb-2">Role</div>
+                <div class="flex flex-wrap justify-center gap-1">
+                    {% if profile_user.is_superuser %}
+                    <span class="px-2 py-1 rounded bg-purple-100 text-purple-700 text-xs font-bold">SUPERUSER</span>
+                    {% endif %}
+                    {% for group in profile_user.groups.all %}
+                    <span class="px-2 py-1 rounded bg-slate-100 text-slate-700 text-xs font-bold uppercase">{{ group.name }}</span>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="bg-white shadow rounded-lg border border-slate-200 p-6">
+                <h3 class="text-sm font-bold text-slate-900 uppercase tracking-widest mb-4 border-b border-slate-100 pb-2">Session Info</h3>
+                <div class="space-y-3">
+                    <div>
+                        <p class="text-[10px] text-slate-400 uppercase font-bold">Last Online</p>
+                        {% if is_online %}
+                        <p class="text-sm text-green-600 font-bold flex items-center">
+                            <span class="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></span>
+                            Online Now
+                        </p>
+                        <p class="text-xs text-slate-500 mt-0.5">Active now ({{ last_seen_time|time:"H:i" }})</p>
+                        {% else %}
+                        <p class="text-sm text-slate-600 font-medium flex items-center">
+                            <span class="w-2 h-2 bg-slate-400 rounded-full mr-2"></span>
+                            Offline
+                        </p>
+                        {% if last_seen_time %}
+                        <p class="text-xs text-slate-500 mt-0.5">Last seen {{ last_seen_time|date:"D, d M Y" }} at {{ last_seen_time|time:"H:i" }} <span class="text-slate-400">({{ last_seen_time|timesince }} ago)</span></p>
+                        {% else %}
+                        <p class="text-xs text-slate-400 italic mt-0.5">No recent activity recorded</p>
+                        {% endif %}
+                        {% endif %}
+                    </div>
+                    <div>
+                        <p class="text-[10px] text-slate-400 uppercase font-bold">Last Login</p>
+                        <p class="text-sm text-slate-700">{{ profile_user.last_login|date:"D, d M Y" }} <span class="text-slate-400">at</span> {{ profile_user.last_login|time:"H:i" }}</p>
+                    </div>
+                    <div>
+                        <p class="text-[10px] text-slate-400 uppercase font-bold">Member Since</p>
+                        <p class="text-sm text-slate-700">{{ profile_user.date_joined|date:"M Y" }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Activity -->
+        <div class="md:col-span-2 space-y-6">
+            <div class="bg-white shadow rounded-lg border border-slate-200 overflow-hidden">
+                <div class="px-6 py-4 bg-slate-50 border-b border-slate-200">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-sm font-bold text-slate-900 uppercase tracking-widest">Recent Activity</h3>
+                        <i class="fa-solid fa-clock-rotate-left text-slate-400"></i>
+                    </div>
+                    <form method="get" class="flex flex-col sm:flex-row gap-3">
+                        <select name="action" class="block w-full sm:w-auto pl-3 pr-10 py-2 text-base border-slate-300 focus:outline-none focus:ring-emerald-500 focus:border-emerald-500 sm:text-sm rounded-md shadow-sm" onchange="this.form.submit()">
+                            <option value="">All Actions</option>
+                            <option value="1" {% if active_action == '1' %}selected{% endif %}>Additions</option>
+                            <option value="2" {% if active_action == '2' %}selected{% endif %}>Changes</option>
+                            <option value="3" {% if active_action == '3' %}selected{% endif %}>Deletions</option>
+                        </select>
+                        <select name="time" class="block w-full sm:w-auto pl-3 pr-10 py-2 text-base border-slate-300 focus:outline-none focus:ring-emerald-500 focus:border-emerald-500 sm:text-sm rounded-md shadow-sm" onchange="this.form.submit()">
+                            <option value="">All Time</option>
+                            <option value="7" {% if active_time == '7' %}selected{% endif %}>Last 7 Days</option>
+                            <option value="30" {% if active_time == '30' %}selected{% endif %}>Last 30 Days</option>
+                        </select>
+                    </form>
+                </div>
+                
+                <div class="divide-y divide-slate-100">
+                    {% if not activities %}
+                    <div class="p-8 text-center text-slate-500 italic">
+                        No recent activity recorded.
+                    </div>
+                    {% endif %}
+
+                    {% for activity in activities %}
+                    <div class="p-4 hover:bg-slate-50 transition-colors flex items-start">
+                        {% if activity.is_addition %}
+                        <div class="w-8 h-8 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mr-3 mt-1">
+                            <i class="fa-solid fa-plus text-xs"></i>
+                        </div>
+                        {% elif activity.is_change %}
+                        <div class="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center mr-3 mt-1">
+                            <i class="fa-solid fa-pen text-xs"></i>
+                        </div>
+                        {% elif activity.is_deletion %}
+                        <div class="w-8 h-8 rounded-full bg-red-100 text-red-600 flex items-center justify-center mr-3 mt-1">
+                            <i class="fa-solid fa-trash text-xs"></i>
+                        </div>
+                        {% else %}
+                        <div class="w-8 h-8 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center mr-3 mt-1">
+                            <i class="fa-solid fa-circle text-xs"></i>
+                        </div>
+                        {% endif %}
+                        <div class="flex-grow">
+                            <div class="flex justify-between">
+                                <p class="text-sm font-semibold text-slate-900">
+                                    {{ activity.get_action_flag_display }} {{ activity.content_type.name|title }}
+                                </p>
+                                <span class="text-[10px] text-slate-400" title="{{ activity.action_time }}">{{ activity.action_time|timesince }} ago</span>
+                            </div>
+                            <p class="text-xs text-slate-700 font-medium mt-0.5">
+                                {{ activity.object_repr }}
+                            </p>
+                            {% if activity.get_change_message and activity.get_change_message != 'Added.' and activity.get_change_message != 'Changed.' and activity.get_change_message != 'Deleted.' and activity.get_change_message != 'No fields changed.' and activity.get_change_message != 'Added' and activity.get_change_message != 'Changed' and activity.get_change_message != 'Deleted' %}
+                            <div class="mt-1 text-xs text-slate-600 bg-slate-100/70 rounded px-2 py-0.5 border border-slate-200 inline-block font-mono">
+                                <i class="fa-solid fa-code-compare mr-1 text-slate-400"></i>{{ activity.get_change_message }}
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% if activity.frontend_url %}
+                        <a href="{{ activity.frontend_url }}" class="ml-4 text-slate-400 hover:text-emerald-600 p-1.5 hover:bg-slate-100 rounded-lg transition-colors" title="View Record">
+                            <i class="fa-solid fa-arrow-up-right-from-square text-sm"></i>
+                        </a>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+                
+                <div class="bg-slate-50 px-6 py-3 border-t border-slate-100 text-center">
+                    <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Showing last 50 activities</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

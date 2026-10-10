@@ -4,10 +4,9 @@ Views for Drivers application
 from django.views.generic import ListView, DetailView, CreateView, UpdateView
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.urls import reverse_lazy, reverse
-from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import get_object_or_404
 from django.contrib import messages
 from django.db.models import Sum, F, DecimalField
-from django.contrib.auth.models import User
 
 from .models import Driver, DriverTransaction
 from .forms import DriverForm, DriverTransactionForm
@@ -23,6 +22,7 @@ class DriverListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
     model = Driver
     template_name = 'drivers/driver_list.html'
     context_object_name = 'drivers'
+    paginate_by = 25
     permission_required = 'drivers.can_view_all_drivers'
 
     def get_queryset(self):

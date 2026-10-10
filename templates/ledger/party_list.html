@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load ledger_extras %}
 
 {% block title %}Parties - Transport Management System{% endblock %}
 
@@ -10,7 +11,7 @@
         <p class="text-sm text-slate-600 mt-1">Total {{ paginator.count }} parties found</p>
     </div>
     <div class="mt-4 md:mt-0 flex space-x-3">
-        {% if perms.ledger.add_financialrecord %}
+        {% if perms.ledger.add_party %}
         <a href="{% url 'party-create' %}" class="flex items-center space-x-2 px-4 py-2 bg-emerald-600 text-white rounded-md text-sm font-medium hover:bg-emerald-700 shadow-sm transition-colors">
             <i class="fa-solid fa-plus"></i>
             <span>Add New Party</span>
@@ -25,7 +26,7 @@
     <form method="get">
         <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
             <!-- Search -->
-            <div class="md:col-span-10 flex flex-col">
+            <div class="md:col-span-7 flex flex-col">
                 <label for="search" class="text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">Search</label>
                 <div class="relative">
                     <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -35,12 +36,22 @@
                            value="{{ request.GET.search }}" placeholder="Name, Phone, State...">
                 </div>
             </div>
+
+            <!-- Sort -->
+            <div class="md:col-span-3 flex flex-col">
+                <label for="sort" class="text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">Sort By</label>
+                <select id="sort" name="sort" class="block w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white">
+                    <option value="name" {% if current_sort == 'name' %}selected{% endif %}>Alphabetical (A-Z)</option>
+                    <option value="most_outstanding" {% if current_sort == 'most_outstanding' %}selected{% endif %}>Most Outstanding (Debtors)</option>
+                    <option value="most_payable" {% if current_sort == 'most_payable' %}selected{% endif %}>Most Payable (Creditors)</option>
+                </select>
+            </div>
             
             <!-- Actions -->
             <div class="md:col-span-2 flex flex-col justify-end">
                 <div class="flex space-x-2">
                     <button type="submit" class="flex-grow bg-emerald-600 text-white px-3 py-2 rounded-md hover:bg-emerald-700 transition-colors text-sm font-medium">
-                        Search
+                        Apply
                     </button>
                     <a href="{% url 'party-list' %}" class="px-3 py-2 border border-slate-300 rounded-md bg-white text-slate-700 hover:bg-slate-50 transition-colors text-sm font-medium">
                         Clear
@@ -57,25 +68,27 @@
 <div class="space-y-4">
     {% for party in parties %}
     <!-- Party Card -->
-    <div class="bg-white border border-slate-200 rounded-lg overflow-hidden hover:shadow-md transition-shadow">
+    <div class="bg-white border border-slate-200 rounded-lg hover:shadow-md transition-shadow">
         <div class="p-4 md:p-5">
-            <div class="flex items-center justify-between mb-4 md:mb-0">
+            <div class="flex items-center justify-between mb-4">
                 <div class="flex-1 min-w-0">
                     <h3 class="font-bold text-lg text-slate-900 leading-tight truncate">
                         <a href="{% url 'party-detail' party.pk %}" class="hover:text-emerald-600 transition-colors">{{ party.name }}</a>
                     </h3>
-                    <p class="text-sm text-slate-600 truncate">{{ party.phone_number|default:"No phone" }} • {{ party.state|default:"No state" }}</p>
+                    <p class="text-xs text-slate-500 mt-1 truncate">
+                        {{ party.phone_number|default:"No phone" }} • {{ party.state|default:"No state" }}
+                    </p>
                 </div>
                 
-                <div class="flex items-center space-x-3 md:hidden">
+                <div class="flex items-center space-x-2">
                     <div class="relative dropdown-container">
-                        <button class="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 transition-colors dropdown-toggle">
+                        <button class="w-9 h-9 rounded-full bg-slate-50 hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-600 transition-colors dropdown-toggle">
                             <i class="fa-solid fa-ellipsis-vertical"></i>
                         </button>
                         <div class="absolute right-0 mt-2 w-48 z-20 dropdown-menu hidden">
                             <div class="bg-white rounded-md shadow-lg py-1 border border-slate-100">
                                 <a href="{% url 'party-detail' party.pk %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"><i class="fa-regular fa-eye mr-2"></i>View Details</a>
-                                {% if perms.ledger.change_financialrecord %}
+                                {% if perms.ledger.change_party %}
                                 <a href="{% url 'party-update' party.pk %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"><i class="fa-regular fa-pen-to-square mr-2"></i>Edit Party</a>
                                 {% endif %}
                             </div>
@@ -84,38 +97,28 @@
                 </div>
             </div>
 
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 mt-4 md:mt-0 md:flex md:items-center">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 border-t border-slate-50">
                 <div class="md:flex-1">
-                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Total Debit (Dr)</span>
-                    <p class="text-sm text-blue-600 font-medium">₹{{ party.total_debit|floatformat:2 }}</p>
+                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Debit (Dr)</span>
+                    <p class="text-sm text-blue-600 font-medium">₹{{ party.total_debit|indian_comma }}</p>
                 </div>
                 
                 <div class="md:flex-1">
-                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Total Credit (Cr)</span>
-                    <p class="text-sm text-emerald-600 font-medium">₹{{ party.total_credit|floatformat:2 }}</p>
+                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Credit (Cr)</span>
+                    <p class="text-sm text-emerald-600 font-medium">₹{{ party.total_credit|indian_comma }}</p>
                 </div>
                 
-                <div class="md:flex-1">
-                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Balance</span>
+                <div class="col-span-2 md:col-span-1 border-t md:border-t-0 pt-3 md:pt-0">
+                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Balance</span>
                     <p class="text-sm font-bold {% if party.current_balance_value > 0 %}text-red-600{% elif party.current_balance_value < 0 %}text-emerald-600{% else %}text-slate-600{% endif %}">
-                        ₹{{ party.current_balance }}
+                        ₹{{ party.current_balance_value|abs_val|indian_comma }} {% if party.current_balance_value > 0 %}Dr{% elif party.current_balance_value < 0 %}Cr{% endif %}
                     </p>
                 </div>
 
-                <div class="hidden md:block md:w-10">
-                    <div class="relative dropdown-container">
-                        <button class="w-8 h-8 rounded-full bg-slate-50 hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-600 transition-colors dropdown-toggle">
-                            <i class="fa-solid fa-ellipsis"></i>
-                        </button>
-                        <div class="absolute right-0 mt-2 w-48 z-20 dropdown-menu hidden">
-                            <div class="bg-white rounded-md shadow-lg py-1 border border-slate-100">
-                                <a href="{% url 'party-detail' party.pk %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"><i class="fa-regular fa-eye mr-2"></i>View Details</a>
-                                {% if perms.ledger.change_financialrecord %}
-                                <a href="{% url 'party-update' party.pk %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"><i class="fa-regular fa-pen-to-square mr-2"></i>Edit Party</a>
-                                {% endif %}
-                            </div>
-                        </div>
-                    </div>
+                <div class="hidden md:flex md:items-end md:justify-end">
+                    <a href="{% url 'party-detail' party.pk %}?tab=ledger" class="text-xs font-bold text-emerald-600 hover:underline">
+                        View Statement <i class="fa-solid fa-chevron-right ml-1 text-[8px]"></i>
+                    </a>
                 </div>
             </div>
         </div>
@@ -128,10 +131,10 @@
 <nav class="mt-8 flex justify-center">
     <div class="flex space-x-1">
         {% if page_obj.has_previous %}
-        <a href="?page=1{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
+        <a href="?page=1{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if current_sort %}&sort={{ current_sort }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
             <i class="fa-solid fa-angles-left"></i>
         </a>
-        <a href="?page={{ page_obj.previous_page_number }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
+        <a href="?page={{ page_obj.previous_page_number }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if current_sort %}&sort={{ current_sort }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
             <i class="fa-solid fa-angle-left"></i>
         </a>
         {% endif %}
@@ -140,15 +143,15 @@
             {% if page_obj.number == num %}
             <span class="px-4 py-2 bg-emerald-600 text-white border border-emerald-600 rounded-md text-sm font-medium">{{ num }}</span>
             {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
-            <a href="?page={{ num }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}" class="px-4 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">{{ num }}</a>
+            <a href="?page={{ num }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if current_sort %}&sort={{ current_sort }}{% endif %}" class="px-4 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">{{ num }}</a>
             {% endif %}
         {% endfor %}
 
         {% if page_obj.has_next %}
-        <a href="?page={{ page_obj.next_page_number }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
+        <a href="?page={{ page_obj.next_page_number }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if current_sort %}&sort={{ current_sort }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
             <i class="fa-solid fa-angle-right"></i>
         </a>
-        <a href="?page={{ page_obj.paginator.num_pages }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
+        <a href="?page={{ page_obj.paginator.num_pages }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if current_sort %}&sort={{ current_sort }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
             <i class="fa-solid fa-angles-right"></i>
         </a>
         {% endif %}
@@ -164,13 +167,19 @@
     </div>
     <h2 class="text-xl font-bold text-slate-900 mb-2">No parties found</h2>
     <p class="text-slate-600 mb-6 max-w-xs mx-auto">We couldn't find any parties matching your search.</p>
-    {% if perms.ledger.add_financialrecord %}
+    {% if perms.ledger.add_party %}
     <a href="{% url 'party-create' %}" class="inline-flex items-center space-x-2 px-6 py-3 bg-emerald-600 text-white rounded-md font-medium hover:bg-emerald-700 shadow-sm transition-colors">
         <i class="fa-solid fa-plus"></i>
         <span>Add Your First Party</span>
     </a>
     {% endif %}
 </div>
+{% endif %}
+
+{% if perms.ledger.add_party %}
+<a href="{% url 'party-create' %}" class="fixed bottom-24 right-6 z-40 lg:hidden w-14 h-14 bg-emerald-600 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-emerald-700 active:scale-95 transition-all" title="Add Party">
+    <i class="fa-solid fa-plus text-xl"></i>
+</a>
 {% endif %}
 
 {% endblock %}

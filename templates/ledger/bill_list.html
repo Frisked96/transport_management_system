@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load ledger_extras %}
 
 {% block title %}Invoices - TMS{% endblock %}
 
@@ -10,7 +11,11 @@
         <p class="text-sm text-slate-600 mt-1">Manage and track your billing to parties</p>
     </div>
     <div class="mt-4 md:mt-0 flex space-x-3">
-        {% if perms.ledger.add_financialrecord %}
+        <button type="button" onclick="openBulkDownloadModal()" class="flex items-center space-x-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-md text-sm font-medium hover:bg-slate-200 shadow-sm transition-colors border border-slate-300">
+            <i class="fa-solid fa-print"></i>
+            <span>Bulk Print</span>
+        </button>
+        {% if perms.ledger.add_bill %}
         <a href="{% url 'bill-create' %}" class="flex items-center space-x-2 px-4 py-2 bg-emerald-600 text-white rounded-md text-sm font-medium hover:bg-emerald-700 shadow-sm transition-colors">
             <i class="fa-solid fa-plus"></i>
             <span>Create Invoice</span>
@@ -20,12 +25,129 @@
 </header>
 <!-- END: Page Header -->
 
+<!-- BEGIN: Quick Nature Filter Pills -->
+<div class="flex items-center gap-2 mb-6">
+    <div class="inline-flex bg-slate-100 border border-slate-200 rounded-lg p-1">
+        <button type="button" onclick="setBillKind('')" class="px-3.5 py-1.5 text-xs font-bold rounded-md transition-all {% if not current_bill_kind %}bg-white text-slate-900 shadow-sm{% else %}text-slate-600 hover:text-slate-900{% endif %}">
+            All Bills
+        </button>
+        <button type="button" onclick="setBillKind('customer')" class="px-3.5 py-1.5 text-xs font-bold rounded-md transition-all {% if current_bill_kind == 'customer' %}bg-white text-emerald-700 shadow-sm{% else %}text-slate-600 hover:text-slate-900{% endif %}">
+            <i class="fa-solid fa-file-invoice mr-1.5 text-emerald-600"></i>Customer Invoices
+        </button>
+        <button type="button" onclick="setBillKind('vendor')" class="px-3.5 py-1.5 text-xs font-bold rounded-md transition-all {% if current_bill_kind == 'vendor' %}bg-white text-blue-700 shadow-sm{% else %}text-slate-600 hover:text-slate-900{% endif %}">
+            <i class="fa-solid fa-truck-moving mr-1.5 text-blue-600"></i>Vendor Bills (Attached)
+        </button>
+    </div>
+</div>
+<!-- END: Quick Nature Filter Pills -->
+
+<!-- BEGIN: Bulk Download Modal -->
+<div id="bulk-download-modal" class="fixed inset-0 z-50 hidden overflow-y-auto">
+    <div class="flex items-center justify-center min-h-screen p-4">
+        <div class="fixed inset-0 bg-slate-900 bg-opacity-50 transition-opacity" onclick="closeBulkDownloadModal()"></div>
+        <div class="relative bg-white rounded-lg shadow-xl max-w-lg w-full p-6">
+            <div class="flex items-center justify-between mb-4 border-b pb-3">
+                <h3 class="text-xl font-bold text-slate-900">Bulk Print Invoices</h3>
+                <button type="button" onclick="closeBulkDownloadModal()" class="text-slate-400 hover:text-slate-500">
+                    <i class="fa-solid fa-xmark text-xl"></i>
+                </button>
+            </div>
+            
+            <form action="{% url 'bulk-print-invoices' %}" method="get" id="bulk-download-form" target="_blank">
+                <p class="text-sm text-slate-600 mb-4">Select the criteria to print multiple invoices at once.</p>
+                
+                <div class="space-y-4">
+                    <!-- Company Account (Mandatory) -->
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Company Account <span class="text-red-500">*</span></label>
+                        <select name="issuer" required class="block w-full border-slate-300 rounded-md shadow-sm focus:ring-emerald-500 focus:border-emerald-500 sm:text-sm">
+                            <option value="">-- Select Company --</option>
+                            {% for issuer in issuers %}
+                            <option value="{{ issuer.id }}" {% if current_issuer == issuer.id|stringformat:"s" %}selected{% endif %}>{{ issuer.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <!-- Party -->
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Bill To (Party)</label>
+                        <select name="party" class="block w-full border-slate-300 rounded-md shadow-sm focus:ring-emerald-500 focus:border-emerald-500 sm:text-sm">
+                            <option value="">-- All Parties --</option>
+                            {% for party in parties %}
+                            <option value="{{ party.id }}" {% if current_party == party.id|stringformat:"s" %}selected{% endif %}>{{ party.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <!-- Invoice Type -->
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Invoice Type</label>
+                            <select name="category" class="block w-full border-slate-300 rounded-md shadow-sm focus:ring-emerald-500 focus:border-emerald-500 sm:text-sm">
+                                <option value="">All Types</option>
+                                <option value="invoice" {% if request.GET.category == 'invoice' %}selected{% endif %}>Standard Invoices</option>
+                                <option value="credit" {% if request.GET.category == 'credit' %}selected{% endif %}>Credit Notes</option>
+                                <option value="debit" {% if request.GET.category == 'debit' %}selected{% endif %}>Debit Notes</option>
+                            </select>
+                        </div>
+                        <!-- Empty for alignment -->
+                        <div></div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <!-- Start Date -->
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 uppercase mb-1">From Date</label>
+                            <input type="date" name="start_date" value="{{ start_date }}" class="block w-full border-slate-300 rounded-md shadow-sm focus:ring-emerald-500 focus:border-emerald-500 sm:text-sm">
+                        </div>
+                        <!-- End Date -->
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 uppercase mb-1">To Date</label>
+                            <input type="date" name="end_date" value="{{ end_date }}" class="block w-full border-slate-300 rounded-md shadow-sm focus:ring-emerald-500 focus:border-emerald-500 sm:text-sm">
+                        </div>
+                    </div>
+
+                    <!-- Custom Bill Numbers -->
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Custom Numbers (Optional)</label>
+                        <input type="text" name="bill_numbers" placeholder="e.g. 1, 3, 5-8, 12" class="block w-full border-slate-300 rounded-md shadow-sm focus:ring-emerald-500 focus:border-emerald-500 sm:text-sm">
+                        <p class="mt-1 text-[10px] text-slate-500">Enter comma-separated numbers or ranges to specifically pick invoices.</p>
+                    </div>
+                </div>
+
+                <div class="mt-6 pt-4 border-t flex justify-end space-x-3">
+                    <button type="button" onclick="closeBulkDownloadModal()" class="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md shadow-sm hover:bg-slate-50">
+                        Cancel
+                    </button>
+                    <button type="submit" class="px-4 py-2 text-sm font-medium text-white bg-emerald-600 border border-transparent rounded-md shadow-sm hover:bg-emerald-700">
+                        <i class="fa-solid fa-print mr-2"></i>Print Selected Invoices
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <!-- BEGIN: Filter Bar -->
 <section class="bg-slate-100 p-5 rounded-lg border border-slate-200 mb-6">
     <form method="get" id="filter-form">
+        <input type="hidden" name="bill_kind" id="id_bill_kind" value="{{ current_bill_kind }}">
         <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
+            <!-- Search -->
+            <div class="md:col-span-12 lg:col-span-4 flex flex-col">
+                <label for="search" class="text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">Search:</label>
+                <div class="relative">
+                    <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">
+                        <i class="fa-solid fa-magnifying-glass text-xs"></i>
+                    </span>
+                    <input type="text" id="search" name="search" value="{{ request.GET.search }}" 
+                           placeholder="Invoice #, Vendor Inv #, Party..." 
+                           class="block w-full pl-9 pr-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white">
+                </div>
+            </div>
+
             <!-- Issuer Filter -->
-            <div class="md:col-span-4 flex flex-col">
+            <div class="md:col-span-6 lg:col-span-4 flex flex-col">
                 <label for="issuer" class="text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">Issued From:</label>
                 <select id="issuer" name="issuer" class="block w-full pl-3 pr-10 py-2 border border-slate-300 rounded-md text-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white">
                     <option value="">All Companies</option>
@@ -36,8 +158,8 @@
             </div>
 
             <!-- Party Filter -->
-            <div class="md:col-span-4 flex flex-col">
-                <label for="party" class="text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">Bill To:</label>
+            <div class="md:col-span-6 lg:col-span-4 flex flex-col">
+                <label for="party" class="text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">Party / Vendor:</label>
                 <select id="party" name="party" class="block w-full pl-3 pr-10 py-2 border border-slate-300 rounded-md text-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white">
                     <option value="">All Parties</option>
                     {% for party in parties %}
@@ -46,8 +168,39 @@
                 </select>
             </div>
             
+            <!-- Bill Nature Filter -->
+            <div class="md:col-span-6 lg:col-span-3 flex flex-col">
+                <label class="text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">Bill Nature:</label>
+                <select id="select_bill_kind" class="block w-full pl-3 pr-10 py-2 border border-slate-300 rounded-md text-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white" onchange="setBillKind(this.value)">
+                    <option value="">All Bills & Invoices</option>
+                    <option value="customer" {% if current_bill_kind == 'customer' %}selected{% endif %}>Customer Invoices (Sales)</option>
+                    <option value="vendor" {% if current_bill_kind == 'vendor' %}selected{% endif %}>Vendor Bills (Purchase / Attached)</option>
+                </select>
+            </div>
+
+            <!-- Invoice Type Filter -->
+            <div class="md:col-span-6 lg:col-span-3 flex flex-col">
+                <label class="text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">Invoice Type:</label>
+                <select name="category" class="block w-full pl-3 pr-10 py-2 border border-slate-300 rounded-md text-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white">
+                    <option value="">All Types</option>
+                    <option value="invoice" {% if request.GET.category == 'invoice' %}selected{% endif %}>Standard Invoices</option>
+                    <option value="credit" {% if request.GET.category == 'credit' %}selected{% endif %}>Credit Notes</option>
+                    <option value="debit" {% if request.GET.category == 'debit' %}selected{% endif %}>Debit Notes</option>
+                </select>
+            </div>
+
+            <!-- Payment Status Filter -->
+            <div class="md:col-span-6 lg:col-span-3 flex flex-col">
+                <label class="text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">Payment Status:</label>
+                <select name="payment_status" class="block w-full pl-3 pr-10 py-2 border border-slate-300 rounded-md text-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white">
+                    <option value="">All Statuses</option>
+                    <option value="pending" {% if current_status == 'pending' %}selected{% endif %}>Pending</option>
+                    <option value="paid" {% if current_status == 'paid' %}selected{% endif %}>Paid</option>
+                </select>
+            </div>
+
             <!-- Date Range -->
-            <div class="md:col-span-4 flex flex-col">
+            <div class="md:col-span-6 lg:col-span-3 flex flex-col">
                 <label class="text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">Date Range:</label>
                 <div class="flex space-x-2">
                     <input type="date" name="start_date" class="block w-full pl-3 pr-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white" 
@@ -66,58 +219,156 @@
 <div class="space-y-4">
     {% for bill in bills %}
     <!-- Bill Card -->
-    <div class="bg-white border border-slate-200 rounded-lg p-5 flex flex-col md:flex-row items-start md:items-center gap-4 hover:shadow-sm transition-shadow">
-        <div class="flex-1 min-w-[150px]">
-            <h3 class="font-bold text-lg text-slate-900 leading-tight">
-                <a href="{% url 'bill-detail' bill.pk %}" class="hover:text-emerald-600 transition-colors">{{ bill.bill_number|default:"Draft" }}</a>
-            </h3>
-            <p class="text-xs text-slate-500 mt-1">{{ bill.date|date:"M d, Y" }}</p>
+    <div class="bg-white border border-slate-200 rounded-lg p-4 md:p-5 flex flex-col md:flex-row items-start md:items-center gap-4 hover:shadow-sm transition-shadow">
+        <!-- Invoice Identification -->
+        <div class="w-full md:w-44 border-b md:border-b-0 pb-3 md:pb-0">
+            <div class="flex justify-between items-start">
+                <div>
+                    <h3 class="font-bold text-lg text-slate-900 leading-tight">
+                        <a href="{% url 'bill-detail' bill.pk %}" class="hover:text-emerald-600 transition-colors">{{ bill.display_invoice_number }}</a>
+                    </h3>
+                    <p class="text-xs text-slate-500 mt-1">{{ bill.date|date:"M d, Y" }}</p>
+                    {% if bill.customer_bill %}
+                    <p class="text-[10px] text-blue-600 font-bold mt-0.5">
+                        <i class="fa-solid fa-link text-[8px] mr-1"></i>Against #{{ bill.customer_bill.bill_number }}
+                    </p>
+                    {% endif %}
+                </div>
+                <!-- Status Badge (Mobile Only) -->
+                <div class="md:hidden">
+                    {% if bill.is_adjustment %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-tighter bg-indigo-100 text-indigo-800">
+                        Applied
+                    </span>
+                    {% else %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-tighter {% if bill.outstanding_balance > 0 %}bg-amber-100 text-amber-800{% else %}bg-emerald-100 text-emerald-800{% endif %}">
+                        {% if bill.outstanding_balance > 0 %}Pending{% else %}Paid{% endif %}
+                    </span>
+                    {% endif %}
+                </div>
+            </div>
+            <!-- Type Badge -->
+            <div class="mt-2">
+                {% if bill.is_creditor_bill %}
+                <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-tight bg-blue-50 text-blue-700 border border-blue-200">
+                    <i class="fa-solid fa-truck-moving mr-1"></i> Vendor Bill
+                </span>
+                {% elif bill.category and bill.category.name == 'Credit Note' %}
+                <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-tight bg-purple-50 text-purple-700 border border-purple-200">
+                    <i class="fa-solid fa-file-invoice-dollar mr-1"></i> Credit Note
+                </span>
+                {% elif bill.category and bill.category.name == 'Debit Note' %}
+                <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-tight bg-blue-50 text-blue-700 border border-blue-200">
+                    <i class="fa-solid fa-file-invoice-dollar mr-1"></i> Debit Note
+                </span>
+                {% else %}
+                <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-tight bg-slate-50 text-slate-700 border border-slate-200">
+                    <i class="fa-solid fa-file-invoice mr-1"></i> Invoice
+                </span>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Issuer (Prominent) -->
+        <div class="flex-1 min-w-[150px] w-full md:w-auto">
+            {% if bill.is_creditor_bill %}
+            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Vendor (Issued By)</span>
+            <a href="{% url 'party-detail' bill.party.pk %}" class="text-sm text-slate-700 font-bold hover:text-emerald-600 block leading-snug">
+                {{ bill.party.name }}
+            </a>
+            {% if bill.party.gstin %}
+            <p class="text-[10px] text-slate-400 font-medium">GSTIN: {{ bill.party.gstin }}</p>
+            {% endif %}
+            {% else %}
+            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Issued From</span>
             {% if bill.issuer %}
-            <p class="text-[10px] text-slate-400 mt-1 uppercase font-bold tracking-tighter">
-                From: <a href="{% url 'account-detail' bill.issuer.pk %}" class="hover:text-emerald-600 transition-colors">{{ bill.issuer.name }}</a>
-            </p>
+            <a href="{% url 'account-detail' bill.issuer.pk %}" class="text-sm text-slate-700 font-bold hover:text-emerald-600 block leading-snug">
+                {{ bill.issuer.name }}
+            </a>
+            {% if bill.issuer.gstin %}
+            <p class="text-[10px] text-slate-400 font-medium">GSTIN: {{ bill.issuer.gstin }}</p>
+            {% endif %}
+            {% else %}
+            <span class="text-sm text-slate-400 italic">Not Assigned</span>
+            {% endif %}
             {% endif %}
         </div>
         
-        <div class="flex-1 min-w-[200px]">
-            <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">Bill To</span>
-            <a href="{% url 'party-detail' bill.party.pk %}" class="text-sm text-emerald-600 font-bold hover:underline">
+        <!-- Party -->
+        <div class="flex-1 min-w-[150px] w-full md:w-auto">
+            {% if bill.is_creditor_bill %}
+            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Billed To (Firm)</span>
+            {% if bill.issuer %}
+            <a href="{% url 'account-detail' bill.issuer.pk %}" class="text-sm text-slate-700 font-bold hover:text-emerald-600 block leading-snug">
+                {{ bill.issuer.name }}
+            </a>
+            {% if bill.issuer.gstin %}
+            <p class="text-[10px] text-slate-400 font-medium">GSTIN: {{ bill.issuer.gstin }}</p>
+            {% endif %}
+            {% else %}
+            <span class="text-sm text-slate-400 italic">{{ bill.invoice_company_name|default:"-" }}</span>
+            {% endif %}
+            {% else %}
+            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Bill To</span>
+            <a href="{% url 'party-detail' bill.party.pk %}" class="text-sm text-slate-700 font-bold hover:text-emerald-600 block leading-snug">
                 {{ bill.party.name }}
             </a>
+            {% if bill.party.gstin %}
+            <p class="text-[10px] text-slate-400 font-medium">GSTIN: {{ bill.party.gstin }}</p>
+            {% endif %}
+            {% endif %}
         </div>
         
-        <div class="w-24 text-center">
-            <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">Trips</span>
-            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
-                {{ bill.trips.count }}
-            </span>
-        </div>
-        
-        <div class="w-32 text-right">
-            <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">Total Amount</span>
-            <p class="text-sm font-bold text-slate-900">₹{{ bill.rounded_total|floatformat:2 }}</p>
-        </div>
+        <!-- Stats Grid for Mobile -->
+        <div class="grid grid-cols-3 md:flex md:items-center gap-4 w-full md:w-auto border-t md:border-t-0 pt-3 md:pt-0">
+            <!-- Trips -->
+            <div class="md:w-16 md:text-center">
+                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Trips</span>
+                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-700">
+                    {{ bill.trips_count }}
+                </span>
+            </div>
+            
+            <!-- Total -->
+            <div class="md:w-32 md:text-right">
+                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Total Amount</span>
+                <p class="text-sm font-bold text-slate-900">₹{{ bill.rounded_total|indian_comma }}</p>
+            </div>
 
-        <div class="w-32 text-right">
-            <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">Pending</span>
-            <p class="text-lg font-bold {% if bill.outstanding_balance > 0 %}text-red-600{% else %}text-emerald-600{% endif %}">
-                ₹{{ bill.outstanding_balance|floatformat:2 }}
-            </p>
+            <!-- Outstanding -->
+            <div class="md:w-32 md:text-right">
+                {% if bill.is_adjustment %}
+                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Adjustment</span>
+                <p class="text-sm font-bold text-slate-500 italic">Applied</p>
+                {% else %}
+                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Outstanding</span>
+                <p class="text-sm font-bold {% if bill.outstanding_balance > 0 %}text-red-600{% else %}text-emerald-600{% endif %}">
+                    ₹{{ bill.outstanding_balance|indian_comma }}
+                </p>
+                {% endif %}
+            </div>
         </div>
         
-        <div class="ml-4 relative dropdown-container">
-            <button class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 transition-colors dropdown-toggle">
-                <i class="fa-solid fa-ellipsis"></i>
-            </button>
-            <div class="absolute right-0 pt-2 w-48 z-20 dropdown-menu hidden">
-                <div class="bg-white rounded-md shadow-lg py-1 border border-slate-100">
-                    <a href="{% url 'bill-detail' bill.pk %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"><i class="fa-regular fa-eye mr-2"></i>View Details</a>
-                    <a href="{% url 'print-combined-bill' bill.pk %}" target="_blank" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"><i class="fa-solid fa-print mr-2"></i>Print Invoice</a>
-                    {% if perms.ledger.change_financialrecord %}
-                    <hr class="my-1 border-slate-100">
-                    <a href="{% url 'bill-update' bill.pk %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"><i class="fa-regular fa-pen-to-square mr-2"></i>Edit Invoice</a>
-                    <a href="{% url 'bill-delete' bill.pk %}" class="block px-4 py-2 text-sm text-red-600 hover:bg-slate-50"><i class="fa-regular fa-trash-can mr-2"></i>Delete</a>
-                    {% endif %}
+        <!-- Actions -->
+        <div class="flex justify-end w-full md:w-auto pt-2 md:pt-0 border-t md:border-t-0">
+            <div class="relative dropdown-container">
+                <button class="w-9 h-9 md:w-8 md:h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 transition-colors dropdown-toggle">
+                    <i class="fa-solid fa-ellipsis"></i>
+                </button>
+                <div class="absolute right-0 pt-2 w-48 z-20 dropdown-menu hidden">
+                    <div class="bg-white rounded-md shadow-lg py-1 border border-slate-100">
+                        <a href="{% url 'bill-detail' bill.pk %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"><i class="fa-regular fa-eye mr-2"></i>View Details</a>
+                        <a href="{% url 'print-combined-bill' bill.pk %}" target="_blank" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"><i class="fa-solid fa-print mr-2"></i>Print {% if bill.is_creditor_bill %}Bill{% else %}Invoice{% endif %}</a>
+                        {% if perms.ledger.change_financialrecord %}
+                        <hr class="my-1 border-slate-100">
+                        {% if bill.is_creditor_bill %}
+                        <a href="{% url 'bill-detail' bill.customer_bill.pk %}" class="block px-4 py-2 text-sm text-blue-600 hover:bg-slate-50"><i class="fa-solid fa-file-invoice mr-2"></i>Customer Invoice</a>
+                        {% else %}
+                        <a href="{% url 'bill-update' bill.pk %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"><i class="fa-regular fa-pen-to-square mr-2"></i>Edit Invoice</a>
+                        <a href="{% url 'bill-delete' bill.pk %}" class="block px-4 py-2 text-sm text-red-600 hover:bg-slate-50"><i class="fa-regular fa-trash-can mr-2"></i>Delete</a>
+                        {% endif %}
+                        {% endif %}
+                    </div>
                 </div>
             </div>
         </div>
@@ -139,14 +390,63 @@
     {% endif %}
 </div>
 {% endif %}
+
+<!-- BEGIN: Pagination -->
+{% if is_paginated %}
+<nav class="mt-8 flex justify-center">
+    <div class="flex space-x-1">
+        {% if page_obj.has_previous %}
+        <a href="?page=1{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if current_issuer %}&issuer={{ current_issuer }}{% endif %}{% if current_party %}&party={{ current_party }}{% endif %}{% if current_bill_kind %}&bill_kind={{ current_bill_kind }}{% endif %}{% if request.GET.category %}&category={{ request.GET.category }}{% endif %}{% if current_status %}&payment_status={{ current_status }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
+            <i class="fa-solid fa-angles-left"></i>
+        </a>
+        <a href="?page={{ page_obj.previous_page_number }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if current_issuer %}&issuer={{ current_issuer }}{% endif %}{% if current_party %}&party={{ current_party }}{% endif %}{% if current_bill_kind %}&bill_kind={{ current_bill_kind }}{% endif %}{% if request.GET.category %}&category={{ request.GET.category }}{% endif %}{% if current_status %}&payment_status={{ current_status }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
+            <i class="fa-solid fa-angle-left"></i>
+        </a>
+        {% endif %}
+
+        {% for num in page_obj.paginator.page_range %}
+            {% if page_obj.number == num %}
+            <span class="px-4 py-2 bg-emerald-600 text-white border border-emerald-600 rounded-md text-sm font-medium">{{ num }}</span>
+            {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+            <a href="?page={{ num }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if current_issuer %}&issuer={{ current_issuer }}{% endif %}{% if current_party %}&party={{ current_party }}{% endif %}{% if current_bill_kind %}&bill_kind={{ current_bill_kind }}{% endif %}{% if request.GET.category %}&category={{ request.GET.category }}{% endif %}{% if current_status %}&payment_status={{ current_status }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}" class="px-4 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">{{ num }}</a>
+            {% endif %}
+        {% endfor %}
+
+        {% if page_obj.has_next %}
+        <a href="?page={{ page_obj.next_page_number }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if current_issuer %}&issuer={{ current_issuer }}{% endif %}{% if current_party %}&party={{ current_party }}{% endif %}{% if current_bill_kind %}&bill_kind={{ current_bill_kind }}{% endif %}{% if request.GET.category %}&category={{ request.GET.category }}{% endif %}{% if current_status %}&payment_status={{ current_status }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
+            <i class="fa-solid fa-angle-right"></i>
+        </a>
+        <a href="?page={{ page_obj.paginator.num_pages }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if current_issuer %}&issuer={{ current_issuer }}{% endif %}{% if current_party %}&party={{ current_party }}{% endif %}{% if current_bill_kind %}&bill_kind={{ current_bill_kind }}{% endif %}{% if request.GET.category %}&category={{ request.GET.category }}{% endif %}{% if current_status %}&payment_status={{ current_status }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
+            <i class="fa-solid fa-angles-right"></i>
+        </a>
+        {% endif %}
+    </div>
+</nav>
+{% endif %}
+<!-- END: Pagination -->
+
+{% if perms.ledger.add_financialrecord %}
+<a href="{% url 'bill-create' %}" class="fixed bottom-24 right-6 z-40 lg:hidden w-14 h-14 bg-emerald-600 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-emerald-700 active:scale-95 transition-all" title="Create Invoice">
+    <i class="fa-solid fa-plus text-xl"></i>
+</a>
+{% endif %}
 {% endblock %}
 
 {% block extra_js %}
 <script>
+function setBillKind(kind) {
+    const input = document.getElementById('id_bill_kind');
+    if (input) input.value = kind;
+    const select = document.getElementById('select_bill_kind');
+    if (select) select.value = kind;
+    const filterForm = document.getElementById('filter-form');
+    if (filterForm) filterForm.submit();
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     const filterForm = document.getElementById('filter-form');
     if (filterForm) {
-        const inputs = filterForm.querySelectorAll('select, input[type="date"]');
+        const inputs = filterForm.querySelectorAll('select, input[type="date"], input[type="text"]');
         inputs.forEach(input => {
             input.addEventListener('change', () => {
                 filterForm.submit();
@@ -154,5 +454,15 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 });
+
+function openBulkDownloadModal() {
+    document.getElementById('bulk-download-modal').classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeBulkDownloadModal() {
+    document.getElementById('bulk-download-modal').classList.add('hidden');
+    document.body.style.overflow = 'auto';
+}
 </script>
 {% endblock %}

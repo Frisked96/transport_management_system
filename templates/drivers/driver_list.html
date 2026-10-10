@@ -25,7 +25,7 @@
 <div class="space-y-4">
     {% for driver in drivers %}
     <!-- Driver Card -->
-    <div class="bg-white border border-slate-200 rounded-lg overflow-hidden hover:shadow-md transition-shadow">
+    <div class="bg-white border border-slate-200 rounded-lg hover:shadow-md transition-shadow">
         <div class="p-4 md:p-5">
             <div class="flex items-center justify-between mb-4 md:mb-0">
                 <div class="flex-1 min-w-0">
@@ -113,5 +113,44 @@
     {% endif %}
 </div>
 {% endif %}
-<!-- END: Driver List -->
+
+<!-- BEGIN: Pagination -->
+{% if is_paginated %}
+<nav class="mt-8 flex justify-center">
+    <div class="flex space-x-1">
+        {% if page_obj.has_previous %}
+        <a href="?page=1" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
+            <i class="fa-solid fa-angles-left"></i>
+        </a>
+        <a href="?page={{ page_obj.previous_page_number }}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
+            <i class="fa-solid fa-angle-left"></i>
+        </a>
+        {% endif %}
+
+        {% for num in page_obj.paginator.page_range %}
+            {% if page_obj.number == num %}
+            <span class="px-4 py-2 bg-emerald-600 text-white border border-emerald-600 rounded-md text-sm font-medium">{{ num }}</span>
+            {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+            <a href="?page={{ num }}" class="px-4 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">{{ num }}</a>
+            {% endif %}
+        {% endfor %}
+
+        {% if page_obj.has_next %}
+        <a href="?page={{ page_obj.next_page_number }}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
+            <i class="fa-solid fa-angle-right"></i>
+        </a>
+        <a href="?page={{ page_obj.paginator.num_pages }}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
+            <i class="fa-solid fa-angles-right"></i>
+        </a>
+        {% endif %}
+    </div>
+</nav>
+{% endif %}
+<!-- END: Pagination -->
+
+{% if perms.drivers.add_driver %}
+<a href="{% url 'driver-create' %}" class="fixed bottom-24 right-6 z-40 lg:hidden w-14 h-14 bg-emerald-600 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-emerald-700 active:scale-95 transition-all" title="Add Driver">
+    <i class="fa-solid fa-plus text-xl"></i>
+</a>
+{% endif %}
 {% endblock %}

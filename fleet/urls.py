@@ -11,6 +11,7 @@ urlpatterns = [
     path('vehicle/create/', views.VehicleCreateView.as_view(), name='vehicle-create'),
     path('vehicle/<int:pk>/update/', views.VehicleUpdateView.as_view(), name='vehicle-update'),
     path('vehicle/<int:pk>/delete/', views.VehicleDeleteView.as_view(), name='vehicle-delete'),
+    path('vehicle/bulk-update/', views.vehicle_bulk_update, name='vehicle-bulk-update'),
     
     # Maintenance Record URLs
     path('maintenance/', views.MaintenanceListView.as_view(), name='maintenance-list'),
@@ -25,7 +26,15 @@ urlpatterns = [
     path('tyre/<int:pk>/', views.TyreDetailView.as_view(), name='tyre-detail'),
     path('tyre/add/', views.TyreCreateView.as_view(), name='tyre-create'),
     path('tyre/<int:pk>/update/', views.TyreUpdateView.as_view(), name='tyre-update'),
+    path('tyre/<int:pk>/delete/', views.TyreDeleteView.as_view(), name='tyre-delete'),
     path('tyre/log/add/', views.TyreLogCreateView.as_view(), name='tyre-log-create'),
+    path('tyre/log/<int:pk>/delete/', views.tyre_log_delete, name='tyre-log-delete'),
     path('tyre/<int:pk>/action/<str:action>/', views.tyre_quick_action, name='tyre-action'),
     path('tyre/<int:pk>/photo/', views.tyre_photo_serve, name='tyre-photo-serve'),
+    
+    # Tyre Brand URLs
+    path('tyre-brands/', views.TyreBrandListView.as_view(), name='tyre-brand-list'),
+    path('tyre-brands/create/', views.TyreBrandCreateView.as_view(), name='tyre-brand-create'),
+    path('tyre-brands/<int:pk>/update/', views.TyreBrandUpdateView.as_view(), name='tyre-brand-update'),
+    path('tyre-brands/<int:pk>/delete/', views.TyreBrandDeleteView.as_view(), name='tyre-brand-delete'),
 ]

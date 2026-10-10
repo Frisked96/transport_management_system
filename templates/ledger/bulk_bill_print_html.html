@@ -1,0 +1,103 @@
+{% load humanize %}
+{% load ledger_extras %}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Bulk Print Invoices</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 0;
+        }
+        
+        body {
+            background-color: #f1f5f9;
+            margin: 0;
+            padding: 0;
+        }
+
+        .page-container {
+            width: 210mm;
+            margin: 20px auto;
+            background: white;
+            padding: 10mm;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            position: relative;
+        }
+
+        @media print {
+            body {
+                background: none;
+            }
+            .page-container {
+                width: auto;
+                margin: 0;
+                padding: 10mm;
+                box-shadow: none;
+                page-break-after: always;
+            }
+            .no-print {
+                display: none !important;
+            }
+        }
+
+        /* Print Controls */
+        .print-controls {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: rgba(15, 23, 42, 0.9);
+            padding: 12px;
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            backdrop-filter: blur(8px);
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .btn-print {
+            background-color: #10b981;
+            color: white;
+            border: none;
+            padding: 10px 24px;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        .btn-close {
+            background-color: transparent;
+            color: #94a3b8;
+            border: 1px solid #334155;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+    </style>
+    {% include "ledger/partials/invoice_styles.html" %}
+</head>
+<body>
+
+    <div class="print-controls no-print">
+        <button onclick="window.print()" class="btn-print">Print All Invoices</button>
+        <button onclick="window.close()" class="btn-close">Close</button>
+    </div>
+
+    {% for ctx in bill_contexts %}
+        <div class="page-container {% if not forloop.first %}page-break{% endif %}">
+            {% include "ledger/partials/bill_content.html" with bill=ctx.bill invoice_items=ctx.invoice_items bill_trips=ctx.bill_trips has_discount=ctx.has_discount has_lr=ctx.has_lr %}
+        </div>
+    {% endfor %}
+
+    <script>
+        window.onload = function() {
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            if (!isMobile) {
+                window.print();
+            }
+        }
+    </script>
+</body>
+</html>

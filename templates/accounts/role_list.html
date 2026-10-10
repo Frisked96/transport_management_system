@@ -1,0 +1,86 @@
+{% extends 'base.html' %}
+
+{% block title %}Roles & Permissions - TMS{% endblock %}
+
+{% block content %}
+<div class="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div>
+        <h1 class="text-2xl font-bold text-slate-800">User Management</h1>
+        <p class="text-sm text-slate-600">Configure roles and assign fine-grained permissions.</p>
+    </div>
+    <a href="{% url 'role-create' %}" class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500">
+        <i class="fa-solid fa-shield-halved mr-2"></i>Add Role
+    </a>
+</div>
+
+<!-- Tabs Navigation -->
+<div class="flex border-b border-slate-200 mb-6 space-x-8">
+    <a href="{% url 'user-list' %}" class="py-2.5 px-1 text-sm font-bold text-slate-500 hover:text-slate-700 border-b-2 border-transparent transition-colors flex items-center">
+        <i class="fa-solid fa-users mr-2"></i>Users
+    </a>
+    <a href="{% url 'role-list' %}" class="py-2.5 px-1 text-sm font-bold text-emerald-600 border-b-2 border-emerald-600 transition-colors flex items-center">
+        <i class="fa-solid fa-shield-halved mr-2"></i>Roles & Permissions
+    </a>
+</div>
+
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+    {% for role in roles %}
+    <div class="bg-white border border-slate-200 rounded-xl shadow-sm hover:shadow-md transition-shadow p-6 flex flex-col justify-between">
+        <div>
+            <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-lg border border-emerald-100">
+                        <i class="fa-solid fa-shield-halved"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-slate-900 text-lg leading-tight">{{ role.name }}</h3>
+                        <p class="text-xs text-slate-400 mt-0.5">Role ID #{{ role.id }}</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex flex-wrap gap-2 my-4">
+                <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                    <i class="fa-solid fa-user-group mr-1.5 text-[10px]"></i>{{ role.user_count }} assigned user{{ role.user_count|pluralize }}
+                </span>
+                <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    <i class="fa-solid fa-key mr-1.5 text-[10px]"></i>{{ role.permissions.count }} permission{{ role.permissions.count|pluralize }}
+                </span>
+            </div>
+
+            {% if role.user_set.exists %}
+            <div class="text-xs text-slate-500 mb-4">
+                <span class="font-bold text-slate-700">Users:</span>
+                {% for u in role.user_set.all|slice:":5" %}
+                <span class="inline-block bg-slate-100 rounded px-1.5 py-0.5 text-[11px] text-slate-600 mr-1 mt-1">{{ u.username }}</span>
+                {% endfor %}
+                {% if role.user_count > 5 %}
+                <span class="text-slate-400 italic text-[11px]">+{{ role.user_count|add:"-5" }} more</span>
+                {% endif %}
+            </div>
+            {% else %}
+            <p class="text-xs text-slate-400 italic mb-4">No users currently assigned to this role.</p>
+            {% endif %}
+        </div>
+
+        <div class="pt-4 border-t border-slate-100 flex items-center justify-between">
+            <a href="{% url 'role-update' role.pk %}" class="inline-flex items-center px-3 py-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-md transition-colors border border-emerald-200">
+                <i class="fa-solid fa-pen-to-square mr-1.5"></i>Configure Permissions
+            </a>
+            <a href="{% url 'role-delete' role.pk %}" class="inline-flex items-center px-2.5 py-1.5 text-xs font-bold text-rose-600 hover:text-rose-800 hover:bg-rose-50 rounded-md transition-colors">
+                <i class="fa-solid fa-trash-can mr-1"></i>Delete
+            </a>
+        </div>
+    </div>
+    {% empty %}
+    <div class="col-span-full text-center py-16 bg-white rounded-xl border border-slate-200 p-8 shadow-sm">
+        <i class="fa-solid fa-shield-halved text-5xl text-slate-300 mb-3"></i>
+        <h3 class="text-lg font-bold text-slate-800 mb-1">No Roles Defined</h3>
+        <p class="text-sm text-slate-500 mb-4">Create roles (e.g. Office, Dispatcher, Accountant) to organize access rights.</p>
+        <a href="{% url 'role-create' %}" class="inline-flex items-center px-4 py-2 bg-emerald-600 text-white rounded-md text-sm font-medium hover:bg-emerald-700 shadow-sm transition-colors">
+            <i class="fa-solid fa-plus mr-2"></i>Create First Role
+        </a>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

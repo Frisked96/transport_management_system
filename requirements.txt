@@ -1,12 +1,8 @@
 Django
 python-decouple
 whitenoise
-dj-database-url
 gunicorn
-django-googledrive-storage==1.6.0
-google-api-python-client
-google-auth-httplib2
-google-auth-oauthlib
-xhtml2pdf
+django-storages
+boto3
 openpyxl
-
+Pillow

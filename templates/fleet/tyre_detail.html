@@ -10,7 +10,7 @@
         <span>Tyre Details</span>
     </div>
     <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <h1 class="text-3xl font-bold text-slate-900 tracking-tight">{{ tyre.brand }} {{ tyre.size }}</h1>
+        <h1 class="text-3xl font-bold text-slate-900 tracking-tight">{{ tyre.brand }} {% if tyre.size %}{{ tyre.size }}{% else %}-{% endif %}</h1>
         <div class="flex items-center gap-2">
             {% if perms.fleet.change_tyre %}
             <a href="{% url 'tyre-update' tyre.pk %}" class="px-4 py-2 border border-slate-300 rounded-md bg-white text-slate-700 text-sm font-bold hover:bg-slate-50 transition-colors">
@@ -25,14 +25,23 @@
                 <i class="fa-solid fa-truck-pickup mr-2"></i>Mount
             </a>
             {% else %}
-            <a href="{% url 'tyre-action' tyre.pk 'Dismount' %}" class="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-bold hover:bg-blue-700 shadow-sm transition-colors" onclick="return confirm('Dismount this tyre?')">
+            <a href="{% url 'tyre-log-create' %}?tyre={{ tyre.pk }}&action=Dismount" class="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-bold hover:bg-blue-700 shadow-sm transition-colors">
                 <i class="fa-solid fa-arrow-down-long mr-2"></i>Dismount
             </a>
             {% endif %}
 
-            {% if tyre.status != 'Scrap' %}
-            <a href="{% url 'tyre-action' tyre.pk 'Scrap' %}" class="px-4 py-2 border border-rose-200 rounded-md bg-rose-50 text-rose-700 text-sm font-bold hover:bg-rose-100 transition-colors" onclick="return confirm('SCRAP this tyre? This cannot be undone.')">
-                <i class="fa-solid fa-trash-can mr-2"></i>Scrap
+            {% if tyre.status != 'Scrap' and perms.fleet.change_tyre %}
+            <form action="{% url 'tyre-action' tyre.pk 'Scrap' %}" method="post" class="inline" onsubmit="return confirm('SCRAP this tyre? This cannot be undone.');">
+                {% csrf_token %}
+                <button type="submit" class="px-4 py-2 border border-rose-200 rounded-md bg-rose-50 text-rose-700 text-sm font-bold hover:bg-rose-100 transition-colors">
+                    <i class="fa-solid fa-ban mr-2"></i>Scrap
+                </button>
+            </form>
+            {% endif %}
+
+            {% if perms.fleet.delete_tyre %}
+            <a href="{% url 'tyre-delete' tyre.pk %}" class="px-4 py-2 bg-rose-600 text-white rounded-md text-sm font-bold hover:bg-rose-700 shadow-sm transition-colors">
+                <i class="fa-solid fa-trash-can mr-2"></i>Delete
             </a>
             {% endif %}
         </div>
@@ -73,11 +82,32 @@
                             </tr>
                             <tr class="border-b border-slate-50">
                                 <td class="py-2 text-slate-500 font-medium whitespace-nowrap pr-4">Dimension/Size</td>
-                                <td class="py-2 text-slate-900 font-bold">{{ tyre.size }}</td>
+                                <td class="py-2 text-slate-900 font-bold">{% if tyre.size %}{{ tyre.size }}{% else %}-{% endif %}</td>
                             </tr>
-                            <tr>
+                            <tr class="border-b border-slate-50">
                                 <td class="py-2 text-slate-500 font-medium whitespace-nowrap pr-4">Purchase Cost</td>
                                 <td class="py-2 text-emerald-700 font-black">₹{{ tyre.purchase_cost|floatformat:2 }}</td>
+                            </tr>
+                            <tr class="border-b border-slate-50">
+                                <td class="py-2 text-slate-500 font-medium whitespace-nowrap pr-4">Purchase Date</td>
+                                <td class="py-2 text-slate-900 font-bold">{{ tyre.purchase_date|date:"d M Y"|default:"-" }}</td>
+                            </tr>
+                            <tr class="border-b border-slate-50">
+                                <td class="py-2 text-slate-500 font-medium whitespace-nowrap pr-4">Vendor</td>
+                                <td class="py-2 text-slate-900 font-bold">{{ tyre.vendor.name|default:"-" }}</td>
+                            </tr>
+                            <tr>
+                                <td class="py-2 text-slate-500 font-medium whitespace-nowrap pr-4">System Entry</td>
+                                <td class="py-2 text-slate-900 font-bold">
+                                    {% if tyre.added_at %}
+                                        <div class="flex flex-col">
+                                            <span>{{ tyre.added_at|date:"d M Y, H:i" }}</span>
+                                            <span class="text-[10px] text-slate-400 font-medium mt-0.5">By: {{ tyre.added_by.get_full_name|default:tyre.added_by.username|default:"System" }}</span>
+                                        </div>
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
                             </tr>
                         </table>
                     </div>
@@ -125,12 +155,13 @@
                         <!-- Loading State -->
                         <div id="photo-loading" class="text-center">
                             <i class="fa-solid fa-circle-notch fa-spin text-emerald-500 text-2xl mb-2"></i>
-                            <p class="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">Drive Fetching...</p>
+                            <p class="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">Loading Image...</p>
                         </div>
                         <!-- Error State -->
                         <div id="photo-error" class="hidden text-center p-4">
                             <i class="fa-solid fa-cloud-bolt text-rose-300 text-xl mb-1"></i>
                             <p class="text-[10px] text-slate-400 font-bold uppercase">Image Offline</p>
+                            <a id="photo-error-link" href="{% url 'tyre-photo-serve' tyre.pk %}" target="_blank" class="text-[9px] text-emerald-600 underline font-semibold mt-1 block">Check Storage Link</a>
                         </div>
                         <!-- Actual Image -->
                         <img id="tyre-photo" src="" alt="Tyre Photo" class="hidden w-full h-full object-cover">
@@ -164,13 +195,20 @@
                         <th class="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider w-40">Event / Action</th>
                         <th class="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider">Asset Context</th>
                         <th class="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">Position</th>
+                        <th class="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider">Logged By</th>
                         <th class="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider">Remarks</th>
+                        {% if request.user.is_superuser %}
+                        <th class="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider text-right">Actions</th>
+                        {% endif %}
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
                     {% for log in logs %}
                     <tr class="hover:bg-slate-50/80 transition-colors">
-                        <td class="px-6 py-4 text-slate-500 font-medium">{{ log.date|date:"d M Y" }}</td>
+                        <td class="px-6 py-4">
+                            <span class="text-slate-900 font-bold block">{{ log.date|date:"d M Y" }}</span>
+                            <span class="text-[9px] text-slate-400 font-black uppercase tracking-tighter">{{ log.created_at|date:"M d, H:i" }}</span>
+                        </td>
                         <td class="px-6 py-4">
                             <span class="inline-flex px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-tight 
                                 {% if log.action == 'Mount' %}bg-emerald-100 text-emerald-700
@@ -189,10 +227,31 @@
                             {% endif %}
                         </td>
                         <td class="px-6 py-4 text-center font-bold text-slate-700">{{ log.position|default:"-" }}</td>
+                        <td class="px-6 py-4">
+                            <div class="flex flex-col">
+                                <span class="text-xs font-bold text-slate-700">
+                                    {% if log.logged_by %}
+                                        {{ log.logged_by.get_full_name|default:log.logged_by.username }}
+                                    {% else %}
+                                        System
+                                    {% endif %}
+                                </span>
+                            </div>
+                        </td>
                         <td class="px-6 py-4 text-slate-500 text-xs">{{ log.notes|default:"-" }}</td>
+                        {% if request.user.is_superuser %}
+                        <td class="px-6 py-4 text-right">
+                            <form action="{% url 'tyre-log-delete' log.pk %}" method="post" class="inline" onsubmit="return confirm('Are you sure you want to delete this log entry?');">
+                                {% csrf_token %}
+                                <button type="submit" class="text-rose-500 hover:text-rose-700 transition-colors" title="Delete Log">
+                                    <i class="fa-solid fa-trash-can text-sm"></i>
+                                </button>
+                            </form>
+                        </td>
+                        {% endif %}
                     </tr>
                     {% empty %}
-                    <tr><td colspan="5" class="px-6 py-12 text-center text-slate-400 italic">No movement history recorded.</td></tr>
+                    <tr><td colspan="{% if request.user.is_superuser %}7{% else %}6{% endif %}" class="px-6 py-12 text-center text-slate-400 italic">No movement history recorded.</td></tr>
                     {% endfor %}
                 </tbody>
             </table>

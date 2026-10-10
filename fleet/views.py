@@ -8,33 +8,32 @@ from django.utils import timezone
 from django.shortcuts import render, get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.contrib import messages
-from django.db.models import Q, Count, Sum
-from django.http import JsonResponse, HttpResponse
+from django.db.models import Q, Count
+from django.http import HttpResponse, HttpResponseRedirect
+from django.views.decorators.http import require_POST
+from ledger.models import Party, CompanyAccount
 
-from .models import Vehicle, MaintenanceRecord, Tyre, TyreLog
-from .forms import VehicleForm, MaintenanceRecordForm, MaintenanceCompleteForm, TyreForm, TyreLogForm
+from .models import Vehicle, MaintenanceRecord, Tyre, TyreLog, TyreBrand
+from .forms import VehicleForm, MaintenanceRecordForm, MaintenanceCompleteForm, TyreForm, TyreLogForm, TyreBrandForm
 
 
 class BaseFleetPermissionMixin:
     """Base mixin for fleet permissions"""
     
-    def has_manager_permission(self):
-        """Check if user is in manager group"""
-        return self.request.user.groups.filter(name='manager').exists()
-    
-    def has_supervisor_permission(self):
-        """Check if user is in supervisor group"""
-        return self.request.user.groups.filter(name='supervisor').exists()
-    
+    def has_driver_profile(self):
+        """Check if user has an associated driver profile"""
+        return hasattr(self.request.user, 'driver_profile')
+
     def has_driver_permission(self):
-        """Check if user is in driver group"""
-        return self.request.user.groups.filter(name='driver').exists()
+        """Check if user has driver access (is a driver)"""
+        return self.has_driver_profile()
 
 
-class TyreListView(LoginRequiredMixin, ListView):
+class TyreListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
     model = Tyre
     template_name = 'fleet/tyre_list.html'
     context_object_name = 'tyres'
+    permission_required = 'fleet.view_tyre'
     paginate_by = 20
 
     def get_queryset(self):
@@ -44,18 +43,32 @@ class TyreListView(LoginRequiredMixin, ListView):
             queryset = queryset.filter(
                 Q(serial_number__icontains=search) |
                 Q(brand__icontains=search) |
-                Q(size__icontains=search)
+                Q(size__icontains=search) |
+                Q(current_vehicle__registration_plate__icontains=search)
             )
         status = self.request.GET.get('status')
         if status:
             queryset = queryset.filter(status=status)
+            
+        vehicle_id = self.request.GET.get('vehicle')
+        if vehicle_id:
+            queryset = queryset.filter(current_vehicle_id=vehicle_id)
+            
         return queryset.order_by('brand', 'serial_number')
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        from .models import Vehicle
+        context['vehicles'] = Vehicle.objects.all().order_by('registration_plate')
+        context['selected_vehicle'] = self.request.GET.get('vehicle', '')
+        return context
 
-class TyreDetailView(LoginRequiredMixin, DetailView):
+
+class TyreDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
     model = Tyre
     template_name = 'fleet/tyre_detail.html'
     context_object_name = 'tyre'
+    permission_required = 'fleet.view_tyre'
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -63,34 +76,165 @@ class TyreDetailView(LoginRequiredMixin, DetailView):
         return context
 
 
-class TyreCreateView(LoginRequiredMixin, CreateView):
+class TyreCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
     model = Tyre
     form_class = TyreForm
     template_name = 'fleet/tyre_form.html'
+    permission_required = 'fleet.add_tyre'
     success_url = reverse_lazy('tyre-list')
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        from .models import TyreBrand
+        context['tyre_brands'] = TyreBrand.objects.all()
+        return context
+
     def form_valid(self, form):
-        messages.success(self.request, 'Tyre added to inventory.')
-        return super().form_valid(form)
+        form.instance._user = self.request.user
+        try:
+            self.object = form.save()
+            messages.success(self.request, 'Tyre added to inventory.')
+            return redirect(self.get_success_url())
+        except Exception as e:
+            messages.error(self.request, f"Storage upload failed: {str(e)}. Please check cloud credentials.")
+            return self.form_invalid(form)
 
 
-class TyreUpdateView(LoginRequiredMixin, UpdateView):
+class TyreUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
     model = Tyre
     form_class = TyreForm
     template_name = 'fleet/tyre_form.html'
+    permission_required = 'fleet.change_tyre'
     
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        from .models import TyreBrand
+        context['tyre_brands'] = TyreBrand.objects.all()
+        return context
+
     def get_success_url(self):
         return reverse_lazy('tyre-detail', kwargs={'pk': self.object.pk})
 
     def form_valid(self, form):
-        messages.success(self.request, 'Tyre updated.')
+        form.instance._user = self.request.user
+        try:
+            self.object = form.save()
+            messages.success(self.request, 'Tyre updated.')
+            return redirect(self.get_success_url())
+        except Exception as e:
+            messages.error(self.request, f"Storage upload failed: {str(e)}. Please check cloud credentials.")
+            return self.form_invalid(form)
+
+
+class TyreDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
+    """
+    Delete view for Tyres.
+    Permission: Only admin and manager can delete tyres.
+    Deletes the tyre, its logs, and its photo from storage.
+    Configurable option to delete or keep linked financial ledger entries.
+    """
+    model = Tyre
+    template_name = 'fleet/tyre_confirm_delete.html'
+    permission_required = 'fleet.delete_tyre'
+    success_url = reverse_lazy('tyre-list')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['associated_records'] = self.object.financial_records.all()
+        return context
+
+    def form_valid(self, form):
+        tyre = self.get_object()
+        serial = tyre.serial_number
+
+        # Handle linked financial records
+        ledger_action = self.request.POST.get('ledger_action', 'keep')
+        associated_records = tyre.financial_records.all()
+        if associated_records.exists():
+            if ledger_action == 'delete':
+                count = associated_records.count()
+                associated_records.delete()
+                messages.info(self.request, f"{count} linked financial ledger entry was deleted.")
+            else:
+                count = associated_records.count()
+                associated_records.update(associated_tyre=None)
+                messages.info(self.request, f"{count} linked financial ledger entry was preserved (unlinked from tyre).")
+
+        if tyre.photo:
+            try:
+                tyre.photo.delete(save=False)
+            except Exception as e:
+                messages.warning(self.request, f"Tyre deleted, but photo deletion from storage encountered: {str(e)}")
+        messages.success(self.request, f'Tyre {serial} and all its history have been deleted.')
+        return super().form_valid(form)
+
+    def delete(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        return self.form_valid(None)
+
+
+# --- Tyre Brand Views ---
+ 
+class TyreBrandListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
+    model = TyreBrand
+    template_name = 'fleet/tyre_brand_list.html'
+    context_object_name = 'brands'
+    permission_required = 'fleet.view_tyrebrand'
+    paginate_by = 25
+
+    def get_queryset(self):
+        queryset = TyreBrand.objects.all().order_by('name')
+        search = self.request.GET.get('search')
+        if search:
+            queryset = queryset.filter(name__icontains=search)
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['search_term'] = self.request.GET.get('search', '')
+        return context
+
+
+class TyreBrandCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+    model = TyreBrand
+    form_class = TyreBrandForm
+    template_name = 'fleet/tyre_brand_form.html'
+    permission_required = 'fleet.add_tyrebrand'
+    success_url = reverse_lazy('tyre-brand-list')
+
+    def form_valid(self, form):
+        messages.success(self.request, 'Tyre brand added successfully.')
         return super().form_valid(form)
 
 
-class TyreLogCreateView(LoginRequiredMixin, CreateView):
+class TyreBrandUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+    model = TyreBrand
+    form_class = TyreBrandForm
+    template_name = 'fleet/tyre_brand_form.html'
+    permission_required = 'fleet.change_tyrebrand'
+    success_url = reverse_lazy('tyre-brand-list')
+
+    def form_valid(self, form):
+        messages.success(self.request, 'Tyre brand updated successfully.')
+        return super().form_valid(form)
+
+
+class TyreBrandDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
+    model = TyreBrand
+    template_name = 'fleet/tyre_brand_confirm_delete.html'
+    permission_required = 'fleet.delete_tyrebrand'
+    success_url = reverse_lazy('tyre-brand-list')
+
+    def delete(self, request, *args, **kwargs):
+        messages.success(self.request, 'Tyre brand deleted successfully.')
+        return super().delete(request, *args, **kwargs)
+
+
+class TyreLogCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
     model = TyreLog
     form_class = TyreLogForm
     template_name = 'fleet/tyre_log_form.html'
+    permission_required = 'fleet.change_tyre'
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -125,6 +269,19 @@ class TyreLogCreateView(LoginRequiredMixin, CreateView):
         
         # Synchronize Tyre model status
         if action == TyreLog.ACTION_MOUNT:
+            # If tyre was already mounted on another vehicle, log dismount from old vehicle first
+            old_vehicle = tyre.current_vehicle
+            old_position = tyre.current_position
+            if old_vehicle and old_vehicle != form.instance.vehicle:
+                TyreLog.objects.create(
+                    tyre=tyre,
+                    action=TyreLog.ACTION_DISMOUNT,
+                    vehicle=old_vehicle,
+                    position=old_position,
+                    date=form.instance.date,
+                    notes=f"Auto-dismount prior to mounting on {form.instance.vehicle.registration_plate}",
+                    logged_by=self.request.user
+                )
             tyre.current_vehicle = form.instance.vehicle
             tyre.current_position = form.instance.position
             tyre.status = Tyre.STATUS_MOUNTED
@@ -150,19 +307,44 @@ class TyreLogCreateView(LoginRequiredMixin, CreateView):
         tyre._skip_auto_log = True
         tyre.save()
         
+        # Assign user who performed the manual action
+        form.instance.logged_by = self.request.user
+        
         messages.success(self.request, f'Tyre action {action} processed.')
         return super().form_valid(form)
 
     def get_success_url(self):
         return reverse_lazy('tyre-detail', kwargs={'pk': self.object.tyre.pk})
 
-
 @login_required
+def tyre_log_delete(request, pk):
+    """
+    Deletes a specific tyre log. Only superusers can delete logs.
+    """
+    log = get_object_or_404(TyreLog, pk=pk)
+    tyre_pk = log.tyre.pk
+    
+    if not request.user.is_superuser:
+        messages.error(request, 'Only superusers can delete tyre logs.')
+        return redirect('tyre-detail', pk=tyre_pk)
+        
+    if request.method == 'POST':
+        log.delete()
+        messages.success(request, 'Tyre log deleted successfully.')
+        
+    return redirect('tyre-detail', pk=tyre_pk)
+
+
+@require_POST
+@login_required
+@permission_required('fleet.change_tyre', raise_exception=True)
 def tyre_quick_action(request, pk, action):
     """
     Handles simple status changes without a form.
+    Requires POST and change_tyre permission.
     """
     tyre = get_object_or_404(Tyre, pk=pk)
+    tyre._user = request.user
     
     if action == 'Dismount':
         tyre.current_vehicle = None
@@ -189,18 +371,19 @@ def tyre_quick_action(request, pk, action):
     return redirect('tyre-detail', pk=pk)
 
 
-class VehicleListView(LoginRequiredMixin, BaseFleetPermissionMixin, ListView):
+class VehicleListView(LoginRequiredMixin, PermissionRequiredMixin, BaseFleetPermissionMixin, ListView):
     """
     List view for vehicles with permission-based filtering
     """
     model = Vehicle
     template_name = 'fleet/vehicle_list.html'
     context_object_name = 'vehicles'
+    permission_required = 'fleet.view_vehicle'
     paginate_by = 15
     
     def get_queryset(self):
         """Filter vehicles based on user permissions"""
-        queryset = Vehicle.objects.all()
+        queryset = Vehicle.objects.all().select_related('vendor', 'company_account', 'created_by')
         
         # Drivers can only view active vehicles
         if self.has_driver_permission():
@@ -211,7 +394,9 @@ class VehicleListView(LoginRequiredMixin, BaseFleetPermissionMixin, ListView):
         if search:
             queryset = queryset.filter(
                 Q(registration_plate__icontains=search) |
-                Q(make_model__icontains=search)
+                Q(make_model__icontains=search) |
+                Q(chassis_number__icontains=search) |
+                Q(engine_number__icontains=search)
             )
         
         # Status filter
@@ -231,16 +416,22 @@ class VehicleListView(LoginRequiredMixin, BaseFleetPermissionMixin, ListView):
         context['status_choices'] = Vehicle.STATUS_CHOICES
         context['current_status'] = self.request.GET.get('status', '')
         context['search_term'] = self.request.GET.get('search', '')
+        context['vendors'] = Party.objects.filter(party_type=Party.TYPE_CREDITOR).order_by('name')
+        context['company_accounts'] = CompanyAccount.objects.all().order_by('name')
         return context
 
 
-class VehicleDetailView(LoginRequiredMixin, BaseFleetPermissionMixin, DetailView):
+class VehicleDetailView(LoginRequiredMixin, PermissionRequiredMixin, BaseFleetPermissionMixin, DetailView):
     """
     Detail view for a single vehicle
     """
     model = Vehicle
     template_name = 'fleet/vehicle_detail.html'
     context_object_name = 'vehicle'
+    permission_required = 'fleet.view_vehicle'
+
+    def get_queryset(self):
+        return super().get_queryset().select_related('vendor', 'company_account', 'created_by')
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -268,6 +459,7 @@ class VehicleCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView)
     permission_required = 'fleet.add_vehicle'
     
     def form_valid(self, form):
+        form.instance.created_by = self.request.user
         messages.success(self.request, 'Vehicle created successfully!')
         return super().form_valid(form)
     
@@ -293,6 +485,49 @@ class VehicleUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView)
         return reverse_lazy('vehicle-detail', kwargs={'pk': self.object.pk})
 
 
+@login_required
+@permission_required('fleet.change_vehicle')
+def vehicle_bulk_update(request):
+    """
+    Bulk update ownership and vendor for multiple vehicles.
+    """
+    if request.method == 'POST':
+        vehicle_ids = list(set(request.POST.getlist('vehicle_ids')))
+        ownership = request.POST.get('ownership')
+        vendor_id = request.POST.get('vendor')
+
+        if not vehicle_ids:
+            messages.error(request, 'No vehicles selected for update.')
+            return redirect('vehicle-list')
+
+        if ownership not in [Vehicle.OWNERSHIP_OWNED, Vehicle.OWNERSHIP_ATTACHED]:
+            messages.error(request, 'Invalid ownership type selected.')
+            return redirect('vehicle-list')
+
+        vendor = None
+        company_account = None
+        if ownership == Vehicle.OWNERSHIP_ATTACHED:
+            if not vendor_id:
+                messages.error(request, 'Vendor must be selected for attached vehicles.')
+                return redirect('vehicle-list')
+            vendor = get_object_or_404(Party, pk=vendor_id)
+        elif ownership == Vehicle.OWNERSHIP_OWNED:
+            company_account_id = request.POST.get('company_account')
+            if company_account_id:
+                company_account = get_object_or_404(CompanyAccount, pk=company_account_id)
+
+        # Update the selected vehicles using save() to keep financial sync consistent
+        for vehicle in Vehicle.objects.filter(id__in=vehicle_ids):
+            vehicle.ownership = ownership
+            vehicle.vendor = vendor if ownership == Vehicle.OWNERSHIP_ATTACHED else None
+            vehicle.company_account = company_account if ownership == Vehicle.OWNERSHIP_OWNED else None
+            vehicle.save()
+        
+        messages.success(request, f'Successfully updated {len(vehicle_ids)} vehicle(s).')
+    
+    return redirect('vehicle-list')
+
+
 class VehicleDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
     """
     Delete view for vehicles
@@ -308,13 +543,14 @@ class VehicleDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView)
         return super().delete(request, *args, **kwargs)
 
 
-class MaintenanceListView(LoginRequiredMixin, BaseFleetPermissionMixin, ListView):
+class MaintenanceListView(LoginRequiredMixin, PermissionRequiredMixin, BaseFleetPermissionMixin, ListView):
     """
     Unified list view for maintenance records (both pending and completed)
     """
     model = MaintenanceRecord
     template_name = 'fleet/maintenance_list.html'
     context_object_name = 'maintenance_records'
+    permission_required = 'fleet.view_maintenancerecord'
     paginate_by = 20
     
     def get_queryset(self):
@@ -384,10 +620,11 @@ class MaintenanceRecordUpdateView(LoginRequiredMixin, PermissionRequiredMixin, U
         return reverse_lazy('maintenance-list')
 
 
-class MaintenanceRecordDetailView(LoginRequiredMixin, DetailView):
+class MaintenanceRecordDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
     model = MaintenanceRecord
     template_name = 'fleet/maintenance_detail.html'
     context_object_name = 'record'
+    permission_required = 'fleet.view_maintenancerecord'
 
 
 class MaintenanceRecordDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
@@ -438,31 +675,17 @@ def maintenance_record_complete(request, pk):
 @login_required
 def tyre_photo_serve(request, pk):
     """
-    Serves the tyre photo directly from storage with browser caching.
-    Ensures fast loading for repeated views on the same device.
+    Redirects to the presigned storage URL for the tyre photo.
+    Allows the browser to fetch directly from CDN edge with zero web server RAM buffering.
     """
     tyre = get_object_or_404(Tyre, pk=pk)
-    if not tyre.photo:
+    if not tyre.photo or not tyre.photo.name:
         return HttpResponse(status=404)
 
     try:
-        # Fetch from Google Drive (the slow network part)
-        with tyre.photo.open('rb') as f:
-            photo_data = f.read()
+        url = tyre.photo.url
+        if url:
+            return HttpResponseRedirect(str(url))
+        return HttpResponse(status=404)
     except Exception as e:
         return HttpResponse(f"Error accessing storage: {str(e)}", status=500)
-
-    # Determine content type (simple detection)
-    content_type = "image/jpeg"
-    # Basic extension check based on file name if available
-    if tyre.photo.name.lower().endswith('.png'):
-        content_type = "image/png"
-    elif tyre.photo.name.lower().endswith('.gif'):
-        content_type = "image/gif"
-
-    response = HttpResponse(photo_data, content_type=content_type)
-
-    # Browser caching (1 day) - This is the "User Mobile Cache"
-    # The phone will remember the image and won't ask the server again for 24h.
-    response['Cache-Control'] = 'public, max-age=86400'
-    return response

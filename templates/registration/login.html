@@ -4,6 +4,10 @@
 
 {% block extra_css %}
 <style>
+    /* Hide navigation elements on login page */
+    nav, footer, #bottom-nav, #mobile-drawer, #upload-status-bar { display: none !important; }
+    main.main-content-area { padding-top: 0 !important; }
+
     body {
         background-color: #f1f5f9;
         background-image: radial-gradient(#cbd5e1 0.5px, transparent 0.5px);

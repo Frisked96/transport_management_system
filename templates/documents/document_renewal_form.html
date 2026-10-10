@@ -1,0 +1,101 @@
+{% extends 'base.html' %}
+
+{% block title %}Edit Renewal Entry - TMS{% endblock %}
+
+{% block content %}
+<header class="mb-6">
+    <div class="flex items-center space-x-2 text-sm text-slate-500 mb-2">
+        {% if vehicle %}
+        <a href="{% url 'vehicle-list' %}" class="hover:text-emerald-600 transition-colors">Fleet</a>
+        <i class="fa-solid fa-chevron-right text-[10px]"></i>
+        <a href="{% url 'vehicle-detail' vehicle.pk %}" class="hover:text-emerald-600 transition-colors">{{ vehicle.registration_plate }}</a>
+        <i class="fa-solid fa-chevron-right text-[10px]"></i>
+        {% endif %}
+        <a href="{% url 'document-history' document.pk %}" class="hover:text-emerald-600 transition-colors">{{ document.document_name }}</a>
+        <i class="fa-solid fa-chevron-right text-[10px]"></i>
+        <span class="text-slate-900 font-bold">Edit History Entry</span>
+    </div>
+    <h1 class="text-3xl font-bold text-slate-900 tracking-tight">Edit Renewal Entry</h1>
+    <p class="text-sm text-slate-600 mt-1">For document: <strong>{{ document.document_name }}</strong></p>
+</header>
+
+<div class="max-w-2xl mx-auto bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
+    <form method="post" enctype="multipart/form-data" class="space-y-5">
+        {% csrf_token %}
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+                <label for="{{ form.valid_from.id_for_label }}" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    {{ form.valid_from.label }}
+                </label>
+                {{ form.valid_from }}
+                {% if form.valid_from.errors %}
+                    <p class="mt-1 text-xs text-rose-600">{{ form.valid_from.errors.0 }}</p>
+                {% endif %}
+            </div>
+            <div>
+                <label for="{{ form.valid_to.id_for_label }}" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    {{ form.valid_to.label }}
+                </label>
+                {{ form.valid_to }}
+                {% if form.valid_to.errors %}
+                    <p class="mt-1 text-xs text-rose-600">{{ form.valid_to.errors.0 }}</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+                <label for="{{ form.cost.id_for_label }}" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    {{ form.cost.label }}
+                </label>
+                {{ form.cost }}
+                {% if form.cost.errors %}
+                    <p class="mt-1 text-xs text-rose-600">{{ form.cost.errors.0 }}</p>
+                {% endif %}
+            </div>
+            <div>
+                <label for="{{ form.document_number.id_for_label }}" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    {{ form.document_number.label }}
+                </label>
+                {{ form.document_number }}
+                {% if form.document_number.errors %}
+                    <p class="mt-1 text-xs text-rose-600">{{ form.document_number.errors.0 }}</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <div>
+            <label for="{{ form.receipt_file.id_for_label }}" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                {{ form.receipt_file.label }}
+            </label>
+            {{ form.receipt_file }}
+            {% if form.receipt_file.errors %}
+                <p class="mt-1 text-xs text-rose-600">{{ form.receipt_file.errors.0 }}</p>
+            {% endif %}
+            {% if form.instance.receipt_file %}
+            <p class="mt-1 text-xs text-slate-500">Current: <a href="{{ form.instance.receipt_file.url }}" target="_blank" class="text-emerald-600 underline">View current file</a></p>
+            {% endif %}
+        </div>
+
+        <div>
+            <label for="{{ form.notes.id_for_label }}" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                {{ form.notes.label }}
+            </label>
+            {{ form.notes }}
+            {% if form.notes.errors %}
+                <p class="mt-1 text-xs text-rose-600">{{ form.notes.errors.0 }}</p>
+            {% endif %}
+        </div>
+
+        <div class="flex items-center space-x-3 pt-4 border-t border-slate-100">
+            <button type="submit" class="px-6 py-2.5 bg-emerald-600 text-white rounded-md text-sm font-bold hover:bg-emerald-700 shadow-sm transition-colors">
+                Update Entry
+            </button>
+            <a href="{% url 'document-history' document.pk %}" class="px-5 py-2.5 border border-slate-300 rounded-md text-slate-700 bg-white hover:bg-slate-50 text-sm font-semibold transition-colors">
+                Cancel
+            </a>
+        </div>
+    </form>
+</div>
+{% endblock %}

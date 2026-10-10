@@ -37,7 +37,7 @@
                 {% endfor %}
             </div>
             
-            <div class="mt-8 pt-6 border-t border-slate-100 flex items-center space-x-4">
+            <div class="mt-8 pt-6 border-t border-slate-100 flex items-center space-x-4 sticky bottom-16 z-30 bg-white py-3 px-4 -mx-4 md:relative md:bottom-auto md:z-auto md:bg-transparent md:border-t md:border-slate-100 md:py-0 md:px-0 md:mx-0 md:pt-6 md:mt-8">
                 <button type="submit" class="px-6 py-2 bg-emerald-600 text-white rounded-md font-medium hover:bg-emerald-700 shadow-sm transition-colors">
                     {% if object %}Update Party{% else %}Create Party{% endif %}
                 </button>

@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load ledger_extras %}
 
 {% block title %}Delete Invoice - Transport Management System{% endblock %}
 
@@ -46,7 +47,7 @@
                         <tr>
                             <td class="py-3 text-slate-500 font-medium">Total Amount</td>
                             <td class="py-3 font-black text-xl text-slate-900">
-                                ₹{{ object.rounded_total|floatformat:2 }}
+                                ₹{{ object.rounded_total|indian_comma }}
                             </td>
                         </tr>
                     </table>

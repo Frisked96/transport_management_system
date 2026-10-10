@@ -1,0 +1,178 @@
+<!-- Document In-Site Preview Modal -->
+<div id="documentPreviewModal" class="fixed inset-0 z-50 hidden bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 md:p-6 transition-all duration-200">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[92vh] flex flex-col overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
+        
+        <!-- Modal Header -->
+        <div class="px-4 py-3.5 sm:px-6 bg-slate-50 border-b border-slate-200 flex items-center justify-between gap-3">
+            <div class="min-w-0 flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                    <i id="docPreviewIcon" class="fa-solid fa-file-pdf text-sm"></i>
+                </div>
+                <div class="min-w-0">
+                    <h3 id="docPreviewTitle" class="text-sm sm:text-base font-black text-slate-900 truncate">Document Preview</h3>
+                    <div class="flex items-center gap-2 mt-0.5">
+                        <span id="docPreviewBadge" class="px-1.5 py-0.2 rounded text-[10px] font-black uppercase tracking-wider bg-slate-200 text-slate-700">FILE</span>
+                        <span id="docPreviewSubtitle" class="text-xs text-slate-400 font-medium truncate"></span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-2 shrink-0">
+                <!-- Direct Download Button -->
+                <a id="docPreviewDownloadBtn" href="#" class="inline-flex items-center px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-sm transition-colors" title="Download to device">
+                    <i class="fa-solid fa-download mr-1.5"></i>
+                    <span class="hidden sm:inline">Download</span>
+                </a>
+
+                <!-- Open in New Window Link -->
+                <a id="docPreviewNewTabBtn" href="#" target="_blank" class="p-2 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-200/60 transition-colors" title="Open in new window / tab">
+                    <i class="fa-solid fa-arrow-up-right-from-square text-xs"></i>
+                </a>
+
+                <!-- Close Button -->
+                <button type="button" onclick="closeDocumentPreview()" class="p-2 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-200/60 transition-colors" title="Close (Esc)">
+                    <i class="fa-solid fa-xmark text-base"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Modal Body / Preview Viewer -->
+        <div class="relative flex-1 bg-slate-900/5 min-h-[400px] max-h-[78vh] flex items-center justify-center overflow-auto p-2 sm:p-4">
+            
+            <!-- Loading Spinner -->
+            <div id="docPreviewLoading" class="absolute inset-0 flex flex-col items-center justify-center bg-white/80 backdrop-blur-xs z-10 transition-opacity">
+                <i class="fa-solid fa-circle-notch fa-spin text-3xl text-emerald-600"></i>
+                <p class="text-xs font-bold text-slate-600 mt-2">Loading document preview...</p>
+            </div>
+
+            <!-- PDF Viewer (iframe) -->
+            <iframe id="docPreviewIframe" src="" class="hidden w-full h-[74vh] rounded-lg border border-slate-200 bg-white shadow-sm" onload="onDocPreviewLoaded()"></iframe>
+
+            <!-- Image Viewer (img) -->
+            <div id="docPreviewImageContainer" class="hidden max-h-[74vh] flex items-center justify-center overflow-auto">
+                <img id="docPreviewImage" src="" alt="Document Preview" class="max-h-[74vh] w-auto max-w-full rounded-lg shadow-md object-contain border border-slate-200 bg-white" onload="onDocPreviewLoaded()" onerror="onDocPreviewError()" />
+            </div>
+
+            <!-- Fallback for Unsupported Previews / Errors -->
+            <div id="docPreviewFallback" class="hidden flex flex-col items-center justify-center p-8 text-center max-w-md mx-auto">
+                <div class="w-16 h-16 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center mb-4 text-2xl">
+                    <i class="fa-solid fa-file-arrow-down"></i>
+                </div>
+                <h4 class="text-base font-bold text-slate-800">Preview Not Available</h4>
+                <p class="text-xs text-slate-500 mt-1 mb-5 leading-relaxed">This file type cannot be previewed directly in the browser, or preview could not be loaded. You can download the file directly to view it.</p>
+                <a id="docPreviewFallbackDownloadBtn" href="#" class="inline-flex items-center px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-sm transition-colors">
+                    <i class="fa-solid fa-download mr-2"></i>Download File
+                </a>
+            </div>
+
+        </div>
+
+    </div>
+</div>
+
+<script>
+    function openDocumentPreview(title, previewUrl, downloadUrl, fileType) {
+        const modal = document.getElementById('documentPreviewModal');
+        const titleEl = document.getElementById('docPreviewTitle');
+        const badgeEl = document.getElementById('docPreviewBadge');
+        const iconEl = document.getElementById('docPreviewIcon');
+        const downloadBtn = document.getElementById('docPreviewDownloadBtn');
+        const fallbackDownloadBtn = document.getElementById('docPreviewFallbackDownloadBtn');
+        const newTabBtn = document.getElementById('docPreviewNewTabBtn');
+        const loading = document.getElementById('docPreviewLoading');
+        const iframe = document.getElementById('docPreviewIframe');
+        const imgContainer = document.getElementById('docPreviewImageContainer');
+        const img = document.getElementById('docPreviewImage');
+        const fallback = document.getElementById('docPreviewFallback');
+
+        if (!modal) return;
+
+        // Reset state
+        loading.classList.remove('hidden');
+        iframe.classList.add('hidden');
+        imgContainer.classList.add('hidden');
+        fallback.classList.add('hidden');
+        iframe.src = 'about:blank';
+        img.src = '';
+
+        // Configure Metadata
+        titleEl.textContent = title || 'Document Preview';
+        const typeNormalized = (fileType || '').toLowerCase();
+        badgeEl.textContent = (fileType || 'DOC').toUpperCase();
+
+        const dlUrl = downloadUrl || (previewUrl + (previewUrl.includes('?') ? '&' : '?') + 'download=1');
+        downloadBtn.href = dlUrl;
+        fallbackDownloadBtn.href = dlUrl;
+        newTabBtn.href = previewUrl;
+
+        // Set Icons and Viewer Type
+        const isImage = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp', 'svg'].includes(typeNormalized);
+        const isPdf = typeNormalized === 'pdf';
+
+        if (isImage) {
+            iconEl.className = 'fa-solid fa-file-image text-sm';
+            imgContainer.classList.remove('hidden');
+            img.src = previewUrl;
+        } else if (isPdf) {
+            iconEl.className = 'fa-solid fa-file-pdf text-sm';
+            iframe.classList.remove('hidden');
+            iframe.src = previewUrl;
+        } else {
+            // Unsupported browser preview (e.g. docx, xlsx, etc.)
+            iconEl.className = 'fa-solid fa-file-lines text-sm';
+            loading.classList.add('hidden');
+            fallback.classList.remove('hidden');
+        }
+
+        // Show Modal
+        modal.classList.remove('hidden');
+        document.body.classList.add('overflow-hidden');
+    }
+
+    function onDocPreviewLoaded() {
+        const loading = document.getElementById('docPreviewLoading');
+        if (loading) loading.classList.add('hidden');
+    }
+
+    function onDocPreviewError() {
+        const loading = document.getElementById('docPreviewLoading');
+        const imgContainer = document.getElementById('docPreviewImageContainer');
+        const fallback = document.getElementById('docPreviewFallback');
+        if (loading) loading.classList.add('hidden');
+        if (imgContainer) imgContainer.classList.add('hidden');
+        if (fallback) fallback.classList.remove('hidden');
+    }
+
+    function closeDocumentPreview() {
+        const modal = document.getElementById('documentPreviewModal');
+        const iframe = document.getElementById('docPreviewIframe');
+        const img = document.getElementById('docPreviewImage');
+
+        if (!modal) return;
+        modal.classList.add('hidden');
+        document.body.classList.remove('overflow-hidden');
+        if (iframe) iframe.src = 'about:blank';
+        if (img) img.src = '';
+    }
+
+    // Keyboard and Backdrop Dismiss
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            const modal = document.getElementById('documentPreviewModal');
+            if (modal && !modal.classList.contains('hidden')) {
+                closeDocumentPreview();
+            }
+        }
+    });
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const modal = document.getElementById('documentPreviewModal');
+        if (modal) {
+            modal.addEventListener('click', function(e) {
+                if (e.target === modal) {
+                    closeDocumentPreview();
+                }
+            });
+        }
+    });
+</script>

@@ -16,7 +16,7 @@ def document_alerts(request):
     # Manager check - cached on request if possible
     is_manager = getattr(request, '_is_manager', None)
     if is_manager is None:
-        is_manager = request.user.is_superuser or request.user.groups.filter(name='manager').exists()
+        is_manager = request.user.is_superuser or request.user.has_perm('trips.can_view_manager_dashboard')
         request._is_manager = is_manager
         
     if not is_manager:

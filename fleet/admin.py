@@ -10,20 +10,34 @@ class VehicleAdmin(admin.ModelAdmin):
     list_display = [
         'registration_plate',
         'make_model',
+        'chassis_number',
+        'engine_number',
         'purchase_date',
         'status',
-        'current_odometer'
+        'current_odometer',
+        'created_by'
     ]
     
     list_filter = [
         'status',
-        'purchase_date'
+        'purchase_date',
+        'created_by'
     ]
     
     search_fields = [
         'registration_plate',
-        'make_model'
+        'make_model',
+        'chassis_number',
+        'engine_number'
     ]
+    
+    readonly_fields = ['created_by', 'created_at', 'updated_at']
+
+    def save_model(self, request, obj, form, change):
+        """Automatically set created_by field"""
+        if not change and not obj.created_by:
+            obj.created_by = request.user
+        super().save_model(request, obj, form, change)
 
 
 @admin.register(MaintenanceRecord)

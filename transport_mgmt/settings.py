@@ -4,6 +4,7 @@ Production-ready configuration for closed network deployment
 """
 
 import os
+import sys
 from pathlib import Path
 from decouple import config
 
@@ -34,12 +35,12 @@ INSTALLED_APPS = [
     'django.contrib.humanize',
     
     # Local apps
+    'accounts',
     'trips',
     'fleet',
     'ledger',
     'drivers',
     'documents',
-    'gdstorage',
 ]
 
 MIDDLEWARE = [
@@ -48,6 +49,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'accounts.middleware.ActiveUserMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -104,7 +106,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 # Internationalization
 LANGUAGE_CODE = 'en-us'
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'Asia/Kolkata'
 USE_I18N = True
 USE_TZ = True
 
@@ -113,18 +115,46 @@ STATIC_URL = '/static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
-# Google Drive Storage Configuration
-GOOGLE_DRIVE_STORAGE_JSON_KEY_FILE = None
-GOOGLE_DRIVE_STORAGE_CLIENT_ID = config('GOOGLE_DRIVE_STORAGE_CLIENT_ID', default=None)
-GOOGLE_DRIVE_STORAGE_CLIENT_SECRET = config('GOOGLE_DRIVE_STORAGE_CLIENT_SECRET', default=None)
-GOOGLE_DRIVE_STORAGE_REFRESH_TOKEN = config('GOOGLE_DRIVE_STORAGE_REFRESH_TOKEN', default=None)
-GOOGLE_DRIVE_STORAGE_MEDIA_ROOT = config('GOOGLE_DRIVE_STORAGE_MEDIA_ROOT', default='')
+# Storage Backend Selection: 'r2' (Cloudflare R2) or 'local' (FileSystem)
+STORAGE_BACKEND = config('STORAGE_BACKEND', default=None)
+if STORAGE_BACKEND:
+    STORAGE_BACKEND = STORAGE_BACKEND.lower()
 
-# Use Google Drive for media storage if configured
-if GOOGLE_DRIVE_STORAGE_REFRESH_TOKEN:
+# Cloudflare R2 Configuration (S3-Compatible Object Storage)
+CLOUDFLARE_R2_ACCOUNT_ID = config('CLOUDFLARE_R2_ACCOUNT_ID', default=None)
+CLOUDFLARE_R2_ACCESS_KEY_ID = config('CLOUDFLARE_R2_ACCESS_KEY_ID', default=None)
+CLOUDFLARE_R2_SECRET_ACCESS_KEY = config('CLOUDFLARE_R2_SECRET_ACCESS_KEY', default=None)
+CLOUDFLARE_R2_BUCKET_NAME = config('CLOUDFLARE_R2_BUCKET_NAME', default=None)
+CLOUDFLARE_R2_CUSTOM_DOMAIN = config('CLOUDFLARE_R2_CUSTOM_DOMAIN', default=None)
+CLOUDFLARE_R2_EXPIRATION_SECS = config('CLOUDFLARE_R2_EXPIRATION_SECS', default=3600, cast=int)
+
+# Configure active storage backend
+is_r2 = (STORAGE_BACKEND == 'r2') or (STORAGE_BACKEND is None and CLOUDFLARE_R2_ACCOUNT_ID and CLOUDFLARE_R2_ACCESS_KEY_ID)
+
+# During automated test runs, always use local FileSystemStorage so tests run fast, locally,
+# and never consume external cloud API calls (R2) or quotas.
+if 'test' in sys.argv:
     STORAGES = {
         "default": {
-            "BACKEND": "transport_mgmt.storage_bridge.GoogleDriveOAuth2Storage",
+            "BACKEND": "django.core.files.storage.FileSystemStorage",
+        },
+        "staticfiles": {
+            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+        },
+    }
+elif is_r2 and CLOUDFLARE_R2_ACCOUNT_ID and CLOUDFLARE_R2_ACCESS_KEY_ID:
+    STORAGES = {
+        "default": {
+            "BACKEND": "transport_mgmt.storage_bridge.CloudflareR2Storage",
+            "OPTIONS": {
+                "access_key": CLOUDFLARE_R2_ACCESS_KEY_ID,
+                "secret_key": CLOUDFLARE_R2_SECRET_ACCESS_KEY,
+                "bucket_name": CLOUDFLARE_R2_BUCKET_NAME,
+                "endpoint_url": f"https://{CLOUDFLARE_R2_ACCOUNT_ID}.r2.cloudflarestorage.com",
+                "custom_domain": CLOUDFLARE_R2_CUSTOM_DOMAIN or None,
+                "querystring_auth": False if CLOUDFLARE_R2_CUSTOM_DOMAIN else True,
+                "querystring_expire": CLOUDFLARE_R2_EXPIRATION_SECS,
+            },
         },
         "staticfiles": {
             "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",

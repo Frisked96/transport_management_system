@@ -40,10 +40,10 @@
                     </p>
                 </div>
                 <div class="text-right">
-                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Current Odo</span>
+                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Current Status</span>
                     <p class="text-sm font-bold text-emerald-600">
                         {% with t=form.instance.tyre|default:form.initial.tyre %}
-                            {{ t.total_km }} KM
+                            {{ t.status }}{% if t.current_vehicle %} ({{ t.current_vehicle.registration_plate }}){% endif %}
                         {% endwith %}
                     </p>
                 </div>
@@ -173,4 +173,27 @@
         display: none;
     }
 </style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    $('#id_vehicle').select2({
+        placeholder: "Select a vehicle",
+        allowClear: true,
+        theme: 'bootstrap-5',
+        width: '100%'
+    });
+    
+    // Also initialize tyre field if it's rendered as a select
+    if ($('#id_tyre').is('select')) {
+        $('#id_tyre').select2({
+            placeholder: "Select a tyre",
+            allowClear: true,
+            theme: 'bootstrap-5',
+            width: '100%'
+        });
+    }
+});
+</script>
 {% endblock %}
