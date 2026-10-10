@@ -100,10 +100,7 @@
             <div id="simple-ded-amount-slot"></div>
             <div id="simple-ded-notes-slot"></div>
         </div>
-
-        <!-- ================================================================= -->
         <!-- TRIP SETTLEMENT CONTAINER (Active when Category is "Trip Payment") -->
-        <!-- ================================================================= -->
         <div id="trip-payment-container" class="hidden border-2 border-emerald-500 rounded-xl overflow-hidden mt-4 shadow-sm">
             <!-- Header with segmented mode switch -->
             <div class="bg-gradient-to-r from-emerald-600 to-teal-700 px-4 py-3 sm:px-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -127,9 +124,7 @@
                 </div>
             </div>
 
-            <!-- ------------------------------------------------------------- -->
             <!-- OPTION 1: SINGLE TRIP VIEW                                    -->
-            <!-- ------------------------------------------------------------- -->
             <div id="single-trip-section" class="p-4 sm:p-5 bg-slate-50 space-y-4">
                 <!-- Trip Selector Slot -->
                 <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-2">
@@ -250,9 +245,7 @@
                 </div>
             </div>
 
-            <!-- ------------------------------------------------------------- -->
             <!-- OPTION 2: MULTI TRIP VIEW                                     -->
-            <!-- ------------------------------------------------------------- -->
             <div id="multi-trip-section" class="hidden p-4 sm:p-5 bg-slate-50 space-y-4">
                 <div class="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-900 flex items-start gap-2.5">
                     <i class="fa-solid fa-circle-info text-blue-600 mt-0.5"></i>
@@ -320,9 +313,7 @@
             </div>
         </div>
 
-        <!-- ================================================================= -->
         <!-- PAYMENT DETAILS BLOCK (Invoice Payment only)                      -->
-        <!-- ================================================================= -->
         <div id="payment-details-block" class="hidden border-2 border-slate-200 rounded-xl overflow-hidden mt-2">
             <div class="bg-slate-700 px-4 py-2.5">
                 <h3 class="text-sm font-bold text-white uppercase tracking-wider flex items-center">
@@ -387,9 +378,7 @@
             </div>
         </div>
 
-        <!-- ================================================================= -->
         <!-- MULTI-BILL SELECTION AREA (Standard category only)                -->
-        <!-- ================================================================= -->
         <div id="multi-bill-area" class="hidden border-2 border-blue-500 rounded-xl overflow-hidden mt-6">
             <div class="bg-blue-500 px-4 py-3">
                 <h3 class="text-xs sm:text-sm font-bold text-white uppercase tracking-wider flex items-center">
@@ -464,9 +453,7 @@
 
     </div>
 
-    <!-- ================================================================= -->
     <!-- INDIVIDUAL FIELD WRAPPERS (Moved into slots dynamically)         -->
-    <!-- ================================================================= -->
     <div id="dynamic-wrappers-pool" class="hidden">
         <!-- Associated Trip Wrapper -->
         <div id="wrapper_id_associated_trip">
@@ -550,9 +537,7 @@
         </div>
     </div>
 
-    <!-- ================================================================= -->
     <!-- STICKY ACTION BAR (Optimized for Mobile)                          -->
-    <!-- ================================================================= -->
     <div id="financial-actions-bar" class="sticky bottom-16 lg:bottom-4 z-40 mt-6 shadow-xl bg-slate-50/95 backdrop-blur-sm px-3 sm:px-6 py-3 border border-slate-200 rounded-xl flex items-center justify-between gap-2">
         <a href="{% if object %}{% url 'financialrecord-detail' object.pk %}{% else %}{% url 'financialrecord-list' %}{% endif %}" 
            class="px-3 sm:px-4 py-2 border border-slate-300 rounded-lg text-slate-700 bg-white hover:bg-slate-50 font-bold text-xs sm:text-sm transition-all flex items-center shadow-sm">
