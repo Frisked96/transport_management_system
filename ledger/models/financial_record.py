@@ -256,10 +256,18 @@ class FinancialRecord(models.Model):
                 return self.associated_bill
         except ObjectDoesNotExist:
             pass
+
+        # Check bill allocations
+        try:
+            first_bill_alloc = self.bill_allocations.select_related('bill').order_by('bill__date', 'bill__id').first()
+            if first_bill_alloc and first_bill_alloc.bill:
+                return first_bill_alloc.bill
+        except ObjectDoesNotExist:
+            pass
         
         # If no direct bill, check if it's a trip payment with allocations
         try:
-            first_alloc = self.allocations.select_related('trip').first()
+            first_alloc = self.allocations.select_related('trip').order_by('trip__date', 'trip__id').first()
             if first_alloc and first_alloc.trip and first_alloc.trip.associated_bill:
                 return first_alloc.trip.associated_bill
         except ObjectDoesNotExist:

@@ -684,6 +684,7 @@
                     categoryName = categorySelect.options[categorySelect.selectedIndex].text;
                 }
 
+                const isPaymentOut = categoryName.toLowerCase().includes('payment out');
                 const isTripPayment = categoryName.toLowerCase().includes('trip payment');
                 const isInvoicePayment = categoryName.toLowerCase().includes('invoice payment');
                 const isStandard = categoryName === 'Standard' || categoryName.toLowerCase().includes('standard');
@@ -698,10 +699,13 @@
 
                 // Associated Bill field visibility
                 if (associatedBillWrapper) {
-                    if (isInvoicePayment || isStandard || isTDS || categoryName.toLowerCase().includes('deduction')) {
+                    if (isInvoicePayment || isStandard || isTDS || isPaymentOut || categoryName.toLowerCase().includes('deduction')) {
                         associatedBillWrapper.classList.remove('hidden');
                     } else {
                         associatedBillWrapper.classList.add('hidden');
+                        if (associatedBillSelect && !isInitialLoad) {
+                            $(associatedBillSelect).val('').trigger('change.select2');
+                        }
                     }
                 }
 
@@ -770,8 +774,8 @@
                     paymentDetailsBlock.classList.add('hidden');
                 }
 
-                // 3. MULTI-BILL (Standard Category)
-                if (isStandard && hasParty) {
+                // 3. MULTI-BILL (Standard and Payment Out Categories)
+                if ((isStandard || isPaymentOut) && hasParty) {
                     multiBillArea.classList.remove('hidden');
                 } else {
                     multiBillArea.classList.add('hidden');

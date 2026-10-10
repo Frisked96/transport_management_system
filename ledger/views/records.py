@@ -537,7 +537,20 @@ class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, Cre
             self.object.recorded_by = self.request.user
             self.object.save()
 
-        messages.success(self.request, 'Financial record created successfully!')
+        # Automatic FIFO allocation for general payments (not focused on a specific bill/trip)
+        allocated_bills = []
+        if not form.cleaned_data.get('associated_bill') and not form.cleaned_data.get('associated_trip'):
+            from ledger.services import BillingService
+            pay_rec = self.object if payment_amount > 0 else None
+            tds_rec = tds_record if has_tds else None
+            ded_rec = ded_record if has_deduction else None
+            allocated_bills = BillingService.allocate_payment_fifo(pay_rec, tds_rec, ded_rec)
+
+        if allocated_bills:
+            messages.success(self.request, f'Financial record created and allocated via FIFO across {len(allocated_bills)} bill(s)!')
+        else:
+            messages.success(self.request, 'Financial record created successfully!')
+
         if '_save_same_party' in self.request.POST:
             return self._redirect_same_party(form)
 
@@ -644,6 +657,17 @@ class FinancialRecordUpdateView(LoginRequiredMixin, PermissionRequiredMixin, Upd
                 return self.form_invalid(form)
 
         response = super().form_valid(form)
+        # If not manual distribution and not linked to specific bill or trip, re-run FIFO
+        if not distribution_json and not bill_distribution_json:
+            if not self.object.associated_bill_id and not self.object.associated_trip_id:
+                from ledger.services import BillingService
+                old_allocs = list(self.object.bill_allocations.select_related('bill').all())
+                if old_allocs:
+                    old_bills = [a.bill for a in old_allocs]
+                    self.object.bill_allocations.all().delete()
+                    for b in old_bills:
+                        BillingService.update_bill_financial_caches(b)
+                    BillingService.allocate_payment_fifo(payment_record=self.object)
         messages.success(self.request, 'Financial record updated successfully!')
         return response
     

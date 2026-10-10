@@ -203,6 +203,8 @@ class BillingService:
                 )
                 if bill.original_bill:
                     BillingService.update_bill_financial_caches(bill.original_bill)
+                if not bill.is_adjustment:
+                    BillingService.settle_bill_with_unallocated_advances(bill)
                 bill.party.refresh_balance()
                 return
 
@@ -288,6 +290,9 @@ class BillingService:
                     cr_dn.sync_to_ledger()
                     BillingService.update_bill_financial_caches(cr_bill)
                     cr_bill.party.refresh_balance()
+
+            if not bill.is_adjustment:
+                BillingService.settle_bill_with_unallocated_advances(bill)
 
             if bill.category and bill.category.name in ['Credit Note', 'Debit Note']:
                 return
@@ -375,6 +380,7 @@ class BillingService:
 
                 # Recalculate creditor bill caches
                 BillingService.update_bill_financial_caches(creditor_bill)
+                BillingService.settle_bill_with_unallocated_advances(creditor_bill)
 
                 # Create or update consolidated financial record for vendor
                 inv_disp = creditor_bill.creditor_invoice_number or creditor_bill.bill_number or 'Pending'
@@ -395,6 +401,9 @@ class BillingService:
                 # Mirror any customer credit notes against this bill as debit notes on creditor_bill
                 for cust_cn in bill.adjustment_bills.filter(category__name='Credit Note'):
                     cust_cn.sync_to_ledger()
+
+            if not bill.is_adjustment:
+                BillingService.settle_bill_with_unallocated_advances(bill)
 
     @staticmethod
     def update_bill_financial_caches(bill):
@@ -455,6 +464,8 @@ class BillingService:
             # Direct links for creditor bill
             direct = bill.financial_records.exclude(
                 record_type=FinancialRecord.RECORD_TYPE_INVOICE
+            ).exclude(
+                bill_allocations__bill=bill
             ).filter(
                 Q(category__name='Payment Out') |
                 Q(category__type=TransactionCategory.TYPE_INCOME) |
@@ -478,6 +489,8 @@ class BillingService:
         # Direct links for debtor bill
         direct = bill.financial_records.exclude(
             record_type=FinancialRecord.RECORD_TYPE_INVOICE
+        ).exclude(
+            bill_allocations__bill=bill
         ).filter(
             Q(category__type=TransactionCategory.TYPE_INCOME) | 
             Q(category__name__in=["Deductions", "TDS", "Shortage", "Credit Note", "Debit Note"])
@@ -515,6 +528,251 @@ class BillingService:
                     adjustments -= adj.total_amount_cached
 
         return Decimal(str(direct)) + Decimal(str(bill_allocations)) + Decimal(str(trip_payments)) + Decimal(str(adjustments))
+
+    @staticmethod
+    def allocate_payment_fifo(payment_record=None, tds_record=None, deduction_record=None):
+        """
+        Allocates an unassigned/general payment (and optional TDS/deduction records)
+        across the oldest unpaid bills for the party on a strict FIFO basis (ordered by date, id).
+        Only bills with date <= payment_date are considered.
+        """
+        from ledger.models import Bill, BillAllocation
+        from decimal import Decimal
+
+        ref_record = payment_record or tds_record or deduction_record
+        if not ref_record or not ref_record.party:
+            return []
+
+        # If already linked to a specific bill or trip, do not auto-allocate
+        if any(r and (r.associated_bill_id or r.associated_trip_id) for r in [payment_record, tds_record, deduction_record]):
+            return []
+
+        # If manual allocations already exist, do not overwrite
+        if any(r and (r.bill_allocations.exists() or r.allocations.exists()) for r in [payment_record, tds_record, deduction_record]):
+            return []
+
+        # Invoices are accruals, not cash settlements
+        if any(r and r.record_type == r.RECORD_TYPE_INVOICE for r in [payment_record, tds_record, deduction_record]):
+            return []
+
+        party = ref_record.party
+        payment_date = ref_record.date
+
+        payment_amount = payment_record.amount if (payment_record and payment_record.amount) else Decimal('0.00')
+        tds_amount = tds_record.amount if (tds_record and tds_record.amount) else Decimal('0.00')
+        deduction_amount = deduction_record.amount if (deduction_record and deduction_record.amount) else Decimal('0.00')
+
+        total_payment_pool = payment_amount + tds_amount + deduction_amount
+        if total_payment_pool <= 0:
+            return []
+
+        # Find eligible unpaid bills for this party:
+        # Exclude adjustment bills (Credit Note, Debit Note)
+        # Strictly ordered by date (oldest first), then id (FIFO)
+        eligible_bills = Bill.objects.filter(
+            party=party
+        ).filter(
+            Q(category__isnull=True) | ~Q(category__name__in=['Credit Note', 'Debit Note'])
+        ).order_by('date', 'id')
+
+        remaining_payment = payment_amount
+        remaining_tds = tds_amount
+        remaining_ded = deduction_amount
+        allocated_bills = []
+
+        for bill in eligible_bills:
+            if remaining_payment <= 0 and remaining_tds <= 0 and remaining_ded <= 0:
+                break
+
+            outstanding = bill.outstanding_balance
+            if outstanding <= 0:
+                continue
+
+            available_total = remaining_payment + remaining_tds + remaining_ded
+            settle_amount = min(outstanding, available_total)
+            if settle_amount <= 0:
+                continue
+
+            # Determine distribution among bank payment, TDS, and deductions
+            if total_payment_pool > 0:
+                p_alloc = Decimal('0.00')
+                t_alloc = Decimal('0.00')
+                d_alloc = Decimal('0.00')
+
+                if remaining_payment > 0:
+                    p_alloc = (settle_amount * (payment_amount / total_payment_pool)).quantize(Decimal('0.01'))
+                    p_alloc = min(remaining_payment, min(settle_amount, p_alloc))
+
+                rem_for_tds_ded = settle_amount - p_alloc
+                if rem_for_tds_ded > 0 and remaining_tds > 0:
+                    t_alloc = (settle_amount * (tds_amount / total_payment_pool)).quantize(Decimal('0.01'))
+                    t_alloc = min(remaining_tds, min(rem_for_tds_ded, t_alloc))
+
+                rem_for_ded = rem_for_tds_ded - t_alloc
+                if rem_for_ded > 0 and remaining_ded > 0:
+                    d_alloc = min(remaining_ded, rem_for_ded)
+
+                # If rounding left unallocated portion of settle_amount, add to payment, tds, or ded
+                alloc_sum = p_alloc + t_alloc + d_alloc
+                if alloc_sum < settle_amount:
+                    diff = settle_amount - alloc_sum
+                    if remaining_payment - p_alloc >= diff:
+                        p_alloc += diff
+                    elif remaining_tds - t_alloc >= diff:
+                        t_alloc += diff
+                    elif remaining_ded - d_alloc >= diff:
+                        d_alloc += diff
+            else:
+                p_alloc = min(remaining_payment, settle_amount)
+                t_alloc = Decimal('0.00')
+                d_alloc = Decimal('0.00')
+
+            if p_alloc > 0 and payment_record:
+                BillAllocation.objects.create(
+                    financial_record=payment_record,
+                    bill=bill,
+                    amount=p_alloc
+                )
+                remaining_payment -= p_alloc
+
+            if t_alloc > 0 and tds_record:
+                BillAllocation.objects.create(
+                    financial_record=tds_record,
+                    bill=bill,
+                    amount=t_alloc
+                )
+                remaining_tds -= t_alloc
+
+            if d_alloc > 0 and deduction_record:
+                BillAllocation.objects.create(
+                    financial_record=deduction_record,
+                    bill=bill,
+                    amount=d_alloc
+                )
+                remaining_ded -= d_alloc
+
+            BillingService.update_bill_financial_caches(bill)
+            allocated_bills.append(bill)
+
+        # Update descriptions if not set
+        if allocated_bills:
+            bill_numbers = [b.display_invoice_number for b in allocated_bills]
+            invoices_str = ', '.join(bill_numbers)
+            if payment_record and not payment_record.description:
+                payment_record.description = f"Paid across invoices: {invoices_str}"
+                payment_record.save(update_fields=['description'])
+            if tds_record and not tds_record.description:
+                tds_record.description = f"TDS across invoices: {invoices_str}"
+                tds_record.save(update_fields=['description'])
+            if deduction_record and not deduction_record.description:
+                deduction_record.description = f"Deduction across invoices: {invoices_str}"
+                deduction_record.save(update_fields=['description'])
+
+        return allocated_bills
+
+    @staticmethod
+    def settle_bill_with_unallocated_advances(bill):
+        """
+        Automatically settles a bill upon creation/update against any
+        existing unallocated advance payments for the party in FIFO order (oldest payment first).
+        """
+        from ledger.models import FinancialRecord, TransactionCategory, BillAllocation
+        from decimal import Decimal
+
+        if not bill or not bill.pk or not bill.party:
+            return []
+
+        # Do not settle adjustment notes (Credit Note / Debit Note)
+        if bill.is_adjustment:
+            return []
+
+        if getattr(bill, '_settling_advances', False):
+            return []
+
+        outstanding = bill.outstanding_balance
+        if outstanding <= 0:
+            return []
+
+        bill._settling_advances = True
+        try:
+            # Find general payments for this party that have no specific bill or trip link
+            if bill.is_creditor_bill:
+                candidates = FinancialRecord.objects.filter(
+                    party=bill.party
+                ).exclude(
+                    record_type=FinancialRecord.RECORD_TYPE_INVOICE
+                ).filter(
+                    associated_bill__isnull=True,
+                    associated_trip__isnull=True
+                ).filter(
+                    Q(category__name='Payment Out') |
+                    Q(category__type=TransactionCategory.TYPE_EXPENSE)
+                ).order_by('date', 'id')
+            else:
+                candidates = FinancialRecord.objects.filter(
+                    party=bill.party
+                ).exclude(
+                    record_type=FinancialRecord.RECORD_TYPE_INVOICE
+                ).filter(
+                    associated_bill__isnull=True,
+                    associated_trip__isnull=True
+                ).filter(
+                    Q(category__name__in=['Payment In', 'Invoice Payment']) |
+                    Q(category__type=TransactionCategory.TYPE_INCOME)
+                ).order_by('date', 'id')
+
+            allocated_records = []
+            remaining_needed = outstanding
+
+            for rec in candidates:
+                if remaining_needed <= 0:
+                    break
+
+                # Skip if this record was distributed to trips
+                if rec.allocations.exists():
+                    continue
+
+                if not rec.amount or rec.amount <= 0:
+                    continue
+
+                # Calculate how much of this record is already allocated across all bills
+                already_alloc = rec.bill_allocations.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+                unallocated_amount = rec.amount - already_alloc
+
+                if unallocated_amount <= 0:
+                    continue
+
+                # Check if this record already has an allocation to THIS bill
+                if rec.bill_allocations.filter(bill=bill).exists():
+                    continue
+
+                alloc_to_bill = min(unallocated_amount, remaining_needed)
+                if alloc_to_bill <= 0:
+                    continue
+
+                BillAllocation.objects.create(
+                    financial_record=rec,
+                    bill=bill,
+                    amount=alloc_to_bill
+                )
+                remaining_needed -= alloc_to_bill
+                allocated_records.append(rec)
+
+                # Update description of payment record if needed
+                bill_num = bill.display_invoice_number
+                if not rec.description:
+                    rec.description = f"Paid across invoices: {bill_num}"
+                    rec.save(update_fields=['description'])
+                elif "Paid across invoices:" in rec.description and bill_num not in rec.description:
+                    rec.description = f"{rec.description}, {bill_num}"
+                    rec.save(update_fields=['description'])
+
+            if allocated_records:
+                BillingService.update_bill_financial_caches(bill)
+
+            return allocated_records
+        finally:
+            del bill._settling_advances
 
 class TripFinancialService:
     """

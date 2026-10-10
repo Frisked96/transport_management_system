@@ -546,7 +546,7 @@ class Trip(models.Model):
             return self.bills.all()[0] if self.bills.all() else None
 
         if not hasattr(self, '_associated_bill_cache'):
-            self._associated_bill_cache = self.bills.filter(customer_bill__isnull=True).exclude(party__party_type='Creditor').first() or self.bills.first()
+            self._associated_bill_cache = self.bills.filter(customer_bill__isnull=True).exclude(party__party_type='Creditor').order_by('date', 'id').first() or self.bills.order_by('date', 'id').first()
         return self._associated_bill_cache
 
     @property
@@ -565,7 +565,7 @@ class Trip(models.Model):
             from django.db.models import Q
             self._creditor_bill_cache = self.bills.filter(
                 Q(customer_bill__isnull=False) | Q(party__party_type='Creditor')
-            ).first()
+            ).order_by('date', 'id').first()
         return self._creditor_bill_cache
 
     @property

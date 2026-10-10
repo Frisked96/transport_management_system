@@ -411,7 +411,7 @@ def get_party_bills(request):
             'adjustment_bills__category'
         ).filter(
             models.Q(category__isnull=True) | ~models.Q(category__name__in=['Credit Note', 'Debit Note'])
-        ).order_by('-date', '-category__name', '-bill_no')
+        ).order_by('date', 'id')
 
         data = []
         for bill in bills_qs:
