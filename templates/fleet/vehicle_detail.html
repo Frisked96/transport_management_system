@@ -48,10 +48,10 @@
         </div>
 
         <div class="p-4 sm:p-6">
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-x-12 gap-y-8">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-x-8 gap-y-6">
                 <!-- Core Specs -->
                 <div class="space-y-4">
-                    <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest border-b pb-2">Core Info</h3>
+                    <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest border-b pb-2">Core Specifications</h3>
                     <div class="overflow-x-auto">
                         <table class="w-full text-sm">
                             <tr class="border-b border-slate-50">
@@ -74,7 +74,16 @@
                                 <td class="py-2 text-slate-500 font-medium whitespace-nowrap pr-4">Current Odo</td>
                                 <td class="py-2 text-slate-900 font-bold">{{ vehicle.current_odometer|default:"0" }} <span class="text-[10px] text-slate-400">km</span></td>
                             </tr>
-                            <tr class="border-t border-slate-50">
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Ownership & Management -->
+                <div class="space-y-4">
+                    <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest border-b pb-2">Ownership & Management</h3>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <tr class="border-b border-slate-50">
                                 <td class="py-2 text-slate-500 font-medium whitespace-nowrap pr-4">Ownership</td>
                                 <td class="py-2 font-bold">
                                     {% if vehicle.is_attached %}
@@ -85,7 +94,7 @@
                                 </td>
                             </tr>
                             {% if vehicle.vendor %}
-                            <tr class="border-t border-slate-50">
+                            <tr class="border-b border-slate-50">
                                 <td class="py-2 text-slate-500 font-medium whitespace-nowrap pr-4">Vendor</td>
                                 <td class="py-2 text-orange-600 font-bold">
                                     <a href="{% url 'party-detail' vehicle.vendor.pk %}" class="hover:underline">{{ vehicle.vendor.name }}</a>
@@ -93,14 +102,14 @@
                             </tr>
                             {% endif %}
                             {% if vehicle.company_account %}
-                            <tr class="border-t border-slate-50">
+                            <tr class="border-b border-slate-50">
                                 <td class="py-2 text-slate-500 font-medium whitespace-nowrap pr-4">Company Account</td>
                                 <td class="py-2 text-emerald-600 font-bold">
                                     <a href="{% url 'account-detail' vehicle.company_account.pk %}" class="hover:underline">{{ vehicle.company_account.name }}</a>
                                 </td>
                             </tr>
                             {% endif %}
-                            <tr class="border-t border-slate-50">
+                            <tr>
                                 <td class="py-2 text-slate-500 font-medium whitespace-nowrap pr-4">Created By</td>
                                 <td class="py-2 text-slate-900 font-bold">
                                     {% if vehicle.created_by %}
@@ -137,29 +146,33 @@
                     </div>
                 </div>
 
-                <!-- Mounted Tyres Summary -->
-                <div class="lg:col-span-2 space-y-4">
-                    <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest border-b pb-2 flex justify-between">
-                        <span>Mounted Tyres</span>
-                        <a href="{% url 'tyre-list' %}" class="text-emerald-600 hover:text-emerald-700 normal-case tracking-normal">View Inventory</a>
+                <!-- Mounted Tyres Quick Snapshot -->
+                <div class="space-y-4">
+                    <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest border-b pb-2 flex justify-between items-center">
+                        <span>Tyres Snapshot</span>
+                        <a href="{% url 'tyre-list' %}?vehicle={{ vehicle.pk }}" class="text-emerald-600 hover:text-emerald-700 normal-case tracking-normal text-xs">View Inventory</a>
                     </h3>
-                    {% if vehicle.tyres.exists %}
-                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                        {% for tyre in vehicle.tyres.all %}
-                        <div class="bg-slate-50 border border-slate-200 p-2 rounded-lg text-center relative group">
-                            <p class="text-[9px] font-black text-slate-400 uppercase mb-0.5">Pos: {{ tyre.current_position }}</p>
-                            <p class="text-xs font-bold text-slate-800 truncate">{{ tyre.brand }}</p>
-                            <a href="{% url 'tyre-detail' tyre.pk %}" class="absolute inset-0 opacity-0 group-hover:opacity-100 bg-slate-900/5 transition-opacity rounded-lg"></a>
+                    <div class="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-2">
+                        <div class="flex items-center justify-between text-xs">
+                            <span class="text-slate-500 font-medium">Mounted Slots:</span>
+                            <span class="font-black text-emerald-700">{{ tyre_layout.stats.total_mounted }} / 19</span>
                         </div>
-                        {% endfor %}
+                        <div class="flex items-center justify-between text-xs">
+                            <span class="text-slate-500 font-medium">Vacant Slots:</span>
+                            <span class="font-black text-slate-600">{{ tyre_layout.stats.total_vacant }}</span>
+                        </div>
+                        <div class="pt-2 border-t border-slate-200">
+                            <a href="#tyre-diagram-section" class="w-full py-1.5 px-3 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded flex items-center justify-center gap-1.5 transition-colors">
+                                <i class="fa-solid fa-arrows-down-to-line text-[10px]"></i> View Position Diagram
+                            </a>
+                        </div>
                     </div>
-                    {% else %}
-                    <p class="text-xs text-slate-400 italic py-2">No tyres currently mounted.</p>
-                    {% endif %}
                 </div>
             </div>
         </div>
     </div>
+
+{% include "fleet/includes/tyre_diagram.html" %}
 
     <!-- Secondary Detail Grid -->
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -362,4 +375,102 @@
     </div>
     {% endif %}
 </div>
+
+<!-- Tyre Quick Action Modal -->
+<div id="tyreActionModal" class="fixed inset-0 z-50 hidden bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-200 overflow-hidden transform transition-all">
+        <div class="bg-slate-800 px-6 py-4 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <i class="fa-solid fa-circle-info text-emerald-400"></i>
+                <h3 class="text-sm font-bold text-white uppercase tracking-wider">Tyre Details & Actions</h3>
+            </div>
+            <button type="button" onclick="closeTyreModal()" class="text-slate-400 hover:text-white transition-colors text-lg">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+
+        <div class="p-6 space-y-4">
+            <!-- Position Header -->
+            <div class="p-3 bg-emerald-50/70 border border-emerald-200 rounded-xl flex items-center justify-between">
+                <div>
+                    <span class="text-[10px] font-black text-emerald-800 uppercase tracking-widest block">Wheel Position</span>
+                    <span id="modalTyrePosition" class="text-sm font-black text-slate-900"></span>
+                </div>
+                <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-emerald-500 text-slate-950">
+                    Mounted
+                </span>
+            </div>
+
+            <!-- Specs Grid -->
+            <div class="grid grid-cols-2 gap-3 text-xs">
+                <div class="p-2.5 bg-slate-50 border border-slate-200/80 rounded-lg">
+                    <span class="text-[10px] text-slate-400 font-bold uppercase block">Brand & Size</span>
+                    <span id="modalTyreBrandSize" class="font-bold text-slate-800"></span>
+                </div>
+                <div class="p-2.5 bg-slate-50 border border-slate-200/80 rounded-lg">
+                    <span class="text-[10px] text-slate-400 font-bold uppercase block">Serial Number</span>
+                    <span id="modalTyreSerial" class="font-mono font-bold text-slate-800"></span>
+                </div>
+                <div class="p-2.5 bg-slate-50 border border-slate-200/80 rounded-lg">
+                    <span class="text-[10px] text-slate-400 font-bold uppercase block">Purchase Date</span>
+                    <span id="modalTyrePurchaseDate" class="font-bold text-slate-800"></span>
+                </div>
+                <div class="p-2.5 bg-slate-50 border border-slate-200/80 rounded-lg">
+                    <span class="text-[10px] text-slate-400 font-bold uppercase block">Purchase Cost</span>
+                    <span id="modalTyreCost" class="font-bold text-emerald-700"></span>
+                </div>
+            </div>
+
+            <div class="p-2.5 bg-slate-50 border border-slate-200/80 rounded-lg text-xs">
+                <span class="text-[10px] text-slate-400 font-bold uppercase block">Vendor / Supplier</span>
+                <span id="modalTyreVendor" class="font-bold text-slate-800"></span>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="pt-2 border-t border-slate-100 flex flex-col sm:flex-row gap-2">
+                <a id="modalDetailBtn" href="#" class="flex-1 py-2 px-3 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-xs font-bold text-center transition-colors">
+                    <i class="fa-solid fa-eye mr-1.5"></i> Full History
+                </a>
+                {% if perms.fleet.change_tyre %}
+                <a id="modalRotateBtn" href="#" class="flex-1 py-2 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold text-center transition-colors">
+                    <i class="fa-solid fa-arrows-rotate mr-1.5"></i> Rotate
+                </a>
+                <form id="modalDismountForm" method="post" action="" class="flex-1" onsubmit="return confirm('Dismount this tyre back to stock?');">
+                    {% csrf_token %}
+                    <button type="submit" class="w-full py-2 px-3 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition-colors">
+                        <i class="fa-solid fa-arrow-down-long mr-1.5"></i> Dismount
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function openTyreModal(data) {
+        document.getElementById('modalTyrePosition').textContent = data.position;
+        document.getElementById('modalTyreBrandSize').textContent = data.brand + ' (' + data.size + ')';
+        document.getElementById('modalTyreSerial').textContent = '#' + data.serialNumber;
+        document.getElementById('modalTyrePurchaseDate').textContent = data.purchaseDate;
+        document.getElementById('modalTyreCost').textContent = '₹' + data.purchaseCost;
+        document.getElementById('modalTyreVendor').textContent = data.vendor;
+
+        document.getElementById('modalDetailBtn').href = data.detailUrl;
+        const rotateBtn = document.getElementById('modalRotateBtn');
+        if (rotateBtn) rotateBtn.href = data.rotateUrl;
+        const dismountForm = document.getElementById('modalDismountForm');
+        if (dismountForm) dismountForm.action = data.dismountUrl;
+
+        document.getElementById('tyreActionModal').classList.remove('hidden');
+    }
+
+    function closeTyreModal() {
+        document.getElementById('tyreActionModal').classList.add('hidden');
+    }
+
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') closeTyreModal();
+    });
+</script>
 {% endblock %}

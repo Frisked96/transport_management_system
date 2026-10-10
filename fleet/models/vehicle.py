@@ -240,6 +240,12 @@ class Vehicle(models.Model):
         )['total']
         return total or 0
 
+    @property
+    def tyre_layout(self):
+        """Constructs and returns the 18+1 tyre layout mapping for this vehicle"""
+        from fleet.services import get_vehicle_tyre_layout
+        return get_vehicle_tyre_layout(self)
+
 
 @receiver(post_save, sender=Vehicle)
 def create_vehicle_base_documents(sender, instance, created, **kwargs):

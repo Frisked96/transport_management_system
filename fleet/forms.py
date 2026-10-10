@@ -2,8 +2,14 @@
 Forms for Fleet application
 """
 from django import forms
+from django.db import models
 from django.utils import timezone
 from .models import Vehicle, MaintenanceRecord, Tyre, TyreLog, TyreBrand
+from fleet.services import (
+    TYRE_POSITION_CHOICES,
+    normalize_tyre_position,
+    TYRE_POSITION_MAP,
+)
 
 
 class VehicleForm(forms.ModelForm):
@@ -142,11 +148,31 @@ class MaintenanceCompleteForm(forms.Form):
     )
 
 
+class TyrePositionChoiceField(forms.ChoiceField):
+    """
+    ChoiceField enforcing selection from the 18+1 tyre positions in the UI,
+    while accepting legacy position aliases (e.g., 'Front Left', 'Rear Left 1')
+    to preserve backwards compatibility.
+    """
+    def valid_value(self, value):
+        if super().valid_value(value):
+            return True
+        norm = normalize_tyre_position(value)
+        if norm and super().valid_value(norm):
+            return True
+        return False
+
+
 class TyreForm(forms.ModelForm):
     """
     Form for adding/editing Tyres
     """
     brand = forms.ChoiceField(choices=[], required=True, label="Brand / Make")
+    current_position = TyrePositionChoiceField(
+        choices=[('', 'Select Position...')] + TYRE_POSITION_CHOICES,
+        required=False,
+        label="Wheel Position"
+    )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -160,6 +186,15 @@ class TyreForm(forms.ModelForm):
         if self.instance.pk and self.instance.brand and (self.instance.brand, self.instance.brand) not in brand_choices:
             brand_choices.append((self.instance.brand, self.instance.brand))
         self.fields['brand'].choices = brand_choices
+
+        # Pre-fill or normalize current_position
+        init_pos = self.initial.get('current_position') or (self.instance.current_position if self.instance.pk else '')
+        if init_pos:
+            norm_init_pos = normalize_tyre_position(init_pos)
+            self.initial['current_position'] = init_pos
+            if norm_init_pos not in TYRE_POSITION_MAP and norm_init_pos != '':
+                pos_choices = [('', 'Select Position...'), ('Current Position', [(init_pos, init_pos)])] + TYRE_POSITION_CHOICES
+                self.fields['current_position'].choices = pos_choices
 
         for field in self.fields.values():
             field.widget.attrs.update({'class': 'block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white'})
@@ -191,12 +226,17 @@ class TyreForm(forms.ModelForm):
     def clean(self):
         cleaned_data = super().clean()
         vehicle = cleaned_data.get('current_vehicle')
-        position = (cleaned_data.get('current_position') or '').strip()
+        raw_position = (cleaned_data.get('current_position') or '').strip()
+        norm_position = normalize_tyre_position(raw_position)
+        position = raw_position
+        cleaned_data['current_position'] = position
 
         if vehicle and position:
             collision = Tyre.objects.filter(
-                current_vehicle=vehicle,
-                current_position__iexact=position
+                current_vehicle=vehicle
+            ).filter(
+                models.Q(current_position__iexact=position) |
+                models.Q(current_position__iexact=norm_position)
             )
             if self.instance.pk:
                 collision = collision.exclude(pk=self.instance.pk)
@@ -234,6 +274,12 @@ class TyreLogForm(forms.ModelForm):
     """
     Form for tyre operations (Mount/Dismount/Repair)
     """
+    position = TyrePositionChoiceField(
+        choices=[('', 'Select Position...')] + TYRE_POSITION_CHOICES,
+        required=False,
+        label="Wheel Position"
+    )
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         for field in self.fields.values():
@@ -253,6 +299,19 @@ class TyreLogForm(forms.ModelForm):
             if tyre:
                 self.fields['tyre'].initial = tyre
                 self.fields['tyre'].widget = forms.HiddenInput()
+        elif self.initial.get('action') == TyreLog.ACTION_MOUNT:
+            # If action is Mount and tyre not pre-selected, prioritize in-stock tyres
+            self.fields['tyre'].queryset = Tyre.objects.filter(
+                models.Q(status=Tyre.STATUS_IN_STOCK) | models.Q(current_vehicle__isnull=True)
+            ).order_by('brand', 'serial_number')
+
+        # Pre-fill or normalize position
+        init_pos = self.initial.get('position') or (self.instance.position if self.instance.pk else '')
+        if init_pos:
+            norm_init_pos = normalize_tyre_position(init_pos)
+            self.initial['position'] = init_pos
+            if norm_init_pos not in TYRE_POSITION_MAP and norm_init_pos != '':
+                self.fields['position'].choices = [('', 'Select Position...'), ('Current Position', [(init_pos, init_pos)])] + TYRE_POSITION_CHOICES
 
     class Meta:
         model = TyreLog
@@ -267,7 +326,10 @@ class TyreLogForm(forms.ModelForm):
         action = cleaned_data.get('action')
         tyre = cleaned_data.get('tyre')
         vehicle = cleaned_data.get('vehicle')
-        position = (cleaned_data.get('position') or '').strip()
+        raw_position = (cleaned_data.get('position') or '').strip()
+        norm_position = normalize_tyre_position(raw_position)
+        position = raw_position
+        cleaned_data['position'] = position
 
         if action == TyreLog.ACTION_MOUNT:
             if tyre and tyre.status == Tyre.STATUS_SCRAP:
@@ -278,8 +340,10 @@ class TyreLogForm(forms.ModelForm):
                 self.add_error('position', "Position is required when mounting a tyre.")
             elif vehicle:
                 collision = Tyre.objects.filter(
-                    current_vehicle=vehicle,
-                    current_position__iexact=position
+                    current_vehicle=vehicle
+                ).filter(
+                    models.Q(current_position__iexact=position) |
+                    models.Q(current_position__iexact=norm_position)
                 )
                 if tyre:
                     collision = collision.exclude(pk=tyre.pk)
@@ -297,8 +361,10 @@ class TyreLogForm(forms.ModelForm):
                 self.add_error('position', "Target position is required for tyre rotation.")
             elif vehicle:
                 collision = Tyre.objects.filter(
-                    current_vehicle=vehicle,
-                    current_position__iexact=position
+                    current_vehicle=vehicle
+                ).filter(
+                    models.Q(current_position__iexact=position) |
+                    models.Q(current_position__iexact=norm_position)
                 )
                 if tyre:
                     collision = collision.exclude(pk=tyre.pk)

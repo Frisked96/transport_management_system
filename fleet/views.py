@@ -83,6 +83,19 @@ class TyreCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
     permission_required = 'fleet.add_tyre'
     success_url = reverse_lazy('tyre-list')
 
+    def get_initial(self):
+        initial = super().get_initial()
+        vehicle_id = self.request.GET.get('vehicle')
+        position = self.request.GET.get('position')
+        if vehicle_id:
+            try:
+                initial['current_vehicle'] = Vehicle.objects.get(pk=vehicle_id)
+            except (Vehicle.DoesNotExist, ValueError):
+                pass
+        if position:
+            initial['current_position'] = position
+        return initial
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         from .models import TyreBrand
@@ -249,6 +262,8 @@ class TyreLogCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView)
         initial = super().get_initial()
         tyre_id = self.request.GET.get('tyre')
         action = self.request.GET.get('action')
+        vehicle_id = self.request.GET.get('vehicle')
+        position = self.request.GET.get('position')
         if tyre_id:
             tyre = get_object_or_404(Tyre, pk=tyre_id)
             initial['tyre'] = tyre
@@ -257,6 +272,13 @@ class TyreLogCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView)
                 initial['position'] = tyre.current_position
         if action:
             initial['action'] = action
+        if vehicle_id and not initial.get('vehicle'):
+            try:
+                initial['vehicle'] = Vehicle.objects.get(pk=vehicle_id)
+            except (Vehicle.DoesNotExist, ValueError):
+                pass
+        if position and not initial.get('position'):
+            initial['position'] = position
         return initial
 
     def form_valid(self, form):
@@ -445,6 +467,9 @@ class VehicleDetailView(LoginRequiredMixin, PermissionRequiredMixin, BaseFleetPe
         # Calculate total maintenance cost (using model property or queryset)
         context['total_maintenance_cost'] = self.object.total_maintenance_cost
         
+        # 18-Wheel + 1 Stepney Tyre Layout
+        context['tyre_layout'] = self.object.tyre_layout
+
         return context
 
 

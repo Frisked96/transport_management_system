@@ -1,0 +1,105 @@
+<!-- Tyre Positions: compact layout (6 horse + 12 trailer + 1 stepney) -->
+<section id="tyre-diagram-section" class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+    <header class="flex flex-col gap-3 border-b border-slate-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+        <div>
+            <h2 class="flex items-center text-sm font-bold text-slate-800">
+                <i class="fa-solid fa-truck-moving mr-2 text-slate-400"></i>Tyre Positions
+            </h2>
+            <p class="mt-0.5 text-xs text-slate-500">Horse 6 &middot; Trailer 12 &middot; Stepney 1 (19 slots)</p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+            <span class="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700 ring-1 ring-inset ring-emerald-200">
+                Mounted {{ tyre_layout.stats.total_mounted }}/19
+            </span>
+            <span class="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-600 ring-1 ring-inset ring-slate-200">
+                Vacant {{ tyre_layout.stats.total_vacant }}
+            </span>
+            {% if perms.fleet.change_tyre %}
+            <a href="{% url 'tyre-log-create' %}?action=Mount&vehicle={{ vehicle.pk }}"
+               class="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition-colors hover:bg-emerald-700">
+                <i class="fa-solid fa-plus text-[10px]"></i> Mount Tyre
+            </a>
+            {% endif %}
+            <a href="{% url 'tyre-list' %}?vehicle={{ vehicle.pk }}"
+               class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-50">
+                Inventory
+            </a>
+        </div>
+    </header>
+
+    <div class="bg-slate-50 p-4 sm:p-5">
+        <div class="grid items-start gap-4 md:grid-cols-2">
+
+            <!-- Left column: Horse + Stepney -->
+            <div class="space-y-4">
+                <div class="rounded-lg border border-slate-200 bg-white p-3 sm:p-4">
+                    <div class="mb-3 flex items-center justify-between">
+                        <span class="text-[11px] font-bold uppercase tracking-wider text-slate-600">Horse &middot; 6 tyres</span>
+                        <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                            <i class="fa-solid fa-arrow-up mr-1"></i>Front
+                        </span>
+                    </div>
+                    <div class="space-y-3">
+                        {% include "fleet/includes/tyre_axle_row.html" with label="Steer" wheels=tyre_layout.horse.axles.0.wheels single=True vehicle=vehicle %}
+                        {% include "fleet/includes/tyre_axle_row.html" with label="Drive" wheels=tyre_layout.horse.axles.1.wheels vehicle=vehicle %}
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2.5 sm:px-4">
+                    <div class="flex items-center gap-2">
+                        <i class="fa-solid fa-life-ring text-slate-400"></i>
+                        <div class="leading-tight">
+                            <p class="text-[11px] font-bold uppercase tracking-wider text-slate-600">Stepney</p>
+                            <p class="text-[10px] text-slate-400">Spare carrier</p>
+                        </div>
+                    </div>
+                    {% include "fleet/includes/tyre_slot.html" with slot=tyre_layout.stepney vehicle=vehicle %}
+                </div>
+            </div>
+
+            <!-- Right column: Trailer -->
+            <div class="rounded-lg border border-slate-200 bg-white p-3 sm:p-4">
+                <div class="mb-3 flex items-center justify-between">
+                    <span class="text-[11px] font-bold uppercase tracking-wider text-slate-600">Trailer &middot; 12 tyres</span>
+                    <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">3 axles</span>
+                </div>
+                <div class="space-y-3">
+                    {% for ax in tyre_layout.trailer.axles %}
+                        {% include "fleet/includes/tyre_axle_row.html" with label=ax.name wheels=ax.wheels vehicle=vehicle %}
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Legend -->
+        <div class="mt-4 flex flex-wrap items-center gap-x-5 gap-y-1.5 text-[11px] text-slate-500">
+            <span class="inline-flex items-center gap-1.5">
+                <span class="inline-block h-3 w-3 rounded-sm border border-emerald-300 bg-emerald-50"></span>Mounted
+            </span>
+            <span class="inline-flex items-center gap-1.5">
+                <span class="inline-block h-3 w-3 rounded-sm border border-dashed border-slate-300 bg-white"></span>Vacant
+            </span>
+            <span class="text-slate-400">Click a tyre for actions &middot; click a vacant slot to mount</span>
+        </div>
+
+        <!-- Unassigned Tyres (if any) -->
+        {% if tyre_layout.unassigned_tyres %}
+        <div class="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3">
+            <h4 class="mb-2 text-[11px] font-bold uppercase tracking-wider text-amber-800">
+                <i class="fa-solid fa-triangle-exclamation mr-1.5"></i>
+                Unassigned / non-standard positions ({{ tyre_layout.unassigned_tyres|length }})
+            </h4>
+            <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {% for t in tyre_layout.unassigned_tyres %}
+                <div class="rounded-md border border-amber-200 bg-white p-2 text-center">
+                    <span class="block text-[10px] font-bold uppercase text-amber-700">Pos: {{ t.current_position }}</span>
+                    <p class="truncate text-xs font-bold text-slate-800">{{ t.brand }}</p>
+                    <p class="font-mono text-[10px] text-slate-500">#{{ t.serial_number }}</p>
+                    <a href="{% url 'tyre-detail' t.pk %}" class="mt-0.5 block text-[10px] font-bold text-emerald-600 hover:underline">View Details</a>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</section>

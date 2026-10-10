@@ -9,6 +9,11 @@ from django.utils import timezone
 from django.db.models.signals import post_delete, pre_save
 from django.dispatch import receiver
 from .vehicle import Vehicle
+from fleet.services import (
+    FLAT_TYRE_POSITION_CHOICES,
+    normalize_tyre_position,
+    TYRE_POSITION_NAME_MAP,
+)
 
 
 class TyreBrand(models.Model):
@@ -100,7 +105,11 @@ class Tyre(models.Model):
         related_name='tyres',
         verbose_name='Current Vehicle'
     )
-    current_position = models.CharField(max_length=50, blank=True, verbose_name='Position')
+    current_position = models.CharField(
+        max_length=50,
+        blank=True,
+        verbose_name='Position'
+    )
     
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_IN_STOCK)
     photo = models.ImageField(upload_to=tyre_photo_upload_path, null=True, blank=True, verbose_name='Tyre Photo')
@@ -108,6 +117,11 @@ class Tyre(models.Model):
 
     def __str__(self):
         return f"{self.brand} {self.size} ({self.serial_number})"
+
+    @property
+    def position_display(self):
+        """Returns clean human-readable position name"""
+        return TYRE_POSITION_NAME_MAP.get(self.current_position, self.current_position)
 
     @property
     def added_by(self):
@@ -324,7 +338,11 @@ class TyreLog(models.Model):
     action = models.CharField(max_length=20, choices=ACTION_CHOICES)
     
     vehicle = models.ForeignKey(Vehicle, on_delete=models.SET_NULL, null=True, blank=True)
-    position = models.CharField(max_length=50, blank=True)
+    position = models.CharField(
+        max_length=50,
+        blank=True,
+        verbose_name='Position'
+    )
     notes = models.TextField(blank=True)
 
     logged_by = models.ForeignKey(
@@ -339,6 +357,11 @@ class TyreLog(models.Model):
 
     class Meta:
         ordering = ['-date', '-created_at', '-id']
+
+    @property
+    def position_display(self):
+        """Returns clean human-readable position name"""
+        return TYRE_POSITION_NAME_MAP.get(self.position, self.position)
 
     def __str__(self):
         try:
