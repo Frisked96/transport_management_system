@@ -588,6 +588,13 @@ class Trip(models.Model):
         return 0
 
     @property
+    def vendor_rate(self):
+        """Returns the rate per ton for vendor hire, calculated from vendor_hire_amount or rate_per_ton"""
+        if self.weight and self.weight > 0 and self.vendor_hire_amount:
+            return (Decimal(str(self.vendor_hire_amount)) / Decimal(str(self.weight))).quantize(Decimal('0.01'))
+        return self.rate_per_ton or Decimal('0.00')
+
+    @property
     def gst_amount(self):
         """Returns GST amount, prioritizing cached value"""
         if getattr(self, '_bypass_cache', False):

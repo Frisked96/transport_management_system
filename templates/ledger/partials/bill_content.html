@@ -115,7 +115,7 @@
                 {% endif %}
                 <td class="text-center">{{ bill.hsn_code }}</td>
                 <td class="text-right">{{ bt.trip.weight|indian_comma }}</td>
-                <td class="text-right">{% if bill.is_creditor_bill %}-{% else %}{{ bt.trip.rate_per_ton|indian_comma }}{% endif %}</td>
+                <td class="text-right">{% if bill.is_creditor_bill %}{% if bt.trip.vendor_rate %}{{ bt.trip.vendor_rate|indian_comma }}{% else %}-{% endif %}{% else %}{{ bt.trip.rate_per_ton|indian_comma }}{% endif %}</td>
                 {% if has_discount %}<td class="text-right" style="color: #c00;">{% if bt.discount %}{{ bt.discount|indian_comma }}{% else %}-{% endif %}</td>{% endif %}
                 <td class="text-right font-bold">
                     {% if bill.is_creditor_bill %}
@@ -321,7 +321,7 @@
                 {% if has_lr %}<td class="text-center">{{ bt.lr_no|default:bt.trip.lr_no|default:"-" }}</td>{% endif %}
                 <td>{{ bt.trip.pickup_location|truncatechars:20 }} - {{ bt.trip.delivery_location|truncatechars:20 }}</td>
                 <td class="text-right">{{ bt.trip.weight|indian_comma }}</td>
-                <td class="text-right">{% if bill.is_creditor_bill %}-{% else %}{{ bt.trip.rate_per_ton|indian_comma }}{% endif %}</td>
+                <td class="text-right">{% if bill.is_creditor_bill %}{% if bt.trip.vendor_rate %}{{ bt.trip.vendor_rate|indian_comma }}{% else %}-{% endif %}{% else %}{{ bt.trip.rate_per_ton|indian_comma }}{% endif %}</td>
                 <td class="text-right font-bold">
                     {% if bill.is_creditor_bill %}
                         {{ bt.trip.vendor_hire_amount|indian_comma }}

@@ -340,10 +340,11 @@ def group_trips_for_bill(bill, bill_trips=None):
     # Pre-calculate sort key values
     def get_sort_key(bt):
         trip = bt.trip
+        rate = (trip.vendor_rate if bill.is_creditor_bill else trip.rate_per_ton) or 0
         return (
             trip.pickup_location or '',
             trip.delivery_location or '',
-            trip.rate_per_ton or 0
+            rate
         )
 
     # Sort bill_trips

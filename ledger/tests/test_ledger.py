@@ -1399,6 +1399,7 @@ class CreditorAttachedVehicleBillingTests(TestCase):
         self.assertContains(resp_vend_detail, "Vendor Bill / Lorry Hire Invoice")
         self.assertContains(resp_vend_detail, "VEND-VIEW-999")
         self.assertContains(resp_vend_detail, customer_bill.bill_number)
+        self.assertContains(resp_vend_detail, "1,600.00")
 
         # 6. Creditor party detail renders operations and invoices
         resp_party = self.client.get(reverse('party-detail', kwargs={'pk': self.creditor.pk}))
