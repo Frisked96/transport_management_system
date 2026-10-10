@@ -106,6 +106,10 @@
                                     <a href="{% url 'tyre-detail' record.associated_tyre.pk %}" class="text-xs font-bold text-indigo-600 hover:underline uppercase">
                                         <i class="fa-solid fa-dharmachakra mr-1 text-[10px]"></i>{{ record.associated_tyre.brand }}
                                     </a>
+                                {% elif record.associated_document_renewal %}
+                                    <a href="{% url 'document-history' record.associated_document_renewal.document.pk %}" class="text-xs font-bold text-emerald-600 hover:underline uppercase" title="Doc: {{ record.associated_document_renewal.document.document_name }}">
+                                        <i class="fa-solid fa-shield-halved mr-1 text-[10px]"></i>{{ record.associated_document_renewal.document.vehicle.registration_plate|default:"" }} {{ record.associated_document_renewal.document.document_name }}
+                                    </a>
                                 {% else %}
                                     <span class="text-slate-400">-</span>
                                 {% endif %}

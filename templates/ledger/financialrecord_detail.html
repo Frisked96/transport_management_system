@@ -201,6 +201,16 @@
                     </a>
                 </div>
                 {% endif %}
+
+                <!-- Associated Document Renewal (only if linked) -->
+                {% if record.associated_document_renewal %}
+                <div class="bg-slate-50 border border-slate-100 rounded-lg p-3.5 space-y-1">
+                    <span class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Associated Document Renewal</span>
+                    <a href="{% url 'document-history' record.associated_document_renewal.document.pk %}" class="inline-flex items-center text-sm font-bold text-emerald-600 hover:text-emerald-700 hover:underline">
+                        <i class="fa-solid fa-shield-halved text-emerald-500 mr-2 text-xs"></i>{{ record.associated_document_renewal.document.document_name }} ({{ record.associated_document_renewal.document.vehicle.registration_plate }})
+                    </a>
+                </div>
+                {% endif %}
             </div>
         </div>
 

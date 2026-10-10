@@ -102,6 +102,20 @@ class DocumentFile(models.Model):
         verbose_name_plural = 'Document Files'
         ordering = ['created_at']
 
+    @property
+    def file_extension(self):
+        if self.file and self.file.name:
+            return os.path.splitext(self.file.name)[1].lstrip('.').upper()
+        return ''
+
+    @property
+    def is_pdf(self):
+        return self.file_extension.lower() == 'pdf'
+
+    @property
+    def is_image(self):
+        return self.file_extension.lower() in ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp', 'svg']
+
     def __str__(self):
         return f"File for {self.document.document_name} ({self.get_upload_status_display()})"
 

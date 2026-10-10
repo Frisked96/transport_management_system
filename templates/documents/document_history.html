@@ -126,10 +126,10 @@
                     <span>Logged: {{ item.created_at|date:"d M Y, H:i" }}{% if item.renewed_by %} by {{ item.renewed_by.username }}{% endif %}</span>
                     <div class="flex items-center space-x-2">
                         {% if item.receipt_file %}
-                        <a href="{% url 'renewal-file-view' item.pk %}" target="_blank" class="text-emerald-600 font-bold p-1"><i class="fa-regular fa-file-lines"></i> Copy</a>
+                        <button type="button" onclick="openDocumentPreview('{{ document.document_name|escapejs }} Renewal Copy', '{% url 'renewal-file-view' item.pk %}', '{% url 'renewal-file-view' item.pk %}?download=1', '{{ item.file_extension|escapejs }}')" class="text-emerald-600 font-bold p-1 hover:text-emerald-800"><i class="fa-regular fa-file-lines"></i> Copy</button>
                         {% endif %}
                         {% for r_file in item.files.all %}
-                        <a href="{% url 'document-view' r_file.pk %}" target="_blank" class="text-emerald-600 font-bold p-1"><i class="fa-regular fa-file-lines"></i> File</a>
+                        <button type="button" onclick="openDocumentPreview('{{ document.document_name|escapejs }} Attachment', '{% url 'document-view' r_file.pk %}', '{% url 'document-view' r_file.pk %}?download=1', '{{ r_file.file_extension|escapejs }}')" class="text-emerald-600 font-bold p-1 hover:text-emerald-800"><i class="fa-regular fa-file-lines"></i> File</button>
                         {% endfor %}
                         <a href="{% url 'document-renewal-update' item.pk %}" class="text-amber-600 font-bold p-1"><i class="fa-regular fa-pen-to-square"></i></a>
                         <a href="{% url 'document-renewal-delete' item.pk %}" class="text-rose-600 font-bold p-1"><i class="fa-regular fa-trash-can"></i></a>
@@ -181,14 +181,14 @@
                         <td class="px-6 py-3.5">
                             <div class="flex flex-col gap-1">
                                 {% if item.receipt_file %}
-                                <a href="{% url 'renewal-file-view' item.pk %}" target="_blank" class="inline-flex items-center text-xs font-bold text-emerald-600 hover:text-emerald-700">
+                                <button type="button" onclick="openDocumentPreview('{{ document.document_name|escapejs }} Renewal Copy', '{% url 'renewal-file-view' item.pk %}', '{% url 'renewal-file-view' item.pk %}?download=1', '{{ item.file_extension|escapejs }}')" class="inline-flex items-center text-xs font-bold text-emerald-600 hover:text-emerald-700">
                                     <i class="fa-regular fa-file-lines mr-1.5 text-emerald-500"></i>View Scanned Copy
-                                </a>
+                                </button>
                                 {% endif %}
                                 {% for r_file in item.files.all %}
-                                <a href="{% url 'document-view' r_file.pk %}" target="_blank" class="inline-flex items-center text-xs font-bold text-emerald-600 hover:text-emerald-700">
+                                <button type="button" onclick="openDocumentPreview('{{ document.document_name|escapejs }} Attachment', '{% url 'document-view' r_file.pk %}', '{% url 'document-view' r_file.pk %}?download=1', '{{ r_file.file_extension|escapejs }}')" class="inline-flex items-center text-xs font-bold text-emerald-600 hover:text-emerald-700">
                                     <i class="fa-regular fa-file-lines mr-1.5 text-emerald-500"></i>Attachment
-                                </a>
+                                </button>
                                 {% endfor %}
                                 {% if not item.receipt_file and not item.files.exists %}
                                 <span class="text-slate-300 italic text-xs">None</span>

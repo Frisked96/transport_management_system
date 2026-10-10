@@ -9,6 +9,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 
 from documents.models import Document, DocumentRenewal
 from fleet.models import Vehicle
+from ledger.models import CompanyAccount, FinancialRecord
 
 
 class BaseComplianceDocumentTests(TestCase):
@@ -289,3 +290,141 @@ class BaseComplianceDocumentTests(TestCase):
             r1.receipt_file.delete(save=False)
         if r2.receipt_file:
             r2.receipt_file.delete(save=False)
+
+    def test_document_renewal_creates_financial_record_in_company_account(self):
+        """Verify renewing a document with cost creates an expense FinancialRecord in the vehicle's company account."""
+        account = CompanyAccount.objects.create(name='Prime Logistics Pvt Ltd', opening_balance=Decimal('100000.00'))
+        self.vehicle.company_account = account
+        self.vehicle.save()
+
+        today = timezone.now().date()
+        doc = self.vehicle.documents.get(document_name='PUCC')
+
+        # Renew PUCC with cost ₹1,500
+        renew_url = reverse('document-renew', kwargs={'pk': doc.pk})
+        response = self.client.post(renew_url, {
+            'valid_from': today.isoformat(),
+            'valid_to': (today + timedelta(days=180)).isoformat(),
+            'cost': '1500.00',
+            'document_number': 'PUCC-2026-001',
+            'notes': 'Six month PUCC test',
+        })
+        self.assertRedirects(response, reverse('document-history', kwargs={'pk': doc.pk}))
+
+        renewal = doc.renewals.first()
+        self.assertIsNotNone(renewal)
+
+        # Financial record must exist
+        fin_rec = FinancialRecord.objects.filter(associated_document_renewal=renewal).first()
+        self.assertIsNotNone(fin_rec)
+        self.assertEqual(fin_rec.account, account)
+        self.assertEqual(fin_rec.amount, Decimal('1500.00'))
+        self.assertEqual(fin_rec.category.name, 'Document Renewal')
+        self.assertEqual(fin_rec.category.type, 'Expense')
+        self.assertEqual(fin_rec.date, today)
+
+        # Company account cached balance must reflect expense
+        account.refresh_from_db()
+        self.assertEqual(account.current_balance_cached, Decimal('98500.00'))
+
+    def test_document_renewal_history_update_syncs_financial_record(self):
+        """Verify editing a historical renewal entry updates the FinancialRecord and account balance."""
+        account = CompanyAccount.objects.create(name='Prime Logistics Pvt Ltd', opening_balance=Decimal('50000.00'))
+        self.vehicle.company_account = account
+        self.vehicle.save()
+
+        today = timezone.now().date()
+        doc = self.vehicle.documents.get(document_name='Fitness')
+
+        renewal = DocumentRenewal.objects.create(
+            document=doc,
+            valid_from=today,
+            valid_to=today + timedelta(days=365),
+            cost=Decimal('3000.00'),
+            document_number='FIT-001',
+            renewed_by=self.user
+        )
+
+        fin_rec = FinancialRecord.objects.get(associated_document_renewal=renewal)
+        self.assertEqual(fin_rec.amount, Decimal('3000.00'))
+        account.refresh_from_db()
+        self.assertEqual(account.current_balance_cached, Decimal('47000.00'))
+
+        # Edit historical renewal via DocumentRenewalUpdateView to cost ₹3,800
+        edit_url = reverse('document-renewal-update', kwargs={'pk': renewal.pk})
+        response = self.client.post(edit_url, {
+            'valid_from': today.isoformat(),
+            'valid_to': (today + timedelta(days=365)).isoformat(),
+            'cost': '3800.00',
+            'document_number': 'FIT-001-REV',
+            'notes': 'Corrected fee with penalty',
+        })
+        self.assertRedirects(response, reverse('document-history', kwargs={'pk': doc.pk}))
+
+        fin_rec.refresh_from_db()
+        self.assertEqual(fin_rec.amount, Decimal('3800.00'))
+        self.assertIn('FIT-001-REV', fin_rec.description)
+
+        account.refresh_from_db()
+        self.assertEqual(account.current_balance_cached, Decimal('46200.00'))
+
+    def test_document_renewal_delete_removes_financial_record_and_restores_balance(self):
+        """Verify deleting a renewal history entry deletes the FinancialRecord and restores account balance."""
+        account = CompanyAccount.objects.create(name='Prime Logistics Pvt Ltd', opening_balance=Decimal('50000.00'))
+        self.vehicle.company_account = account
+        self.vehicle.save()
+
+        today = timezone.now().date()
+        doc = self.vehicle.documents.get(document_name='Insurance')
+
+        renewal = DocumentRenewal.objects.create(
+            document=doc,
+            valid_from=today,
+            valid_to=today + timedelta(days=365),
+            cost=Decimal('10000.00'),
+            document_number='INS-2026',
+            renewed_by=self.user
+        )
+
+        self.assertTrue(FinancialRecord.objects.filter(associated_document_renewal=renewal).exists())
+        account.refresh_from_db()
+        self.assertEqual(account.current_balance_cached, Decimal('40000.00'))
+
+        # Delete renewal via DocumentRenewalDeleteView
+        del_url = reverse('document-renewal-delete', kwargs={'pk': renewal.pk})
+        response = self.client.post(del_url)
+        self.assertRedirects(response, reverse('document-history', kwargs={'pk': doc.pk}))
+
+        # Financial record must be deleted
+        self.assertFalse(FinancialRecord.objects.filter(associated_document_renewal_id=renewal.pk).exists())
+
+        # Account balance must be restored
+        account.refresh_from_db()
+        self.assertEqual(account.current_balance_cached, Decimal('50000.00'))
+
+    def test_proxy_views_download_parameter(self):
+        """Verify proxy views return downloadable attachment FileResponse when ?download=1 is provided."""
+        today = timezone.now().date()
+        doc = self.vehicle.documents.get(document_name='Tax')
+        test_file = SimpleUploadedFile("tax_receipt.pdf", b"%PDF-1.4 sample content", content_type="application/pdf")
+        renewal = DocumentRenewal.objects.create(
+            document=doc,
+            valid_from=today,
+            valid_to=today + timedelta(days=365),
+            cost=Decimal('5000.00'),
+            receipt_file=test_file
+        )
+
+        # Standard view redirects
+        resp_view = self.client.get(reverse('renewal-file-view', kwargs={'pk': renewal.pk}))
+        self.assertEqual(resp_view.status_code, 302)
+
+        # Download view returns attachment
+        resp_dl = self.client.get(reverse('renewal-file-view', kwargs={'pk': renewal.pk}) + '?download=1')
+        self.assertIn(resp_dl.status_code, [200, 302])
+        if resp_dl.status_code == 200:
+            self.assertIn('attachment', resp_dl.headers.get('Content-Disposition', ''))
+
+        # Clean up file
+        if renewal.receipt_file:
+            renewal.receipt_file.delete(save=False)

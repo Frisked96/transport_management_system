@@ -95,8 +95,81 @@ class DocumentRenewal(models.Model):
             return False
         return self.valid_to < timezone.now().date()
 
+    @property
+    def file_extension(self):
+        if self.receipt_file and self.receipt_file.name:
+            return os.path.splitext(self.receipt_file.name)[1].lstrip('.').upper()
+        return ''
+
+    @property
+    def is_pdf(self):
+        return self.file_extension.lower() == 'pdf'
+
+    @property
+    def is_image(self):
+        return self.file_extension.lower() in ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp', 'svg']
+
+    def sync_financial_record(self):
+        """
+        Synchronizes this renewal expense with the vehicle's company account in the ledger.
+        - If the vehicle belongs to a CompanyAccount and cost > 0: creates or updates FinancialRecord.
+        - If cost <= 0 or vehicle has no CompanyAccount: deletes any existing FinancialRecord.
+        """
+        from ledger.models import FinancialRecord, TransactionCategory
+
+        vehicle = getattr(self.document, 'vehicle', None)
+        record = FinancialRecord.objects.filter(associated_document_renewal=self).first()
+
+        if vehicle and vehicle.company_account and self.cost and self.cost > 0:
+            category, _ = TransactionCategory.objects.get_or_create(
+                name='Document Renewal',
+                defaults={
+                    'type': TransactionCategory.TYPE_EXPENSE,
+                    'description': 'Vehicle document renewal expenses'
+                }
+            )
+            date = self.valid_from or (self.created_at.date() if self.created_at else timezone.now().date())
+            description = f"Document renewal: {self.document.document_name} ({vehicle.registration_plate})"
+            if self.document_number:
+                description += f" - Doc #{self.document_number}"
+
+            if record:
+                updated = False
+                if record.account != vehicle.company_account:
+                    record.account = vehicle.company_account
+                    updated = True
+                if record.amount != self.cost:
+                    record.amount = self.cost
+                    updated = True
+                if record.date != date:
+                    record.date = date
+                    updated = True
+                if record.description != description:
+                    record.description = description
+                    updated = True
+                if record.category != category:
+                    record.category = category
+                    updated = True
+                if updated:
+                    record.save()
+            else:
+                FinancialRecord.objects.create(
+                    account=vehicle.company_account,
+                    category=category,
+                    record_type=FinancialRecord.RECORD_TYPE_TRANSACTION,
+                    amount=self.cost,
+                    date=date,
+                    associated_document_renewal=self,
+                    recorded_by=self.renewed_by,
+                    description=description
+                )
+        else:
+            if record:
+                record.delete()
+
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
+        self.sync_financial_record()
         # Resync parent document if this is the latest renewal
         latest = self.document.renewals.order_by('-valid_to', '-created_at').first()
         if latest and latest.pk == self.pk:

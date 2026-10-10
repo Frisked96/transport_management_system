@@ -11,7 +11,7 @@ from django.contrib import messages
 from django.db.models import Q, Count
 from django.http import HttpResponse, HttpResponseRedirect
 from django.views.decorators.http import require_POST
-from ledger.models import Party
+from ledger.models import Party, CompanyAccount
 
 from .models import Vehicle, MaintenanceRecord, Tyre, TyreLog, TyreBrand
 from .forms import VehicleForm, MaintenanceRecordForm, MaintenanceCompleteForm, TyreForm, TyreLogForm, TyreBrandForm
@@ -383,7 +383,7 @@ class VehicleListView(LoginRequiredMixin, PermissionRequiredMixin, BaseFleetPerm
     
     def get_queryset(self):
         """Filter vehicles based on user permissions"""
-        queryset = Vehicle.objects.all().select_related('vendor', 'created_by')
+        queryset = Vehicle.objects.all().select_related('vendor', 'company_account', 'created_by')
         
         # Drivers can only view active vehicles
         if self.has_driver_permission():
@@ -417,6 +417,7 @@ class VehicleListView(LoginRequiredMixin, PermissionRequiredMixin, BaseFleetPerm
         context['current_status'] = self.request.GET.get('status', '')
         context['search_term'] = self.request.GET.get('search', '')
         context['vendors'] = Party.objects.filter(party_type=Party.TYPE_CREDITOR).order_by('name')
+        context['company_accounts'] = CompanyAccount.objects.all().order_by('name')
         return context
 
 
@@ -430,7 +431,7 @@ class VehicleDetailView(LoginRequiredMixin, PermissionRequiredMixin, BaseFleetPe
     permission_required = 'fleet.view_vehicle'
 
     def get_queryset(self):
-        return super().get_queryset().select_related('vendor', 'created_by')
+        return super().get_queryset().select_related('vendor', 'company_account', 'created_by')
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -504,17 +505,23 @@ def vehicle_bulk_update(request):
             return redirect('vehicle-list')
 
         vendor = None
+        company_account = None
         if ownership == Vehicle.OWNERSHIP_ATTACHED:
             if not vendor_id:
                 messages.error(request, 'Vendor must be selected for attached vehicles.')
                 return redirect('vehicle-list')
             vendor = get_object_or_404(Party, pk=vendor_id)
+        elif ownership == Vehicle.OWNERSHIP_OWNED:
+            company_account_id = request.POST.get('company_account')
+            if company_account_id:
+                company_account = get_object_or_404(CompanyAccount, pk=company_account_id)
 
-        # Update the selected vehicles
-        Vehicle.objects.filter(id__in=vehicle_ids).update(
-            ownership=ownership,
-            vendor=vendor if ownership == Vehicle.OWNERSHIP_ATTACHED else None
-        )
+        # Update the selected vehicles using save() to keep financial sync consistent
+        for vehicle in Vehicle.objects.filter(id__in=vehicle_ids):
+            vehicle.ownership = ownership
+            vehicle.vendor = vendor if ownership == Vehicle.OWNERSHIP_ATTACHED else None
+            vehicle.company_account = company_account if ownership == Vehicle.OWNERSHIP_OWNED else None
+            vehicle.save()
         
         messages.success(request, f'Successfully updated {len(vehicle_ids)} vehicle(s).')
     

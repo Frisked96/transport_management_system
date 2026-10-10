@@ -146,14 +146,14 @@
                             </div>
                             <div class="flex items-center space-x-1.5">
                                 {% if doc.latest_renewal and doc.latest_renewal.receipt_file %}
-                                <a href="{% url 'renewal-file-view' doc.latest_renewal.pk %}" target="_blank" class="text-slate-400 hover:text-emerald-600 p-2" title="View Current Scanned Copy">
+                                <button type="button" onclick="openDocumentPreview('{{ doc.document_name|escapejs }}', '{% url 'renewal-file-view' doc.latest_renewal.pk %}', '{% url 'renewal-file-view' doc.latest_renewal.pk %}?download=1', '{{ doc.latest_renewal.file_extension|escapejs }}')" class="text-slate-400 hover:text-emerald-600 p-2" title="Preview / Download Scanned Copy">
                                     <i class="fa-solid fa-file-lines"></i>
-                                </a>
+                                </button>
                                 {% else %}
                                 {% for doc_file in doc.files.all %}
-                                <a href="{% url 'document-view' doc_file.pk %}" target="_blank" class="text-slate-400 hover:text-emerald-600 p-2" title="View Scanned Copy">
+                                <button type="button" onclick="openDocumentPreview('{{ doc.document_name|escapejs }}', '{% url 'document-view' doc_file.pk %}', '{% url 'document-view' doc_file.pk %}?download=1', '{{ doc_file.file_extension|escapejs }}')" class="text-slate-400 hover:text-emerald-600 p-2" title="Preview / Download Scanned Copy">
                                     <i class="fa-solid fa-file-lines"></i>
-                                </a>
+                                </button>
                                 {% endfor %}
                                 {% endif %}
                                 {% if perms.documents.change_document %}
@@ -237,14 +237,14 @@
                                 <td class="px-4 py-3 text-right text-sm whitespace-nowrap">
                                     <div class="flex justify-end items-center space-x-1">
                                         {% if doc.latest_renewal and doc.latest_renewal.receipt_file %}
-                                        <a href="{% url 'renewal-file-view' doc.latest_renewal.pk %}" target="_blank" class="text-slate-400 hover:text-emerald-600 p-1" title="View Current Scanned Copy">
+                                        <button type="button" onclick="openDocumentPreview('{{ doc.document_name|escapejs }}', '{% url 'renewal-file-view' doc.latest_renewal.pk %}', '{% url 'renewal-file-view' doc.latest_renewal.pk %}?download=1', '{{ doc.latest_renewal.file_extension|escapejs }}')" class="text-slate-400 hover:text-emerald-600 p-1" title="Preview / Download Scanned Copy">
                                             <i class="fa-solid fa-file-lines"></i>
-                                        </a>
+                                        </button>
                                         {% else %}
                                         {% for doc_file in doc.files.all %}
-                                        <a href="{% url 'document-view' doc_file.pk %}" target="_blank" class="text-slate-400 hover:text-emerald-600 p-1" title="View Scanned Copy">
+                                        <button type="button" onclick="openDocumentPreview('{{ doc.document_name|escapejs }}', '{% url 'document-view' doc_file.pk %}', '{% url 'document-view' doc_file.pk %}?download=1', '{{ doc_file.file_extension|escapejs }}')" class="text-slate-400 hover:text-emerald-600 p-1" title="Preview / Download Scanned Copy">
                                             <i class="fa-solid fa-file-lines"></i>
-                                        </a>
+                                        </button>
                                         {% endfor %}
                                         {% endif %}
                                         {% if perms.documents.change_document %}
@@ -395,9 +395,9 @@
                             </div>
                             <div class="flex items-center space-x-3">
                                 {% for doc_file in doc.files.all %}
-                                <a href="{% url 'document-view' doc_file.pk %}" target="_blank" class="text-slate-400 hover:text-emerald-600 min-h-[44px] min-w-[44px] inline-flex items-center justify-center" title="View Scanned Copy">
+                                <button type="button" onclick="openDocumentPreview('{{ doc.document_name|escapejs }}', '{% url 'document-view' doc_file.pk %}', '{% url 'document-view' doc_file.pk %}?download=1', '{{ doc_file.file_extension|escapejs }}')" class="text-slate-400 hover:text-emerald-600 min-h-[44px] min-w-[44px] inline-flex items-center justify-center" title="Preview / Download Scanned Copy">
                                     <i class="fa-solid fa-file-lines"></i>
-                                </a>
+                                </button>
                                 {% endfor %}
                                 {% if perms.documents.change_document %}
                                 <a href="{% url 'document-update' doc.pk %}" class="text-slate-400 hover:text-blue-600 min-h-[44px] min-w-[44px] inline-flex items-center justify-center" title="Edit">
@@ -459,9 +459,9 @@
                                 <td class="px-4 py-3 text-right text-sm">
                                     <div class="flex justify-end space-x-2">
                                         {% for doc_file in doc.files.all %}
-                                        <a href="{% url 'document-view' doc_file.pk %}" target="_blank" class="text-slate-400 hover:text-emerald-600" title="View Scanned Copy">
+                                        <button type="button" onclick="openDocumentPreview('{{ doc.document_name|escapejs }}', '{% url 'document-view' doc_file.pk %}', '{% url 'document-view' doc_file.pk %}?download=1', '{{ doc_file.file_extension|escapejs }}')" class="text-slate-400 hover:text-emerald-600" title="Preview / Download Scanned Copy">
                                             <i class="fa-solid fa-file-lines"></i>
-                                        </a>
+                                        </button>
                                         {% endfor %}
                                         {% if perms.documents.change_document %}
                                         <a href="{% url 'document-update' doc.pk %}" class="text-slate-400 hover:text-blue-600" title="Edit">

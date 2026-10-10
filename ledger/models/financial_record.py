@@ -111,6 +111,14 @@ class FinancialRecord(models.Model):
         related_name='financial_records',
         verbose_name='Associated Tyre'
     )
+    associated_document_renewal = models.ForeignKey(
+        'documents.DocumentRenewal',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='financial_records',
+        verbose_name='Associated Document Renewal'
+    )
 
     record_type = models.CharField(
         max_length=20,
@@ -282,6 +290,16 @@ class FinancialRecord(models.Model):
         except ObjectDoesNotExist:
             pass
             
+        return None
+
+    @property
+    def linked_document_renewal(self):
+        """Returns associated document renewal if present"""
+        try:
+            if self.associated_document_renewal:
+                return self.associated_document_renewal
+        except ObjectDoesNotExist:
+            pass
         return None
 
     @property

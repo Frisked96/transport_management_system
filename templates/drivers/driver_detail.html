@@ -204,9 +204,9 @@
                                 </td>
                                 <td class="px-6 py-4 text-sm flex items-center space-x-3">
                                     {% for doc_file in doc.files.all %}
-                                    <a href="{% url 'document-view' doc_file.pk %}" target="_blank" class="text-slate-400 hover:text-emerald-600 transition-colors" title="View Document">
+                                    <button type="button" onclick="openDocumentPreview('{{ doc.document_name|escapejs }} - {{ driver.name|escapejs }}', '{% url 'document-view' doc_file.pk %}', '{% url 'document-view' doc_file.pk %}?download=1', '{{ doc_file.file_extension|escapejs }}')" class="text-slate-400 hover:text-emerald-600 transition-colors" title="Preview / Download Document">
                                         <i class="fa-regular fa-eye"></i>
-                                    </a>
+                                    </button>
                                     {% endfor %}
                                     {% if perms.documents.change_document %}
                                     <a href="{% url 'document-update' doc.pk %}" class="text-slate-400 hover:text-amber-600 transition-colors" title="Edit">

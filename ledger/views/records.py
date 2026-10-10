@@ -38,7 +38,7 @@ class FinancialRecordListView(LoginRequiredMixin, PermissionRequiredMixin, BaseL
             return FinancialRecord.objects.none()
         
         queryset = FinancialRecord.objects.all().select_related(
-            'category', 'party', 'account', 'driver__user', 'associated_trip', 'associated_bill', 'associated_tyre'
+            'category', 'party', 'account', 'driver__user', 'associated_trip', 'associated_bill', 'associated_tyre', 'associated_document_renewal__document__vehicle'
         ).prefetch_related('allocations__trip', 'bill_allocations__bill')
         
         # Category filter
@@ -168,7 +168,7 @@ class FinancialRecordDetailView(LoginRequiredMixin, PermissionRequiredMixin, Bas
             return FinancialRecord.objects.none()
         
         return FinancialRecord.objects.all().select_related(
-            'category', 'party', 'account', 'driver', 'associated_trip', 'associated_bill', 'associated_tyre', 'recorded_by'
+            'category', 'party', 'account', 'driver', 'associated_trip', 'associated_bill', 'associated_tyre', 'associated_document_renewal__document__vehicle', 'recorded_by'
         ).prefetch_related(
             'allocations__trip', 'bill_allocations__bill', 'associated_bill__original_bill'
         )

@@ -97,6 +97,16 @@ class Vehicle(models.Model):
         verbose_name='Vendor / Owner',
         help_text='Required if Ownership Type is Attached'
     )
+
+    company_account = models.ForeignKey(
+        'ledger.CompanyAccount',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='vehicles',
+        verbose_name='Company Account',
+        help_text='Company account / firm that owns this vehicle'
+    )
     
     # Audit fields
     created_by = models.ForeignKey(
@@ -128,6 +138,36 @@ class Vehicle(models.Model):
         verbose_name_plural = 'Vehicles'
         ordering = ['-registration_plate'] # Or -id/created_at if you want newest added. Registration plate descending might put newer ones on top if they follow a pattern. Let's use -id.
     
+    def save(self, *args, **kwargs):
+        if self.ownership == self.OWNERSHIP_ATTACHED:
+            self.company_account = None
+        elif self.ownership == self.OWNERSHIP_OWNED:
+            self.vendor = None
+
+        old_company_account_id = None
+        if self.pk:
+            old_inst = Vehicle.objects.filter(pk=self.pk).values('company_account_id').first()
+            if old_inst:
+                old_company_account_id = old_inst['company_account_id']
+
+        super().save(*args, **kwargs)
+
+        if old_company_account_id is not None and old_company_account_id != self.company_account_id:
+            from ledger.models import FinancialRecord, CompanyAccount
+            from ledger.services import BalanceService
+            records = FinancialRecord.objects.filter(
+                associated_document_renewal__document__vehicle=self
+            )
+            if self.company_account:
+                records.update(account=self.company_account)
+                BalanceService.refresh_account_balance(self.company_account)
+            else:
+                records.delete()
+            if old_company_account_id:
+                old_account = CompanyAccount.objects.filter(pk=old_company_account_id).first()
+                if old_account:
+                    BalanceService.refresh_account_balance(old_account)
+
     def delete(self, *args, **kwargs):
         self._is_being_deleted = True
         self.documents.filter(is_base_document=True).update(is_base_document=False)

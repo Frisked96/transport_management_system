@@ -97,7 +97,7 @@ class CompanyAccountDetailView(LoginRequiredMixin, PermissionRequiredMixin, Base
         records = self.object.financial_records.exclude(
             Q(record_type=FinancialRecord.RECORD_TYPE_INVOICE) | 
             Q(category__name__in=['Deductions', 'TDS', 'Shortage', 'Credit Note', 'Debit Note'])
-        ).select_related('category', 'party', 'driver__user', 'associated_trip', 'associated_bill', 'associated_tyre')
+        ).select_related('category', 'party', 'driver__user', 'associated_trip', 'associated_bill', 'associated_tyre', 'associated_document_renewal__document__vehicle')
         
         if start_date:
             records = records.filter(date__gte=start_date)

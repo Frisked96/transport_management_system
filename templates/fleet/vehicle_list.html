@@ -93,6 +93,8 @@
                             <a href="{% url 'vehicle-detail' vehicle.pk %}">{{ vehicle.registration_plate }}</a>
                             {% if vehicle.is_attached %}
                             <span class="px-1 py-0.5 rounded text-[10px] font-black uppercase tracking-tight bg-orange-100 text-orange-600">ATT</span>
+                            {% elif vehicle.company_account %}
+                            <span class="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-tight bg-emerald-50 text-emerald-700 border border-emerald-200/60" title="Company Account: {{ vehicle.company_account.name }}">{{ vehicle.company_account.name|truncatechars:15 }}</span>
                             {% endif %}
                         </h3>
                         <p class="text-xs font-bold text-slate-500 mt-1 uppercase">{{ vehicle.make_model|default:"-" }}</p>
@@ -167,7 +169,7 @@
                     {% endif %}
                     <td class="px-6 py-4">
                         <a href="{% url 'vehicle-detail' vehicle.pk %}" class="text-sm font-black text-slate-900 hover:text-emerald-600 transition-colors uppercase">{{ vehicle.registration_plate }}</a>
-                        {% if vehicle.is_attached %}<span class="ml-1 px-1 py-0.5 rounded text-[7px] font-black uppercase bg-orange-100 text-orange-600">ATT</span>{% endif %}
+                        {% if vehicle.is_attached %}<span class="ml-1 px-1 py-0.5 rounded text-[7px] font-black uppercase bg-orange-100 text-orange-600">ATT</span>{% elif vehicle.company_account %}<span class="ml-1 px-1.5 py-0.5 rounded text-[8px] font-bold uppercase bg-emerald-50 text-emerald-700 border border-emerald-200/60" title="Company Account: {{ vehicle.company_account.name }}">{{ vehicle.company_account.name|truncatechars:10 }}</span>{% endif %}
                     </td>
                     <td class="px-6 py-4 text-xs font-bold text-slate-600 uppercase">{{ vehicle.make_model|default:"-" }}</td>
                     <td class="px-6 py-4 text-xs font-bold text-slate-500">{{ vehicle.purchase_date|date:"d/m/y"|default:"-" }}</td>
@@ -249,6 +251,15 @@
                     <option value="">Select Vendor...</option>
                     {% for vendor in vendors %}
                     <option value="{{ vendor.pk }}">{{ vendor.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div id="bulkCompanyAccountContainer" class="hidden w-full sm:w-auto">
+                <select name="company_account" class="block w-full sm:w-56 pl-3 pr-10 py-2 text-sm border border-slate-300 focus:outline-none focus:ring-emerald-500 focus:border-emerald-500 rounded-md">
+                    <option value="">Select Company Account...</option>
+                    {% for acc in company_accounts %}
+                    <option value="{{ acc.pk }}">{{ acc.name }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -382,13 +393,22 @@
             updateBulkToolbar();
         });
 
+        const bulkCompanyAccountContainer = $('#bulkCompanyAccountContainer');
         bulkOwnershipSelect.on('change', function() {
             if ($(this).val() === 'Attached') {
                 bulkVendorContainer.removeClass('hidden');
                 bulkVendorContainer.find('select').prop('required', true);
+                bulkCompanyAccountContainer.addClass('hidden');
+                bulkCompanyAccountContainer.find('select').val('');
+            } else if ($(this).val() === 'Owned') {
+                bulkVendorContainer.addClass('hidden');
+                bulkVendorContainer.find('select').prop('required', false).val('');
+                bulkCompanyAccountContainer.removeClass('hidden');
             } else {
                 bulkVendorContainer.addClass('hidden');
                 bulkVendorContainer.find('select').prop('required', false).val('');
+                bulkCompanyAccountContainer.addClass('hidden');
+                bulkCompanyAccountContainer.find('select').val('');
             }
         });
 

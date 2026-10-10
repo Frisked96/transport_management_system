@@ -54,6 +54,34 @@ class VehicleModelTests(TestCase):
         self.attached_veh.refresh_from_db()
         self.assertIsNone(self.attached_veh.vendor)
 
+    def test_vehicle_company_account_assignment_and_mutual_exclusion(self):
+        """Verify company_account assignment and mutual exclusion with vendor."""
+        from ledger.models import CompanyAccount
+        account = CompanyAccount.objects.create(name='M/S Apex Transport')
+        
+        # Owned vehicle can have company_account
+        self.owned_veh.company_account = account
+        self.owned_veh.save()
+        self.owned_veh.refresh_from_db()
+        self.assertEqual(self.owned_veh.company_account, account)
+        self.assertIsNone(self.owned_veh.vendor)
+
+        # Switching to attached clears company_account
+        self.owned_veh.ownership = Vehicle.OWNERSHIP_ATTACHED
+        self.owned_veh.vendor = self.vendor
+        self.owned_veh.save()
+        self.owned_veh.refresh_from_db()
+        self.assertIsNone(self.owned_veh.company_account)
+        self.assertEqual(self.owned_veh.vendor, self.vendor)
+
+        # Switching back to owned clears vendor
+        self.owned_veh.ownership = Vehicle.OWNERSHIP_OWNED
+        self.owned_veh.company_account = account
+        self.owned_veh.save()
+        self.owned_veh.refresh_from_db()
+        self.assertEqual(self.owned_veh.company_account, account)
+        self.assertIsNone(self.owned_veh.vendor)
+
     def test_vehicle_delete_safeguard_flag(self):
         """Verify Vehicle.delete sets _is_being_deleted flag."""
         veh = self.owned_veh

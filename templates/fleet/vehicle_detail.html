@@ -92,6 +92,14 @@
                                 </td>
                             </tr>
                             {% endif %}
+                            {% if vehicle.company_account %}
+                            <tr class="border-t border-slate-50">
+                                <td class="py-2 text-slate-500 font-medium whitespace-nowrap pr-4">Company Account</td>
+                                <td class="py-2 text-emerald-600 font-bold">
+                                    <a href="{% url 'account-detail' vehicle.company_account.pk %}" class="hover:underline">{{ vehicle.company_account.name }}</a>
+                                </td>
+                            </tr>
+                            {% endif %}
                             <tr class="border-t border-slate-50">
                                 <td class="py-2 text-slate-500 font-medium whitespace-nowrap pr-4">Created By</td>
                                 <td class="py-2 text-slate-900 font-bold">
@@ -262,14 +270,14 @@
                         <!-- Action Buttons -->
                         <div class="flex items-center space-x-1.5 sm:self-center self-end pt-1 sm:pt-0">
                             {% if doc.latest_renewal and doc.latest_renewal.receipt_file %}
-                            <a href="{% url 'renewal-file-view' doc.latest_renewal.pk %}" target="_blank" class="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded" title="View Scanned Copy">
+                            <button type="button" onclick="openDocumentPreview('{{ doc.document_name|escapejs }} - {{ vehicle.registration_plate|escapejs }}', '{% url 'renewal-file-view' doc.latest_renewal.pk %}', '{% url 'renewal-file-view' doc.latest_renewal.pk %}?download=1', '{{ doc.latest_renewal.file_extension|escapejs }}')" class="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded" title="Preview / Download Scanned Copy">
                                 <i class="fa-regular fa-file-lines text-xs"></i>
-                            </a>
+                            </button>
                             {% else %}
                             {% for doc_file in doc.files.all %}
-                            <a href="{% url 'document-view' doc_file.pk %}" target="_blank" class="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded" title="View Scanned File">
+                            <button type="button" onclick="openDocumentPreview('{{ doc.document_name|escapejs }} - {{ vehicle.registration_plate|escapejs }}', '{% url 'document-view' doc_file.pk %}', '{% url 'document-view' doc_file.pk %}?download=1', '{{ doc_file.file_extension|escapejs }}')" class="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded" title="Preview / Download Scanned File">
                                 <i class="fa-regular fa-file-lines text-xs"></i>
-                            </a>
+                            </button>
                             {% endfor %}
                             {% endif %}
                             <a href="{% url 'document-renew' doc.pk %}" class="px-2 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 rounded text-[11px] font-bold transition-colors" title="Renew Document">
@@ -300,10 +308,10 @@
                             </div>
                             <div class="flex items-center space-x-1">
                                 {% if doc.latest_renewal and doc.latest_renewal.receipt_file %}
-                                <a href="{% url 'renewal-file-view' doc.latest_renewal.pk %}" target="_blank" class="p-1 text-slate-400 hover:text-emerald-600" title="View Scanned Copy"><i class="fa-regular fa-eye text-xs"></i></a>
+                                <button type="button" onclick="openDocumentPreview('{{ doc.document_name|escapejs }} - {{ vehicle.registration_plate|escapejs }}', '{% url 'renewal-file-view' doc.latest_renewal.pk %}', '{% url 'renewal-file-view' doc.latest_renewal.pk %}?download=1', '{{ doc.latest_renewal.file_extension|escapejs }}')" class="p-1 text-slate-400 hover:text-emerald-600" title="Preview / Download Scanned Copy"><i class="fa-regular fa-eye text-xs"></i></button>
                                 {% else %}
                                 {% for doc_file in doc.files.all %}
-                                <a href="{% url 'document-view' doc_file.pk %}" target="_blank" class="p-1 text-slate-400 hover:text-emerald-600" title="View File"><i class="fa-regular fa-eye text-xs"></i></a>
+                                <button type="button" onclick="openDocumentPreview('{{ doc.document_name|escapejs }} - {{ vehicle.registration_plate|escapejs }}', '{% url 'document-view' doc_file.pk %}', '{% url 'document-view' doc_file.pk %}?download=1', '{{ doc_file.file_extension|escapejs }}')" class="p-1 text-slate-400 hover:text-emerald-600" title="Preview / Download File"><i class="fa-regular fa-eye text-xs"></i></button>
                                 {% endfor %}
                                 {% endif %}
                                 <a href="{% url 'document-renew' doc.pk %}" class="px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded text-[10px] font-bold"><i class="fa-solid fa-arrows-rotate mr-1"></i>Renew</a>
