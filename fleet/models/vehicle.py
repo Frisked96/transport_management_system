@@ -181,7 +181,7 @@ class Vehicle(models.Model):
 
     @property
     def base_documents(self):
-        """Returns all 7 base compliance documents for this vehicle, creating them if missing"""
+        """Returns all 8 base compliance documents for this vehicle, creating them if missing"""
         from documents.models import Document
         Document.ensure_base_documents(self)
         return self.documents.filter(is_base_document=True).order_by('id')

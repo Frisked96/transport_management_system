@@ -35,6 +35,7 @@ class Document(models.Model):
         'Tax',
         'RC',
         'Vltd cirtificate',
+        'PUCC',
     ]
 
     vehicle = models.ForeignKey(
@@ -166,7 +167,7 @@ class Document(models.Model):
     @classmethod
     def ensure_base_documents(cls, vehicle):
         """
-        Ensures all 7 base compliance documents exist for the given vehicle.
+        Ensures all 8 base compliance documents exist for the given vehicle.
         Idempotent and matches case-insensitively with standard synonyms.
         """
         if not vehicle or not vehicle.pk:
@@ -179,6 +180,7 @@ class Document(models.Model):
             'Insurance': ['insurance', 'insurance policy'],
             'Tax': ['tax', 'road tax', 'vehicle tax'],
             'RC': ['rc', 'registration certificate', 'rc book'],
+            'PUCC': ['pucc', 'puc', 'pollution', 'pollution under control', 'pollution certificate', 'pollution under control certificate'],
         }
         existing_docs = list(cls.objects.filter(vehicle=vehicle))
         for base_name in cls.BASE_VEHICLE_DOCUMENTS:

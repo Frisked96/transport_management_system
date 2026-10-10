@@ -18,7 +18,7 @@ class BaseComplianceDocumentTests(TestCase):
         self.vehicle = Vehicle.objects.create(registration_plate='MH 14 DE 5555', make_model='Tata Prima')
 
     def test_base_documents_auto_created_on_vehicle_creation(self):
-        """Verify that exactly the 7 required base documents are automatically created on vehicle creation."""
+        """Verify that exactly the 8 required base documents are automatically created on vehicle creation."""
         base_names = [
             'Fitness',
             '1 yr permit',
@@ -27,9 +27,10 @@ class BaseComplianceDocumentTests(TestCase):
             'Tax',
             'RC',
             'Vltd cirtificate',
+            'PUCC',
         ]
         vehicle_docs = self.vehicle.documents.filter(is_base_document=True)
-        self.assertEqual(vehicle_docs.count(), 7)
+        self.assertEqual(vehicle_docs.count(), 8)
 
         doc_names = list(vehicle_docs.values_list('document_name', flat=True))
         for expected_name in base_names:
@@ -62,7 +63,7 @@ class BaseComplianceDocumentTests(TestCase):
         """Verify custom documents can still be deleted without error."""
         custom_doc = Document.objects.create(
             vehicle=self.vehicle,
-            document_name='Pollution Certificate',
+            document_name='Custom Agreement',
             is_base_document=False
         )
         custom_doc.delete()
@@ -72,7 +73,7 @@ class BaseComplianceDocumentTests(TestCase):
         """Verify deleting vehicle cascades and deletes all related base documents."""
         veh_id = self.vehicle.pk
         doc_count = self.vehicle.documents.count()
-        self.assertEqual(doc_count, 7)
+        self.assertEqual(doc_count, 8)
 
         self.vehicle.delete()
         self.assertEqual(Document.objects.filter(vehicle_id=veh_id).count(), 0)
