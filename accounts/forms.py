@@ -3,7 +3,7 @@ from django.contrib.auth.models import User, Group
 
 class UserForm(forms.ModelForm):
     groups = forms.ModelMultipleChoiceField(
-        queryset=Group.objects.all(),
+        queryset=Group.objects.all().order_by('name'),
         required=False,
         widget=forms.CheckboxSelectMultiple
     )
