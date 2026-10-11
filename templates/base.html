@@ -208,6 +208,11 @@
                             {% if user.is_superuser or perms.ledger.view_companyaccount %}
                             <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'account-list' %}">Company Accounts</a>
                             {% endif %}
+                            {% if user.is_superuser or perms.ledger.view_tollaccount or perms.ledger.can_view_financial_records %}
+                            <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'toll-ledger' %}">
+                                <i class="fa-solid fa-road mr-1.5 text-slate-400"></i>Toll Ledger
+                            </a>
+                            {% endif %}
                             {% if user.is_superuser or perms.ledger.can_view_financial_records %}
                             <hr class="my-1 border-slate-200"/>
                             <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'financial-summary' %}">Reports</a>
@@ -460,6 +465,11 @@
                 {% if user.is_superuser or perms.ledger.view_companyaccount %}
                 <a class="flex items-center px-3 py-3 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-700 hover:text-white transition-colors" href="{% url 'account-list' %}">
                     <i class="fa-solid fa-building-columns mr-3 w-5 text-center text-slate-500"></i>Company Accounts
+                </a>
+                {% endif %}
+                {% if user.is_superuser or perms.ledger.view_tollaccount or perms.ledger.can_view_financial_records %}
+                <a class="flex items-center px-3 py-3 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-700 hover:text-white transition-colors" href="{% url 'toll-ledger' %}">
+                    <i class="fa-solid fa-road mr-3 w-5 text-center text-slate-500"></i>Toll Ledger
                 </a>
                 {% endif %}
                 {% if user.is_superuser or perms.ledger.can_view_financial_records %}

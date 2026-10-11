@@ -32,6 +32,9 @@ def financial_record_upload_path(instance, filename):
     elif instance.driver:
         folder = 'drivers'
         identifier = instance.driver.employee_id or instance.driver.name
+    elif instance.associated_toll_recharge:
+        folder = 'toll'
+        identifier = f"recharge_{instance.associated_toll_recharge_id}"
     else:
         folder = 'miscellaneous'
         identifier = 'general'
@@ -118,6 +121,14 @@ class FinancialRecord(models.Model):
         blank=True,
         related_name='financial_records',
         verbose_name='Associated Document Renewal'
+    )
+    associated_toll_recharge = models.ForeignKey(
+        'ledger.TollRecharge',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='financial_records',
+        verbose_name='Associated Toll Recharge'
     )
 
     record_type = models.CharField(
@@ -246,6 +257,14 @@ class FinancialRecord(models.Model):
             except ObjectDoesNotExist:
                 return f"{category_name} - Bill: #{self.associated_bill_id} - {self.amount}"
 
+        if self.associated_toll_recharge_id:
+            try:
+                recharge = self.associated_toll_recharge
+                if recharge:
+                    return f"{category_name} - Toll Top-up: {recharge.toll_account.name} - {self.amount}"
+            except ObjectDoesNotExist:
+                return f"{category_name} - Toll Top-up #{self.associated_toll_recharge_id} - {self.amount}"
+
         return f"{category_name} - {self.amount}"
 
     @property
@@ -306,6 +325,16 @@ class FinancialRecord(models.Model):
         try:
             if self.associated_document_renewal:
                 return self.associated_document_renewal
+        except ObjectDoesNotExist:
+            pass
+        return None
+
+    @property
+    def linked_toll_recharge(self):
+        """Returns associated toll recharge if present"""
+        try:
+            if self.associated_toll_recharge:
+                return self.associated_toll_recharge
         except ObjectDoesNotExist:
             pass
         return None

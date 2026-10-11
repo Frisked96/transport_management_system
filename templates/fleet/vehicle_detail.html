@@ -355,6 +355,41 @@
                     {% endfor %}
                 </div>
             </div>
+
+            <!-- Toll Expenses -->
+            <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+                <div class="bg-slate-50 px-6 py-3 border-b border-slate-200 flex items-center justify-between">
+                    <h3 class="text-xs font-bold text-slate-600 uppercase tracking-widest flex items-center">
+                        <i class="fa-solid fa-road mr-2 text-slate-400"></i>Toll Expenses
+                    </h3>
+                    <span class="text-xs font-black text-rose-600">₹{{ total_toll_cost|floatformat:2 }}</span>
+                </div>
+                <div class="p-4 space-y-2">
+                    <div class="flex items-center justify-between pb-1 border-b border-slate-100">
+                        <span class="text-[11px] text-slate-500 font-medium">{{ toll_entries_count }} total deduction{{ toll_entries_count|pluralize }}</span>
+                        <div class="flex items-center space-x-2">
+                            <a href="{% url 'toll-entry-create' %}?vehicle={{ vehicle.pk }}" class="text-[11px] font-bold text-emerald-600 hover:text-emerald-700">
+                                + Add Toll
+                            </a>
+                            <span class="text-slate-300">&bull;</span>
+                            <a href="{% url 'toll-ledger' %}?vehicle={{ vehicle.pk }}" class="text-[11px] font-bold text-blue-600 hover:text-blue-700">
+                                View Ledger
+                            </a>
+                        </div>
+                    </div>
+                    {% for toll in recent_toll_entries %}
+                    <div class="flex items-center justify-between p-2 rounded-lg border border-slate-100 hover:bg-slate-50 text-xs transition-colors">
+                        <div>
+                            <span class="font-bold text-slate-800">{{ toll.toll_plaza|default:"Toll Plaza" }}</span>
+                            <span class="block text-[10px] text-slate-400">{{ toll.date|date:"d M Y" }}{% if toll.transaction_reference %} &bull; Ref: {{ toll.transaction_reference }}{% endif %}</span>
+                        </div>
+                        <span class="font-bold text-rose-600">-₹{{ toll.amount|floatformat:2 }}</span>
+                    </div>
+                    {% empty %}
+                    <p class="text-center py-4 text-xs text-slate-400 italic">No toll charges recorded for this vehicle.</p>
+                    {% endfor %}
+                </div>
+            </div>
         </div>
     </div>
 

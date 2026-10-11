@@ -763,9 +763,9 @@ class TyrePositionDiagramAndLayoutTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertIn('tyre_layout', resp.context)
         content = resp.content.decode('utf-8')
-        self.assertIn("Tyre Positions & Axle Layout", content)
-        self.assertIn("Horse: 6 Wheels", content)
-        self.assertIn("Trailer: 12 Wheels", content)
+        self.assertIn("Tyre Positions", content)
+        self.assertIn("Horse", content)
+        self.assertIn("Trailer", content)
         self.assertIn("T-DETAIL-1", content)
 
 

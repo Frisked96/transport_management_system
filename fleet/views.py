@@ -8,7 +8,7 @@ from django.utils import timezone
 from django.shortcuts import render, get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.contrib import messages
-from django.db.models import Q, Count
+from django.db.models import Q, Count, Sum
 from django.http import HttpResponse, HttpResponseRedirect
 from django.views.decorators.http import require_POST
 from ledger.models import Party, CompanyAccount
@@ -469,6 +469,12 @@ class VehicleDetailView(LoginRequiredMixin, PermissionRequiredMixin, BaseFleetPe
         
         # 18-Wheel + 1 Stepney Tyre Layout
         context['tyre_layout'] = self.object.tyre_layout
+
+        # Toll Expenses
+        toll_entries = self.object.toll_entries.select_related('toll_account').order_by('-date', '-created_at')
+        context['recent_toll_entries'] = toll_entries[:8]
+        context['total_toll_cost'] = toll_entries.aggregate(total=Sum('amount'))['total'] or 0
+        context['toll_entries_count'] = toll_entries.count()
 
         return context
 

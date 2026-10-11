@@ -142,6 +142,11 @@ ROLE_MODULE_PERMISSIONS = [
             ('ledger.add_companyaccount', 'Add Company Accounts', 'Create company firms or bank profiles'),
             ('ledger.change_companyaccount', 'Edit Company Accounts', 'Update firm details and bank details'),
             ('ledger.delete_companyaccount', 'Delete Company Accounts', 'Remove accounts'),
+            ('ledger.view_tollaccount', 'View Toll Ledger', 'Access toll ledger, accounts, and balance statements'),
+            ('ledger.add_tollrecharge', 'Record Toll Top-up', 'Top-up toll balance from company accounts'),
+            ('ledger.add_tollentry', 'Record Toll Entries', 'Add single or bulk vehicle toll entries'),
+            ('ledger.change_tollentry', 'Edit Toll Entries', 'Modify toll expenses and slip details'),
+            ('ledger.delete_tollentry', 'Delete Toll Entries', 'Remove toll entries and restore balance'),
         ]
     },
     {

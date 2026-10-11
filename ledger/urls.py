@@ -53,4 +53,19 @@ urlpatterns = [
     path('bills/<int:pk>/print-combined/', views.print_combined_bill, name='print-combined-bill'),
     path('bills/shared/<str:token>/', views.shared_bill_view, name='shared-bill'),
     path('bills/bulk-print/', views.bulk_print_invoices, name='bulk-print-invoices'),
+
+    # Toll Ledger URLs
+    path('toll/', views.TollLedgerView.as_view(), name='toll-ledger'),
+    path('toll/accounts/', views.TollAccountListView.as_view(), name='toll-account-list'),
+    path('toll/accounts/create/', views.TollAccountCreateView.as_view(), name='toll-account-create'),
+    path('toll/accounts/<int:pk>/update/', views.TollAccountUpdateView.as_view(), name='toll-account-update'),
+    path('toll/accounts/<int:pk>/delete/', views.TollAccountDeleteView.as_view(), name='toll-account-delete'),
+    path('toll/recharge/create/', views.TollRechargeCreateView.as_view(), name='toll-recharge-create'),
+    path('toll/recharge/<int:pk>/update/', views.TollRechargeUpdateView.as_view(), name='toll-recharge-update'),
+    path('toll/recharge/<int:pk>/delete/', views.TollRechargeDeleteView.as_view(), name='toll-recharge-delete'),
+    path('toll/entry/create/', views.TollEntryCreateView.as_view(), name='toll-entry-create'),
+    path('toll/entry/bulk/', views.TollEntryBulkCreateView.as_view(), name='toll-entry-bulk-create'),
+    path('toll/entry/<int:pk>/update/', views.TollEntryUpdateView.as_view(), name='toll-entry-update'),
+    path('toll/entry/<int:pk>/delete/', views.TollEntryDeleteView.as_view(), name='toll-entry-delete'),
+    path('toll/statement/', views.toll_statement_print, name='toll-statement-print'),
 ]
