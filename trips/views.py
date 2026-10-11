@@ -7,8 +7,8 @@ from django.contrib.auth.decorators import login_required, permission_required
 from django.shortcuts import render, redirect
 from django.urls import reverse_lazy
 from django.contrib import messages
-from django.db.models import Q, Sum, F, Case, When, Value, DecimalField, ExpressionWrapper, Avg, Min, Max, Count
-from django.db.models.functions import TruncMonth
+from django.db.models import Q, Sum, F, Case, When, Value, DecimalField, ExpressionWrapper, Avg, Min, Max, Count, OuterRef, Subquery
+from django.db.models.functions import TruncMonth, Coalesce
 from django.db import models, transaction
 from django.utils import timezone
 from django import forms
@@ -218,8 +218,8 @@ class TripListView(LoginRequiredMixin, BaseTripPermissionMixin, ListView):
         
         # Summary for the filtered queryset
         queryset = self.get_queryset()
-        context['total_weight'] = queryset.aggregate(Sum('weight'))['weight__sum'] or 0
-        context['total_count'] = queryset.count()
+        context['total_weight'] = queryset.aggregate(total_weight=Sum('weight'))['total_weight'] or 0
+        context['total_count'] = context['paginator'].count if 'paginator' in context else queryset.count()
         
         return context
 
@@ -494,34 +494,45 @@ def manager_dashboard(request):
     
     gst_this_month += trip_gst
 
-    # 4. Deep Vehicle Utilization & Health
-    # We want a list of all vehicles with their performance metrics
+    # 4. Deep Vehicle Utilization & Health (Optimized with Subqueries to avoid Cartesian products and sum-distinct bugs)
+    trip_qs = Trip.objects.filter(vehicle=OuterRef('pk'))
+    maint_qs = MaintenanceRecord.objects.filter(vehicle=OuterRef('pk'))
+
+    sub_trips_lifetime = Subquery(
+        trip_qs.values('vehicle').annotate(cnt=Count('id')).values('cnt')[:1],
+        output_field=models.IntegerField()
+    )
+    sub_trips_month = Subquery(
+        trip_qs.filter(date__month=current_month, date__year=current_year).values('vehicle').annotate(cnt=Count('id')).values('cnt')[:1],
+        output_field=models.IntegerField()
+    )
+    sub_rev_lifetime = Subquery(
+        trip_qs.values('vehicle').annotate(total=Sum('revenue_cached')).values('total')[:1],
+        output_field=DecimalField()
+    )
+    sub_rev_month = Subquery(
+        trip_qs.filter(date__month=current_month, date__year=current_year).values('vehicle').annotate(total=Sum('revenue_cached')).values('total')[:1],
+        output_field=DecimalField()
+    )
+    sub_maint_month = Subquery(
+        maint_qs.filter(
+            is_completed=True,
+            completion_date__month=current_month,
+            completion_date__year=current_year
+        ).values('vehicle').annotate(total=Sum('cost')).values('total')[:1],
+        output_field=DecimalField()
+    )
+    sub_next_maint = Subquery(
+        maint_qs.filter(is_completed=False, expiry_date__isnull=False).order_by('expiry_date').values('expiry_date')[:1]
+    )
+
     vehicles = Vehicle.objects.exclude(status=Vehicle.STATUS_RETIRED).annotate(
-        # Trips
-        trips_lifetime=models.Count('trips', distinct=True),
-        trips_this_month=models.Count('trips', filter=Q(
-            trips__date__month=current_month,
-            trips__date__year=current_year
-        ), distinct=True),
-        
-        # Revenue (Subtotal)
-        revenue_lifetime=Sum('trips__revenue_cached', distinct=True),
-        revenue_this_month=Sum('trips__revenue_cached', filter=Q(
-            trips__date__month=current_month,
-            trips__date__year=current_year
-        ), distinct=True),
-        
-        # Maintenance Cost (Monthly)
-        maintenance_cost_month=Sum('maintenance_records__cost', filter=Q(
-            maintenance_records__is_completed=True,
-            maintenance_records__completion_date__month=current_month,
-            maintenance_records__completion_date__year=current_year
-        ), distinct=True),
-        
-        # Next Maintenance Due
-        next_maint_date=models.Min('maintenance_records__expiry_date', filter=Q(
-            maintenance_records__is_completed=False
-        ))
+        trips_lifetime=Coalesce(sub_trips_lifetime, Value(0)),
+        trips_this_month=Coalesce(sub_trips_month, Value(0)),
+        revenue_lifetime=Coalesce(sub_rev_lifetime, Value(Decimal('0'))),
+        revenue_this_month=Coalesce(sub_rev_month, Value(Decimal('0'))),
+        maintenance_cost_month=Coalesce(sub_maint_month, Value(Decimal('0'))),
+        next_maint_date=sub_next_maint,
     ).order_by('registration_plate')
 
     # 5. Global Alerts

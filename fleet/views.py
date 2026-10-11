@@ -473,8 +473,9 @@ class VehicleDetailView(LoginRequiredMixin, PermissionRequiredMixin, BaseFleetPe
         # Toll Expenses
         toll_entries = self.object.toll_entries.select_related('toll_account').order_by('-date', '-created_at')
         context['recent_toll_entries'] = toll_entries[:8]
-        context['total_toll_cost'] = toll_entries.aggregate(total=Sum('amount'))['total'] or 0
-        context['toll_entries_count'] = toll_entries.count()
+        toll_stats = self.object.toll_entries.aggregate(total=Sum('amount'), count=Count('id'))
+        context['total_toll_cost'] = toll_stats['total'] or 0
+        context['toll_entries_count'] = toll_stats['count']
 
         return context
 

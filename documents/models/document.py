@@ -118,6 +118,11 @@ class Document(models.Model):
         verbose_name = 'Document'
         verbose_name_plural = 'Documents'
         ordering = ['expiry_date', '-created_at']
+        indexes = [
+            models.Index(fields=['never_expires', 'expiry_date']),
+            models.Index(fields=['vehicle', 'is_base_document']),
+            models.Index(fields=['driver', 'expiry_date']),
+        ]
 
     def __str__(self):
         if self.document_number:

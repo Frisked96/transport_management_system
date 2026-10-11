@@ -197,8 +197,8 @@ class Vehicle(models.Model):
     
     @property
     def last_maintenance(self):
-        """Get the last maintenance log"""
-        return self.maintenance_logs.order_by('-date').first()
+        """Get the last completed maintenance record"""
+        return self.maintenance_records.filter(is_completed=True).order_by('-completion_date', '-id').first()
     
     @property
     def next_due_maintenance(self):

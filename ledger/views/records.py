@@ -81,22 +81,17 @@ class FinancialRecordListView(LoginRequiredMixin, PermissionRequiredMixin, BaseL
         context['current_party'] = self.request.GET.get('party', '')
 
         # 1. Financial Records Totals (Filtered)
-        records = self.get_queryset()
-        
-        total_tds = records.filter(
-            category__name='TDS'
-        ).exclude(record_type='Invoice').aggregate(total=Sum('amount'))['total'] or 0
+        filtered_non_invoices = self.get_queryset().exclude(record_type='Invoice')
+        totals = filtered_non_invoices.aggregate(
+            tds=Sum('amount', filter=Q(category__name='TDS')),
+            income_all=Sum('amount', filter=Q(category__type=TransactionCategory.TYPE_INCOME)),
+            expenses=Sum('amount', filter=Q(category__type=TransactionCategory.TYPE_EXPENSE)),
+        )
 
-        total_income_all = records.filter(
-            category__type=TransactionCategory.TYPE_INCOME
-        ).exclude(record_type='Invoice').aggregate(total=Sum('amount'))['total'] or 0
-        
-        # Total Debit (In) should have TDS subtracted
+        total_tds = totals['tds'] or Decimal('0')
+        total_income_all = totals['income_all'] or Decimal('0')
+        total_expenses = totals['expenses'] or Decimal('0')
         total_income = total_income_all - total_tds
-        
-        total_expenses = records.filter(
-            category__type=TransactionCategory.TYPE_EXPENSE
-        ).exclude(record_type='Invoice').aggregate(total=Sum('amount'))['total'] or 0
 
         context['total_tds'] = total_tds
         context['total_income'] = total_income

@@ -331,7 +331,7 @@
                     <button type="button" id="mobile-menu-toggle" class="inline-flex items-center justify-center p-2 rounded-md text-slate-400 hover:text-white hover:bg-slate-700 focus:outline-none relative">
                         <span class="sr-only">Open main menu</span>
                         <i class="fa-solid fa-bars text-xl"></i>
-                        {% if user.is_authenticated and total_alerts > 0 and request.user.is_superuser or request.user.groups.all.0.name == 'manager' %}
+                        {% if user.is_authenticated and total_alerts > 0 and is_manager %}
                         <span class="absolute top-0 right-0 block h-2.5 w-2.5 rounded-full bg-red-600 ring-2 ring-slate-800" style="margin-top: 0.5rem; margin-right: 0.5rem;"></span>
                         {% endif %}
                     </button>
@@ -360,8 +360,7 @@
         <div class="flex-1 overflow-y-auto py-4 px-3 space-y-1">
             {% if user.is_authenticated %}
 
-            {% if user.is_authenticated and request.user.is_superuser or request.user.groups.all.0.name == 'manager' %}
-            {% if total_alerts > 0 %}
+            {% if user.is_authenticated and is_manager and total_alerts > 0 %}
             <div class="px-3 py-2 bg-red-900/20 rounded-md mb-3">
                 <p class="text-[10px] font-black text-red-400 uppercase tracking-widest mb-1">Active Alerts ({{ total_alerts }})</p>
                 <div class="space-y-2 max-h-32 overflow-y-auto pr-1">
@@ -389,7 +388,6 @@
                     <a href="{% url 'maintenance-list' %}" class="text-[10px] font-bold text-blue-400 uppercase">Maintenance</a>
                 </div>
             </div>
-            {% endif %}
             {% endif %}
 
             <a class="flex items-center px-3 py-3 rounded-lg text-sm font-bold {% if request.resolver_match.url_name == 'trip-list' %}bg-emerald-600/20 text-emerald-400{% else %}text-slate-300 hover:bg-slate-700 hover:text-white{% endif %} transition-colors" href="{% url 'trip-list' %}">
@@ -603,7 +601,7 @@
         <button type="button" id="btm-nav-more" class="btm-nav-item flex flex-col items-center justify-center flex-1 relative text-slate-400 hover:text-emerald-600 transition-colors" data-nav="more">
             <i class="fa-solid fa-ellipsis text-lg"></i>
             <span class="text-[9px] font-bold mt-1 uppercase tracking-wider">More</span>
-            {% if total_alerts > 0 and request.user.is_superuser or request.user.groups.all.0.name == 'manager' %}
+            {% if total_alerts > 0 and is_manager %}
             <span class="absolute top-2 right-1/4 block h-2 w-2 rounded-full bg-red-500"></span>
             {% endif %}
         </button>

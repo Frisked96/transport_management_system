@@ -103,6 +103,10 @@ class MaintenanceRecord(models.Model):
         verbose_name = 'Maintenance Record'
         verbose_name_plural = 'Maintenance Records'
         ordering = ['is_completed', 'expiry_date', '-completion_date', '-created_at']
+        indexes = [
+            models.Index(fields=['is_completed', 'expiry_date']),
+            models.Index(fields=['vehicle', 'is_completed']),
+        ]
     
     def __str__(self):
         status = "Completed" if self.is_completed else "Pending"
