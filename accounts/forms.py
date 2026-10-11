@@ -142,11 +142,23 @@ ROLE_MODULE_PERMISSIONS = [
             ('ledger.add_companyaccount', 'Add Company Accounts', 'Create company firms or bank profiles'),
             ('ledger.change_companyaccount', 'Edit Company Accounts', 'Update firm details and bank details'),
             ('ledger.delete_companyaccount', 'Delete Company Accounts', 'Remove accounts'),
-            ('ledger.view_tollaccount', 'View Toll Ledger', 'Access toll ledger, accounts, and balance statements'),
-            ('ledger.add_tollrecharge', 'Record Toll Top-up', 'Top-up toll balance from company accounts'),
-            ('ledger.add_tollentry', 'Record Toll Entries', 'Add single or bulk vehicle toll entries'),
-            ('ledger.change_tollentry', 'Edit Toll Entries', 'Modify toll expenses and slip details'),
-            ('ledger.delete_tollentry', 'Delete Toll Entries', 'Remove toll entries and restore balance'),
+        ]
+    },
+    {
+        'module': 'Toll & FASTag Management',
+        'key': 'toll',
+        'icon': 'fa-solid fa-road',
+        'permissions': [
+            ('ledger.view_tollaccount', 'View Toll Ledger', 'Access toll dashboard, balance summary, and statement reports'),
+            ('ledger.add_tollentry', 'Enter Toll Data', 'Record vehicle toll expenses and bulk FASTag entries'),
+            ('ledger.change_tollentry', 'Edit Toll Entries', 'Modify vehicle toll expenses and slip details'),
+            ('ledger.delete_tollentry', 'Delete Toll Entries', 'Remove toll entries and restore wallet balance'),
+            ('ledger.add_tollrecharge', 'Top-up Toll Balance', 'Deposit funds from company accounts into toll wallets'),
+            ('ledger.change_tollrecharge', 'Edit Toll Top-up', 'Modify toll recharge transaction details'),
+            ('ledger.delete_tollrecharge', 'Delete Toll Top-up', 'Remove toll recharge and restore bank balance'),
+            ('ledger.add_tollaccount', 'Add Toll Accounts', 'Register new toll accounts or FASTag wallets'),
+            ('ledger.change_tollaccount', 'Edit Toll Accounts', 'Update toll account configuration and opening balance'),
+            ('ledger.delete_tollaccount', 'Delete Toll Accounts', 'Remove toll accounts'),
         ]
     },
     {

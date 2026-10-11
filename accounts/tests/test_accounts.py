@@ -255,3 +255,72 @@ class DirectURLPermissionEnforcementTests(TestCase):
         post_resp = self.client.post(reverse('trip-create'), post_data)
         self.assertRedirects(post_resp, reverse('trip-list'))
         self.assertTrue(Trip.objects.filter(lr_no='TEST-LR-NO-ROUTE-PERM').exists())
+
+
+class TollRolePermissionTests(TestCase):
+    def setUp(self):
+        from ledger.models import TollAccount, CompanyAccount
+        self.superadmin = User.objects.create_superuser('superadmin', 'admin@example.com', 'password123')
+        self.toll_user = User.objects.create_user('toll_clerk', 'clerk@example.com', 'password123')
+        self.unprivileged_user = User.objects.create_user('plain_user', 'plain@example.com', 'password123')
+
+        # Ensure Toll Account exists
+        self.toll_account = TollAccount.objects.create(
+            name='FASTag Primary',
+            provider='FASTag',
+            opening_balance=1000,
+            opening_balance_date=timezone.now().date(),
+            is_default=True
+        )
+        self.vehicle = Vehicle.objects.create(registration_plate='HR 55 AB 1234', status=Vehicle.STATUS_ACTIVE)
+
+        # Assign Toll Operator role
+        toll_operator_role = Group.objects.get(name='Toll Operator')
+        self.toll_user.groups.add(toll_operator_role)
+
+    def test_role_form_includes_toll_module(self):
+        """RoleForm includes the dedicated Toll & FASTag Management module."""
+        from accounts.forms import RoleForm
+        form = RoleForm()
+        toll_section = next((s for s in form.module_sections if s['key'] == 'toll'), None)
+        self.assertIsNotNone(toll_section)
+        self.assertEqual(toll_section['name'], 'Toll & FASTag Management')
+        perm_keys = [item['key'] for item in toll_section['items']]
+        self.assertIn('ledger.view_tollaccount', perm_keys)
+        self.assertIn('ledger.add_tollentry', perm_keys)
+        self.assertIn('ledger.change_tollentry', perm_keys)
+
+    def test_toll_operator_can_view_and_enter_toll_data(self):
+        """User with Toll Operator role can view toll ledger and submit toll entries."""
+        self.client.login(username='toll_clerk', password='password123')
+
+        # 1. Access toll ledger
+        resp = self.client.get(reverse('toll-ledger'))
+        self.assertEqual(resp.status_code, 200)
+
+        # 2. Access toll entry form
+        resp_add = self.client.get(reverse('toll-entry-create'))
+        self.assertEqual(resp_add.status_code, 200)
+
+        # 3. Create a toll entry
+        post_data = {
+            'toll_account': self.toll_account.pk,
+            'vehicle': self.vehicle.pk,
+            'amount': '350.00',
+            'date': timezone.now().date().strftime('%Y-%m-%d'),
+            'toll_plaza': 'Manesar Toll Plaza',
+            'transaction_reference': 'TXN-OP-001',
+        }
+        post_resp = self.client.post(reverse('toll-entry-create'), post_data)
+        self.assertRedirects(post_resp, reverse('toll-ledger'))
+        from ledger.models import TollEntry
+        self.assertTrue(TollEntry.objects.filter(transaction_reference='TXN-OP-001').exists())
+
+    def test_unprivileged_user_blocked_from_toll(self):
+        """User without toll permissions is blocked from entering toll data."""
+        self.client.login(username='plain_user', password='password123')
+        resp = self.client.get(reverse('toll-ledger'))
+        self.assertEqual(resp.status_code, 403)
+        resp_add = self.client.get(reverse('toll-entry-create'))
+        self.assertEqual(resp_add.status_code, 403)
+
