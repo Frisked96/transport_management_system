@@ -9,57 +9,7 @@ from django.core.exceptions import ValidationError, ObjectDoesNotExist
 from django.db.models import Case, When, Value, F, DecimalField, OuterRef
 from fleet.models import Vehicle
 from .route import Route
-
-
-class TripQuerySet(models.QuerySet):
-    def with_payment_info(self):
-        """
-        Ultra-lightweight payment info using cached fields.
-        Backward compatible with previous annotation names.
-        """
-        return self.annotate(
-            annotated_revenue=F('revenue_cached'),
-            annotated_gst_amount=F('gst_amount_cached'),
-            annotated_total_revenue=F('total_revenue_cached'),
-            annotated_received=F('amount_received_cached'),
-            annotated_outstanding=F('outstanding_balance_cached'),
-            annotated_status=F('payment_status_cached')
-        )
-
-    def with_billing_info(self):
-        """Annotate queryset with billing status and GST type"""
-        from django.db.models import Exists, OuterRef, Case, When, Value, F, CharField
-        # Import internally to avoid circular dependency
-        from ledger.models import Bill
-
-        return self.annotate(
-            annotated_is_billed=Exists(
-                Bill.objects.filter(trips=OuterRef('pk'), customer_bill__isnull=True).exclude(party__party_type='Creditor')
-            ),
-            annotated_is_creditor_billed=Exists(
-                Bill.objects.filter(trips=OuterRef('pk')).filter(
-                    models.Q(customer_bill__isnull=False) | models.Q(party__party_type='Creditor')
-                )
-            ),
-            annotated_gst_type=Case(
-                When(gst_type_snapshot__gt='', then=F('gst_type_snapshot')),
-                When(route__route_type='intra', then=Value('IGST')),
-                When(route__route_type='none', then=Value('NONE')),
-                default=Value('GST'),
-                output_field=CharField()
-            )
-        )
-
-
-class TripManager(models.Manager):
-    def get_queryset(self):
-        return TripQuerySet(self.model, using=self._db)
-    
-    def with_payment_info(self):
-        return self.get_queryset().with_payment_info()
-
-    def with_billing_info(self):
-        return self.get_queryset().with_billing_info()
+from .managers import TripQuerySet, TripManager
 
 
 class Trip(models.Model):

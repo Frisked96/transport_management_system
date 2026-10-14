@@ -1,32 +1,18 @@
 """
-Views for Fleet application with permission checks
+Tyre and Tyre Brand views for Fleet app.
 """
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.contrib.auth.decorators import login_required, permission_required
-from django.utils import timezone
 from django.shortcuts import render, get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.contrib import messages
-from django.db.models import Q, Count, Sum
+from django.db.models import Q
 from django.http import HttpResponse, HttpResponseRedirect
 from django.views.decorators.http import require_POST
-from ledger.models import Party, CompanyAccount
 
-from .models import Vehicle, MaintenanceRecord, Tyre, TyreLog, TyreBrand
-from .forms import VehicleForm, MaintenanceRecordForm, MaintenanceCompleteForm, TyreForm, TyreLogForm, TyreBrandForm
-
-
-class BaseFleetPermissionMixin:
-    """Base mixin for fleet permissions"""
-    
-    def has_driver_profile(self):
-        """Check if user has an associated driver profile"""
-        return hasattr(self.request.user, 'driver_profile')
-
-    def has_driver_permission(self):
-        """Check if user has driver access (is a driver)"""
-        return self.has_driver_profile()
+from fleet.models import Vehicle, Tyre, TyreLog, TyreBrand
+from fleet.forms import TyreForm, TyreLogForm, TyreBrandForm
 
 
 class TyreListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
@@ -58,7 +44,6 @@ class TyreListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        from .models import Vehicle
         context['vehicles'] = Vehicle.objects.all().order_by('registration_plate')
         context['selected_vehicle'] = self.request.GET.get('vehicle', '')
         return context
@@ -98,7 +83,6 @@ class TyreCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        from .models import TyreBrand
         context['tyre_brands'] = TyreBrand.objects.all()
         return context
 
@@ -121,7 +105,6 @@ class TyreUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        from .models import TyreBrand
         context['tyre_brands'] = TyreBrand.objects.all()
         return context
 
@@ -186,8 +169,6 @@ class TyreDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
         return self.form_valid(None)
 
 
-# --- Tyre Brand Views ---
- 
 class TyreBrandListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
     model = TyreBrand
     template_name = 'fleet/tyre_brand_list.html'
@@ -285,10 +266,6 @@ class TyreLogCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView)
         tyre = form.cleaned_data['tyre']
         action = form.cleaned_data['action']
         
-        # We'll just let Tyre.save handle the auto-logging for Mount/Dismount/Rotation
-        # unless we want to keep the specific notes from the form.
-        # Actually, let's keep the notes but avoid double logs.
-        
         # Synchronize Tyre model status
         if action == TyreLog.ACTION_MOUNT:
             # If tyre was already mounted on another vehicle, log dismount from old vehicle first
@@ -322,21 +299,16 @@ class TyreLogCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView)
         elif action == TyreLog.ACTION_ROTATION:
             tyre.current_position = form.instance.position
 
-        # Using _skip_auto_log to avoid double logs, 
-        # then manually saving the TyreLog from the form 
-        # which has user notes/date/etc.
-        
         tyre._skip_auto_log = True
         tyre.save()
         
-        # Assign user who performed the manual action
         form.instance.logged_by = self.request.user
-        
         messages.success(self.request, f'Tyre action {action} processed.')
         return super().form_valid(form)
 
     def get_success_url(self):
         return reverse_lazy('tyre-detail', kwargs={'pk': self.object.tyre.pk})
+
 
 @login_required
 def tyre_log_delete(request, pk):
@@ -386,322 +358,10 @@ def tyre_quick_action(request, pk, action):
     tyre.save()
     messages.success(request, f'Tyre action {action} processed successfully.')
     
-    # Try to redirect back to referer (e.g., Vehicle Detail) if available
     referer = request.META.get('HTTP_REFERER')
     if referer:
         return redirect(referer)
     return redirect('tyre-detail', pk=pk)
-
-
-class VehicleListView(LoginRequiredMixin, PermissionRequiredMixin, BaseFleetPermissionMixin, ListView):
-    """
-    List view for vehicles with permission-based filtering
-    """
-    model = Vehicle
-    template_name = 'fleet/vehicle_list.html'
-    context_object_name = 'vehicles'
-    permission_required = 'fleet.view_vehicle'
-    paginate_by = 15
-    
-    def get_queryset(self):
-        """Filter vehicles based on user permissions"""
-        queryset = Vehicle.objects.all().select_related('vendor', 'company_account', 'created_by')
-        
-        # Drivers can only view active vehicles
-        if self.has_driver_permission():
-            queryset = queryset.filter(status=Vehicle.STATUS_ACTIVE)
-        
-        # Search functionality
-        search = self.request.GET.get('search')
-        if search:
-            queryset = queryset.filter(
-                Q(registration_plate__icontains=search) |
-                Q(make_model__icontains=search) |
-                Q(chassis_number__icontains=search) |
-                Q(engine_number__icontains=search)
-            )
-        
-        # Status filter
-        status = self.request.GET.get('status')
-        if status:
-            queryset = queryset.filter(status=status)
-        
-        # Add maintenance log count
-        queryset = queryset.annotate(
-            maintenance_count=Count('maintenance_records')
-        )
-        
-        return queryset.order_by('registration_plate')
-    
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['status_choices'] = Vehicle.STATUS_CHOICES
-        context['current_status'] = self.request.GET.get('status', '')
-        context['search_term'] = self.request.GET.get('search', '')
-        context['vendors'] = Party.objects.filter(party_type=Party.TYPE_CREDITOR).order_by('name')
-        context['company_accounts'] = CompanyAccount.objects.all().order_by('name')
-        return context
-
-
-class VehicleDetailView(LoginRequiredMixin, PermissionRequiredMixin, BaseFleetPermissionMixin, DetailView):
-    """
-    Detail view for a single vehicle
-    """
-    model = Vehicle
-    template_name = 'fleet/vehicle_detail.html'
-    context_object_name = 'vehicle'
-    permission_required = 'fleet.view_vehicle'
-
-    def get_queryset(self):
-        return super().get_queryset().select_related('vendor', 'company_account', 'created_by')
-    
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        
-        # Get recent maintenance records
-        context['maintenance_records'] = self.object.maintenance_records.order_by('is_completed', 'expiry_date', '-completion_date')[:10]
-        
-        # Get recent trips
-        context['recent_trips'] = self.object.trips.order_by('-created_at')[:10]
-        
-        # Calculate total maintenance cost (using model property or queryset)
-        context['total_maintenance_cost'] = self.object.total_maintenance_cost
-        
-        # 18-Wheel + 1 Stepney Tyre Layout
-        context['tyre_layout'] = self.object.tyre_layout
-
-        # Toll Expenses
-        toll_entries = self.object.toll_entries.select_related('toll_account').order_by('-date', '-created_at')
-        context['recent_toll_entries'] = toll_entries[:8]
-        toll_stats = self.object.toll_entries.aggregate(total=Sum('amount'), count=Count('id'))
-        context['total_toll_cost'] = toll_stats['total'] or 0
-        context['toll_entries_count'] = toll_stats['count']
-
-        return context
-
-
-class VehicleCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
-    """
-    Create view for new vehicles
-    Permission: Only admin and manager can create vehicles
-    """
-    model = Vehicle
-    form_class = VehicleForm
-    template_name = 'fleet/vehicle_form.html'
-    permission_required = 'fleet.add_vehicle'
-    
-    def form_valid(self, form):
-        form.instance.created_by = self.request.user
-        messages.success(self.request, 'Vehicle created successfully!')
-        return super().form_valid(form)
-    
-    def get_success_url(self):
-        return reverse_lazy('vehicle-detail', kwargs={'pk': self.object.pk})
-
-
-class VehicleUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
-    """
-    Update view for existing vehicles
-    Permission: Admin and manager can update vehicles
-    """
-    model = Vehicle
-    form_class = VehicleForm
-    template_name = 'fleet/vehicle_form.html'
-    permission_required = 'fleet.change_vehicle'
-    
-    def form_valid(self, form):
-        messages.success(self.request, 'Vehicle updated successfully!')
-        return super().form_valid(form)
-    
-    def get_success_url(self):
-        return reverse_lazy('vehicle-detail', kwargs={'pk': self.object.pk})
-
-
-@login_required
-@permission_required('fleet.change_vehicle')
-def vehicle_bulk_update(request):
-    """
-    Bulk update ownership and vendor for multiple vehicles.
-    """
-    if request.method == 'POST':
-        vehicle_ids = list(set(request.POST.getlist('vehicle_ids')))
-        ownership = request.POST.get('ownership')
-        vendor_id = request.POST.get('vendor')
-
-        if not vehicle_ids:
-            messages.error(request, 'No vehicles selected for update.')
-            return redirect('vehicle-list')
-
-        if ownership not in [Vehicle.OWNERSHIP_OWNED, Vehicle.OWNERSHIP_ATTACHED]:
-            messages.error(request, 'Invalid ownership type selected.')
-            return redirect('vehicle-list')
-
-        vendor = None
-        company_account = None
-        if ownership == Vehicle.OWNERSHIP_ATTACHED:
-            if not vendor_id:
-                messages.error(request, 'Vendor must be selected for attached vehicles.')
-                return redirect('vehicle-list')
-            vendor = get_object_or_404(Party, pk=vendor_id)
-        elif ownership == Vehicle.OWNERSHIP_OWNED:
-            company_account_id = request.POST.get('company_account')
-            if company_account_id:
-                company_account = get_object_or_404(CompanyAccount, pk=company_account_id)
-
-        # Update the selected vehicles using save() to keep financial sync consistent
-        for vehicle in Vehicle.objects.filter(id__in=vehicle_ids):
-            vehicle.ownership = ownership
-            vehicle.vendor = vendor if ownership == Vehicle.OWNERSHIP_ATTACHED else None
-            vehicle.company_account = company_account if ownership == Vehicle.OWNERSHIP_OWNED else None
-            vehicle.save()
-        
-        messages.success(request, f'Successfully updated {len(vehicle_ids)} vehicle(s).')
-    
-    return redirect('vehicle-list')
-
-
-class VehicleDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
-    """
-    Delete view for vehicles
-    Permission: Only admin can delete vehicles
-    """
-    model = Vehicle
-    template_name = 'fleet/vehicle_confirm_delete.html'
-    permission_required = 'fleet.delete_vehicle'
-    success_url = reverse_lazy('vehicle-list')
-    
-    def delete(self, request, *args, **kwargs):
-        messages.success(self.request, 'Vehicle deleted successfully!')
-        return super().delete(request, *args, **kwargs)
-
-
-class MaintenanceListView(LoginRequiredMixin, PermissionRequiredMixin, BaseFleetPermissionMixin, ListView):
-    """
-    Unified list view for maintenance records (both pending and completed)
-    """
-    model = MaintenanceRecord
-    template_name = 'fleet/maintenance_list.html'
-    context_object_name = 'maintenance_records'
-    permission_required = 'fleet.view_maintenancerecord'
-    paginate_by = 20
-    
-    def get_queryset(self):
-        queryset = MaintenanceRecord.objects.all().select_related('vehicle')
-        
-        # Vehicle filter
-        vehicle_id = self.request.GET.get('vehicle')
-        if vehicle_id:
-            queryset = queryset.filter(vehicle_id=vehicle_id)
-        
-        # Status filter
-        status = self.request.GET.get('status')
-        if status == 'completed':
-            queryset = queryset.filter(is_completed=True)
-        elif status == 'pending':
-            queryset = queryset.filter(is_completed=False)
-            
-        # Search
-        search = self.request.GET.get('search')
-        if search:
-            queryset = queryset.filter(name__icontains=search)
-            
-        return queryset.order_by('is_completed', 'expiry_date', '-completion_date')
-    
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['vehicles'] = Vehicle.objects.all().order_by('registration_plate')
-        context['selected_vehicle'] = self.request.GET.get('vehicle', '')
-        context['current_status'] = self.request.GET.get('status', '')
-        context['search_term'] = self.request.GET.get('search', '')
-        return context
-
-
-class MaintenanceRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
-    model = MaintenanceRecord
-    form_class = MaintenanceRecordForm
-    template_name = 'fleet/maintenance_form.html'
-    permission_required = 'fleet.add_maintenancerecord'
-
-    def get_initial(self):
-        initial = super().get_initial()
-        vehicle_id = self.request.GET.get('vehicle')
-        if vehicle_id:
-            initial['vehicle'] = vehicle_id
-        return initial
-    
-    def form_valid(self, form):
-        form.instance.logged_by = self.request.user
-        messages.success(self.request, 'Maintenance record created successfully!')
-        return super().form_valid(form)
-    
-    def get_success_url(self):
-        return reverse_lazy('maintenance-list')
-
-
-class MaintenanceRecordUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
-    model = MaintenanceRecord
-    form_class = MaintenanceRecordForm
-    template_name = 'fleet/maintenance_form.html'
-    permission_required = 'fleet.change_maintenancerecord'
-    
-    def form_valid(self, form):
-        messages.success(self.request, 'Maintenance record updated successfully!')
-        return super().form_valid(form)
-    
-    def get_success_url(self):
-        return reverse_lazy('maintenance-list')
-
-
-class MaintenanceRecordDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
-    model = MaintenanceRecord
-    template_name = 'fleet/maintenance_detail.html'
-    context_object_name = 'record'
-    permission_required = 'fleet.view_maintenancerecord'
-
-
-class MaintenanceRecordDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
-    model = MaintenanceRecord
-    template_name = 'fleet/maintenance_confirm_delete.html'
-    permission_required = 'fleet.delete_maintenancerecord'
-    success_url = reverse_lazy('maintenance-list')
-
-
-@login_required
-@permission_required('fleet.change_maintenancerecord')
-def maintenance_record_complete(request, pk):
-    """
-    View to mark a pending maintenance record as completed.
-    """
-    record = get_object_or_404(MaintenanceRecord, pk=pk)
-    
-    if record.is_completed:
-        messages.warning(request, 'This record is already completed.')
-        return redirect('maintenance-list')
-        
-    if request.method == 'POST':
-        form = MaintenanceCompleteForm(request.POST)
-        if form.is_valid():
-            record.mark_as_completed(
-                date=form.cleaned_data['completion_date'],
-                km=form.cleaned_data['completion_km'],
-                cost=form.cleaned_data['cost'],
-                provider=form.cleaned_data['service_provider'],
-                notes=form.cleaned_data['notes'],
-                user=request.user
-            )
-            messages.success(request, f'Maintenance "{record.name}" marked as completed.')
-            return redirect('maintenance-list')
-    else:
-        # Pre-fill with current odometer
-        form = MaintenanceCompleteForm(initial={
-            'completion_km': record.vehicle.current_odometer,
-            'completion_date': timezone.now().date()
-        })
-        
-    return render(request, 'fleet/maintenance_complete_form.html', {
-        'form': form,
-        'record': record
-    })
 
 
 @login_required

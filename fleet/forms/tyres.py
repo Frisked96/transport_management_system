@@ -1,151 +1,14 @@
 """
-Forms for Fleet application
+Tyre, TyreBrand, and TyreLog forms for Fleet application.
 """
 from django import forms
 from django.db import models
-from django.utils import timezone
-from .models import Vehicle, MaintenanceRecord, Tyre, TyreLog, TyreBrand
-from fleet.services import (
+from fleet.models import Vehicle, Tyre, TyreLog, TyreBrand
+from fleet.constants import (
     TYRE_POSITION_CHOICES,
-    normalize_tyre_position,
     TYRE_POSITION_MAP,
 )
-
-
-class VehicleForm(forms.ModelForm):
-    """
-    Form for creating and editing vehicles
-    """
-    
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # Add basic styling for clarity
-        for field_name, field in self.fields.items():
-            field.widget.attrs.update({'class': 'block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white'})
-        
-        # Filter vendor to only show Creditor-type parties
-        from ledger.models import Party, CompanyAccount
-        self.fields['vendor'].queryset = Party.objects.filter(
-            party_type=Party.TYPE_CREDITOR
-        ).order_by('name')
-        self.fields['company_account'].queryset = CompanyAccount.objects.all().order_by('name')
-        self.fields['company_account'].empty_label = "Select Company Account..."
-    
-    class Meta:
-        model = Vehicle
-        fields = [
-            'registration_plate',
-            'make_model',
-            'chassis_number',
-            'engine_number',
-            'purchase_date',
-            'current_odometer',
-            'status',
-            'ownership',
-            'vendor',
-            'company_account',
-        ]
-        
-        widgets = {
-            'purchase_date': forms.DateInput(
-                attrs={
-                    'type': 'date'
-                }
-            ),
-            'chassis_number': forms.TextInput(
-                attrs={
-                    'placeholder': 'Enter chassis number (optional)'
-                }
-            ),
-            'engine_number': forms.TextInput(
-                attrs={
-                    'placeholder': 'Enter engine number (optional)'
-                }
-            ),
-        }
-    
-    def clean(self):
-        cleaned_data = super().clean()
-        ownership = cleaned_data.get('ownership')
-        vendor = cleaned_data.get('vendor')
-        
-        if ownership == Vehicle.OWNERSHIP_ATTACHED:
-            if not vendor:
-                self.add_error('vendor', 'Vendor is required for Attached vehicles.')
-            cleaned_data['company_account'] = None
-        
-        if ownership == Vehicle.OWNERSHIP_OWNED:
-            cleaned_data['vendor'] = None
-        
-        return cleaned_data
-
-
-class MaintenanceRecordForm(forms.ModelForm):
-    """
-    Form for creating and editing maintenance records (both pending and completed)
-    """
-    
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # Filter vehicles to show all
-        self.fields['vehicle'].queryset = Vehicle.objects.all().order_by('registration_plate')
-        
-        # Add basic styling for clarity
-        for field_name, field in self.fields.items():
-            field.widget.attrs.update({'class': 'block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white'})
-    
-    class Meta:
-        model = MaintenanceRecord
-        fields = [
-            'vehicle',
-            'name',
-            'is_completed',
-            'expiry_date',
-            'expiry_km',
-            'interval_days',
-            'interval_km',
-            'completion_date',
-            'completion_km',
-            'cost',
-            'service_provider',
-            'notes'
-        ]
-        
-        widgets = {
-            'expiry_date': forms.DateInput(attrs={'type': 'date'}),
-            'completion_date': forms.DateInput(attrs={'type': 'date'}),
-            'notes': forms.Textarea(attrs={'rows': 3}),
-            'cost': forms.NumberInput(attrs={'step': '0.01', 'min': '0'}),
-        }
-
-
-class MaintenanceCompleteForm(forms.Form):
-    """
-    Form for marking a pending maintenance record as completed
-    """
-    completion_date = forms.DateField(
-        widget=forms.DateInput(attrs={'type': 'date', 'class': 'block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white'}),
-        initial=timezone.now
-    )
-    completion_km = forms.IntegerField(
-        min_value=0,
-        widget=forms.NumberInput(attrs={'class': 'block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white'})
-    )
-    cost = forms.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        initial=0,
-        widget=forms.NumberInput(attrs={'step': '0.01', 'min': '0', 'class': 'block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white'})
-    )
-    service_provider = forms.CharField(
-        max_length=200,
-        required=False,
-        widget=forms.TextInput(attrs={'class': 'block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white'})
-    )
-    notes = forms.CharField(
-        widget=forms.Textarea(attrs={'rows': 3, 'class': 'block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white'}),
-        required=False
-    )
+from fleet.services import normalize_tyre_position
 
 
 class TyrePositionChoiceField(forms.ChoiceField):
@@ -218,7 +81,6 @@ class TyreForm(forms.ModelForm):
         }
 
     def clean_status(self):
-        # Return current status if disabled
         if self.instance.pk:
             return self.instance.status
         return self.cleaned_data.get('status')
@@ -300,7 +162,6 @@ class TyreLogForm(forms.ModelForm):
                 self.fields['tyre'].initial = tyre
                 self.fields['tyre'].widget = forms.HiddenInput()
         elif self.initial.get('action') == TyreLog.ACTION_MOUNT:
-            # If action is Mount and tyre not pre-selected, prioritize in-stock tyres
             self.fields['tyre'].queryset = Tyre.objects.filter(
                 models.Q(status=Tyre.STATUS_IN_STOCK) | models.Q(current_vehicle__isnull=True)
             ).order_by('brand', 'serial_number')

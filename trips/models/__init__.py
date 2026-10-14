@@ -1,5 +1,6 @@
 from .route import Route
-from .trip import Trip, TripQuerySet, TripManager
+from .managers import TripQuerySet, TripManager
+from .trip import Trip
 
 __all__ = [
     'Route',

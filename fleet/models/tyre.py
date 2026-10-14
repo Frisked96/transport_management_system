@@ -16,40 +16,7 @@ from fleet.services import (
 )
 
 
-class TyreBrand(models.Model):
-    """
-    Pre-defined tyre brands/makes with suggestive pricing.
-    Used as reference data for tyre inventory management.
-    """
-    name = models.CharField(
-        max_length=100,
-        unique=True,
-        verbose_name='Brand / Make'
-    )
-    suggestive_price = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        default=0,
-        verbose_name='Suggestive Price',
-        help_text='Suggested purchase price for tyres of this brand'
-    )
-    vendor = models.ForeignKey(
-        'ledger.Party',
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        limit_choices_to={'party_type': 'Creditor'},
-        verbose_name='Default Vendor',
-        help_text='Vendor to automatically bill when a tyre of this brand is created'
-    )
-
-    class Meta:
-        verbose_name = 'Tyre Brand'
-        verbose_name_plural = 'Tyre Brands'
-        ordering = ['name']
-
-    def __str__(self):
-        return self.name
+from .tyre_brand import TyreBrand
 
 
 def tyre_photo_upload_path(instance, filename):
@@ -310,65 +277,7 @@ class Tyre(models.Model):
                 record.delete()
 
 
-class TyreLog(models.Model):
-    """
-    History of tyre movements and repairs.
-    Simplified: No odometer tracking for tyres.
-    """
-    ACTION_MOUNT = 'Mount'
-    ACTION_DISMOUNT = 'Dismount'
-    ACTION_ROTATION = 'Rotation'
-    ACTION_REPAIR = 'Repair'
-    ACTION_REMOLD = 'Remold'
-    ACTION_SCRAP = 'Scrap'
-    ACTION_STOCK = 'Stock'
-
-    ACTION_CHOICES = [
-        (ACTION_MOUNT, 'Mount'),
-        (ACTION_DISMOUNT, 'Dismount'),
-        (ACTION_ROTATION, 'Rotation'),
-        (ACTION_REPAIR, 'Repair'),
-        (ACTION_REMOLD, 'Remold'),
-        (ACTION_SCRAP, 'Scrap'),
-        (ACTION_STOCK, 'Stock'),
-    ]
-
-    tyre = models.ForeignKey(Tyre, on_delete=models.CASCADE, related_name='logs')
-    date = models.DateField(default=timezone.now)
-    action = models.CharField(max_length=20, choices=ACTION_CHOICES)
-    
-    vehicle = models.ForeignKey(Vehicle, on_delete=models.SET_NULL, null=True, blank=True)
-    position = models.CharField(
-        max_length=50,
-        blank=True,
-        verbose_name='Position'
-    )
-    notes = models.TextField(blank=True)
-
-    logged_by = models.ForeignKey(
-        User,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='logged_tyre_actions',
-        verbose_name='Logged By'
-    )
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ['-date', '-created_at', '-id']
-
-    @property
-    def position_display(self):
-        """Returns clean human-readable position name"""
-        return TYRE_POSITION_NAME_MAP.get(self.position, self.position)
-
-    def __str__(self):
-        try:
-            tyre_str = str(self.tyre) if self.tyre else "No Tyre"
-        except ObjectDoesNotExist:
-            tyre_str = f"Tyre #{self.tyre_id}"
-        return f"{tyre_str} - {self.action} on {self.date}"
+from .tyre_log import TyreLog
 
 
 # --- Signals ---

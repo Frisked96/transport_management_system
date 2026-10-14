@@ -31,28 +31,7 @@ def unmark_bill_deleting(bill_id):
         _bill_thread_local.deleting_pks.discard(bill_id)
 
 
-class BillQuerySet(models.QuerySet):
-    def with_payment_info(self):
-        """
-        Ultra-lightweight payment info using cached fields.
-        Backward compatible with previous annotation names.
-        """
-        return self.annotate(
-            annotated_subtotal=F('subtotal_cached'),
-            annotated_gst_amount=F('gst_amount_cached'),
-            annotated_total_amount=F('total_amount_cached'),
-            annotated_received=F('amount_received_cached'),
-            annotated_outstanding=F('outstanding_balance_cached'),
-            annotated_status=F('payment_status_cached')
-        )
-
-
-class BillManager(models.Manager):
-    def get_queryset(self):
-        return BillQuerySet(self.model, using=self._db)
-    
-    def with_payment_info(self):
-        return self.get_queryset().with_payment_info()
+from .managers import BillQuerySet, BillManager
 
 
 class Bill(models.Model):
@@ -504,27 +483,4 @@ class Bill(models.Model):
         return self.rounded_total - self.total_amount
 
 
-class BillTrip(models.Model):
-    """
-    Through model for Bill and Trip to store LR No and Discount for each trip in a bill context.
-    """
-    bill = models.ForeignKey(Bill, on_delete=models.CASCADE, related_name='bill_trips')
-    trip = models.ForeignKey(Trip, on_delete=models.CASCADE, related_name='bill_trips')
-    lr_no = models.CharField(max_length=100, blank=True, null=True, verbose_name="LR No")
-    discount = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name="Discount")
-    
-    class Meta:
-        verbose_name = 'Bill Trip'
-        verbose_name_plural = 'Bill Trips'
-        unique_together = ('bill', 'trip')
-
-    def __str__(self):
-        try:
-            bill_str = self.bill.bill_number if self.bill else 'No Bill'
-        except ObjectDoesNotExist:
-            bill_str = f"Bill #{self.bill_id}"
-        try:
-            trip_str = self.trip.trip_number if self.trip else 'No Trip'
-        except ObjectDoesNotExist:
-            trip_str = f"Trip #{self.trip_id}"
-        return f"{bill_str} - {trip_str} (LR: {self.lr_no or 'N/A'})"
+from .bill_trip import BillTrip
