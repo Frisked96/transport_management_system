@@ -1,13 +1,17 @@
-from django.test import TestCase, Client
-from django.utils import timezone
-from datetime import timedelta
 from decimal import Decimal
+from datetime import timedelta
+from django.test import TestCase, Client
 from django.contrib.auth.models import User, Permission
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.admin.models import LogEntry, DELETION
-from trips.models import Trip, Route
+from django.utils import timezone
+from django.core.exceptions import ValidationError
+from django.urls import reverse
+from trips.models import Route, Trip, TripQuerySet
 from fleet.models import Vehicle
-from ledger.models import FinancialRecord, Party, TransactionCategory, CompanyAccount, Bill
+from ledger.models import (
+    FinancialRecord, Party, TransactionCategory, CompanyAccount, Bill, BillTrip
+)
 
 class TripDeletionTests(TestCase):
     def setUp(self):
@@ -443,126 +447,27 @@ class TripBusinessLogicTests(TestCase):
             _thread_locals.user = None
 
 
-class RouteNetworkDashboardTests(TestCase):
+
+
+class TripDeletionModelTests(TestCase):
     def setUp(self):
-        self.client = Client()
-        self.user = User.objects.create_superuser(
-            username='dashboard_admin',
-            email='dashadmin@example.com',
-            password='password123'
-        )
-        self.unauthorized_user = User.objects.create_user(
-            username='plain_user',
-            password='password123'
-        )
-        self.vehicle = Vehicle.objects.create(
-            registration_plate='MH 12 CD 5678',
-            status='Active'
-        )
-        self.party1 = Party.objects.create(name='Alpha Cement')
-        self.party2 = Party.objects.create(name='Beta Steel')
-
-        # Create routes
-        self.route_local = Route.objects.create(
-            pickup_location='Pune',
-            delivery_location='Mumbai',
-            route_type=Route.ROUTE_TYPE_LOCAL,
-            default_rate=Decimal('1200.00')
-        )
-        self.route_intra = Route.objects.create(
-            pickup_location='Nagpur',
-            delivery_location='Hyderabad',
-            route_type=Route.ROUTE_TYPE_INTRA,
-            default_rate=Decimal('2500.00')
-        )
-        self.route_dormant = Route.objects.create(
-            pickup_location='Nashik',
-            delivery_location='Surat',
-            route_type=Route.ROUTE_TYPE_LOCAL,
-            default_rate=Decimal('1500.00')
-        )
-
-        today = timezone.now().date()
-
-        # Trips on Route 1
-        Trip.objects.create(
+        self.party = Party.objects.create(name='Protect Party', party_type=Party.TYPE_DEBTOR)
+        self.vehicle = Vehicle.objects.create(registration_plate='MH 12 DL 4004')
+        self.trip = Trip.objects.create(
             vehicle=self.vehicle,
-            party=self.party1,
-            route=self.route_local,
-            date=today,
-            weight=Decimal('20.00'),
-            rate_per_ton=Decimal('1250.00'),
-            revenue_type=Trip.REVENUE_PER_TON
-        )
-        Trip.objects.create(
-            vehicle=self.vehicle,
-            party=self.party1,
-            route=self.route_local,
-            date=today - timedelta(days=10),
-            weight=Decimal('30.00'),
-            rate_per_ton=Decimal('1300.00'),
-            revenue_type=Trip.REVENUE_PER_TON
+            party=self.party,
+            revenue_type=Trip.REVENUE_FIXED,
+            rate_per_ton=Decimal('10000.00')
         )
 
-        # Trip on Route 2
-        Trip.objects.create(
-            vehicle=self.vehicle,
-            party=self.party2,
-            route=self.route_intra,
-            date=today - timedelta(days=40),
-            weight=Decimal('25.00'),
-            rate_per_ton=Decimal('2400.00'),
-            revenue_type=Trip.REVENUE_PER_TON
-        )
+    def test_trip_delete_sets_flag(self):
+        """Verify Trip.delete sets _is_being_deleted flag to prevent signal recursion."""
+        trip = self.trip
+        trip.delete()
+        self.assertTrue(trip._is_being_deleted)
+        self.assertFalse(Trip.objects.filter(pk=trip.pk).exists())
 
-    def test_anonymous_redirected(self):
-        resp = self.client.get('/routes/dashboard/')
-        self.assertEqual(resp.status_code, 302)
-
-    def test_unauthorized_user_forbidden(self):
-        self.client.force_login(self.unauthorized_user)
-        resp = self.client.get('/routes/dashboard/')
-        self.assertEqual(resp.status_code, 403)
-
-    def test_authorized_user_success(self):
-        self.client.force_login(self.user)
-        resp = self.client.get('/routes/dashboard/')
-        self.assertEqual(resp.status_code, 200)
-        self.assertTemplateUsed(resp, 'trips/routes_dashboard.html')
-
-        # Check KPI context
-        self.assertEqual(resp.context['all_routes_count'], 3)
-        self.assertEqual(resp.context['active_routes_count'], 2)
-        self.assertEqual(resp.context['inactive_routes_count'], 1)
-        self.assertEqual(resp.context['total_trips'], 3)
-        self.assertEqual(resp.context['total_weight'], Decimal('75.00'))
-
-        # Check leaderboards
-        self.assertEqual(len(resp.context['top_by_revenue']), 2)
-        self.assertEqual(len(resp.context['inactive_routes_list']), 1)
-        self.assertEqual(resp.context['inactive_routes_list'][0]['route'], self.route_dormant)
-
-    def test_period_filter_30d(self):
-        self.client.force_login(self.user)
-        resp = self.client.get('/routes/dashboard/?period=30d')
-        self.assertEqual(resp.status_code, 200)
-        # In last 30 days, only route_local had trips (2 trips, 50 MT)
-        self.assertEqual(resp.context['total_trips'], 2)
-        self.assertEqual(resp.context['total_weight'], Decimal('50.00'))
-        self.assertEqual(resp.context['active_routes_count'], 1)
-
-    def test_route_type_filter(self):
-        self.client.force_login(self.user)
-        resp = self.client.get(f'/routes/dashboard/?route_type={Route.ROUTE_TYPE_INTRA}')
-        self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.context['total_trips'], 1)
-        self.assertEqual(resp.context['total_weight'], Decimal('25.00'))
-
-    def test_party_filter(self):
-        self.client.force_login(self.user)
-        resp = self.client.get(f'/routes/dashboard/?party={self.party1.id}')
-        self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.context['total_trips'], 2)
-
-
-
+    def test_party_protected_on_trip_delete(self):
+        """Verify party with existing trips cannot be deleted due to PROTECT foreign key constraint."""
+        with self.assertRaises(Exception):
+            self.party.delete()

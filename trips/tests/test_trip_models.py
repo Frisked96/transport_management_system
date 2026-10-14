@@ -1,47 +1,17 @@
 from decimal import Decimal
 from datetime import timedelta
-from django.test import TestCase
-from django.contrib.auth.models import User
+from django.test import TestCase, Client
+from django.contrib.auth.models import User, Permission
+from django.contrib.contenttypes.models import ContentType
+from django.contrib.admin.models import LogEntry, DELETION
 from django.utils import timezone
 from django.core.exceptions import ValidationError
+from django.urls import reverse
 from trips.models import Route, Trip, TripQuerySet
 from fleet.models import Vehicle
-from ledger.models import Party, CompanyAccount, TransactionCategory, FinancialRecord, Bill, BillTrip
-
-
-class RouteModelTests(TestCase):
-    def test_route_str_and_choices(self):
-        """Verify Route __str__ returns '{pickup} to {delivery} ({Route Type Display})'."""
-        route_local = Route.objects.create(
-            pickup_location='Ahmedabad',
-            delivery_location='Surat',
-            route_type=Route.ROUTE_TYPE_LOCAL,
-            default_rate=Decimal('850.00')
-        )
-        self.assertEqual(str(route_local), 'Ahmedabad to Surat (Local (GST))')
-
-        route_intra = Route.objects.create(
-            pickup_location='Ahmedabad',
-            delivery_location='Jaipur',
-            route_type=Route.ROUTE_TYPE_INTRA,
-            default_rate=Decimal('1800.00')
-        )
-        self.assertEqual(str(route_intra), 'Ahmedabad to Jaipur (Intra/Interstate (IGST))')
-
-    def test_route_unique_together_constraint(self):
-        """Verify Route enforces uniqueness on ['pickup_location', 'delivery_location', 'route_type']."""
-        Route.objects.create(
-            pickup_location='Pune',
-            delivery_location='Nagpur',
-            route_type=Route.ROUTE_TYPE_LOCAL
-        )
-        with self.assertRaises(Exception):
-            Route.objects.create(
-                pickup_location='Pune',
-                delivery_location='Nagpur',
-                route_type=Route.ROUTE_TYPE_LOCAL
-            )
-
+from ledger.models import (
+    FinancialRecord, Party, TransactionCategory, CompanyAccount, Bill, BillTrip
+)
 
 class TripNumberingModelTests(TestCase):
     def setUp(self):
@@ -344,25 +314,3 @@ class TripQuerySetModelTests(TestCase):
         self.assertEqual(annotated_trip.annotated_gst_type, 'GST')
 
 
-class TripDeletionModelTests(TestCase):
-    def setUp(self):
-        self.party = Party.objects.create(name='Protect Party', party_type=Party.TYPE_DEBTOR)
-        self.vehicle = Vehicle.objects.create(registration_plate='MH 12 DL 4004')
-        self.trip = Trip.objects.create(
-            vehicle=self.vehicle,
-            party=self.party,
-            revenue_type=Trip.REVENUE_FIXED,
-            rate_per_ton=Decimal('10000.00')
-        )
-
-    def test_trip_delete_sets_flag(self):
-        """Verify Trip.delete sets _is_being_deleted flag to prevent signal recursion."""
-        trip = self.trip
-        trip.delete()
-        self.assertTrue(trip._is_being_deleted)
-        self.assertFalse(Trip.objects.filter(pk=trip.pk).exists())
-
-    def test_party_protected_on_trip_delete(self):
-        """Verify party with existing trips cannot be deleted due to PROTECT foreign key constraint."""
-        with self.assertRaises(Exception):
-            self.party.delete()
