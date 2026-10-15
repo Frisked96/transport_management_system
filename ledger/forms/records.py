@@ -133,7 +133,7 @@ class FinancialRecordForm(forms.ModelForm):
                 if initial_bill and initial_bill.pk not in unpaid_bill_ids:
                     unpaid_bill_ids.append(initial_bill.pk)
 
-                self.fields['associated_bill'].queryset = Bill.objects.with_payment_info().filter(id__in=unpaid_bill_ids).order_by('date', 'id')
+                self.fields['associated_bill'].queryset = Bill.objects.with_payment_info().filter(id__in=unpaid_bill_ids).order_by('-date')
 
                 # Filter categories for Creditor
                 self.fields['category'].queryset = TransactionCategory.objects.filter(
@@ -178,7 +178,7 @@ class FinancialRecordForm(forms.ModelForm):
                 if initial_bill and initial_bill.pk not in unpaid_bill_ids:
                     unpaid_bill_ids.append(initial_bill.pk)
                 
-                self.fields['associated_bill'].queryset = Bill.objects.with_payment_info().filter(id__in=unpaid_bill_ids).order_by('date', 'id')
+                self.fields['associated_bill'].queryset = Bill.objects.with_payment_info().filter(id__in=unpaid_bill_ids).order_by('-date')
                 
                 # Filter categories for Debtor
                 self.fields['category'].queryset = TransactionCategory.objects.exclude(
