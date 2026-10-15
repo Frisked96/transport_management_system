@@ -161,3 +161,57 @@ class GeneralPaymentAndBillAllocationTests(TestCase):
         self.assertEqual(bill.amount_received, Decimal('25000.00'))
         self.assertEqual(bill.outstanding_balance, Decimal('0.00'))
         self.assertEqual(bill.payment_status, Bill.PAYMENT_STATUS_PAID)
+
+    def test_cleanup_fifo_allocations_command(self):
+        """
+        Verify that the cleanup_fifo_allocations management command deletes
+        erroneous allocations and recalculates bill outstanding balance back to unpaid.
+        """
+        from django.core.management import call_command
+        import io
+
+        bill = Bill.objects.create(
+            bill_number="BILL-CLEANUP-001",
+            bill_type=Bill.TYPE_STANDARD,
+            issuer=self.company,
+            party=self.customer,
+            date=datetime.date(2026, 8, 5),
+            amount_override=Decimal('15000.00'),
+            gst_rate=0,
+            use_roundoff=False
+        )
+        bill.sync_to_ledger()
+
+        payment = FinancialRecord.objects.create(
+            date=datetime.date(2026, 8, 1),
+            account=self.company,
+            party=self.customer,
+            category=self.cat_payment_in,
+            amount=Decimal('15000.00'),
+            description="Payment advance Paid across invoices: BILL-CLEANUP-001",
+            record_type=FinancialRecord.RECORD_TYPE_TRANSACTION,
+            recorded_by=self.user
+        )
+
+        # Simulate erroneous BillAllocation created by FIFO
+        BillAllocation.objects.create(
+            financial_record=payment,
+            bill=bill,
+            amount=Decimal('15000.00')
+        )
+        bill.refresh_from_db()
+        self.assertEqual(bill.payment_status, Bill.PAYMENT_STATUS_PAID)
+
+        # Run command with --apply and --clean-descriptions
+        out = io.StringIO()
+        call_command('cleanup_fifo_allocations', party='Customer Logistics', apply=True, clean_descriptions=True, stdout=out)
+
+        # Verify allocation removed and bill restored
+        bill.refresh_from_db()
+        payment.refresh_from_db()
+        self.assertEqual(bill.amount_received, Decimal('0.00'))
+        self.assertEqual(bill.outstanding_balance, Decimal('15000.00'))
+        self.assertEqual(bill.payment_status, Bill.PAYMENT_STATUS_UNPAID)
+        self.assertEqual(payment.bill_allocations.count(), 0)
+        self.assertEqual(payment.description, "Payment advance")
+
