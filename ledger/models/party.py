@@ -92,16 +92,9 @@ class Party(models.Model):
         return self.total_debit_amount
 
     def _calculate_totals(self):
-        """Single-pass calculation of total debits and credits from financial records."""
-        base_debit = self.opening_balance if self.opening_balance > 0 else Decimal('0')
-        base_credit = abs(self.opening_balance) if self.opening_balance < 0 else Decimal('0')
-        records = self.financial_records.select_related('category', 'associated_bill__category').all()
-        debit_sum = Decimal('0')
-        credit_sum = Decimal('0')
-        for r in records:
-            debit_sum += (r.debit_amount or Decimal('0'))
-            credit_sum += (r.credit_amount or Decimal('0'))
-        return base_debit + debit_sum, base_credit + credit_sum
+        """Single-pass SQL calculation of total debits and credits from financial records."""
+        from ledger.services import BalanceService
+        return BalanceService.calculate_party_totals(self)
 
     def _calculate_total_debit(self):
         """Total Debits: Opening Balance (if positive) + Debits (Revenue/Invoices/Notes)"""

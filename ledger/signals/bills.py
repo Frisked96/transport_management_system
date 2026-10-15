@@ -137,8 +137,8 @@ def sync_trip_ledger_on_billtrip_delete(sender, instance, **kwargs):
         except Bill.DoesNotExist:
             pass
 
-    # Don't try to sync the bill if it's being deleted
-    if bill and getattr(bill, '_is_being_deleted', False):
+    # Don't try to sync the bill if it's being deleted or suppressing sync
+    if bill and (getattr(bill, '_is_being_deleted', False) or getattr(bill, '_suppress_billtrip_sync', False)):
         return
         
     # Also check if there's a global flag or we know it's being deleted

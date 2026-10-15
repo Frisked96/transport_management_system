@@ -9,24 +9,6 @@ from trips.models import Trip
 from ledger.services import BalanceService, BillingService, TripFinancialService
 
 
-@receiver(pre_save, sender=FinancialRecord)
-def delete_old_financial_document_on_change(sender, instance, **kwargs):
-    """
-    Deletes the old supporting document from storage when a new one is uploaded.
-    """
-    if not instance.pk:
-        return False
-
-    try:
-        old_file = FinancialRecord.objects.get(pk=instance.pk).document_ref
-    except FinancialRecord.DoesNotExist:
-        return False
-
-    new_file = instance.document_ref
-    if old_file and old_file != new_file:
-        old_file.delete(save=False)
-
-
 @receiver(post_delete, sender=FinancialRecord)
 def delete_financial_document_on_delete(sender, instance, **kwargs):
     """
@@ -72,7 +54,7 @@ def sync_account_balance_on_opening_change(sender, instance, **kwargs):
         try:
             old_instance = CompanyAccount.objects.get(pk=instance.pk)
             if old_instance.opening_balance != instance.opening_balance:
-                instance.current_balance_cached = instance._calculate_balance()
+                instance.current_balance_cached = BalanceService.calculate_account_balance(instance)
         except CompanyAccount.DoesNotExist:
             pass
     else:
@@ -82,11 +64,14 @@ def sync_account_balance_on_opening_change(sender, instance, **kwargs):
 @receiver(pre_save, sender=FinancialRecord)
 def track_financial_record_changes(sender, instance, **kwargs):
     """
-    Captures old state to handle party/account changes.
+    Captures old state to handle party/account changes and handles document replacement.
     """
     if instance.pk:
         try:
-            instance._old_instance = FinancialRecord.objects.get(pk=instance.pk)
+            old_instance = FinancialRecord.objects.get(pk=instance.pk)
+            instance._old_instance = old_instance
+            if old_instance.document_ref and old_instance.document_ref != instance.document_ref:
+                old_instance.document_ref.delete(save=False)
         except FinancialRecord.DoesNotExist:
             instance._old_instance = None
     else:

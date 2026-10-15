@@ -7,6 +7,7 @@ from django.contrib.auth.decorators import login_required, permission_required
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse_lazy
 from django.contrib import messages
+from django.db import transaction
 from django.db.models import Q, Sum, F, DecimalField, Value, Case, When, OuterRef, Count, Max
 from django.utils import timezone
 from decimal import Decimal, InvalidOperation, DecimalException
@@ -17,6 +18,7 @@ from django.http import JsonResponse, HttpResponse
 from ledger.models import FinancialRecord, Party, CompanyAccount, TripAllocation, BillAllocation, TransactionCategory, Bill, BillTrip
 from ledger.forms import FinancialRecordForm
 from trips.models import Trip
+from ledger.services import BillingService, TripFinancialService
 from ledger.views.base import BaseLedgerPermissionMixin
 from ledger.utils import format_indian_comma, format_balance
 
@@ -271,134 +273,159 @@ class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, Cre
         # 1. Multi-Trip Distribution Flow
         if distribution_json:
             try:
-                distribution_data = json.loads(distribution_json)
-                if not isinstance(distribution_data, list) or len(distribution_data) == 0:
-                    raise ValueError("No trip allocation data found")
+                with transaction.atomic():
+                    distribution_data = json.loads(distribution_json)
+                    if not isinstance(distribution_data, list) or len(distribution_data) == 0:
+                        raise ValueError("No trip allocation data found")
 
-                total_payment = sum(Decimal(str(item.get('payment', item.get('amount', 0)) or 0)) for item in distribution_data)
-                total_tds = sum(Decimal(str(item.get('tds', 0) or 0)) for item in distribution_data)
-                total_deduction = sum(Decimal(str(item.get('deduction', 0) or 0)) for item in distribution_data)
+                    total_payment = sum(Decimal(str(item.get('payment', item.get('amount', 0)) or 0)) for item in distribution_data)
+                    total_tds = sum(Decimal(str(item.get('tds', 0) or 0)) for item in distribution_data)
+                    total_deduction = sum(Decimal(str(item.get('deduction', 0) or 0)) for item in distribution_data)
 
-                # Fallback to form-level values if per-trip was not provided
-                if total_tds == 0 and has_tds:
-                    total_tds = tds_amount
-                if total_deduction == 0 and has_deduction:
-                    total_deduction = deduction_amount
+                    # Fallback to form-level values if per-trip was not provided
+                    if total_tds == 0 and has_tds:
+                        total_tds = tds_amount
+                    if total_deduction == 0 and has_deduction:
+                        total_deduction = deduction_amount
 
-                self.object = None
+                    self.object = None
 
-                # 1.1 Bank Payment Record
-                if total_payment > 0:
-                    self.object = form.save(commit=False)
-                    self.object.amount = total_payment
-                    self.object.recorded_by = self.request.user
-                    self.object.save()
+                    trip_ids = [item.get('trip_id') for item in distribution_data if item.get('trip_id')]
+                    trips_by_id = Trip.objects.in_bulk(trip_ids)
 
-                    for item in distribution_data:
-                        trip_id = item.get('trip_id')
-                        p_amt = Decimal(str(item.get('payment', item.get('amount', 0)) or 0))
-                        if p_amt > 0:
-                            trip = Trip.objects.get(pk=trip_id)
-                            TripAllocation.objects.create(
-                                financial_record=self.object,
-                                trip=trip,
-                                amount=p_amt
-                            )
+                    # 1.1 Bank Payment Record
+                    if total_payment > 0:
+                        self.object = form.save(commit=False)
+                        self.object.amount = total_payment
+                        self.object.recorded_by = self.request.user
+                        self.object.save()
 
-                # 1.2 TDS Record
-                if total_tds > 0:
-                    tds_category, _ = TransactionCategory.objects.get_or_create(
-                        name='TDS',
-                        defaults={'type': TransactionCategory.TYPE_EXPENSE, 'description': 'Tax Deducted at Source'}
-                    )
-                    tds_record = FinancialRecord.objects.create(
-                        date=self.object.date if self.object else form.cleaned_data['date'],
-                        account=None,
-                        party=self.object.party if self.object else form.cleaned_data['party'],
-                        driver=None,
-                        record_type=self.object.record_type if self.object else form.cleaned_data.get('record_type', 'Transaction'),
-                        category=tds_category,
-                        amount=total_tds,
-                        description=f"Auto-generated TDS for Trip Payment across {len(distribution_data)} trips",
-                        recorded_by=self.request.user
-                    )
-                    if not self.object:
-                        self.object = tds_record
-
-                    # Allocate TDS per trip
-                    has_explicit_tds = any(Decimal(str(item.get('tds', 0) or 0)) > 0 for item in distribution_data)
-                    for item in distribution_data:
-                        trip_id = item.get('trip_id')
-                        trip = Trip.objects.get(pk=trip_id)
-                        if has_explicit_tds:
-                            t_amt = Decimal(str(item.get('tds', 0) or 0))
-                            if t_amt > 0:
-                                TripAllocation.objects.create(financial_record=tds_record, trip=trip, amount=t_amt)
-                        elif total_payment > 0:
+                        for item in distribution_data:
+                            trip_id = item.get('trip_id')
                             p_amt = Decimal(str(item.get('payment', item.get('amount', 0)) or 0))
-                            if p_amt > 0:
-                                ratio = p_amt / total_payment
-                                TripAllocation.objects.create(financial_record=tds_record, trip=trip, amount=total_tds * ratio)
+                            if p_amt > 0 and trip_id in trips_by_id:
+                                alloc = TripAllocation(
+                                    financial_record=self.object,
+                                    trip=trips_by_id[trip_id],
+                                    amount=p_amt
+                                )
+                                alloc._suppress_cache_cascade = True
+                                alloc.save()
 
-                # 1.3 Deductions Record
-                if total_deduction > 0:
-                    deductions_category, _ = TransactionCategory.objects.get_or_create(
-                        name='Deductions',
-                        defaults={'type': TransactionCategory.TYPE_EXPENSE, 'description': 'Deductions (shortage, charges, etc.)'}
-                    )
-                    notes_list = [str(item.get('deduction_notes', '')).strip() for item in distribution_data if str(item.get('deduction_notes', '')).strip()]
-                    if deduction_notes.strip():
-                        notes_list.append(deduction_notes.strip())
-                    ded_desc = f"Deductions: {', '.join(notes_list)}" if notes_list else f"Deductions across {len(distribution_data)} trips"
+                    # 1.2 TDS Record
+                    if total_tds > 0:
+                        tds_category, _ = TransactionCategory.objects.get_or_create(
+                            name='TDS',
+                            defaults={'type': TransactionCategory.TYPE_EXPENSE, 'description': 'Tax Deducted at Source'}
+                        )
+                        tds_record = FinancialRecord.objects.create(
+                            date=self.object.date if self.object else form.cleaned_data['date'],
+                            account=None,
+                            party=self.object.party if self.object else form.cleaned_data['party'],
+                            driver=None,
+                            record_type=self.object.record_type if self.object else form.cleaned_data.get('record_type', 'Transaction'),
+                            category=tds_category,
+                            amount=total_tds,
+                            description=f"Auto-generated TDS for Trip Payment across {len(distribution_data)} trips",
+                            recorded_by=self.request.user
+                        )
+                        if not self.object:
+                            self.object = tds_record
 
-                    ded_record = FinancialRecord.objects.create(
-                        date=self.object.date if self.object else form.cleaned_data['date'],
-                        account=None,
-                        party=self.object.party if self.object else form.cleaned_data['party'],
-                        driver=None,
-                        record_type=self.object.record_type if self.object else form.cleaned_data.get('record_type', 'Transaction'),
-                        category=deductions_category,
-                        amount=total_deduction,
-                        description=ded_desc,
-                        recorded_by=self.request.user
-                    )
+                        # Allocate TDS per trip
+                        has_explicit_tds = any(Decimal(str(item.get('tds', 0) or 0)) > 0 for item in distribution_data)
+                        for item in distribution_data:
+                            trip_id = item.get('trip_id')
+                            trip = trips_by_id.get(trip_id)
+                            if not trip:
+                                continue
+                            if has_explicit_tds:
+                                t_amt = Decimal(str(item.get('tds', 0) or 0))
+                                if t_amt > 0:
+                                    alloc = TripAllocation(financial_record=tds_record, trip=trip, amount=t_amt)
+                                    alloc._suppress_cache_cascade = True
+                                    alloc.save()
+                            elif total_payment > 0:
+                                p_amt = Decimal(str(item.get('payment', item.get('amount', 0)) or 0))
+                                if p_amt > 0:
+                                    ratio = p_amt / total_payment
+                                    alloc = TripAllocation(financial_record=tds_record, trip=trip, amount=total_tds * ratio)
+                                    alloc._suppress_cache_cascade = True
+                                    alloc.save()
+
+                    # 1.3 Deductions Record
+                    if total_deduction > 0:
+                        deductions_category, _ = TransactionCategory.objects.get_or_create(
+                            name='Deductions',
+                            defaults={'type': TransactionCategory.TYPE_EXPENSE, 'description': 'Deductions (shortage, charges, etc.)'}
+                        )
+                        notes_list = [str(item.get('deduction_notes', '')).strip() for item in distribution_data if str(item.get('deduction_notes', '')).strip()]
+                        if deduction_notes.strip():
+                            notes_list.append(deduction_notes.strip())
+                        ded_desc = f"Deductions: {', '.join(notes_list)}" if notes_list else f"Deductions across {len(distribution_data)} trips"
+
+                        ded_record = FinancialRecord.objects.create(
+                            date=self.object.date if self.object else form.cleaned_data['date'],
+                            account=None,
+                            party=self.object.party if self.object else form.cleaned_data['party'],
+                            driver=None,
+                            record_type=self.object.record_type if self.object else form.cleaned_data.get('record_type', 'Transaction'),
+                            category=deductions_category,
+                            amount=total_deduction,
+                            description=ded_desc,
+                            recorded_by=self.request.user
+                        )
+                        if not self.object:
+                            self.object = ded_record
+
+                        # Allocate Deductions per trip
+                        has_explicit_ded = any(Decimal(str(item.get('deduction', 0) or 0)) > 0 for item in distribution_data)
+                        for item in distribution_data:
+                            trip_id = item.get('trip_id')
+                            trip = trips_by_id.get(trip_id)
+                            if not trip:
+                                continue
+                            if has_explicit_ded:
+                                d_amt = Decimal(str(item.get('deduction', 0) or 0))
+                                if d_amt > 0:
+                                    alloc = TripAllocation(financial_record=ded_record, trip=trip, amount=d_amt)
+                                    alloc._suppress_cache_cascade = True
+                                    alloc.save()
+                            elif total_payment > 0:
+                                p_amt = Decimal(str(item.get('payment', item.get('amount', 0)) or 0))
+                                if p_amt > 0:
+                                    ratio = p_amt / total_payment
+                                    alloc = TripAllocation(financial_record=ded_record, trip=trip, amount=total_deduction * ratio)
+                                    alloc._suppress_cache_cascade = True
+                                    alloc.save()
+
+                    # Fallback if no payment, tds, or deduction created an object
                     if not self.object:
-                        self.object = ded_record
+                        self.object = form.save(commit=False)
+                        self.object.recorded_by = self.request.user
+                        self.object.save()
 
-                    # Allocate Deductions per trip
-                    has_explicit_ded = any(Decimal(str(item.get('deduction', 0) or 0)) > 0 for item in distribution_data)
-                    for item in distribution_data:
-                        trip_id = item.get('trip_id')
-                        trip = Trip.objects.get(pk=trip_id)
-                        if has_explicit_ded:
-                            d_amt = Decimal(str(item.get('deduction', 0) or 0))
-                            if d_amt > 0:
-                                TripAllocation.objects.create(financial_record=ded_record, trip=trip, amount=d_amt)
-                        elif total_payment > 0:
-                            p_amt = Decimal(str(item.get('payment', item.get('amount', 0)) or 0))
-                            if p_amt > 0:
-                                ratio = p_amt / total_payment
-                                TripAllocation.objects.create(financial_record=ded_record, trip=trip, amount=total_deduction * ratio)
+                    # Single consolidated cache refresh pass on unique touched trips and bills
+                    touched_trips = list(trips_by_id.values())
+                    touched_bills = {t.associated_bill for t in touched_trips if t.associated_bill}
+                    for trip in touched_trips:
+                        TripFinancialService.update_trip_financial_caches(trip)
+                    for bill in touched_bills:
+                        BillingService.update_bill_financial_caches(bill)
 
-                # Fallback if no payment, tds, or deduction created an object
-                if not self.object:
-                    self.object = form.save(commit=False)
-                    self.object.recorded_by = self.request.user
-                    self.object.save()
+                    # Auto-generate description if blank
+                    if not self.object.description:
+                        trip_nums = [a.trip.trip_number for a in self.object.allocations.select_related('trip').all()]
+                        if trip_nums:
+                            self.object.description = f"Paid across trips: {', '.join(trip_nums)}"
+                            self.object.save(update_fields=['description'])
 
-                # Auto-generate description if blank
-                if not self.object.description:
-                    trip_nums = [a.trip.trip_number for a in self.object.allocations.select_related('trip').all()]
-                    if trip_nums:
-                        self.object.description = f"Paid across trips: {', '.join(trip_nums)}"
-                        self.object.save(update_fields=['description'])
-
-                messages.success(self.request, f'Settlement recorded across {len(distribution_data)} trips!')
-                if '_save_same_party' in self.request.POST:
-                    return self._redirect_same_party(form)
-                if self.object.party:
-                    return redirect('party-detail', pk=self.object.party.pk)
-                return redirect('financialrecord-list')
+                    messages.success(self.request, f'Settlement recorded across {len(distribution_data)} trips!')
+                    if '_save_same_party' in self.request.POST:
+                        return self._redirect_same_party(form)
+                    if self.object.party:
+                        return redirect('party-detail', pk=self.object.party.pk)
+                    return redirect('financialrecord-list')
 
             except Exception as e:
                 form.add_error(None, f"Error processing trip distribution: {str(e)}")
@@ -407,130 +434,144 @@ class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, Cre
         # 2. Multi-Bill Distribution Flow
         if bill_distribution_json:
             try:
-                bill_data = json.loads(bill_distribution_json)
-                self.object = form.save(commit=False)
-                self.object.recorded_by = self.request.user
-                self.object.save()
+                with transaction.atomic():
+                    bill_data = json.loads(bill_distribution_json)
+                    self.object = form.save(commit=False)
+                    self.object.recorded_by = self.request.user
+                    self.object.save()
 
-                # TDS record if specified
-                tds_record = None
-                if has_tds:
-                    tds_category, _ = TransactionCategory.objects.get_or_create(
-                        name='TDS',
-                        defaults={'type': TransactionCategory.TYPE_EXPENSE, 'description': 'Tax Deducted at Source'}
-                    )
-                    tds_record = FinancialRecord.objects.create(
-                        date=self.object.date,
-                        account=None,
-                        party=self.object.party,
-                        driver=self.object.driver,
-                        associated_bill=self.object.associated_bill,
-                        record_type=self.object.record_type,
-                        category=tds_category,
-                        amount=tds_amount,
-                        description=f"Auto-generated TDS for {self.object.category.name} entry #{self.object.entry_number}",
-                        recorded_by=self.request.user
-                    )
+                    # TDS record if specified
+                    tds_record = None
+                    if has_tds:
+                        tds_category, _ = TransactionCategory.objects.get_or_create(
+                            name='TDS',
+                            defaults={'type': TransactionCategory.TYPE_EXPENSE, 'description': 'Tax Deducted at Source'}
+                        )
+                        tds_record = FinancialRecord.objects.create(
+                            date=self.object.date,
+                            account=None,
+                            party=self.object.party,
+                            driver=self.object.driver,
+                            associated_bill=self.object.associated_bill,
+                            record_type=self.object.record_type,
+                            category=tds_category,
+                            amount=tds_amount,
+                            description=f"Auto-generated TDS for {self.object.category.name} entry #{self.object.entry_number}",
+                            recorded_by=self.request.user
+                        )
 
-                total_allocated = sum(Decimal(str(item.get('amount', 0))) for item in bill_data)
-                for item in bill_data:
-                    bill_id = item.get('bill_id')
-                    try:
-                        amount = Decimal(str(item.get('amount')))
-                    except (ValueError, InvalidOperation):
-                        raise ValueError(f"Invalid amount format for bill {bill_id}")
+                    bill_ids = [item.get('bill_id') for item in bill_data if item.get('bill_id')]
+                    bills_by_id = Bill.objects.in_bulk(bill_ids)
 
-                    if amount > 0:
-                        bill = Bill.objects.get(pk=bill_id)
-                        if has_tds and total_allocated > 0:
-                            ratio = amount / total_allocated
-                            payment_alloc = self.object.amount * ratio
-                            tds_alloc = tds_amount * ratio
-                            BillAllocation.objects.create(financial_record=self.object, bill=bill, amount=payment_alloc)
-                            BillAllocation.objects.create(financial_record=tds_record, bill=bill, amount=tds_alloc)
-                        else:
-                            BillAllocation.objects.create(
-                                financial_record=self.object,
-                                bill=bill,
-                                amount=amount
-                            )
+                    total_allocated = sum(Decimal(str(item.get('amount', 0))) for item in bill_data)
+                    for item in bill_data:
+                        bill_id = item.get('bill_id')
+                        try:
+                            amount = Decimal(str(item.get('amount')))
+                        except (ValueError, InvalidOperation):
+                            raise ValueError(f"Invalid amount format for bill {bill_id}")
 
-                if not self.object.description:
-                    bill_nums = [a.bill.bill_number or 'Draft' for a in self.object.bill_allocations.select_related('bill').all()]
-                    if bill_nums:
-                        self.object.description = f"Paid across invoices: {', '.join(bill_nums)}"
-                        self.object.save(update_fields=['description'])
+                        if amount > 0 and bill_id in bills_by_id:
+                            bill = bills_by_id[bill_id]
+                            if has_tds and total_allocated > 0:
+                                ratio = amount / total_allocated
+                                payment_alloc = self.object.amount * ratio
+                                tds_alloc = tds_amount * ratio
+                                ba1 = BillAllocation(financial_record=self.object, bill=bill, amount=payment_alloc)
+                                ba1._suppress_cache_cascade = True
+                                ba1.save()
+                                ba2 = BillAllocation(financial_record=tds_record, bill=bill, amount=tds_alloc)
+                                ba2._suppress_cache_cascade = True
+                                ba2.save()
+                            else:
+                                ba = BillAllocation(
+                                    financial_record=self.object,
+                                    bill=bill,
+                                    amount=amount
+                                )
+                                ba._suppress_cache_cascade = True
+                                ba.save()
 
-                messages.success(self.request, f'Financial record created and distributed across {len(bill_data)} bills!')
-                if '_save_same_party' in self.request.POST:
-                    return self._redirect_same_party(form)
-                if self.object.party:
-                    return redirect('party-detail', pk=self.object.party.pk)
-                return redirect('financialrecord-list')
+                    for bill in bills_by_id.values():
+                        BillingService.update_bill_financial_caches(bill)
+
+                    if not self.object.description:
+                        bill_nums = [a.bill.bill_number or 'Draft' for a in self.object.bill_allocations.select_related('bill').all()]
+                        if bill_nums:
+                            self.object.description = f"Paid across invoices: {', '.join(bill_nums)}"
+                            self.object.save(update_fields=['description'])
+
+                    messages.success(self.request, f'Financial record created and distributed across {len(bill_data)} bills!')
+                    if '_save_same_party' in self.request.POST:
+                        return self._redirect_same_party(form)
+                    if self.object.party:
+                        return redirect('party-detail', pk=self.object.party.pk)
+                    return redirect('financialrecord-list')
 
             except Exception as e:
                 form.add_error(None, f"Error processing bill distribution: {str(e)}")
                 return self.form_invalid(form)
 
         # 3. Single Trip or Standard Financial Record Creation
-        payment_amount = form.cleaned_data.get('amount') or Decimal('0.00')
-        self.object = None
+        with transaction.atomic():
+            payment_amount = form.cleaned_data.get('amount') or Decimal('0.00')
+            self.object = None
 
-        if payment_amount > 0:
-            self.object = form.save(commit=False)
-            self.object.recorded_by = self.request.user
-            self.object.save()
+            if payment_amount > 0:
+                self.object = form.save(commit=False)
+                self.object.recorded_by = self.request.user
+                self.object.save()
 
-        # Auto-create TDS record if specified
-        if has_tds:
-            tds_category, _ = TransactionCategory.objects.get_or_create(
-                name='TDS',
-                defaults={'type': TransactionCategory.TYPE_EXPENSE, 'description': 'Tax Deducted at Source'}
-            )
-            tds_record = FinancialRecord.objects.create(
-                date=self.object.date if self.object else form.cleaned_data['date'],
-                account=None,
-                party=self.object.party if self.object else form.cleaned_data['party'],
-                driver=self.object.driver if self.object else form.cleaned_data.get('driver'),
-                associated_trip=form.cleaned_data.get('associated_trip'),
-                associated_bill=form.cleaned_data.get('associated_bill'),
-                record_type=self.object.record_type if self.object else form.cleaned_data.get('record_type', 'Transaction'),
-                category=tds_category,
-                amount=tds_amount,
-                description=f"Auto-generated TDS for {form.cleaned_data.get('associated_trip') or self.object or 'Trip'}",
-                recorded_by=self.request.user
-            )
+            # Auto-create TDS record if specified
+            if has_tds:
+                tds_category, _ = TransactionCategory.objects.get_or_create(
+                    name='TDS',
+                    defaults={'type': TransactionCategory.TYPE_EXPENSE, 'description': 'Tax Deducted at Source'}
+                )
+                tds_record = FinancialRecord.objects.create(
+                    date=self.object.date if self.object else form.cleaned_data['date'],
+                    account=None,
+                    party=self.object.party if self.object else form.cleaned_data['party'],
+                    driver=self.object.driver if self.object else form.cleaned_data.get('driver'),
+                    associated_trip=form.cleaned_data.get('associated_trip'),
+                    associated_bill=form.cleaned_data.get('associated_bill'),
+                    record_type=self.object.record_type if self.object else form.cleaned_data.get('record_type', 'Transaction'),
+                    category=tds_category,
+                    amount=tds_amount,
+                    description=f"Auto-generated TDS for {form.cleaned_data.get('associated_trip') or self.object or 'Trip'}",
+                    recorded_by=self.request.user
+                )
+                if not self.object:
+                    self.object = tds_record
+
+            # Auto-create Deductions record if specified
+            if has_deduction:
+                deductions_category, _ = TransactionCategory.objects.get_or_create(
+                    name='Deductions',
+                    defaults={'type': TransactionCategory.TYPE_EXPENSE, 'description': 'Deductions (shortage, charges, etc.)'}
+                )
+                ded_desc = deduction_notes.strip() if deduction_notes.strip() else f"Deductions for {form.cleaned_data.get('associated_trip') or 'Trip'}"
+                ded_record = FinancialRecord.objects.create(
+                    date=self.object.date if self.object else form.cleaned_data['date'],
+                    account=None,
+                    party=self.object.party if self.object else form.cleaned_data['party'],
+                    driver=self.object.driver if self.object else form.cleaned_data.get('driver'),
+                    associated_trip=form.cleaned_data.get('associated_trip'),
+                    associated_bill=form.cleaned_data.get('associated_bill'),
+                    record_type=self.object.record_type if self.object else form.cleaned_data.get('record_type', 'Transaction'),
+                    category=deductions_category,
+                    amount=deduction_amount,
+                    description=ded_desc,
+                    recorded_by=self.request.user
+                )
+                if not self.object:
+                    self.object = ded_record
+
+            # Fallback if no payment, tds, or deduction created an object
             if not self.object:
-                self.object = tds_record
-
-        # Auto-create Deductions record if specified
-        if has_deduction:
-            deductions_category, _ = TransactionCategory.objects.get_or_create(
-                name='Deductions',
-                defaults={'type': TransactionCategory.TYPE_EXPENSE, 'description': 'Deductions (shortage, charges, etc.)'}
-            )
-            ded_desc = deduction_notes.strip() if deduction_notes.strip() else f"Deductions for {form.cleaned_data.get('associated_trip') or 'Trip'}"
-            ded_record = FinancialRecord.objects.create(
-                date=self.object.date if self.object else form.cleaned_data['date'],
-                account=None,
-                party=self.object.party if self.object else form.cleaned_data['party'],
-                driver=self.object.driver if self.object else form.cleaned_data.get('driver'),
-                associated_trip=form.cleaned_data.get('associated_trip'),
-                associated_bill=form.cleaned_data.get('associated_bill'),
-                record_type=self.object.record_type if self.object else form.cleaned_data.get('record_type', 'Transaction'),
-                category=deductions_category,
-                amount=deduction_amount,
-                description=ded_desc,
-                recorded_by=self.request.user
-            )
-            if not self.object:
-                self.object = ded_record
-
-        # Fallback if no payment, tds, or deduction created an object
-        if not self.object:
-            self.object = form.save(commit=False)
-            self.object.recorded_by = self.request.user
-            self.object.save()
+                self.object = form.save(commit=False)
+                self.object.recorded_by = self.request.user
+                self.object.save()
 
         messages.success(self.request, 'Financial record created successfully!')
 
@@ -590,50 +631,84 @@ class FinancialRecordUpdateView(LoginRequiredMixin, PermissionRequiredMixin, Upd
         
         if distribution_json or bill_distribution_json:
             try:
-                # 1. Update the parent FinancialRecord
-                self.object = form.save()
-                
-                # 2. Update Trip Allocations (Delete old ones first)
-                if distribution_json:
-                    distribution_data = json.loads(distribution_json)
-                    self.object.allocations.all().delete()
-                    for item in distribution_data:
-                        trip_id = item.get('trip_id')
-                        try:
-                            amount = Decimal(str(item.get('amount')))
-                        except (ValueError, InvalidOperation):
-                            raise ValueError(f"Invalid amount format for trip {trip_id}")
-                        
-                        if amount > 0:
-                            trip = Trip.objects.get(pk=trip_id)
-                            TripAllocation.objects.create(
-                                financial_record=self.object,
-                                trip=trip,
-                                amount=amount
-                            )
-                    messages.success(self.request, f'Financial record updated and redistributed across trips!')
+                with transaction.atomic():
+                    # 1. Update the parent FinancialRecord
+                    self.object = form.save()
+                    
+                    # 2. Update Trip Allocations (Delete old ones first)
+                    if distribution_json:
+                        distribution_data = json.loads(distribution_json)
+                        old_allocs = list(self.object.allocations.all())
+                        old_trip_ids = [a.trip_id for a in old_allocs]
+                        for a in old_allocs:
+                            a._suppress_cache_cascade = True
+                            a.delete()
 
-                # 3. Update Bill Allocations (Delete old ones first)
-                if bill_distribution_json:
-                    bill_data = json.loads(bill_distribution_json)
-                    self.object.bill_allocations.all().delete()
-                    for item in bill_data:
-                        bill_id = item.get('bill_id')
-                        try:
-                            amount = Decimal(str(item.get('amount')))
-                        except (ValueError, InvalidOperation):
-                            raise ValueError(f"Invalid amount format for bill {bill_id}")
-                        
-                        if amount > 0:
-                            bill = Bill.objects.get(pk=bill_id)
-                            BillAllocation.objects.create(
-                                financial_record=self.object,
-                                bill=bill,
-                                amount=amount
-                            )
-                    messages.success(self.request, f'Financial record updated and redistributed across bills!')
-                
-                return redirect(self.get_success_url())
+                        trip_ids = [item.get('trip_id') for item in distribution_data if item.get('trip_id')]
+                        trips_by_id = Trip.objects.in_bulk(list(set(old_trip_ids + trip_ids)))
+
+                        for item in distribution_data:
+                            trip_id = item.get('trip_id')
+                            try:
+                                amount = Decimal(str(item.get('amount')))
+                            except (ValueError, InvalidOperation):
+                                raise ValueError(f"Invalid amount format for trip {trip_id}")
+                            
+                            if amount > 0 and trip_id in trips_by_id:
+                                trip = trips_by_id[trip_id]
+                                alloc = TripAllocation(
+                                    financial_record=self.object,
+                                    trip=trip,
+                                    amount=amount
+                                )
+                                alloc._suppress_cache_cascade = True
+                                alloc.save()
+
+                        # Refresh caches once for all affected trips and their bills
+                        touched_trips = list(trips_by_id.values())
+                        touched_bills = {t.associated_bill for t in touched_trips if t.associated_bill}
+                        for trip in touched_trips:
+                            TripFinancialService.update_trip_financial_caches(trip)
+                        for bill in touched_bills:
+                            BillingService.update_bill_financial_caches(bill)
+
+                        messages.success(self.request, f'Financial record updated and redistributed across trips!')
+
+                    # 3. Update Bill Allocations (Delete old ones first)
+                    if bill_distribution_json:
+                        bill_data = json.loads(bill_distribution_json)
+                        old_allocs = list(self.object.bill_allocations.all())
+                        old_bill_ids = [a.bill_id for a in old_allocs]
+                        for a in old_allocs:
+                            a._suppress_cache_cascade = True
+                            a.delete()
+
+                        bill_ids = [item.get('bill_id') for item in bill_data if item.get('bill_id')]
+                        bills_by_id = Bill.objects.in_bulk(list(set(old_bill_ids + bill_ids)))
+
+                        for item in bill_data:
+                            bill_id = item.get('bill_id')
+                            try:
+                                amount = Decimal(str(item.get('amount')))
+                            except (ValueError, InvalidOperation):
+                                raise ValueError(f"Invalid amount format for bill {bill_id}")
+                            
+                            if amount > 0 and bill_id in bills_by_id:
+                                bill = bills_by_id[bill_id]
+                                alloc = BillAllocation(
+                                    financial_record=self.object,
+                                    bill=bill,
+                                    amount=amount
+                                )
+                                alloc._suppress_cache_cascade = True
+                                alloc.save()
+
+                        for bill in bills_by_id.values():
+                            BillingService.update_bill_financial_caches(bill)
+
+                        messages.success(self.request, f'Financial record updated and redistributed across bills!')
+                    
+                    return redirect(self.get_success_url())
 
             except Exception as e:
                 form.add_error(None, f"Error processing distribution: {str(e)}")

@@ -52,6 +52,11 @@ def snapshot_instance_before_save(sender, instance, **kwargs):
     if not user or not user.is_authenticated:
         return
 
+    update_fields = kwargs.get('update_fields')
+    if update_fields is not None and set(update_fields).issubset(IGNORED_FIELDS):
+        instance._activity_old_snapshot = {}
+        return
+
     try:
         existing = sender.objects.filter(pk=instance.pk).first()
         if existing:
@@ -122,6 +127,10 @@ def log_action(sender, instance, action_flag, **kwargs):
 
         user = get_current_user()
         if not user or not user.is_authenticated:
+            return
+
+        update_fields = kwargs.get('update_fields')
+        if update_fields is not None and set(update_fields).issubset(IGNORED_FIELDS):
             return
 
         change_message = ''

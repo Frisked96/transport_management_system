@@ -122,6 +122,9 @@ class Tyre(models.Model):
 
         super().save(*args, **kwargs)
 
+        # Sync financial record for tyre purchase unconditionally
+        self.sync_financial_record()
+
         # Automatic Logging (skip if explicitly told to)
         if getattr(self, '_skip_auto_log', False):
             return
@@ -210,9 +213,6 @@ class Tyre(models.Model):
                         notes="Repair completed, moved back to stock",
                         logged_by=current_user
                     )
-
-        # Sync financial record for tyre purchase unconditionally
-        self.sync_financial_record()
 
     def sync_financial_record(self):
         """

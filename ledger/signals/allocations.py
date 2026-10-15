@@ -23,7 +23,7 @@ def track_bill_allocation_changes(sender, instance, **kwargs):
 @receiver(post_save, sender=BillAllocation)
 def update_bill_caches_on_alloc_save(sender, instance, **kwargs):
     """Update Bill caches when a bill allocation is created/updated"""
-    if getattr(instance, '_updating_financial_caches', False):
+    if getattr(instance, '_updating_financial_caches', False) or getattr(instance, '_suppress_cache_cascade', False):
         return
 
     if not getattr(instance.bill, '_is_being_deleted', False):
@@ -55,7 +55,7 @@ def track_trip_allocation_changes(sender, instance, **kwargs):
 @receiver(post_save, sender=TripAllocation)
 def update_trip_bill_caches_on_alloc_save(sender, instance, **kwargs):
     """Update Trip and Bill caches when an allocation is created/updated"""
-    if getattr(instance, '_updating_financial_caches', False):
+    if getattr(instance, '_updating_financial_caches', False) or getattr(instance, '_suppress_cache_cascade', False):
         return
 
     TripFinancialService.update_trip_financial_caches(instance.trip)
@@ -78,7 +78,7 @@ def update_trip_bill_caches_on_alloc_save(sender, instance, **kwargs):
 @receiver(post_delete, sender=TripAllocation)
 def update_trip_bill_caches_on_alloc_delete(sender, instance, **kwargs):
     """Update Trip and Bill caches when an allocation is deleted"""
-    if getattr(instance, '_updating_financial_caches', False):
+    if getattr(instance, '_updating_financial_caches', False) or getattr(instance, '_suppress_cache_cascade', False):
         return
 
     if instance.trip_id:
@@ -95,6 +95,9 @@ def update_trip_bill_caches_on_alloc_delete(sender, instance, **kwargs):
 @receiver(post_delete, sender=BillAllocation)
 def update_bill_caches_on_alloc_delete(sender, instance, **kwargs):
     """Update Bill caches when a bill allocation is deleted"""
+    if getattr(instance, '_updating_financial_caches', False) or getattr(instance, '_suppress_cache_cascade', False):
+        return
+
     if instance.bill_id:
         try:
             bill = instance.bill

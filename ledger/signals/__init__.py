@@ -12,7 +12,6 @@ from .bills import (
     sync_trip_ledger_on_billtrip_delete,
 )
 from .records import (
-    delete_old_financial_document_on_change,
     delete_financial_document_on_delete,
     sync_party_balance_on_opening_change,
     sync_account_balance_on_opening_change,
@@ -48,7 +47,6 @@ __all__ = [
     'cleanup_financial_record_on_bill_delete',
     'sync_trip_ledger_on_billtrip_save',
     'sync_trip_ledger_on_billtrip_delete',
-    'delete_old_financial_document_on_change',
     'delete_financial_document_on_delete',
     'sync_party_balance_on_opening_change',
     'sync_account_balance_on_opening_change',

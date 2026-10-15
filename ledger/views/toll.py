@@ -437,6 +437,9 @@ class TollEntryBulkCreateView(LoginRequiredMixin, PermissionRequiredMixin, View)
         entries_to_create = []
         errors = []
 
+        valid_veh_ids = [int(v.strip()) for v in vehicles if v and v.strip().isdigit()]
+        vehicles_by_id = Vehicle.objects.in_bulk(valid_veh_ids)
+
         for i in range(len(amounts)):
             amt_str = amounts[i].strip() if i < len(amounts) else ''
             veh_id = vehicles[i].strip() if i < len(vehicles) else ''
@@ -461,8 +464,10 @@ class TollEntryBulkCreateView(LoginRequiredMixin, PermissionRequiredMixin, View)
 
             # Validate vehicle
             try:
-                vehicle = Vehicle.objects.get(pk=veh_id)
-            except (ValueError, Vehicle.DoesNotExist):
+                vehicle = vehicles_by_id.get(int(veh_id))
+                if not vehicle:
+                    raise ValueError
+            except (ValueError, TypeError):
                 errors.append(f"Row {i+1}: Please select a valid vehicle.")
                 continue
 

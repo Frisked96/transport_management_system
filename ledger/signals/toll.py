@@ -2,6 +2,7 @@
 Toll ledger signals for TollAccount, TollRecharge, and TollEntry.
 """
 from decimal import Decimal
+from django.db.models import Sum
 from django.db.models.signals import post_save, post_delete, pre_save
 from django.dispatch import receiver
 from ledger.models import TollAccount, TollRecharge, TollEntry, FinancialRecord
@@ -16,8 +17,8 @@ def sync_toll_account_on_opening_change(sender, instance, **kwargs):
         try:
             old_inst = TollAccount.objects.get(pk=instance.pk)
             if old_inst.opening_balance != instance.opening_balance:
-                total_recharges = instance.recharges.aggregate(total=Decimal('0.00'))['total'] or Decimal('0.00')
-                total_spent = instance.entries.aggregate(total=Decimal('0.00'))['total'] or Decimal('0.00')
+                total_recharges = instance.recharges.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+                total_spent = instance.entries.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
                 instance.current_balance_cached = instance.opening_balance + total_recharges - total_spent
         except TollAccount.DoesNotExist:
             pass

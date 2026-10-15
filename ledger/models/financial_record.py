@@ -179,12 +179,12 @@ class FinancialRecord(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='Created At')
 
     @classmethod
-    def resequence_entry_numbers(cls):
+    def resequence_entry_numbers(cls, from_date=None, from_created_at=None):
         """
-        Resequence all entry numbers to remove gaps.
+        Resequence entry numbers to remove gaps.
         """
         from ledger.services import LedgerService
-        return LedgerService.resequence_financial_records()
+        return LedgerService.resequence_financial_records(from_date=from_date, from_created_at=from_created_at)
 
     def save(self, *args, **kwargs):
         if not self.entry_number:
@@ -204,6 +204,9 @@ class FinancialRecord(models.Model):
         """
         If a ledger entry representing an Invoice is deleted, the Bill itself should be deleted.
         """
+        deleted_date = self.date
+        deleted_created_at = self.created_at
+
         if self.record_type == self.RECORD_TYPE_INVOICE and self.associated_bill:
             # We must be careful not to recurse. super().delete() should be called 
             # after deleting the bill if Bill doesn't CASCADE back here.
@@ -215,8 +218,8 @@ class FinancialRecord(models.Model):
         else:
             super().delete(*args, **kwargs)
         
-        # Resequence after deletion
-        FinancialRecord.resequence_entry_numbers()
+        # Resequence after deletion starting from the deleted record's timestamp
+        FinancialRecord.resequence_entry_numbers(from_date=deleted_date, from_created_at=deleted_created_at)
 
     class Meta:
         verbose_name = 'Financial Record'

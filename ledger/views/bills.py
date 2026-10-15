@@ -159,8 +159,6 @@ class BillUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
         return reverse_lazy('bill-detail', kwargs={'pk': self.object.pk})
     def form_valid(self, form):
         response = super().form_valid(form)
-        # sync_to_ledger is already called in BillForm.save()
-        self.object.sync_to_ledger()
         messages.success(self.request, 'Bill updated successfully!')
         
         if 'save_print' in self.request.POST:

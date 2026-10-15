@@ -134,26 +134,7 @@ def sum_attribute(queryset, attr):
             pass
     return total
 
-@register.filter
-def get_route_description(bill):
-    """
-    Returns a string describing the unique routes in the bill's trips.
-    Format: "Pickup - Delivery"
-    Usage: {{ bill|get_route_description }}
-    """
-    routes = set()
-    for trip in bill.trips.all():
-        if trip.pickup_location and trip.delivery_location:
-            routes.add(f"{trip.pickup_location} - {trip.delivery_location}")
-        elif trip.pickup_location:
-             routes.add(f"From {trip.pickup_location}")
-        elif trip.delivery_location:
-             routes.add(f"To {trip.delivery_location}")
-    
-    if not routes:
-        return bill.description or "Transportation Service"
-        
-    return ", ".join(sorted(list(routes)))
+
 
 @register.filter
 def sum_list(data_list, key):
