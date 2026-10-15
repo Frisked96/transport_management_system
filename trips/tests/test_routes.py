@@ -171,4 +171,73 @@ class RouteNetworkDashboardTests(TestCase):
         self.assertEqual(resp.context['total_trips'], 2)
 
 
+class RouteUpdateViewTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create_superuser(
+            username='admin_routes',
+            email='admin_routes@example.com',
+            password='password123'
+        )
+        self.vehicle = Vehicle.objects.create(
+            registration_plate='MH 12 UV 3344',
+            status='Active'
+        )
+        self.party = Party.objects.create(name='Test Party', party_type=Party.TYPE_DEBTOR)
+        self.route = Route.objects.create(
+            pickup_location='Nasik',
+            delivery_location='Pune',
+            route_type=Route.ROUTE_TYPE_LOCAL,
+            default_rate=Decimal('1000.00')
+        )
+        self.trip = Trip.objects.create(
+            vehicle=self.vehicle,
+            party=self.party,
+            route=self.route,
+            revenue_type=Trip.REVENUE_FIXED,
+            rate_per_ton=Decimal('10000.00')
+        )
+
+    def test_route_update_view_syncs_unbilled_trips(self):
+        """Updating route_type in RouteUpdateView updates unbilled trips using that route."""
+        self.assertEqual(self.trip.gst_type_snapshot, Bill.GST_TYPE_GST)
+        self.assertEqual(self.trip.gst_amount, Decimal('1800.00'))
+        self.assertEqual(self.trip.total_revenue, Decimal('11800.00'))
+
+        self.client.force_login(self.user)
+        resp = self.client.post(reverse('route-update', kwargs={'pk': self.route.pk}), {
+            'pickup_location': 'Nasik',
+            'delivery_location': 'Pune',
+            'route_type': Route.ROUTE_TYPE_NONE,
+            'default_rate': '1000.00'
+        })
+        self.assertEqual(resp.status_code, 302)
+
+        self.trip.refresh_from_db()
+        self.assertEqual(self.trip.gst_type_snapshot, Bill.GST_TYPE_NONE)
+        self.assertEqual(self.trip.gst_type, Bill.GST_TYPE_NONE)
+        self.assertEqual(self.trip.gst_amount, Decimal('0.00'))
+        self.assertEqual(self.trip.gst_amount_cached, Decimal('0.00'))
+        self.assertEqual(self.trip.total_revenue, Decimal('10000.00'))
+        self.assertEqual(self.trip.total_revenue_cached, Decimal('10000.00'))
+
+        # Now update back to Local (GST)
+        resp = self.client.post(reverse('route-update', kwargs={'pk': self.route.pk}), {
+            'pickup_location': 'Nasik',
+            'delivery_location': 'Pune',
+            'route_type': Route.ROUTE_TYPE_LOCAL,
+            'default_rate': '1000.00'
+        })
+        self.assertEqual(resp.status_code, 302)
+
+        self.trip.refresh_from_db()
+        self.assertEqual(self.trip.gst_type_snapshot, Bill.GST_TYPE_GST)
+        self.assertEqual(self.trip.gst_type, Bill.GST_TYPE_GST)
+        self.assertEqual(self.trip.gst_amount, Decimal('1800.00'))
+        self.assertEqual(self.trip.gst_amount_cached, Decimal('1800.00'))
+        self.assertEqual(self.trip.total_revenue, Decimal('11800.00'))
+        self.assertEqual(self.trip.total_revenue_cached, Decimal('11800.00'))
+
+
+
 

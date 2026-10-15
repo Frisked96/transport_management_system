@@ -601,8 +601,14 @@ class RouteUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
     success_url = reverse_lazy('route-list')
 
     def form_valid(self, form):
+        response = super().form_valid(form)
+        if 'route_type' in form.changed_data or 'pickup_location' in form.changed_data or 'delivery_location' in form.changed_data:
+            from trips.models import Trip
+            for trip in Trip.objects.filter(route=self.object):
+                if not trip.is_billed:
+                    trip.save()
         messages.success(self.request, 'Route updated successfully.')
-        return super().form_valid(form)
+        return response
 
 
 class RouteDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):

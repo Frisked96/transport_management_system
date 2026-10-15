@@ -177,6 +177,14 @@
                         {% else %}bg-slate-100 text-slate-500{% endif %}">
                         {{ trip.annotated_status }}
                     </span>
+                    <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-tighter
+                        {% if trip.annotated_gst_type == 'IGST' or trip.gst_type == 'IGST' %}bg-purple-50 text-purple-700 border border-purple-100
+                        {% elif trip.annotated_gst_type == 'NONE' or trip.gst_type == 'NONE' %}bg-slate-50 text-slate-500 border border-slate-200
+                        {% else %}bg-blue-50 text-blue-700 border border-blue-100{% endif %}">
+                        {% if trip.annotated_gst_type == 'IGST' or trip.gst_type == 'IGST' %}IGST
+                        {% elif trip.annotated_gst_type == 'NONE' or trip.gst_type == 'NONE' %}Non-GST
+                        {% else %}GST{% endif %}
+                    </span>
                 </div>
             </div>
 
@@ -264,6 +272,14 @@
                             {% else %}bg-slate-100 text-slate-500{% endif %}">
                             {{ trip.annotated_status }}
                         </span>
+                        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-tighter
+                            {% if trip.annotated_gst_type == 'IGST' or trip.gst_type == 'IGST' %}bg-purple-50 text-purple-700 border border-purple-100
+                            {% elif trip.annotated_gst_type == 'NONE' or trip.gst_type == 'NONE' %}bg-slate-50 text-slate-500 border border-slate-200
+                            {% else %}bg-blue-50 text-blue-700 border border-blue-100{% endif %}">
+                            {% if trip.annotated_gst_type == 'IGST' or trip.gst_type == 'IGST' %}IGST
+                            {% elif trip.annotated_gst_type == 'NONE' or trip.gst_type == 'NONE' %}Non-GST
+                            {% else %}GST{% endif %}
+                        </span>
                     </div>
                     <p class="text-[9px] font-bold text-slate-500 uppercase">{{ trip.weight|default:"-" }} MT @ ₹{{ trip.rate_per_ton|indian_comma }}</p>
                 </div>
@@ -317,11 +333,21 @@
                                     {% else %}bg-slate-100 text-slate-600{% endif %}">
                                     {{ trip.annotated_status }}
                                 </span>
-                                {% if trip.annotated_is_billed %}
-                                <span class="text-[8px] font-black text-blue-600 bg-blue-50 px-1 py-0.5 rounded border border-blue-100 uppercase tracking-widest">Billed</span>
-                                {% else %}
-                                <span class="text-[8px] font-black text-slate-400 bg-slate-50 px-1 py-0.5 rounded border border-slate-200 uppercase tracking-widest">Unbilled</span>
-                                {% endif %}
+                                <div class="flex items-center gap-1">
+                                    {% if trip.annotated_is_billed %}
+                                    <span class="text-[8px] font-black text-blue-600 bg-blue-50 px-1 py-0.5 rounded border border-blue-100 uppercase tracking-widest">Billed</span>
+                                    {% else %}
+                                    <span class="text-[8px] font-black text-slate-400 bg-slate-50 px-1 py-0.5 rounded border border-slate-200 uppercase tracking-widest">Unbilled</span>
+                                    {% endif %}
+                                    <span class="text-[8px] font-black px-1 py-0.5 rounded border uppercase tracking-widest
+                                        {% if trip.annotated_gst_type == 'IGST' or trip.gst_type == 'IGST' %}text-purple-700 bg-purple-50 border-purple-100
+                                        {% elif trip.annotated_gst_type == 'NONE' or trip.gst_type == 'NONE' %}text-slate-500 bg-slate-50 border-slate-200
+                                        {% else %}text-blue-700 bg-blue-50 border-blue-100{% endif %}">
+                                        {% if trip.annotated_gst_type == 'IGST' or trip.gst_type == 'IGST' %}IGST
+                                        {% elif trip.annotated_gst_type == 'NONE' or trip.gst_type == 'NONE' %}Non-GST
+                                        {% else %}GST{% endif %}
+                                    </span>
+                                </div>
                             </div>
                         </td>
                         <td class="px-6 py-3 text-right">

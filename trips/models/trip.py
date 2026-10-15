@@ -298,11 +298,11 @@ class Trip(models.Model):
                 # If the trip was deleted, we shouldn't be saving it
                 return
 
-        # Sync locations from route if provided
+        # Sync locations and GST snapshot from route if provided
         if self.route:
             self.pickup_location = self.route.pickup_location
             self.delivery_location = self.route.delivery_location
-            if not self.gst_type_snapshot:
+            if not self.is_billed:
                 from ledger.models import Bill
                 if self.route.route_type == Route.ROUTE_TYPE_INTRA:
                     self.gst_type_snapshot = Bill.GST_TYPE_IGST
@@ -310,6 +310,16 @@ class Trip(models.Model):
                     self.gst_type_snapshot = Bill.GST_TYPE_NONE
                 else:
                     self.gst_type_snapshot = Bill.GST_TYPE_GST
+            elif not self.gst_type_snapshot:
+                from ledger.models import Bill
+                if self.route.route_type == Route.ROUTE_TYPE_INTRA:
+                    self.gst_type_snapshot = Bill.GST_TYPE_IGST
+                elif self.route.route_type == Route.ROUTE_TYPE_NONE:
+                    self.gst_type_snapshot = Bill.GST_TYPE_NONE
+                else:
+                    self.gst_type_snapshot = Bill.GST_TYPE_GST
+        elif not self.is_billed and old_instance and old_instance.route_id:
+            self.gst_type_snapshot = ""
 
         # Handle Trip Number generation and regeneration
         reg_plate = self.vehicle.registration_plate
@@ -562,17 +572,13 @@ class Trip(models.Model):
         
         # 1. Use Bill Rate if available
         bill = self.associated_bill
-        if bill and bill.gst_rate:
-            return rev * (Decimal(bill.gst_rate) / Decimal(100))
+        if bill:
+            if bill.gst_rate:
+                return rev * (Decimal(bill.gst_rate) / Decimal(100))
+            return Decimal('0')
         
-        # 2. If unbilled, check if route/snapshot is taxable
-        is_taxable = False
-        if self.gst_type_snapshot in ['GST', 'IGST']:
-            is_taxable = True
-        elif self.route and self.route.route_type in ['local', 'intra']:
-            is_taxable = True
-            
-        if is_taxable:
+        # 2. If unbilled, check GST type
+        if self.gst_type in ['GST', 'IGST']:
             return rev * (Decimal('18') / Decimal('100'))
             
         return Decimal('0')

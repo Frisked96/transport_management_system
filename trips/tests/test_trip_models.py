@@ -143,11 +143,86 @@ class TripFinancialModelTests(TestCase):
         self.assertEqual(trip.gst_type_snapshot, Bill.GST_TYPE_IGST)
         self.assertEqual(trip.gst_type, Bill.GST_TYPE_IGST)
 
-        # Snapshot principle: changing route doesn't alter existing trip snapshot
+        # Snapshot principle: changing route directly doesn't alter existing trip snapshot without save
         self.route_igst.route_type = Route.ROUTE_TYPE_NONE
         self.route_igst.save()
         trip.refresh_from_db()
         self.assertEqual(trip.gst_type_snapshot, Bill.GST_TYPE_IGST)
+
+    def test_trip_route_change_updates_gst_components_and_tags(self):
+        """Verify changing route on unbilled trip updates GST snapshot, GST amount, and total revenue."""
+        # 1. Create trip with GST route
+        trip = Trip.objects.create(
+            vehicle=self.vehicle,
+            party=self.party,
+            route=self.route_gst,
+            revenue_type=Trip.REVENUE_FIXED,
+            rate_per_ton=Decimal('10000.00')
+        )
+        self.assertEqual(trip.gst_type_snapshot, Bill.GST_TYPE_GST)
+        self.assertEqual(trip.gst_type, Bill.GST_TYPE_GST)
+        self.assertEqual(trip.gst_amount, Decimal('1800.00'))
+        self.assertEqual(trip.gst_amount_cached, Decimal('1800.00'))
+        self.assertEqual(trip.total_revenue, Decimal('11800.00'))
+        self.assertEqual(trip.total_revenue_cached, Decimal('11800.00'))
+        
+        accrual = FinancialRecord.objects.get(associated_trip=trip, record_type=FinancialRecord.RECORD_TYPE_INVOICE)
+        self.assertEqual(accrual.amount, Decimal('11800.00'))
+        
+        annotated = Trip.objects.with_billing_info().with_payment_info().get(pk=trip.pk)
+        self.assertEqual(annotated.annotated_gst_type, 'GST')
+        self.assertEqual(annotated.annotated_gst_amount, Decimal('1800.00'))
+
+        # 2. Change route to Non-GST route
+        trip.route = self.route_none
+        trip.save()
+        trip.refresh_from_db()
+
+        self.assertEqual(trip.gst_type_snapshot, Bill.GST_TYPE_NONE)
+        self.assertEqual(trip.gst_type, Bill.GST_TYPE_NONE)
+        self.assertEqual(trip.gst_amount, Decimal('0.00'))
+        self.assertEqual(trip.gst_amount_cached, Decimal('0.00'))
+        self.assertEqual(trip.total_revenue, Decimal('10000.00'))
+        self.assertEqual(trip.total_revenue_cached, Decimal('10000.00'))
+
+        accrual.refresh_from_db()
+        self.assertEqual(accrual.amount, Decimal('10000.00'))
+
+        annotated = Trip.objects.with_billing_info().with_payment_info().get(pk=trip.pk)
+        self.assertEqual(annotated.annotated_gst_type, 'NONE')
+        self.assertEqual(annotated.annotated_gst_amount, Decimal('0.00'))
+
+        # 3. Change route back to GST route
+        trip.route = self.route_gst
+        trip.save()
+        trip.refresh_from_db()
+
+        self.assertEqual(trip.gst_type_snapshot, Bill.GST_TYPE_GST)
+        self.assertEqual(trip.gst_type, Bill.GST_TYPE_GST)
+        self.assertEqual(trip.gst_amount, Decimal('1800.00'))
+        self.assertEqual(trip.gst_amount_cached, Decimal('1800.00'))
+        self.assertEqual(trip.total_revenue, Decimal('11800.00'))
+
+        accrual.refresh_from_db()
+        self.assertEqual(accrual.amount, Decimal('11800.00'))
+
+        annotated = Trip.objects.with_billing_info().with_payment_info().get(pk=trip.pk)
+        self.assertEqual(annotated.annotated_gst_type, 'GST')
+        self.assertEqual(annotated.annotated_gst_amount, Decimal('1800.00'))
+
+        # 4. Change route to IGST route
+        trip.route = self.route_igst
+        trip.save()
+        trip.refresh_from_db()
+
+        self.assertEqual(trip.gst_type_snapshot, Bill.GST_TYPE_IGST)
+        self.assertEqual(trip.gst_type, Bill.GST_TYPE_IGST)
+        self.assertEqual(trip.gst_amount, Decimal('1800.00'))
+        self.assertEqual(trip.total_revenue, Decimal('11800.00'))
+
+        annotated = Trip.objects.with_billing_info().with_payment_info().get(pk=trip.pk)
+        self.assertEqual(annotated.annotated_gst_type, 'IGST')
+        self.assertEqual(annotated.annotated_gst_amount, Decimal('1800.00'))
 
     def test_gst_amount_calculation_and_total_revenue(self):
         """Verify 18% default on taxable unbilled trips and 0% on non-GST routes."""
