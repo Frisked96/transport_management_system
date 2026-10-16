@@ -12,10 +12,12 @@
 </header>
 <!-- END: Page Header -->
 
-<!-- BEGIN: Search Bar -->
+<!-- BEGIN: Filter Bar -->
 <section class="bg-slate-100 p-5 rounded-lg border border-slate-200 mb-8">
     <form method="get" class="flex flex-col md:flex-row gap-4">
         <input type="hidden" name="type" value="{{ doc_type }}">
+        
+        <!-- Search Input -->
         <div class="flex-grow relative">
             <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <i class="fa-solid fa-magnifying-glass text-slate-400"></i>
@@ -24,33 +26,124 @@
                    class="block w-full pl-10 pr-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white" 
                    placeholder="Search vehicles (plate, model) or drivers (name, ID, license)...">
         </div>
+
+        {% if doc_type == 'vehicles' %}
+        <!-- Ownership Filter (Company Owned by Default) -->
+        <div class="w-full md:w-56">
+            <select name="ownership" onchange="this.form.submit()" class="block w-full py-2 px-3 border border-slate-300 bg-white rounded-md text-sm focus:ring-emerald-500 focus:border-emerald-500 text-slate-700 font-medium">
+                <option value="owned" {% if ownership_filter == 'owned' %}selected{% endif %}>🏢 Company Owned (Default)</option>
+                <option value="attached" {% if ownership_filter == 'attached' %}selected{% endif %}>🤝 Attached Vehicles</option>
+                <option value="all" {% if ownership_filter == 'all' %}selected{% endif %}>🌐 All Vehicles ({{ total_vehicles_count|default:summary_counts.total }})</option>
+            </select>
+        </div>
+        {% endif %}
+
+        <!-- Alert Filter Dropdown -->
+        <div class="w-full md:w-60">
+            <select name="alert" onchange="this.form.submit()" class="block w-full py-2 px-3 border border-slate-300 bg-white rounded-md text-sm focus:ring-emerald-500 focus:border-emerald-500 text-slate-700">
+                <option value="">All Document Statuses</option>
+                <option value="alerts" {% if alert_filter == 'alerts' %}selected{% endif %}>⚠️ Active Alerts (Expired/Expiring)</option>
+                <option value="expired" {% if alert_filter == 'expired' %}selected{% endif %}>⛔ Expired Only</option>
+                <option value="expiring" {% if alert_filter == 'expiring' %}selected{% endif %}>⏳ Expiring Soon Only</option>
+            </select>
+        </div>
+
         <button type="submit" class="bg-emerald-600 text-white px-6 py-2 rounded-md hover:bg-emerald-700 transition-colors flex items-center justify-center space-x-2">
             <i class="fa-solid fa-filter"></i>
-            <span>Search</span>
+            <span>Filter</span>
         </button>
-        {% if search_term %}
+        {% if search_term or alert_filter or doc_type == 'vehicles' and ownership_filter != 'owned' %}
         <a href="{% url 'document-list' %}?type={{ doc_type }}" class="bg-slate-200 text-slate-700 px-6 py-2 rounded-md hover:bg-slate-300 transition-colors flex items-center justify-center">
-            Clear
+            Reset
         </a>
         {% endif %}
     </form>
+
+    <!-- Quick Filter Pills -->
+    <div class="flex flex-col gap-2.5 mt-4 pt-3 border-t border-slate-200 text-xs">
+        {% if doc_type == 'vehicles' %}
+        <!-- Ownership Quick Pills -->
+        <div class="flex flex-wrap items-center gap-2">
+            <span class="font-bold text-slate-500 uppercase tracking-wider mr-1">Fleet:</span>
+            <a href="?type=vehicles&ownership=owned{% if search_term %}&search={{ search_term }}{% endif %}{% if alert_filter %}&alert={{ alert_filter }}{% endif %}" 
+               class="inline-flex items-center px-3 py-1 rounded-full font-semibold transition-colors {% if ownership_filter == 'owned' %}bg-emerald-700 text-white shadow-sm{% else %}bg-white text-slate-700 hover:bg-slate-200 border border-slate-300{% endif %}">
+                <i class="fa-solid fa-building mr-1.5 text-xs"></i>
+                Company Owned ({{ owned_vehicles_count|default:0 }})
+            </a>
+            <a href="?type=vehicles&ownership=attached{% if search_term %}&search={{ search_term }}{% endif %}{% if alert_filter %}&alert={{ alert_filter }}{% endif %}" 
+               class="inline-flex items-center px-3 py-1 rounded-full font-semibold transition-colors {% if ownership_filter == 'attached' %}bg-emerald-700 text-white shadow-sm{% else %}bg-white text-slate-700 hover:bg-slate-200 border border-slate-300{% endif %}">
+                <i class="fa-solid fa-handshake mr-1.5 text-xs"></i>
+                Attached ({{ attached_vehicles_count|default:0 }})
+            </a>
+            <a href="?type=vehicles&ownership=all{% if search_term %}&search={{ search_term }}{% endif %}{% if alert_filter %}&alert={{ alert_filter }}{% endif %}" 
+               class="inline-flex items-center px-3 py-1 rounded-full font-semibold transition-colors {% if ownership_filter == 'all' %}bg-slate-800 text-white shadow-sm{% else %}bg-white text-slate-700 hover:bg-slate-200 border border-slate-300{% endif %}">
+                All Fleet ({{ total_vehicles_count|default:0 }})
+            </a>
+        </div>
+        {% endif %}
+
+        <!-- Alert Quick Pills -->
+        <div class="flex flex-wrap items-center gap-2">
+            <span class="font-bold text-slate-500 uppercase tracking-wider mr-1">Alerts:</span>
+            <a href="?type={{ doc_type }}{% if doc_type == 'vehicles' %}&ownership={{ ownership_filter }}{% endif %}{% if search_term %}&search={{ search_term }}{% endif %}" 
+               class="inline-flex items-center px-3 py-1 rounded-full font-semibold transition-colors {% if not alert_filter %}bg-slate-800 text-white shadow-sm{% else %}bg-white text-slate-600 hover:bg-slate-200 border border-slate-300{% endif %}">
+                All ({{ summary_counts.total|default:0 }})
+            </a>
+            <a href="?type={{ doc_type }}{% if doc_type == 'vehicles' %}&ownership={{ ownership_filter }}{% endif %}&alert=alerts{% if search_term %}&search={{ search_term }}{% endif %}" 
+               class="inline-flex items-center px-3 py-1 rounded-full font-semibold transition-colors {% if alert_filter == 'alerts' %}bg-amber-600 text-white shadow-sm{% else %}bg-white text-amber-800 hover:bg-amber-50 border border-amber-300{% endif %}">
+                <i class="fa-solid fa-triangle-exclamation mr-1.5 text-xs"></i>
+                Active Alerts ({{ summary_counts.alerts|default:0 }})
+            </a>
+            <a href="?type={{ doc_type }}{% if doc_type == 'vehicles' %}&ownership={{ ownership_filter }}{% endif %}&alert=expired{% if search_term %}&search={{ search_term }}{% endif %}" 
+               class="inline-flex items-center px-3 py-1 rounded-full font-semibold transition-colors {% if alert_filter == 'expired' %}bg-red-600 text-white shadow-sm{% else %}bg-white text-red-700 hover:bg-red-50 border border-red-300{% endif %}">
+                <i class="fa-solid fa-circle-exclamation mr-1.5 text-xs"></i>
+                Expired ({{ summary_counts.expired|default:0 }})
+            </a>
+            <a href="?type={{ doc_type }}{% if doc_type == 'vehicles' %}&ownership={{ ownership_filter }}{% endif %}&alert=expiring{% if search_term %}&search={{ search_term }}{% endif %}" 
+               class="inline-flex items-center px-3 py-1 rounded-full font-semibold transition-colors {% if alert_filter == 'expiring' %}bg-amber-500 text-white shadow-sm{% else %}bg-white text-amber-800 hover:bg-amber-50 border border-amber-300{% endif %}">
+                <i class="fa-solid fa-clock mr-1.5 text-xs"></i>
+                Expiring Soon ({{ summary_counts.expiring|default:0 }})
+            </a>
+        </div>
+    </div>
 </section>
-<!-- END: Search Bar -->
+<!-- END: Filter Bar -->
 
 <!-- BEGIN: Type Tabs -->
-<div class="border-b border-slate-200 mb-8">
+<div class="border-b border-slate-200 mb-6">
     <nav class="-mb-px flex space-x-8 overflow-x-auto" aria-label="Tabs">
-        <a href="?type=vehicles{% if search_term %}&search={{ search_term }}{% endif %}" 
+        <a href="?type=vehicles{% if search_term %}&search={{ search_term }}{% endif %}{% if alert_filter %}&alert={{ alert_filter }}{% endif %}{% if ownership_filter %}&ownership={{ ownership_filter }}{% endif %}" 
            class="flex-shrink-0 {% if doc_type == 'vehicles' %}border-emerald-500 text-emerald-600{% else %}border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300{% endif %} whitespace-nowrap py-4 px-1 border-b-2 font-bold text-sm">
             <i class="fa-solid fa-truck mr-2"></i>Vehicle Documents
         </a>
-        <a href="?type=drivers{% if search_term %}&search={{ search_term }}{% endif %}" 
+        <a href="?type=drivers{% if search_term %}&search={{ search_term }}{% endif %}{% if alert_filter %}&alert={{ alert_filter }}{% endif %}" 
            class="flex-shrink-0 {% if doc_type == 'drivers' %}border-emerald-500 text-emerald-600{% else %}border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300{% endif %} whitespace-nowrap py-4 px-1 border-b-2 font-bold text-sm">
             <i class="fa-solid fa-users mr-2"></i>Driver Documents
         </a>
     </nav>
 </div>
 <!-- END: Type Tabs -->
+
+{% if alert_filter or doc_type == 'vehicles' and ownership_filter != 'all' %}
+<!-- Active Filter Indicator Banner -->
+<div class="mb-6 p-3 rounded-lg flex items-center justify-between {% if alert_filter == 'expired' %}bg-red-50 border border-red-200 text-red-800{% elif alert_filter %}bg-amber-50 border border-amber-200 text-amber-800{% else %}bg-slate-100 border border-slate-200 text-slate-800{% endif %}">
+    <div class="flex items-center space-x-2 text-sm font-medium">
+        <i class="fa-solid fa-filter"></i>
+        <span>
+            Filtered by: <strong>{% if doc_type == 'vehicles' %}{% if ownership_filter == 'owned' %}Company Owned Vehicles{% elif ownership_filter == 'attached' %}Attached Vehicles{% else %}All Vehicles{% endif %}{% else %}Drivers{% endif %}</strong>
+            {% if alert_filter %}
+            with <strong>{% if alert_filter == 'expired' %}Expired Documents{% elif alert_filter == 'expiring' %}Expiring Soon (within 30 days){% else %}Active Alerts{% endif %}</strong>
+            {% endif %}
+            &bull; {{ page_obj.paginator.count }} found
+        </span>
+    </div>
+    {% if alert_filter or ownership_filter != 'owned' %}
+    <a href="?type={{ doc_type }}" class="text-xs font-bold underline hover:no-underline">
+        Reset to Default (Company Owned)
+    </a>
+    {% endif %}
+</div>
+{% endif %}
 
 {% if doc_type == 'vehicles' %}
 <!-- BEGIN: Vehicle Wise Documents -->
@@ -65,7 +158,14 @@
                         <i class="fa-solid fa-chevron-right transition-transform duration-200" id="icon-vehicle-docs-{{ vehicle.pk }}"></i>
                     </div>
                     <div>
-                        <h3 class="font-bold text-slate-900">{{ vehicle.registration_plate }}</h3>
+                        <div class="flex items-center gap-2">
+                            <h3 class="font-bold text-slate-900">{{ vehicle.registration_plate }}</h3>
+                            {% if vehicle.ownership == 'Owned' %}
+                            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 text-emerald-800">Owned</span>
+                            {% else %}
+                            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-100 text-blue-800">Attached</span>
+                            {% endif %}
+                        </div>
                         <p class="text-xs text-slate-500">{{ vehicle.make_model }}</p>
                     </div>
                 </div>
@@ -280,7 +380,16 @@
         </div>
         {% empty %}
         <div class="text-center py-12 bg-white rounded-lg border border-slate-200">
+            {% if alert_filter %}
+            <i class="fa-solid fa-circle-check text-emerald-500 text-4xl mb-3"></i>
+            <p class="text-slate-800 font-bold text-base">No vehicles found matching the "{{ alert_filter }}" alert filter.</p>
+            <p class="text-slate-500 text-xs mt-1">All compliance documents for vehicles in this criteria are in good standing!</p>
+            <a href="{% url 'document-list' %}?type=vehicles" class="inline-block mt-3 px-4 py-1.5 bg-emerald-50 text-emerald-700 rounded-md text-xs font-bold hover:bg-emerald-100">
+                View All Vehicles
+            </a>
+            {% else %}
             <p class="text-slate-500">No vehicles found.</p>
+            {% endif %}
         </div>
         {% endfor %}
     </div>
@@ -290,7 +399,7 @@
     <div class="mt-6 flex justify-center">
         <nav class="inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
             {% if page_obj.has_previous %}
-            <a href="?page={{ page_obj.previous_page_number }}{% if search_term %}&search={{ search_term }}{% endif %}&type={{ doc_type }}" class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-slate-300 bg-white text-sm font-medium text-slate-500 hover:bg-slate-50">
+            <a href="?page={{ page_obj.previous_page_number }}{% if search_term %}&search={{ search_term }}{% endif %}&type={{ doc_type }}{% if alert_filter %}&alert={{ alert_filter }}{% endif %}{% if ownership_filter %}&ownership={{ ownership_filter }}{% endif %}" class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-slate-300 bg-white text-sm font-medium text-slate-500 hover:bg-slate-50">
                 <span class="sr-only">Previous</span>
                 <i class="fa-solid fa-chevron-left"></i>
             </a>
@@ -301,7 +410,7 @@
             </span>
 
             {% if page_obj.has_next %}
-            <a href="?page={{ page_obj.next_page_number }}{% if search_term %}&search={{ search_term }}{% endif %}&type={{ doc_type }}" class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-slate-300 bg-white text-sm font-medium text-slate-500 hover:bg-slate-50">
+            <a href="?page={{ page_obj.next_page_number }}{% if search_term %}&search={{ search_term }}{% endif %}&type={{ doc_type }}{% if alert_filter %}&alert={{ alert_filter }}{% endif %}{% if ownership_filter %}&ownership={{ ownership_filter }}{% endif %}" class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-slate-300 bg-white text-sm font-medium text-slate-500 hover:bg-slate-50">
                 <span class="sr-only">Next</span>
                 <i class="fa-solid fa-chevron-right"></i>
             </a>
@@ -488,7 +597,16 @@
         </div>
         {% empty %}
         <div class="text-center py-12 bg-white rounded-lg border border-slate-200">
+            {% if alert_filter %}
+            <i class="fa-solid fa-circle-check text-emerald-500 text-4xl mb-3"></i>
+            <p class="text-slate-800 font-bold text-base">No drivers found matching the "{{ alert_filter }}" alert filter.</p>
+            <p class="text-slate-500 text-xs mt-1">All compliance documents for drivers in this criteria are in good standing!</p>
+            <a href="{% url 'document-list' %}?type=drivers" class="inline-block mt-3 px-4 py-1.5 bg-emerald-50 text-emerald-700 rounded-md text-xs font-bold hover:bg-emerald-100">
+                View All Drivers
+            </a>
+            {% else %}
             <p class="text-slate-500">No drivers found.</p>
+            {% endif %}
         </div>
         {% endfor %}
     </div>
@@ -498,7 +616,7 @@
     <div class="mt-6 flex justify-center">
         <nav class="inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
             {% if page_obj.has_previous %}
-            <a href="?page={{ page_obj.previous_page_number }}{% if search_term %}&search={{ search_term }}{% endif %}&type={{ doc_type }}" class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-slate-300 bg-white text-sm font-medium text-slate-500 hover:bg-slate-50">
+            <a href="?page={{ page_obj.previous_page_number }}{% if search_term %}&search={{ search_term }}{% endif %}&type={{ doc_type }}{% if alert_filter %}&alert={{ alert_filter }}{% endif %}" class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-slate-300 bg-white text-sm font-medium text-slate-500 hover:bg-slate-50">
                 <span class="sr-only">Previous</span>
                 <i class="fa-solid fa-chevron-left"></i>
             </a>
@@ -509,7 +627,7 @@
             </span>
 
             {% if page_obj.has_next %}
-            <a href="?page={{ page_obj.next_page_number }}{% if search_term %}&search={{ search_term }}{% endif %}&type={{ doc_type }}" class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-slate-300 bg-white text-sm font-medium text-slate-500 hover:bg-slate-50">
+            <a href="?page={{ page_obj.next_page_number }}{% if search_term %}&search={{ search_term }}{% endif %}&type={{ doc_type }}{% if alert_filter %}&alert={{ alert_filter }}{% endif %}" class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-slate-300 bg-white text-sm font-medium text-slate-500 hover:bg-slate-50">
                 <span class="sr-only">Next</span>
                 <i class="fa-solid fa-chevron-right"></i>
             </a>

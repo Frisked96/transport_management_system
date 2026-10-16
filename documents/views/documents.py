@@ -24,6 +24,10 @@ class DocumentListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
     def get_queryset(self):
         self.doc_type = self.request.GET.get('type', 'vehicles')
         search_term = self.request.GET.get('search')
+        self.alert_filter = self.request.GET.get('alert', '').strip().lower()
+        self.ownership_filter = self.request.GET.get('ownership', 'owned').strip().lower()
+        if not self.ownership_filter:
+            self.ownership_filter = 'owned'
         
         today = timezone.now().date()
         warning_date = today + timedelta(days=30)
@@ -60,25 +64,69 @@ class DocumentListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
                     filter=Q(documents__never_expires=False, documents__expiry_date__lt=today)
                 )
             ).all().order_by('registration_plate')
+            
+            # Ownership filter (default: Company Owned)
+            if self.ownership_filter == 'owned':
+                queryset = queryset.filter(ownership=Vehicle.OWNERSHIP_OWNED)
+            elif self.ownership_filter == 'attached':
+                queryset = queryset.filter(ownership=Vehicle.OWNERSHIP_ATTACHED)
+            # if 'all', do not filter by ownership
+            
             if search_term:
                 queryset = queryset.filter(
                     Q(registration_plate__icontains=search_term) |
                     Q(make_model__icontains=search_term)
                 )
         
+        # Apply Alert filter
+        if self.alert_filter in ['alerts', 'all_alerts', 'active']:
+            queryset = queryset.filter(Q(expired_count__gt=0) | Q(expiring_count__gt=0))
+        elif self.alert_filter == 'expired':
+            queryset = queryset.filter(expired_count__gt=0)
+        elif self.alert_filter in ['expiring', 'expiring_soon']:
+            queryset = queryset.filter(expiring_count__gt=0)
+
         return queryset
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['doc_type'] = self.doc_type
         context['search_term'] = self.request.GET.get('search')
+        context['alert_filter'] = self.alert_filter
+        context['ownership_filter'] = self.ownership_filter
         
+        today = timezone.now().date()
+        warning_date = today + timedelta(days=30)
+
         if self.doc_type == 'drivers':
             context['drivers'] = context['page_obj']
             context['vehicles'] = []
+            context['summary_counts'] = Driver.objects.aggregate(
+                total=Count('id', distinct=True),
+                expired=Count('id', filter=Q(documents__never_expires=False, documents__expiry_date__lt=today), distinct=True),
+                expiring=Count('id', filter=Q(documents__never_expires=False, documents__expiry_date__lte=warning_date, documents__expiry_date__gte=today), distinct=True),
+                alerts=Count('id', filter=Q(documents__never_expires=False, documents__expiry_date__lte=warning_date), distinct=True),
+            )
         else:
             context['vehicles'] = context['page_obj']
             context['drivers'] = []
+            
+            # Base queryset for summary counts reflecting current ownership filter
+            base_veh = Vehicle.objects.all()
+            if self.ownership_filter == 'owned':
+                base_veh = base_veh.filter(ownership=Vehicle.OWNERSHIP_OWNED)
+            elif self.ownership_filter == 'attached':
+                base_veh = base_veh.filter(ownership=Vehicle.OWNERSHIP_ATTACHED)
+
+            context['summary_counts'] = base_veh.aggregate(
+                total=Count('id', distinct=True),
+                expired=Count('id', filter=Q(documents__never_expires=False, documents__expiry_date__lt=today), distinct=True),
+                expiring=Count('id', filter=Q(documents__never_expires=False, documents__expiry_date__lte=warning_date, documents__expiry_date__gte=today), distinct=True),
+                alerts=Count('id', filter=Q(documents__never_expires=False, documents__expiry_date__lte=warning_date), distinct=True),
+            )
+            context['owned_vehicles_count'] = Vehicle.objects.filter(ownership=Vehicle.OWNERSHIP_OWNED).count()
+            context['attached_vehicles_count'] = Vehicle.objects.filter(ownership=Vehicle.OWNERSHIP_ATTACHED).count()
+            context['total_vehicles_count'] = Vehicle.objects.count()
             
         return context
 

@@ -43,6 +43,17 @@ class VehicleListView(LoginRequiredMixin, PermissionRequiredMixin, BaseFleetPerm
                 Q(engine_number__icontains=search)
             )
         
+        # Ownership filter (default: Company Owned)
+        self.ownership = self.request.GET.get('ownership', 'owned').strip().lower()
+        if not self.ownership:
+            self.ownership = 'owned'
+            
+        if self.ownership == 'owned':
+            queryset = queryset.filter(ownership=Vehicle.OWNERSHIP_OWNED)
+        elif self.ownership == 'attached':
+            queryset = queryset.filter(ownership=Vehicle.OWNERSHIP_ATTACHED)
+        # if 'all', do not filter by ownership
+
         # Status filter
         status = self.request.GET.get('status')
         if status:
@@ -60,6 +71,10 @@ class VehicleListView(LoginRequiredMixin, PermissionRequiredMixin, BaseFleetPerm
         context['status_choices'] = Vehicle.STATUS_CHOICES
         context['current_status'] = self.request.GET.get('status', '')
         context['search_term'] = self.request.GET.get('search', '')
+        context['current_ownership'] = self.ownership
+        context['owned_count'] = Vehicle.objects.filter(ownership=Vehicle.OWNERSHIP_OWNED).count()
+        context['attached_count'] = Vehicle.objects.filter(ownership=Vehicle.OWNERSHIP_ATTACHED).count()
+        context['total_count'] = Vehicle.objects.count()
         context['vendors'] = Party.objects.filter(party_type=Party.TYPE_CREDITOR).order_by('name')
         context['company_accounts'] = CompanyAccount.objects.all().order_by('name')
         return context

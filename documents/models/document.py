@@ -130,6 +130,10 @@ class Document(models.Model):
         return self.document_name
 
     @property
+    def document_type(self):
+        return self.document_name
+
+    @property
     def valid_to(self):
         return self.expiry_date
 

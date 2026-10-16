@@ -225,7 +225,7 @@
             </div>
             <div class="flex items-center">
                 <!-- Notifications Desktop -->
-                {% if user.is_authenticated and request.user.is_superuser or request.user.groups.all.0.name == 'manager' %}
+                {% if user.is_authenticated %}
                 <div class="hidden lg:block relative dropdown-container mr-2">
                     <button class="flex items-center justify-center w-8 h-8 rounded-full text-slate-300 hover:text-white hover:bg-slate-700 focus:outline-none dropdown-toggle relative">
                         <i class="fa-solid fa-bell"></i>
@@ -258,7 +258,7 @@
                                 </a>
                                 {% endfor %}
                                 {% for doc in expired_docs %}
-                                <a href="{% url 'document-list' %}" class="block px-4 py-3 hover:bg-slate-50 border-b border-slate-50 last:border-0">
+                                <a href="{% url 'document-list' %}?type={% if doc.driver %}drivers{% else %}vehicles{% endif %}&alert=expired" class="block px-4 py-3 hover:bg-slate-50 border-b border-slate-50 last:border-0">
                                     <div class="flex items-start">
                                         <div class="flex-shrink-0 pt-0.5"><i class="fa-solid fa-circle-exclamation text-red-500"></i></div>
                                         <div class="ml-3 w-0 flex-1">
@@ -269,7 +269,7 @@
                                 </a>
                                 {% endfor %}
                                 {% for doc in expiring_docs %}
-                                <a href="{% url 'document-list' %}" class="block px-4 py-3 hover:bg-slate-50 border-b border-slate-50 last:border-0">
+                                <a href="{% url 'document-list' %}?type={% if doc.driver %}drivers{% else %}vehicles{% endif %}&alert=expiring" class="block px-4 py-3 hover:bg-slate-50 border-b border-slate-50 last:border-0">
                                     <div class="flex items-start">
                                         <div class="flex-shrink-0 pt-0.5"><i class="fa-solid fa-triangle-exclamation text-yellow-500"></i></div>
                                         <div class="ml-3 w-0 flex-1">
@@ -281,8 +281,8 @@
                                 {% endfor %}
                             {% endif %}
                         </div>
-                        <a href="{% url 'document-list' %}" class="block px-4 py-2 text-xs text-center font-medium text-emerald-600 hover:text-emerald-500 hover:bg-slate-50 border-t border-slate-100">
-                            View all documents
+                        <a href="{% url 'document-list' %}?alert=alerts" class="block px-4 py-2 text-xs text-center font-medium text-emerald-600 hover:text-emerald-500 hover:bg-slate-50 border-t border-slate-100">
+                            View all document alerts
                         </a>
                     </div>
                 </div>
@@ -331,7 +331,7 @@
                     <button type="button" id="mobile-menu-toggle" class="inline-flex items-center justify-center p-2 rounded-md text-slate-400 hover:text-white hover:bg-slate-700 focus:outline-none relative">
                         <span class="sr-only">Open main menu</span>
                         <i class="fa-solid fa-bars text-xl"></i>
-                        {% if user.is_authenticated and total_alerts > 0 and is_manager %}
+                        {% if user.is_authenticated and total_alerts > 0 %}
                         <span class="absolute top-0 right-0 block h-2.5 w-2.5 rounded-full bg-red-600 ring-2 ring-slate-800" style="margin-top: 0.5rem; margin-right: 0.5rem;"></span>
                         {% endif %}
                     </button>
@@ -360,7 +360,7 @@
         <div class="flex-1 overflow-y-auto py-4 px-3 space-y-1">
             {% if user.is_authenticated %}
 
-            {% if user.is_authenticated and is_manager and total_alerts > 0 %}
+            {% if total_alerts > 0 %}
             <div class="px-3 py-2 bg-red-900/20 rounded-md mb-3">
                 <p class="text-[10px] font-black text-red-400 uppercase tracking-widest mb-1">Active Alerts ({{ total_alerts }})</p>
                 <div class="space-y-2 max-h-32 overflow-y-auto pr-1">
@@ -371,20 +371,20 @@
                     </div>
                     {% endfor %}
                     {% for doc in expired_docs %}
-                    <div class="text-xs text-red-200 flex items-start">
+                    <a href="{% url 'document-list' %}?type={% if doc.driver %}drivers{% else %}vehicles{% endif %}&alert=expired" class="text-xs text-red-200 flex items-start hover:underline">
                         <i class="fa-solid fa-circle-exclamation mr-2 mt-0.5"></i>
-                        <span>{{ doc.document_type }} expired ({{ doc.expiry_date }})</span>
-                    </div>
+                        <span>{{ doc }} expired ({{ doc.expiry_date }})</span>
+                    </a>
                     {% endfor %}
                     {% for doc in expiring_docs %}
-                    <div class="text-xs text-yellow-200 flex items-start">
+                    <a href="{% url 'document-list' %}?type={% if doc.driver %}drivers{% else %}vehicles{% endif %}&alert=expiring" class="text-xs text-yellow-200 flex items-start hover:underline">
                         <i class="fa-solid fa-triangle-exclamation mr-2 mt-0.5"></i>
-                        <span>{{ doc.document_type }} expires ({{ doc.expiry_date }})</span>
-                    </div>
+                        <span>{{ doc }} expires ({{ doc.expiry_date }})</span>
+                    </a>
                     {% endfor %}
                 </div>
                 <div class="flex justify-between mt-2">
-                    <a href="{% url 'document-list' %}" class="text-[10px] font-bold text-emerald-400 uppercase">Documents</a>
+                    <a href="{% url 'document-list' %}?alert=alerts" class="text-[10px] font-bold text-emerald-400 uppercase">Documents</a>
                     <a href="{% url 'maintenance-list' %}" class="text-[10px] font-bold text-blue-400 uppercase">Maintenance</a>
                 </div>
             </div>
@@ -601,7 +601,7 @@
         <button type="button" id="btm-nav-more" class="btm-nav-item flex flex-col items-center justify-center flex-1 relative text-slate-400 hover:text-emerald-600 transition-colors" data-nav="more">
             <i class="fa-solid fa-ellipsis text-lg"></i>
             <span class="text-[9px] font-bold mt-1 uppercase tracking-wider">More</span>
-            {% if total_alerts > 0 and is_manager %}
+            {% if total_alerts > 0 %}
             <span class="absolute top-2 right-1/4 block h-2 w-2 rounded-full bg-red-500"></span>
             {% endif %}
         </button>

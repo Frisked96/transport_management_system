@@ -306,3 +306,56 @@ class VehicleModelTests(TestCase):
         self.assertIsNone(vehicle.created_by)
 
 
+class VehicleListViewOwnershipFilterTest(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='fleet_manager', password='password123')
+        view_perm = Permission.objects.get(codename='view_vehicle', content_type__app_label='fleet')
+        self.user.user_permissions.add(view_perm)
+        self.client = Client()
+        self.client.login(username='fleet_manager', password='password123')
+
+        self.owned_veh = Vehicle.objects.create(
+            registration_plate='DL 01 AA 1111',
+            make_model='Tata Prima',
+            ownership=Vehicle.OWNERSHIP_OWNED,
+            status=Vehicle.STATUS_ACTIVE
+        )
+        self.attached_veh = Vehicle.objects.create(
+            registration_plate='DL 02 BB 2222',
+            make_model='Ashok Leyland',
+            ownership=Vehicle.OWNERSHIP_ATTACHED,
+            status=Vehicle.STATUS_ACTIVE
+        )
+
+    def test_vehicle_list_defaults_to_company_owned(self):
+        url = reverse('vehicle-list')
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        vehicles = list(response.context['vehicles'])
+        self.assertIn(self.owned_veh, vehicles)
+        self.assertNotIn(self.attached_veh, vehicles)
+        self.assertEqual(response.context['current_ownership'], 'owned')
+        self.assertEqual(response.context['owned_count'], 1)
+        self.assertEqual(response.context['attached_count'], 1)
+        self.assertEqual(response.context['total_count'], 2)
+
+    def test_vehicle_list_filter_attached(self):
+        url = reverse('vehicle-list')
+        response = self.client.get(url, {'ownership': 'attached'})
+        self.assertEqual(response.status_code, 200)
+        vehicles = list(response.context['vehicles'])
+        self.assertIn(self.attached_veh, vehicles)
+        self.assertNotIn(self.owned_veh, vehicles)
+        self.assertEqual(response.context['current_ownership'], 'attached')
+
+    def test_vehicle_list_filter_all(self):
+        url = reverse('vehicle-list')
+        response = self.client.get(url, {'ownership': 'all'})
+        self.assertEqual(response.status_code, 200)
+        vehicles = list(response.context['vehicles'])
+        self.assertIn(self.owned_veh, vehicles)
+        self.assertIn(self.attached_veh, vehicles)
+        self.assertEqual(response.context['current_ownership'], 'all')
+
+
+

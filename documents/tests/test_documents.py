@@ -137,16 +137,153 @@ class DocumentAlertsTests(TestCase):
         self.assertEqual(alerts['due_maintenance'].count(), 1)
         self.assertEqual(alerts['due_maintenance'].first().id, maint_due.id)
 
-        # Request as Regular User: should receive empty dict
+        # Request as Regular User: should also receive all 3 alerts
         req_regular = self.factory.get('/')
         req_regular.user = self.regular_user
-        self.assertEqual(document_alerts(req_regular), {})
+        regular_alerts = document_alerts(req_regular)
+        self.assertEqual(regular_alerts['total_alerts'], 3)
+        self.assertEqual(regular_alerts['expiring_docs'].count(), 1)
+        self.assertEqual(regular_alerts['expired_docs'].count(), 1)
+        self.assertEqual(regular_alerts['due_maintenance'].count(), 1)
+        self.assertFalse(regular_alerts['is_manager'])
 
         # Request as Unauthenticated: should receive empty dict
         from django.contrib.auth.models import AnonymousUser
         req_anon = self.factory.get('/')
         req_anon.user = AnonymousUser()
         self.assertEqual(document_alerts(req_anon), {})
+
+    def test_regular_user_sees_notifications_in_template(self):
+        """Verify that regular non-manager users see the notification bell and alerts in the UI."""
+        today = timezone.now().date()
+        Document.objects.create(
+            vehicle=self.vehicle,
+            document_name='Tax Token',
+            expiry_date=today - timedelta(days=2)
+        )
+        self.client.login(username='driver_john', password='password123')
+        response = self.client.get(reverse('trip-list'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'fa-bell')
+        self.assertContains(response, 'Alerts')
+        self.assertContains(response, 'Tax Token')
+
+    def test_document_list_view_alert_filters_vehicles(self):
+        """Test filtering document list view by alert statuses (expired, expiring, alerts) for vehicles."""
+        today = timezone.now().date()
+        veh_clean = Vehicle.objects.create(registration_plate='MH 12 CLEAN')
+        veh_expired = Vehicle.objects.create(registration_plate='MH 12 EXPIRED')
+        veh_expiring = Vehicle.objects.create(registration_plate='MH 12 EXPIRING')
+
+        # Clean has far future doc
+        Document.objects.create(vehicle=veh_clean, document_name='Fitness', expiry_date=today + timedelta(days=90))
+        # Expired doc
+        Document.objects.create(vehicle=veh_expired, document_name='Insurance', expiry_date=today - timedelta(days=5))
+        # Expiring soon doc
+        Document.objects.create(vehicle=veh_expiring, document_name='Permit', expiry_date=today + timedelta(days=10))
+
+        # Grant view permission to user
+        view_perm = Permission.objects.get(codename='view_document')
+        self.regular_user.user_permissions.add(view_perm)
+        self.client.login(username='driver_john', password='password123')
+
+        url = reverse('document-list')
+
+        # 1. No filter: all vehicles returned
+        res_all = self.client.get(url, {'type': 'vehicles'})
+        self.assertEqual(res_all.status_code, 200)
+        vehicles_all = list(res_all.context['vehicles'])
+        self.assertIn(veh_clean, vehicles_all)
+        self.assertIn(veh_expired, vehicles_all)
+        self.assertIn(veh_expiring, vehicles_all)
+        self.assertEqual(res_all.context['summary_counts']['expired'], 1)
+        self.assertEqual(res_all.context['summary_counts']['expiring'], 1)
+        self.assertEqual(res_all.context['summary_counts']['alerts'], 2)
+
+        # 2. alert=expired: only veh_expired
+        res_expired = self.client.get(url, {'type': 'vehicles', 'alert': 'expired'})
+        self.assertEqual(res_expired.status_code, 200)
+        vehicles_expired = list(res_expired.context['vehicles'])
+        self.assertIn(veh_expired, vehicles_expired)
+        self.assertNotIn(veh_clean, vehicles_expired)
+        self.assertNotIn(veh_expiring, vehicles_expired)
+        self.assertContains(res_expired, 'Filtered by:')
+        self.assertContains(res_expired, 'Expired Documents')
+
+        # 3. alert=expiring: only veh_expiring
+        res_expiring = self.client.get(url, {'type': 'vehicles', 'alert': 'expiring'})
+        self.assertEqual(res_expiring.status_code, 200)
+        vehicles_expiring = list(res_expiring.context['vehicles'])
+        self.assertIn(veh_expiring, vehicles_expiring)
+        self.assertNotIn(veh_clean, vehicles_expiring)
+        self.assertNotIn(veh_expired, vehicles_expiring)
+        self.assertContains(res_expiring, 'Filtered by:')
+        self.assertContains(res_expiring, 'Expiring Soon')
+
+        # 4. alert=alerts: both veh_expired and veh_expiring
+        res_alerts = self.client.get(url, {'type': 'vehicles', 'alert': 'alerts'})
+        self.assertEqual(res_alerts.status_code, 200)
+        vehicles_alerts = list(res_alerts.context['vehicles'])
+        self.assertIn(veh_expired, vehicles_alerts)
+        self.assertIn(veh_expiring, vehicles_alerts)
+        self.assertNotIn(veh_clean, vehicles_alerts)
+
+    def test_document_list_view_alert_filters_drivers(self):
+        """Test filtering document list view by alert statuses for drivers."""
+        today = timezone.now().date()
+        u1 = User.objects.create_user(username='drv_ok', password='password123')
+        d_ok = Driver.objects.create(user=u1, employee_id='D-OK')
+        Document.objects.create(driver=d_ok, document_name='License', expiry_date=today + timedelta(days=120))
+
+        u2 = User.objects.create_user(username='drv_bad', password='password123')
+        d_bad = Driver.objects.create(user=u2, employee_id='D-BAD')
+        Document.objects.create(driver=d_bad, document_name='License', expiry_date=today - timedelta(days=10))
+
+        view_perm = Permission.objects.get(codename='view_document')
+        self.regular_user.user_permissions.add(view_perm)
+        self.client.login(username='driver_john', password='password123')
+
+        url = reverse('document-list')
+        res = self.client.get(url, {'type': 'drivers', 'alert': 'expired'})
+        self.assertEqual(res.status_code, 200)
+        drivers_list = list(res.context['drivers'])
+        self.assertIn(d_bad, drivers_list)
+        self.assertNotIn(d_ok, drivers_list)
+
+    def test_document_list_view_ownership_filters_default_company_owned(self):
+        """Test that by default only company owned vehicles are shown, with option to filter by ownership."""
+        veh_owned = Vehicle.objects.create(registration_plate='MH 12 OW 555', ownership=Vehicle.OWNERSHIP_OWNED)
+        veh_attached = Vehicle.objects.create(registration_plate='MH 12 AT 777', ownership=Vehicle.OWNERSHIP_ATTACHED)
+
+        view_perm = Permission.objects.get(codename='view_document')
+        self.regular_user.user_permissions.add(view_perm)
+        self.client.login(username='driver_john', password='password123')
+
+        url = reverse('document-list')
+
+        # 1. Default request (no ownership param): only company owned vehicles shown
+        res_default = self.client.get(url, {'type': 'vehicles'})
+        self.assertEqual(res_default.status_code, 200)
+        default_vehicles = list(res_default.context['vehicles'])
+        self.assertIn(veh_owned, default_vehicles)
+        self.assertNotIn(veh_attached, default_vehicles)
+        self.assertEqual(res_default.context['ownership_filter'], 'owned')
+
+        # 2. Explicit ownership=attached: only attached vehicles shown
+        res_attached = self.client.get(url, {'type': 'vehicles', 'ownership': 'attached'})
+        self.assertEqual(res_attached.status_code, 200)
+        attached_vehicles = list(res_attached.context['vehicles'])
+        self.assertIn(veh_attached, attached_vehicles)
+        self.assertNotIn(veh_owned, attached_vehicles)
+        self.assertEqual(res_attached.context['ownership_filter'], 'attached')
+
+        # 3. Explicit ownership=all: both owned and attached vehicles shown
+        res_all = self.client.get(url, {'type': 'vehicles', 'ownership': 'all'})
+        self.assertEqual(res_all.status_code, 200)
+        all_vehicles = list(res_all.context['vehicles'])
+        self.assertIn(veh_owned, all_vehicles)
+        self.assertIn(veh_attached, all_vehicles)
+        self.assertEqual(res_all.context['ownership_filter'], 'all')
 
 
 class DirectDocumentUploadTests(TestCase):

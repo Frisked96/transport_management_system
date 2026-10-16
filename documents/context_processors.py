@@ -18,9 +18,6 @@ def document_alerts(request):
     if is_manager is None:
         is_manager = request.user.is_superuser or request.user.has_perm('trips.can_view_manager_dashboard')
         request._is_manager = is_manager
-        
-    if not is_manager:
-        return {}
 
     today = timezone.now().date()
     warning_date = today + timedelta(days=30)
