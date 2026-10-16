@@ -137,7 +137,7 @@ class FinancialRecordForm(forms.ModelForm):
 
                 # Filter categories for Creditor
                 self.fields['category'].queryset = TransactionCategory.objects.filter(
-                    models.Q(name__in=['Payment Out', 'Expense', 'Deductions', 'TDS', 'Debit Note', 'Credit Note'])
+                    models.Q(name__in=['Payment Out', 'Expense', 'Deductions', 'TDS', 'Debit Note', 'Credit Note', 'Standard'])
                 ).order_by('name')
 
                 # Default to Payment Out if not set
@@ -181,11 +181,8 @@ class FinancialRecordForm(forms.ModelForm):
                 self.fields['associated_bill'].queryset = Bill.objects.with_payment_info().filter(id__in=unpaid_bill_ids).order_by('-date')
                 
                 # Filter categories for Debtor
-                self.fields['category'].queryset = TransactionCategory.objects.exclude(
-                    models.Q(name='Payment Out') |
-                    models.Q(name='Halting') |
-                    models.Q(name='Debit Note') |
-                    models.Q(name='Credit Note')
+                self.fields['category'].queryset = TransactionCategory.objects.filter(
+                    models.Q(name__in=['Trip Payment', 'Invoice Payment', 'Payment In', 'Standard', 'TDS', 'Deductions'])
                 ).order_by('name')
         
         # 2. If Driver context: Remove Party, Trip, and Bill fields
