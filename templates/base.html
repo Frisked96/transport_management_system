@@ -851,6 +851,40 @@
                 }
             }
         });
+
+        // Global Double-Submit Prevention for all POST forms
+        $(document).on('submit', 'form[method="post"], form[method="POST"]', function(e) {
+            const $form = $(this);
+
+            if (e.isDefaultPrevented()) return;
+            if (this.checkValidity && !this.checkValidity()) return;
+            if ($form.data('allow-resubmit')) return;
+
+            if ($form.data('is-submitting')) {
+                e.preventDefault();
+                return false;
+            }
+
+            $form.data('is-submitting', true);
+
+            const $btn = $form.find('button[type="submit"]:focus, input[type="submit"]:focus').length
+                ? $form.find('button[type="submit"]:focus, input[type="submit"]:focus')
+                : $form.find('button[type="submit"], input[type="submit"]').last();
+
+            if ($btn.length && !$btn.hasClass('no-disable-on-submit')) {
+                $btn.addClass('opacity-75 cursor-not-allowed pointer-events-none');
+                const $icon = $btn.find('i');
+                if ($icon.length && !$icon.hasClass('fa-spinner')) {
+                    $icon.attr('class', 'fa-solid fa-spinner fa-spin mr-1');
+                }
+            }
+        });
+
+        // Reset submit lock on page restore (e.g. back navigation or validation reload)
+        window.addEventListener('pageshow', function(event) {
+            $('form').removeData('is-submitting');
+            $('button[type="submit"], input[type="submit"]').removeClass('opacity-75 cursor-not-allowed pointer-events-none');
+        });
     </script>
     {% include 'includes/document_preview_modal.html' %}
     {% block extra_js %}{% endblock %}

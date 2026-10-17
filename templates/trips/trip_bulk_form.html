@@ -388,27 +388,7 @@ $(document).ready(function() {
         saveDraft();
     });
 
-    // Prevent double submission and show loading feedback
-    let isSubmitting = false;
-    $('#bulk-trip-form').on('submit', function(e) {
-        if (isSubmitting) {
-            e.preventDefault();
-            return false;
-        }
 
-        if (this.checkValidity && !this.checkValidity()) {
-            return;
-        }
-
-        isSubmitting = true;
-        const $submitBtn = $('#save-trips-btn');
-        $submitBtn.addClass('opacity-75 cursor-not-allowed pointer-events-none');
-        $submitBtn.find('span').text('Saving Trips...');
-        $submitBtn.find('i').attr('class', 'fa-solid fa-spinner fa-spin mr-1');
-        setTimeout(function() {
-            $submitBtn.prop('disabled', true);
-        }, 10);
-    });
 
     // Minimize / Float Actions Bar
     const $actionsBar = $('#bulk-actions-bar');

@@ -307,24 +307,6 @@ $(document).ready(function() {
     });
     toggleVendorHire();
 
-    // Prevent double submission and show loading feedback
-    let isSubmitting = false;
-    $('#trip-form').on('submit', function(e) {
-        if (isSubmitting) {
-            e.preventDefault();
-            return false;
-        }
-        if (this.checkValidity && !this.checkValidity()) {
-            return;
-        }
-        isSubmitting = true;
-        const $clickedBtn = $(document.activeElement).is('button[type="submit"]') ? $(document.activeElement) : $(this).find('button[type="submit"]').last();
-        $clickedBtn.addClass('opacity-75 cursor-not-allowed pointer-events-none');
-        $clickedBtn.find('i').attr('class', 'fa-solid fa-spinner fa-spin mr-1');
-        setTimeout(function() {
-            $('#trip-form button[type="submit"]').prop('disabled', true);
-        }, 10);
-    });
 });
 </script>
 {% endblock %}
