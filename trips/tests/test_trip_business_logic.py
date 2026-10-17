@@ -471,3 +471,46 @@ class TripDeletionModelTests(TestCase):
         """Verify party with existing trips cannot be deleted due to PROTECT foreign key constraint."""
         with self.assertRaises(Exception):
             self.party.delete()
+
+
+class TripBulkCreateDuplicatePreventionTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_superuser(
+            username='bulkuser',
+            email='bulk@example.com',
+            password='password123'
+        )
+        self.vehicle = Vehicle.objects.create(registration_plate='MH 12 BK 9999')
+        self.party = Party.objects.create(name='Bulk Party')
+        self.route = Route.objects.create(pickup_location='City A', delivery_location='City B', default_rate=Decimal('1000.00'))
+
+    def test_bulk_create_prevents_duplicate_rapid_submissions(self):
+        client = Client()
+        client.force_login(self.user)
+        
+        post_data = {
+            'form-TOTAL_FORMS': '1',
+            'form-INITIAL_FORMS': '0',
+            'form-MIN_NUM_FORMS': '0',
+            'form-MAX_NUM_FORMS': '1000',
+            'form-0-date': str(timezone.now().date()),
+            'form-0-party': str(self.party.pk),
+            'form-0-route': str(self.route.pk),
+            'form-0-vehicle': str(self.vehicle.pk),
+            'form-0-revenue_type': 'per_ton',
+            'form-0-weight': '25.00',
+            'form-0-rate_per_ton': '1000.00',
+            'form-0-vendor_hire_amount': '0.00',
+        }
+        
+        # First submission
+        res1 = client.post(reverse('trip-bulk-create'), post_data)
+        self.assertEqual(res1.status_code, 302)
+        self.assertEqual(Trip.objects.filter(vehicle=self.vehicle).count(), 1)
+        
+        # Rapid duplicate submission (simulating double click)
+        res2 = client.post(reverse('trip-bulk-create'), post_data)
+        self.assertEqual(res2.status_code, 302)
+        # Should still be 1, NOT 2
+        self.assertEqual(Trip.objects.filter(vehicle=self.vehicle).count(), 1)
+

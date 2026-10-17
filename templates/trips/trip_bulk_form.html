@@ -253,7 +253,7 @@
                     <i class="fa-solid fa-arrow-down text-xs"></i>
                     <span>Minimize</span>
                 </button>
-                <button type="submit" class="w-full sm:w-auto flex items-center justify-center space-x-2 px-8 py-3 bg-emerald-600 text-white rounded-lg text-sm font-black hover:bg-emerald-700 shadow-lg shadow-emerald-100 transition-all active:scale-95 uppercase tracking-widest">
+                <button type="submit" id="save-trips-btn" class="w-full sm:w-auto flex items-center justify-center space-x-2 px-8 py-3 bg-emerald-600 text-white rounded-lg text-sm font-black hover:bg-emerald-700 shadow-lg shadow-emerald-100 transition-all active:scale-95 uppercase tracking-widest">
                     <i class="fa-solid fa-circle-check"></i>
                     <span>Save All Trips</span>
                 </button>
@@ -388,11 +388,26 @@ $(document).ready(function() {
         saveDraft();
     });
 
-    // Clear draft on submit? 
-    // We NO LONGER clear on submit to prevent data loss if the network fails during POST.
-    // Instead, we clear it on the success page (trip-list).
-    $('#bulk-trip-form').on('submit', function() {
-        // localStorage.removeItem(DRAFT_KEY); // Removed for robustness
+    // Prevent double submission and show loading feedback
+    let isSubmitting = false;
+    $('#bulk-trip-form').on('submit', function(e) {
+        if (isSubmitting) {
+            e.preventDefault();
+            return false;
+        }
+
+        if (this.checkValidity && !this.checkValidity()) {
+            return;
+        }
+
+        isSubmitting = true;
+        const $submitBtn = $('#save-trips-btn');
+        $submitBtn.addClass('opacity-75 cursor-not-allowed pointer-events-none');
+        $submitBtn.find('span').text('Saving Trips...');
+        $submitBtn.find('i').attr('class', 'fa-solid fa-spinner fa-spin mr-1');
+        setTimeout(function() {
+            $submitBtn.prop('disabled', true);
+        }, 10);
     });
 
     // Minimize / Float Actions Bar

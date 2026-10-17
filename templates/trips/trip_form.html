@@ -13,7 +13,7 @@
 </header>
 
 <div class="max-w-5xl mx-auto">
-    <form method="post" class="space-y-6">
+    <form method="post" id="trip-form" class="space-y-6">
         {% csrf_token %}
         
         {% if form.non_field_errors %}
@@ -306,6 +306,25 @@ $(document).ready(function() {
         }
     });
     toggleVendorHire();
+
+    // Prevent double submission and show loading feedback
+    let isSubmitting = false;
+    $('#trip-form').on('submit', function(e) {
+        if (isSubmitting) {
+            e.preventDefault();
+            return false;
+        }
+        if (this.checkValidity && !this.checkValidity()) {
+            return;
+        }
+        isSubmitting = true;
+        const $clickedBtn = $(document.activeElement).is('button[type="submit"]') ? $(document.activeElement) : $(this).find('button[type="submit"]').last();
+        $clickedBtn.addClass('opacity-75 cursor-not-allowed pointer-events-none');
+        $clickedBtn.find('i').attr('class', 'fa-solid fa-spinner fa-spin mr-1');
+        setTimeout(function() {
+            $('#trip-form button[type="submit"]').prop('disabled', true);
+        }, 10);
+    });
 });
 </script>
 {% endblock %}

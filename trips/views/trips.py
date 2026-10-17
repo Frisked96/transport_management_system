@@ -2,6 +2,7 @@
 Core CRUD views for Trip model.
 """
 from datetime import datetime, timedelta
+import hashlib
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView, FormView
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.shortcuts import redirect
@@ -11,6 +12,7 @@ from django.db.models import Q, Sum
 from django.db import transaction
 from django.utils import timezone
 from django.forms import modelformset_factory
+from django.core.cache import cache
 
 from trips.models import Trip, Route
 from trips.forms import TripForm
@@ -219,6 +221,16 @@ class TripBulkCreateView(LoginRequiredMixin, PermissionRequiredMixin, FormView):
         return context
 
     def form_valid(self, form):
+        # Prevent rapid duplicate submissions (e.g. double click or network replay)
+        post_data = self.request.POST.copy()
+        post_data.pop('csrfmiddlewaretoken', None)
+        fingerprint = hashlib.md5(str(sorted(post_data.items())).encode('utf-8')).hexdigest()
+        cache_key = f"bulk_trip_submit_{self.request.user.id}_{fingerprint}"
+        
+        if not cache.add(cache_key, '1', timeout=10):
+            messages.warning(self.request, "Your trips have already been submitted.")
+            return redirect(self.success_url)
+
         with transaction.atomic():
             instances = form.save(commit=False)
             for instance in instances:
