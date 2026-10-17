@@ -236,3 +236,71 @@ class BillForm(forms.ModelForm):
                 instance.sync_to_ledger()
             
         return instance
+
+
+class VendorBillUpdateForm(forms.ModelForm):
+    """
+    Focused form to update Vendor Bill Number and Date on Creditor Bills directly.
+    """
+    class Meta:
+        model = Bill
+        fields = [
+            'creditor_invoice_number',
+            'creditor_invoice_date',
+        ]
+        widgets = {
+            'creditor_invoice_number': forms.TextInput(attrs={
+                'id': 'id_creditor_invoice_number',
+                'placeholder': 'e.g. VEND-INV-101 or Bill #',
+                'class': 'block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white font-medium',
+            }),
+            'creditor_invoice_date': forms.DateInput(attrs={
+                'type': 'date',
+                'id': 'id_creditor_invoice_date',
+                'class': 'block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white',
+            }),
+        }
+        labels = {
+            'creditor_invoice_number': 'Vendor Bill / Invoice Number',
+            'creditor_invoice_date': 'Vendor Bill Date',
+        }
+        help_texts = {
+            'creditor_invoice_number': 'Enter the invoice/bill number printed on the vendor’s physical document.',
+            'creditor_invoice_date': 'Enter the date of the vendor’s physical invoice/bill.',
+        }
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        if instance.creditor_invoice_date:
+            instance.date = instance.creditor_invoice_date
+
+        if commit:
+            instance.save()
+
+            # Update associated consolidated financial record in vendor ledger
+            from ledger.models import FinancialRecord
+            inv_disp = instance.creditor_invoice_number or instance.bill_number or 'Pending'
+            cust_ref = instance.customer_bill.bill_number if instance.customer_bill else f"Draft-{instance.pk}"
+            FinancialRecord.objects.filter(
+                associated_bill=instance,
+                record_type=FinancialRecord.RECORD_TYPE_INVOICE
+            ).update(
+                date=instance.date,
+                description=f"Lorry Hire Inv #{inv_disp} (Against Bill {cust_ref})"
+            )
+
+            FinancialRecord.resequence_entry_numbers(from_date=instance.date)
+
+            # Sync back to linked customer bill if it has a single vendor bill
+            if instance.customer_bill:
+                cust_bill = instance.customer_bill
+                if cust_bill.creditor_bills.count() == 1:
+                    cust_bill.creditor_invoice_number = instance.creditor_invoice_number
+                    cust_bill.creditor_invoice_date = instance.creditor_invoice_date
+                    cust_bill.save(update_fields=['creditor_invoice_number', 'creditor_invoice_date'])
+
+            if instance.party:
+                instance.party.refresh_balance()
+
+        return instance
+

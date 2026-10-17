@@ -485,4 +485,131 @@ class CreditorAttachedVehicleBillingTests(TestCase):
         self.creditor.refresh_from_db()
         self.assertEqual(self.creditor.current_balance_cached, Decimal('-23600.00'))
 
+    def test_vendor_bill_direct_update_view_and_form(self):
+        """
+        Verify that a vendor bill can be directly updated with vendor bill no and date,
+        updating the creditor bill, ledger entry, and synced customer bill.
+        """
+        trip = Trip.objects.create(
+            vehicle=self.vehicle,
+            party=self.debtor,
+            route=self.route,
+            weight=Decimal('10.00'),
+            rate_per_ton=Decimal('2000.00'),
+            vendor_hire_amount=Decimal('15000.00'),
+            date=timezone.now().date()
+        )
+        customer_bill = Bill.objects.create(
+            issuer=self.issuer,
+            party=self.debtor,
+            date=timezone.now().date(),
+            bill_type=Bill.TYPE_TRIP,
+            category=self.cat_trip_payment,
+        )
+        customer_bill.trips.add(trip)
+        customer_bill.sync_to_ledger()
+
+        creditor_bill = customer_bill.creditor_bills.first()
+        self.assertIsNotNone(creditor_bill)
+        self.assertFalse(creditor_bill.creditor_invoice_number)
+
+        # 1. GET vendor-bill-update
+        get_url = reverse('vendor-bill-update', kwargs={'pk': creditor_bill.pk})
+        resp_get = self.client.get(get_url)
+        self.assertEqual(resp_get.status_code, 200)
+        self.assertContains(resp_get, "Update Vendor Bill")
+        self.assertContains(resp_get, self.vehicle.registration_plate)
+        self.assertContains(resp_get, "id_creditor_invoice_number")
+        self.assertContains(resp_get, "id_creditor_invoice_date")
+
+        # 2. POST updates
+        new_date = datetime.date(2026, 10, 15)
+        resp_post = self.client.post(get_url, {
+            'creditor_invoice_number': 'PHYSICAL-VB-777',
+            'creditor_invoice_date': new_date.strftime('%Y-%m-%d'),
+        })
+        self.assertRedirects(resp_post, reverse('bill-detail', kwargs={'pk': creditor_bill.pk}))
+
+        # 3. Verify creditor_bill updated
+        creditor_bill.refresh_from_db()
+        self.assertEqual(creditor_bill.creditor_invoice_number, 'PHYSICAL-VB-777')
+        self.assertEqual(creditor_bill.creditor_invoice_date, new_date)
+        self.assertEqual(creditor_bill.date, new_date)
+        self.assertEqual(creditor_bill.display_invoice_number, 'PHYSICAL-VB-777')
+
+        # 4. Verify associated ledger entry updated
+        ledger_entry = FinancialRecord.objects.filter(associated_bill=creditor_bill, record_type=FinancialRecord.RECORD_TYPE_INVOICE).first()
+        self.assertIsNotNone(ledger_entry)
+        self.assertEqual(ledger_entry.date, new_date)
+        self.assertIn('PHYSICAL-VB-777', ledger_entry.description)
+
+        # 5. Verify customer bill synced
+        customer_bill.refresh_from_db()
+        self.assertEqual(customer_bill.creditor_invoice_number, 'PHYSICAL-VB-777')
+        self.assertEqual(customer_bill.creditor_invoice_date, new_date)
+
+    def test_bill_update_view_redirects_creditor_bill_to_vendor_update(self):
+        """
+        Verify that accessing bill-update on a creditor bill redirects to vendor-bill-update.
+        """
+        trip = Trip.objects.create(
+            vehicle=self.vehicle,
+            party=self.debtor,
+            route=self.route,
+            weight=Decimal('5.00'),
+            rate_per_ton=Decimal('2000.00'),
+            vendor_hire_amount=Decimal('8000.00'),
+            date=timezone.now().date()
+        )
+        customer_bill = Bill.objects.create(
+            issuer=self.issuer,
+            party=self.debtor,
+            date=timezone.now().date(),
+            bill_type=Bill.TYPE_TRIP,
+            category=self.cat_trip_payment,
+        )
+        customer_bill.trips.add(trip)
+        customer_bill.sync_to_ledger()
+
+        creditor_bill = customer_bill.creditor_bills.first()
+        resp = self.client.get(reverse('bill-update', kwargs={'pk': creditor_bill.pk}))
+        self.assertRedirects(resp, reverse('vendor-bill-update', kwargs={'pk': creditor_bill.pk}))
+
+    def test_customer_bill_resave_preserves_vendor_bill_details(self):
+        """
+        Verify that saving a customer bill with empty creditor_invoice_number does not
+        erase a previously set vendor bill number on creditor bill.
+        """
+        trip = Trip.objects.create(
+            vehicle=self.vehicle,
+            party=self.debtor,
+            route=self.route,
+            weight=Decimal('10.00'),
+            rate_per_ton=Decimal('2000.00'),
+            vendor_hire_amount=Decimal('12000.00'),
+            date=timezone.now().date()
+        )
+        customer_bill = Bill.objects.create(
+            issuer=self.issuer,
+            party=self.debtor,
+            date=timezone.now().date(),
+            bill_type=Bill.TYPE_TRIP,
+            category=self.cat_trip_payment,
+        )
+        customer_bill.trips.add(trip)
+        customer_bill.sync_to_ledger()
+
+        creditor_bill = customer_bill.creditor_bills.first()
+        creditor_bill.creditor_invoice_number = "DIRECT-VEND-123"
+        creditor_bill.creditor_invoice_date = datetime.date(2026, 10, 10)
+        creditor_bill.save()
+
+        # Re-sync/save customer bill
+        customer_bill.sync_to_ledger()
+
+        creditor_bill.refresh_from_db()
+        self.assertEqual(creditor_bill.creditor_invoice_number, "DIRECT-VEND-123")
+        self.assertEqual(creditor_bill.creditor_invoice_date, datetime.date(2026, 10, 10))
+
+
 

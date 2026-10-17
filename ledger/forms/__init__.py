@@ -9,7 +9,7 @@ from .records import (
 )
 from .parties import PartyForm
 from .company import CompanyAccountForm
-from .bills import BillForm
+from .bills import BillForm, VendorBillUpdateForm
 from .toll import (
     TollAccountForm,
     TollRechargeForm,
@@ -24,6 +24,7 @@ __all__ = [
     'PartyForm',
     'CompanyAccountForm',
     'BillForm',
+    'VendorBillUpdateForm',
     'TollAccountForm',
     'TollRechargeForm',
     'TollEntryForm',

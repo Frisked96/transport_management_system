@@ -20,7 +20,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 from ledger.models import FinancialRecord, Party, CompanyAccount, TripAllocation, TransactionCategory, Bill, BillTrip
-from ledger.forms import BillForm
+from ledger.forms import BillForm, VendorBillUpdateForm
 from trips.models import Trip
 from ledger.views.base import BaseLedgerPermissionMixin
 from ledger.utils import format_indian_comma, format_balance
@@ -155,8 +155,15 @@ class BillUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
     template_name = 'ledger/bill_form.html'
     permission_required = 'ledger.change_bill'
 
+    def dispatch(self, request, *args, **kwargs):
+        obj = self.get_object()
+        if obj.is_creditor_bill:
+            return redirect('vendor-bill-update', pk=obj.pk)
+        return super().dispatch(request, *args, **kwargs)
+
     def get_success_url(self):
         return reverse_lazy('bill-detail', kwargs={'pk': self.object.pk})
+
     def form_valid(self, form):
         response = super().form_valid(form)
         messages.success(self.request, 'Bill updated successfully!')
@@ -165,6 +172,39 @@ class BillUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
             return redirect('bill-detail', pk=self.object.pk)
             
         return response
+
+
+class VendorBillUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+    """
+    Focused view to update Vendor Bill Number and Date on Creditor Bills directly.
+    """
+    model = Bill
+    form_class = VendorBillUpdateForm
+    template_name = 'ledger/vendor_bill_form.html'
+    permission_required = 'ledger.change_bill'
+
+    def get_queryset(self):
+        return Bill.objects.filter(
+            Q(customer_bill__isnull=False) | Q(party__party_type=Party.TYPE_CREDITOR)
+        ).select_related('party', 'customer_bill', 'issuer')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        bill = self.object
+        bill_trips = list(bill.bill_trips.select_related('trip', 'trip__vehicle', 'trip__route').order_by('trip__date'))
+        context['bill_trips'] = bill_trips
+        context['bill_trips_count'] = len(bill_trips)
+        context['total_hire'] = sum((bt.trip.vendor_hire_amount or Decimal('0')) for bt in bill_trips if bt.trip)
+        return context
+
+    def get_success_url(self):
+        return reverse_lazy('bill-detail', kwargs={'pk': self.object.pk})
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        messages.success(self.request, f"Vendor bill {self.object.display_invoice_number} updated successfully!")
+        return response
+
 
 class BillDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
     model = Bill

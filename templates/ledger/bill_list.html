@@ -362,7 +362,10 @@
                         {% if perms.ledger.change_financialrecord %}
                         <hr class="my-1 border-slate-100">
                         {% if bill.is_creditor_bill %}
+                        <a href="{% url 'vendor-bill-update' bill.pk %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"><i class="fa-regular fa-pen-to-square mr-2"></i>Update Vendor Bill</a>
+                        {% if bill.customer_bill %}
                         <a href="{% url 'bill-detail' bill.customer_bill.pk %}" class="block px-4 py-2 text-sm text-blue-600 hover:bg-slate-50"><i class="fa-solid fa-file-invoice mr-2"></i>Customer Invoice</a>
+                        {% endif %}
                         {% else %}
                         <a href="{% url 'bill-update' bill.pk %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"><i class="fa-regular fa-pen-to-square mr-2"></i>Edit Invoice</a>
                         <a href="{% url 'bill-delete' bill.pk %}" class="block px-4 py-2 text-sm text-red-600 hover:bg-slate-50"><i class="fa-regular fa-trash-can mr-2"></i>Delete</a>

@@ -350,7 +350,11 @@
                                         </a>
                                         {% endif %}
                                         <a href="{% url 'print-combined-bill' bill.pk %}" target="_blank" class="text-slate-400 hover:text-slate-600" title="Print"><i class="fa-solid fa-print text-xs"></i></a>
+                                        {% if bill.is_creditor_bill %}
+                                        <a href="{% url 'vendor-bill-update' bill.pk %}" class="text-slate-400 hover:text-emerald-600" title="Edit Vendor Bill"><i class="fa-regular fa-pen-to-square text-xs"></i></a>
+                                        {% else %}
                                         <a href="{% url 'bill-update' bill.pk %}" class="text-slate-400 hover:text-emerald-600" title="Edit"><i class="fa-regular fa-pen-to-square text-xs"></i></a>
+                                        {% endif %}
                                     </div>
                                 </td>
                             </tr>

@@ -237,9 +237,14 @@ class BillingService:
                     )
                     creditor_bill.save()
                 else:
-                    creditor_bill.date = bill.creditor_invoice_date or bill.date
-                    creditor_bill.creditor_invoice_date = bill.creditor_invoice_date or bill.date
-                    creditor_bill.creditor_invoice_number = bill.creditor_invoice_number
+                    if bill.creditor_invoice_number:
+                        creditor_bill.creditor_invoice_number = bill.creditor_invoice_number
+                    if bill.creditor_invoice_date:
+                        creditor_bill.creditor_invoice_date = bill.creditor_invoice_date
+                        creditor_bill.date = bill.creditor_invoice_date
+                    elif not creditor_bill.creditor_invoice_date:
+                        creditor_bill.date = bill.date
+                        creditor_bill.creditor_invoice_date = bill.date
                     creditor_bill.issuer = bill.issuer
                     creditor_bill.use_roundoff = bill.use_roundoff
                     creditor_bill.gst_rate = bill.gst_rate
@@ -247,6 +252,14 @@ class BillingService:
                     if not creditor_bill.bill_number or creditor_bill.bill_number.startswith("CR-DRAFT-"):
                         creditor_bill.bill_number = creditor_bill_no
                     creditor_bill.save()
+
+                    if len(vendor_trips) == 1 and creditor_bill.creditor_invoice_number and not bill.creditor_invoice_number:
+                        bill.creditor_invoice_number = creditor_bill.creditor_invoice_number
+                        bill.creditor_invoice_date = creditor_bill.creditor_invoice_date
+                        Bill.objects.filter(pk=bill.pk).update(
+                            creditor_invoice_number=creditor_bill.creditor_invoice_number,
+                            creditor_invoice_date=creditor_bill.creditor_invoice_date
+                        )
 
                 # Sync BillTrip relationships for creditor bill
                 creditor_bill._suppress_billtrip_sync = True

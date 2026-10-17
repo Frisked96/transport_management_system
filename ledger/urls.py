@@ -45,6 +45,7 @@ urlpatterns = [
     path('bills/create/', views.BillCreateView.as_view(), name='bill-create'),
     path('bills/<int:pk>/', views.BillDetailView.as_view(), name='bill-detail'),
     path('bills/<int:pk>/update/', views.BillUpdateView.as_view(), name='bill-update'),
+    path('bills/<int:pk>/vendor-update/', views.VendorBillUpdateView.as_view(), name='vendor-bill-update'),
     path('bills/<int:pk>/delete/', views.BillDeleteView.as_view(), name='bill-delete'),
     
     # New print views

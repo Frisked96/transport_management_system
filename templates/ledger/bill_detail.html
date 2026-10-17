@@ -42,14 +42,16 @@
     </div>
 
     <div class="flex items-center gap-3">
-        {% if bill.is_creditor_bill and bill.customer_bill %}
+        {% if bill.is_creditor_bill %}
             {% if perms.ledger.change_bill %}
-            <a href="{% url 'bill-update' bill.pk %}" class="px-4 py-2 border border-slate-300 rounded-md bg-white text-slate-700 text-sm font-medium hover:bg-slate-50 transition-colors" title="Update Vendor Invoice/CN # and Details">
-                <i class="fa-regular fa-pen-to-square mr-2"></i>Edit Vendor Details
+            <a href="{% url 'vendor-bill-update' bill.pk %}" class="px-4 py-2 border border-emerald-300 rounded-md bg-emerald-50 text-emerald-800 text-sm font-bold hover:bg-emerald-100 transition-colors" title="Update Vendor Bill Number and Date">
+                <i class="fa-regular fa-pen-to-square mr-2"></i>Update Vendor Bill
             </a>
+            {% if bill.customer_bill %}
             <a href="{% url 'bill-detail' bill.customer_bill.pk %}" class="px-4 py-2 border border-slate-300 rounded-md bg-white text-slate-700 text-sm font-medium hover:bg-slate-50 transition-colors" title="View Customer Invoice">
                 <i class="fa-regular fa-file-invoice mr-2"></i>Customer Invoice
             </a>
+            {% endif %}
             {% endif %}
         {% else %}
             {% if perms.ledger.change_bill %}
@@ -111,7 +113,14 @@
                         </div>
                         <div class="flex items-center justify-between text-[10px] pt-1.5 border-t border-slate-100">
                             <span class="text-slate-400">Pending: <strong class="{% if cb.outstanding_balance > 0 %}text-rose-600{% else %}text-emerald-600{% endif %}">₹{{ cb.outstanding_balance|indian_comma }}</strong></span>
-                            <a href="{% url 'bill-detail' cb.pk %}" class="text-[10px] font-bold text-blue-600 hover:text-blue-800">View Bill &rarr;</a>
+                            <div class="flex items-center space-x-2">
+                                {% if perms.ledger.change_bill %}
+                                <a href="{% url 'vendor-bill-update' cb.pk %}" class="text-[10px] font-bold text-amber-600 hover:text-amber-800" title="Update Vendor Bill Number and Date">
+                                    <i class="fa-solid fa-pen mr-1"></i>Edit
+                                </a>
+                                {% endif %}
+                                <a href="{% url 'bill-detail' cb.pk %}" class="text-[10px] font-bold text-blue-600 hover:text-blue-800">View Bill &rarr;</a>
+                            </div>
                         </div>
                     </div>
                     {% endfor %}
@@ -328,7 +337,14 @@
                 {% endif %}
             </div>
             <div class="p-6 bg-slate-50/30">
-                <span class="text-[10px] font-black uppercase tracking-widest text-slate-400 border border-slate-200 px-2 py-0.5 bg-slate-50 inline-block mb-3">{% if bill.is_creditor_bill %}Bill Details{% else %}Invoice Details{% endif %}</span>
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-[10px] font-black uppercase tracking-widest text-slate-400 border border-slate-200 px-2 py-0.5 bg-slate-50 inline-block">{% if bill.is_creditor_bill %}Bill Details{% else %}Invoice Details{% endif %}</span>
+                    {% if bill.is_creditor_bill and perms.ledger.change_bill %}
+                    <a href="{% url 'vendor-bill-update' bill.pk %}" class="text-[11px] font-bold text-emerald-600 hover:text-emerald-700 hover:underline flex items-center gap-1" title="Update Vendor Bill Number and Date">
+                        <i class="fa-regular fa-pen-to-square text-[10px]"></i> Edit Bill Info
+                    </a>
+                    {% endif %}
+                </div>
                 <div class="space-y-2">
                     <div class="flex justify-between text-xs">
                         <span class="font-bold uppercase text-slate-400">{% if bill.is_creditor_bill %}Vendor Inv No:{% else %}Invoice No:{% endif %}</span>
