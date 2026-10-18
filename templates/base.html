@@ -6,6 +6,24 @@
     <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
     <meta name="referrer" content="no-referrer-when-downgrade">
     <title>{% block title %}Transport Management System{% endblock %}</title>
+    <!-- Font Preload & Local Inter Definition (Eliminates FOUT / Font Flicker) -->
+    <link rel="preload" href="{% static 'fonts/inter.woff2' %}" as="font" type="font/woff2" crossorigin>
+    <style>
+        @font-face {
+            font-family: 'Inter';
+            font-style: normal;
+            font-weight: 100 900;
+            font-display: optional;
+            src: url("{% static 'fonts/inter.woff2' %}") format('woff2');
+            unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+        }
+        body, input, select, textarea, button {
+            font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+        body {
+            background-color: #f8fafc;
+        }
+    </style>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
     <script>
@@ -28,26 +46,22 @@
                         },
                     },
                     fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
+                        sans: ['Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', '"Helvetica Neue"', 'Arial', 'sans-serif'],
                     },
                 }
             }
         }
     </script>
-    <!-- Google Fonts: Inter -->
+    <!-- Google Fonts: Inter Fallback -->
     <link href="https://fonts.googleapis.com" rel="preconnect"/>
     <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=optional" rel="stylesheet"/>
     <!-- Font Awesome -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
     <!-- Select2 CSS (Kept for functionality) -->
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet"/>
     <link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet"/>
     <style>
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #f8fafc;
-        }
         /* Tailwind-friendly Select2 styling */
         .select2-container--default .select2-selection--single {
             height: 38px !important;
@@ -146,147 +160,11 @@
             <div class="flex items-center">
                 <a class="text-xl font-bold tracking-wider text-emerald-400" href="{% url 'trip-list' %}">TMS</a>
                 <!-- Desktop Menu -->
-                <div class="hidden lg:ml-10 lg:flex lg:items-center lg:space-x-4 text-sm font-medium">
-                    <a class="px-3 py-2 rounded-md {% if request.resolver_match.url_name == 'trip-list' %}bg-slate-900 text-white{% else %}text-slate-300 hover:bg-slate-700 hover:text-white{% endif %}" href="{% url 'trip-list' %}">
-                        <i class="fa-solid fa-truck mr-2"></i>Trips
-                    </a>
-                    
-                    {% if user.is_authenticated %}
-                    {% if user.is_superuser or perms.trips.view_route or perms.fleet.view_vehicle or perms.documents.view_document or perms.fleet.view_maintenancerecord or perms.fleet.view_tyre %}
-                    <div class="relative dropdown-container">
-                        <button class="flex items-center space-x-2 px-3 py-2 rounded-md text-slate-300 hover:bg-slate-700 hover:text-white focus:outline-none dropdown-toggle">
-                            <i class="fa-solid fa-truck-fast"></i><span>Fleet</span><i class="fa-solid fa-chevron-down text-xs ml-1"></i>
-                        </button>
-                        <div class="absolute left-0 mt-1 w-48 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5 hidden dropdown-menu">
-                            {% if user.is_superuser or perms.trips.view_route %}
-                            <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'route-list' %}">Routes</a>
-                            <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'routes-dashboard' %}">Route Analytics</a>
-                            {% endif %}
-                            {% if user.is_superuser or perms.fleet.view_vehicle %}
-                            <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'vehicle-list' %}">Vehicles</a>
-                            {% endif %}
-                            {% if user.is_superuser or perms.documents.view_document %}
-                            <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'document-list' %}">Documents</a>
-                            {% endif %}
-                            {% if user.is_superuser or perms.fleet.view_maintenancerecord %}
-                            <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'maintenance-list' %}">Maintenance</a>
-                            {% endif %}
-                            {% if user.is_superuser or perms.fleet.view_tyre %}
-                            <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'tyre-list' %}">Tyre Inventory</a>
-                            {% endif %}
-                        </div>
-                    </div>
-                    {% endif %}
-                    
-                    {% if user.is_superuser or perms.trips.can_view_manager_dashboard %}
-                    <a class="px-3 py-2 rounded-md {% if request.resolver_match.url_name == 'manager-dashboard' %}bg-slate-900 text-white{% else %}text-slate-300 hover:bg-slate-700 hover:text-white{% endif %}" href="{% url 'manager-dashboard' %}">
-                        <i class="fa-solid fa-gauge mr-2"></i>Dashboard
-                    </a>
-                    {% endif %}
-
-                    {% if user.is_superuser or perms.drivers.can_view_all_drivers %}
-                    <a class="px-3 py-2 rounded-md {% if request.resolver_match.url_name == 'driver-list' %}bg-slate-900 text-white{% else %}text-slate-300 hover:bg-slate-700 hover:text-white{% endif %}" href="{% url 'driver-list' %}">
-                        <i class="fa-solid fa-users mr-2"></i>Drivers
-                    </a>
-                    {% endif %}
-
-                    {% if user.is_superuser or perms.ledger.can_view_financial_records or perms.ledger.view_bill or perms.ledger.view_party or perms.ledger.view_companyaccount %}
-                    <div class="relative dropdown-container">
-                        <button class="flex items-center space-x-2 px-3 py-2 rounded-md text-slate-300 hover:bg-slate-700 hover:text-white focus:outline-none dropdown-toggle">
-                            <i class="fa-solid fa-wallet"></i><span>Finance</span><i class="fa-solid fa-chevron-down text-xs ml-1"></i>
-                        </button>
-                        <div class="absolute left-0 mt-1 w-48 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5 hidden dropdown-menu">
-                            {% if user.is_superuser or perms.ledger.view_bill %}
-                            <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'bill-list' %}">Invoices</a>
-                            {% endif %}
-                            {% if user.is_superuser or perms.ledger.can_view_financial_records %}
-                            <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'financialrecord-list' %}">Ledger</a>
-                            {% endif %}
-                            {% if user.is_superuser or perms.ledger.view_party %}
-                            <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'party-list' %}">Parties</a>
-                            {% endif %}
-                            {% if user.is_superuser or perms.ledger.view_companyaccount %}
-                            <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'account-list' %}">Company Accounts</a>
-                            {% endif %}
-                            {% if user.is_superuser or perms.ledger.view_tollaccount or perms.ledger.can_view_financial_records %}
-                            <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'toll-ledger' %}">
-                                <i class="fa-solid fa-road mr-1.5 text-slate-400"></i>Toll Ledger
-                            </a>
-                            {% endif %}
-                            {% if user.is_superuser or perms.ledger.can_view_financial_records %}
-                            <hr class="my-1 border-slate-200"/>
-                            <a class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" href="{% url 'financial-summary' %}">Reports</a>
-                            {% endif %}
-                        </div>
-                    </div>
-                    {% endif %}
-                    {% endif %}
-                </div>
+                {% include "includes/nav_desktop.html" %}
             </div>
             <div class="flex items-center">
                 <!-- Notifications Desktop -->
-                {% if user.is_authenticated %}
-                <div class="hidden lg:block relative dropdown-container mr-2">
-                    <button class="flex items-center justify-center w-8 h-8 rounded-full text-slate-300 hover:text-white hover:bg-slate-700 focus:outline-none dropdown-toggle relative">
-                        <i class="fa-solid fa-bell"></i>
-                        {% if total_alerts > 0 %}
-                        <span class="absolute top-0 right-0 inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-bold leading-none text-white bg-red-600 rounded-full" style="transform: translate(30%, -30%);">
-                            {{ total_alerts }}
-                        </span>
-                        {% endif %}
-                    </button>
-                    <div class="absolute right-0 mt-2 w-80 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5 hidden dropdown-menu z-50">
-                        <div class="px-4 py-2 font-semibold text-slate-700 border-b border-slate-100 flex justify-between items-center">
-                            <span>Alerts</span>
-                            {% if total_alerts > 0 %}
-                            <span class="bg-red-100 text-red-800 text-xs font-medium px-2 py-0.5 rounded-full">{{ total_alerts }} new</span>
-                            {% endif %}
-                        </div>
-                        <div class="max-h-64 overflow-y-auto">
-                            {% if total_alerts == 0 %}
-                            <div class="px-4 py-4 text-sm text-slate-500 text-center">No alerts at this time.</div>
-                            {% else %}
-                                {% for task in due_maintenance %}
-                                <a href="{% url 'maintenance-list' %}" class="block px-4 py-3 hover:bg-slate-50 border-b border-slate-50 last:border-0">
-                                    <div class="flex items-start">
-                                        <div class="flex-shrink-0 pt-0.5"><i class="fa-solid fa-wrench text-blue-500"></i></div>
-                                        <div class="ml-3 w-0 flex-1">
-                                            <p class="text-sm font-medium text-slate-900">{{ task.vehicle }} - {{ task.name }}</p>
-                                            <p class="mt-1 text-xs text-blue-600 font-medium italic">Service Due</p>
-                                        </div>
-                                    </div>
-                                </a>
-                                {% endfor %}
-                                {% for doc in expired_docs %}
-                                <a href="{% url 'document-list' %}?type={% if doc.driver %}drivers{% else %}vehicles{% endif %}&alert=expired" class="block px-4 py-3 hover:bg-slate-50 border-b border-slate-50 last:border-0">
-                                    <div class="flex items-start">
-                                        <div class="flex-shrink-0 pt-0.5"><i class="fa-solid fa-circle-exclamation text-red-500"></i></div>
-                                        <div class="ml-3 w-0 flex-1">
-                                            <p class="text-sm font-medium text-slate-900">{{ doc }}</p>
-                                            <p class="mt-1 text-xs text-red-600 font-medium">Expired on {{ doc.expiry_date }}</p>
-                                        </div>
-                                    </div>
-                                </a>
-                                {% endfor %}
-                                {% for doc in expiring_docs %}
-                                <a href="{% url 'document-list' %}?type={% if doc.driver %}drivers{% else %}vehicles{% endif %}&alert=expiring" class="block px-4 py-3 hover:bg-slate-50 border-b border-slate-50 last:border-0">
-                                    <div class="flex items-start">
-                                        <div class="flex-shrink-0 pt-0.5"><i class="fa-solid fa-triangle-exclamation text-yellow-500"></i></div>
-                                        <div class="ml-3 w-0 flex-1">
-                                            <p class="text-sm font-medium text-slate-900">{{ doc }}</p>
-                                            <p class="mt-1 text-xs text-yellow-600 font-medium">Expires on {{ doc.expiry_date }}</p>
-                                        </div>
-                                    </div>
-                                </a>
-                                {% endfor %}
-                            {% endif %}
-                        </div>
-                        <a href="{% url 'document-list' %}?alert=alerts" class="block px-4 py-2 text-xs text-center font-medium text-emerald-600 hover:text-emerald-500 hover:bg-slate-50 border-t border-slate-100">
-                            View all document alerts
-                        </a>
-                    </div>
-                </div>
-                {% endif %}
+                {% include "includes/alerts_dropdown.html" %}
 
                 <!-- User Profile Desktop -->
                 <div class="hidden lg:ml-4 lg:flex lg:items-center">
@@ -342,191 +220,7 @@
 </nav>
 <!-- END: Top Navigation -->
 
-<!-- BEGIN: Slide-out Drawer (Mobile) -->
-<div id="mobile-drawer" class="drawer-overlay fixed inset-0 z-[80] lg:hidden">
-    <!-- Backdrop -->
-    <div class="absolute inset-0 bg-slate-900/60" id="drawer-backdrop"></div>
-    <!-- Drawer Panel -->
-    <div class="drawer-panel absolute top-0 right-0 w-[85%] max-w-sm h-full bg-slate-800 shadow-2xl flex flex-col">
-        <!-- Drawer Header -->
-        <div class="flex items-center justify-between px-5 py-4 border-b border-slate-700">
-            <span class="text-lg font-bold text-emerald-400 tracking-wider">TMS</span>
-            <button id="drawer-close" class="w-9 h-9 rounded-full bg-slate-700 flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-600 transition-colors">
-                <i class="fa-solid fa-xmark text-lg"></i>
-            </button>
-        </div>
-
-        <!-- Drawer Body -->
-        <div class="flex-1 overflow-y-auto py-4 px-3 space-y-1">
-            {% if user.is_authenticated %}
-
-            {% if total_alerts > 0 %}
-            <div class="px-3 py-2 bg-red-900/20 rounded-md mb-3">
-                <p class="text-[10px] font-black text-red-400 uppercase tracking-widest mb-1">Active Alerts ({{ total_alerts }})</p>
-                <div class="space-y-2 max-h-32 overflow-y-auto pr-1">
-                    {% for task in due_maintenance %}
-                    <div class="text-xs text-blue-200 flex items-start">
-                        <i class="fa-solid fa-wrench mr-2 mt-0.5"></i>
-                        <span>{{ task.vehicle.registration_plate }}: {{ task.name }} Due</span>
-                    </div>
-                    {% endfor %}
-                    {% for doc in expired_docs %}
-                    <a href="{% url 'document-list' %}?type={% if doc.driver %}drivers{% else %}vehicles{% endif %}&alert=expired" class="text-xs text-red-200 flex items-start hover:underline">
-                        <i class="fa-solid fa-circle-exclamation mr-2 mt-0.5"></i>
-                        <span>{{ doc }} expired ({{ doc.expiry_date }})</span>
-                    </a>
-                    {% endfor %}
-                    {% for doc in expiring_docs %}
-                    <a href="{% url 'document-list' %}?type={% if doc.driver %}drivers{% else %}vehicles{% endif %}&alert=expiring" class="text-xs text-yellow-200 flex items-start hover:underline">
-                        <i class="fa-solid fa-triangle-exclamation mr-2 mt-0.5"></i>
-                        <span>{{ doc }} expires ({{ doc.expiry_date }})</span>
-                    </a>
-                    {% endfor %}
-                </div>
-                <div class="flex justify-between mt-2">
-                    <a href="{% url 'document-list' %}?alert=alerts" class="text-[10px] font-bold text-emerald-400 uppercase">Documents</a>
-                    <a href="{% url 'maintenance-list' %}" class="text-[10px] font-bold text-blue-400 uppercase">Maintenance</a>
-                </div>
-            </div>
-            {% endif %}
-
-            <a class="flex items-center px-3 py-3 rounded-lg text-sm font-bold {% if request.resolver_match.url_name == 'trip-list' %}bg-emerald-600/20 text-emerald-400{% else %}text-slate-300 hover:bg-slate-700 hover:text-white{% endif %} transition-colors" href="{% url 'trip-list' %}">
-                <i class="fa-solid fa-truck mr-3 w-5 text-center"></i>Trips
-            </a>
-
-            <!-- Fleet Section -->
-            {% if user.is_superuser or perms.trips.view_route or perms.fleet.view_vehicle or perms.documents.view_document or perms.fleet.view_maintenancerecord or perms.fleet.view_tyre %}
-            <div class="pt-3">
-                <p class="px-3 py-1 text-[10px] font-black text-slate-500 uppercase tracking-widest">Fleet</p>
-                {% if user.is_superuser or perms.trips.view_route %}
-                <a class="flex items-center px-3 py-3 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-700 hover:text-white transition-colors" href="{% url 'route-list' %}">
-                    <i class="fa-solid fa-route mr-3 w-5 text-center text-slate-500"></i>Routes
-                </a>
-                <a class="flex items-center px-3 py-3 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-700 hover:text-white transition-colors" href="{% url 'routes-dashboard' %}">
-                    <i class="fa-solid fa-chart-pie mr-3 w-5 text-center text-slate-500"></i>Route Analytics
-                </a>
-                {% endif %}
-                {% if user.is_superuser or perms.fleet.view_vehicle %}
-                <a class="flex items-center px-3 py-3 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-700 hover:text-white transition-colors" href="{% url 'vehicle-list' %}">
-                    <i class="fa-solid fa-car mr-3 w-5 text-center text-slate-500"></i>Vehicles
-                </a>
-                {% endif %}
-                {% if user.is_superuser or perms.documents.view_document %}
-                <a class="flex items-center px-3 py-3 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-700 hover:text-white transition-colors" href="{% url 'document-list' %}">
-                    <i class="fa-solid fa-file-lines mr-3 w-5 text-center text-slate-500"></i>Documents
-                </a>
-                {% endif %}
-                {% if user.is_superuser or perms.fleet.view_maintenancerecord %}
-                <a class="flex items-center px-3 py-3 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-700 hover:text-white transition-colors" href="{% url 'maintenance-list' %}">
-                    <i class="fa-solid fa-wrench mr-3 w-5 text-center text-slate-500"></i>Maintenance
-                </a>
-                {% endif %}
-                {% if user.is_superuser or perms.fleet.view_tyre %}
-                <a class="flex items-center px-3 py-3 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-700 hover:text-white transition-colors" href="{% url 'tyre-list' %}">
-                    <i class="fa-solid fa-circle-dot mr-3 w-5 text-center text-slate-500"></i>Tyre Inventory
-                </a>
-                {% endif %}
-            </div>
-            {% endif %}
-
-            {% if user.is_superuser or perms.trips.can_view_manager_dashboard %}
-            <a class="flex items-center px-3 py-3 rounded-lg text-sm font-bold {% if request.resolver_match.url_name == 'manager-dashboard' %}bg-emerald-600/20 text-emerald-400{% else %}text-slate-300 hover:bg-slate-700 hover:text-white{% endif %} transition-colors" href="{% url 'manager-dashboard' %}">
-                <i class="fa-solid fa-gauge mr-3 w-5 text-center"></i>Dashboard
-            </a>
-            {% endif %}
-
-            {% if user.is_superuser or perms.drivers.can_view_all_drivers %}
-            <a class="flex items-center px-3 py-3 rounded-lg text-sm font-bold {% if request.resolver_match.url_name == 'driver-list' %}bg-emerald-600/20 text-emerald-400{% else %}text-slate-300 hover:bg-slate-700 hover:text-white{% endif %} transition-colors" href="{% url 'driver-list' %}">
-                <i class="fa-solid fa-users mr-3 w-5 text-center"></i>Drivers
-            </a>
-            {% endif %}
-
-            {% if user.is_superuser or perms.ledger.can_view_financial_records or perms.ledger.view_bill or perms.ledger.view_party or perms.ledger.view_companyaccount %}
-            <!-- Finance Section -->
-            <div class="pt-3">
-                <p class="px-3 py-1 text-[10px] font-black text-slate-500 uppercase tracking-widest">Finance</p>
-                {% if user.is_superuser or perms.ledger.view_bill %}
-                <a class="flex items-center px-3 py-3 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-700 hover:text-white transition-colors" href="{% url 'bill-list' %}">
-                    <i class="fa-solid fa-file-invoice mr-3 w-5 text-center text-slate-500"></i>Invoices
-                </a>
-                {% endif %}
-                {% if user.is_superuser or perms.ledger.can_view_financial_records %}
-                <a class="flex items-center px-3 py-3 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-700 hover:text-white transition-colors" href="{% url 'financialrecord-list' %}">
-                    <i class="fa-solid fa-book mr-3 w-5 text-center text-slate-500"></i>Ledger
-                </a>
-                {% endif %}
-                {% if user.is_superuser or perms.ledger.view_party %}
-                <a class="flex items-center px-3 py-3 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-700 hover:text-white transition-colors" href="{% url 'party-list' %}">
-                    <i class="fa-solid fa-handshake mr-3 w-5 text-center text-slate-500"></i>Parties
-                </a>
-                {% endif %}
-                {% if user.is_superuser or perms.ledger.view_companyaccount %}
-                <a class="flex items-center px-3 py-3 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-700 hover:text-white transition-colors" href="{% url 'account-list' %}">
-                    <i class="fa-solid fa-building-columns mr-3 w-5 text-center text-slate-500"></i>Company Accounts
-                </a>
-                {% endif %}
-                {% if user.is_superuser or perms.ledger.view_tollaccount or perms.ledger.can_view_financial_records %}
-                <a class="flex items-center px-3 py-3 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-700 hover:text-white transition-colors" href="{% url 'toll-ledger' %}">
-                    <i class="fa-solid fa-road mr-3 w-5 text-center text-slate-500"></i>Toll Ledger
-                </a>
-                {% endif %}
-                {% if user.is_superuser or perms.ledger.can_view_financial_records %}
-                <a class="flex items-center px-3 py-3 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-700 hover:text-white transition-colors" href="{% url 'financial-summary' %}">
-                    <i class="fa-solid fa-chart-pie mr-3 w-5 text-center text-slate-500"></i>Reports
-                </a>
-                {% endif %}
-            </div>
-            {% endif %}
-
-            {% else %}
-            <a href="{% url 'login' %}" class="flex items-center px-3 py-3 rounded-lg text-sm font-bold text-slate-300 hover:bg-slate-700 hover:text-white transition-colors">
-                <i class="fa-solid fa-right-to-bracket mr-3 w-5 text-center"></i>Login
-            </a>
-            {% endif %}
-        </div>
-
-        <!-- Drawer Footer: User Profile -->
-        {% if user.is_authenticated %}
-        <details class="group border-t border-slate-700">
-            <summary class="flex items-center justify-between px-4 py-4 cursor-pointer list-none select-none [&::-webkit-details-marker]:hidden">
-                <div class="flex items-center space-x-3">
-                    <div class="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center">
-                        <i class="fa-solid fa-user text-slate-400"></i>
-                    </div>
-                    <div>
-                        <p class="text-sm font-bold text-white">{{ user.username }}</p>
-                        <p class="text-[10px] text-slate-400 uppercase tracking-wider">{{ user.groups.all.0.name|default:"User" }}</p>
-                    </div>
-                </div>
-                <i class="fa-solid fa-chevron-down text-slate-400 group-open:rotate-180 transition-transform"></i>
-            </summary>
-            <div class="px-4 pb-4 space-y-2">
-                <a href="{% url 'user-profile' %}" class="flex items-center px-3 py-2 rounded-lg text-xs font-medium text-slate-400 hover:bg-slate-700 hover:text-white transition-colors">
-                    <i class="fa-solid fa-user-circle mr-2"></i>My Profile
-                </a>
-                {% if user.is_authenticated and request.user.is_superuser or perms.trips.can_view_manager_dashboard %}
-                <a href="{% url 'global-resync' %}" class="flex items-center px-3 py-2 rounded-lg text-xs font-medium text-emerald-400 hover:bg-slate-700 transition-colors">
-                    <i class="fa-solid fa-sync-alt mr-2"></i>Resync Balances
-                </a>
-                {% endif %}
-                {% if user.is_superuser %}
-                <a href="{% url 'user-list' %}" class="flex items-center px-3 py-2 rounded-lg text-xs font-medium text-slate-400 hover:bg-slate-700 hover:text-white transition-colors">
-                    <i class="fa-solid fa-users-gear mr-2"></i>User Management
-                </a>
-                {% endif %}
-                <form method="post" action="{% url 'logout' %}" class="block">
-                    {% csrf_token %}
-                    <button type="submit" class="w-full flex items-center px-3 py-2 rounded-lg text-xs font-medium text-rose-400 hover:bg-slate-700 hover:text-rose-300 focus:outline-none transition-colors">
-                        <i class="fa-solid fa-right-from-bracket mr-2"></i>Logout
-                    </button>
-                </form>
-            </div>
-        </details>
-        {% endif %}
-    </div>
-</div>
-<!-- END: Slide-out Drawer (Mobile) -->
-<!-- END: Top Navigation -->
+{% include "includes/nav_mobile_drawer.html" %}
 <main class="flex-grow w-full max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 main-content-area">
     <!-- Messages -->
     {% if messages %}
@@ -550,65 +244,8 @@
     <p class="text-center text-sm text-slate-600">© 2024 Transport Management System</p>
 </footer>
 
-<!-- BEGIN: Bottom Navigation Bar (Mobile) -->
-{% if user.is_authenticated %}
-<nav id="bottom-nav" class="fixed bottom-0 left-0 right-0 z-[70] bg-white border-t border-slate-200 shadow-[0_-2px_10px_rgba(0,0,0,0.06)] lg:hidden">
-    <div class="flex items-stretch justify-around h-16 max-w-lg mx-auto">
-        <!-- Trips -->
-        <a href="{% url 'trip-list' %}" class="btm-nav-item flex flex-col items-center justify-center flex-1 relative text-slate-400 hover:text-emerald-600 transition-colors" data-nav="trips">
-            <i class="fa-solid fa-truck text-lg"></i>
-            <span class="text-[9px] font-bold mt-1 uppercase tracking-wider">Trips</span>
-        </a>
-        {% if user.is_superuser or perms.fleet.view_vehicle %}
-        <!-- Fleet -->
-        <a href="{% url 'vehicle-list' %}" class="btm-nav-item flex flex-col items-center justify-center flex-1 relative text-slate-400 hover:text-emerald-600 transition-colors" data-nav="fleet">
-            <i class="fa-solid fa-truck-fast text-lg"></i>
-            <span class="text-[9px] font-bold mt-1 uppercase tracking-wider">Fleet</span>
-        </a>
-        {% elif perms.trips.view_route %}
-        <a href="{% url 'route-list' %}" class="btm-nav-item flex flex-col items-center justify-center flex-1 relative text-slate-400 hover:text-emerald-600 transition-colors" data-nav="fleet">
-            <i class="fa-solid fa-route text-lg"></i>
-            <span class="text-[9px] font-bold mt-1 uppercase tracking-wider">Routes</span>
-        </a>
-        {% endif %}
+{% include "includes/nav_bottom_bar.html" %}
 
-        {% if user.is_superuser or perms.trips.can_view_manager_dashboard %}
-        <!-- Dashboard -->
-        <a href="{% url 'manager-dashboard' %}" class="btm-nav-item flex flex-col items-center justify-center flex-1 relative text-slate-400 hover:text-emerald-600 transition-colors" data-nav="dashboard">
-            <i class="fa-solid fa-gauge text-lg"></i>
-            <span class="text-[9px] font-bold mt-1 uppercase tracking-wider">Home</span>
-        </a>
-        {% endif %}
-
-        {% if user.is_superuser or perms.ledger.can_view_financial_records %}
-        <!-- Finance -->
-        <a href="{% url 'financialrecord-list' %}" class="btm-nav-item flex flex-col items-center justify-center flex-1 relative text-slate-400 hover:text-emerald-600 transition-colors" data-nav="finance">
-            <i class="fa-solid fa-wallet text-lg"></i>
-            <span class="text-[9px] font-bold mt-1 uppercase tracking-wider">Finance</span>
-        </a>
-        {% elif perms.ledger.view_bill %}
-        <a href="{% url 'bill-list' %}" class="btm-nav-item flex flex-col items-center justify-center flex-1 relative text-slate-400 hover:text-emerald-600 transition-colors" data-nav="finance">
-            <i class="fa-solid fa-file-invoice text-lg"></i>
-            <span class="text-[9px] font-bold mt-1 uppercase tracking-wider">Invoices</span>
-        </a>
-        {% elif perms.ledger.view_party %}
-        <a href="{% url 'party-list' %}" class="btm-nav-item flex flex-col items-center justify-center flex-1 relative text-slate-400 hover:text-emerald-600 transition-colors" data-nav="finance">
-            <i class="fa-solid fa-handshake text-lg"></i>
-            <span class="text-[9px] font-bold mt-1 uppercase tracking-wider">Parties</span>
-        </a>
-        {% endif %}
-        <!-- More (opens drawer) -->
-        <button type="button" id="btm-nav-more" class="btm-nav-item flex flex-col items-center justify-center flex-1 relative text-slate-400 hover:text-emerald-600 transition-colors" data-nav="more">
-            <i class="fa-solid fa-ellipsis text-lg"></i>
-            <span class="text-[9px] font-bold mt-1 uppercase tracking-wider">More</span>
-            {% if total_alerts > 0 %}
-            <span class="absolute top-2 right-1/4 block h-2 w-2 rounded-full bg-red-500"></span>
-            {% endif %}
-        </button>
-    </div>
-</nav>
-{% endif %}
-<!-- END: Bottom Navigation Bar (Mobile) -->
 <!-- Scripts (Using jQuery for Select2 compatibility) -->
 <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
@@ -661,231 +298,231 @@
 
         // Toggle dropdown on click
         $(document).on('click', '.dropdown-toggle', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                
-                const $container = $(this).closest('.dropdown-container');
-                const $menu = $container.find('.dropdown-menu');
-                
-                // Close all other dropdowns
-                $('.dropdown-menu').not($menu).addClass('hidden');
-                
-                // Toggle current dropdown
-                $menu.toggleClass('hidden');
-            });
+            e.preventDefault();
+            e.stopPropagation();
             
-            // Close dropdowns when clicking outside
-            $(document).on('click', function(e) {
-                if (!$(e.target).closest('.dropdown-container').length) {
-                    $('.dropdown-menu').addClass('hidden');
-                }
-            });
-
-            // Prevent closing when clicking inside the menu
-            $(document).on('click', '.dropdown-menu', function(e) {
-                e.stopPropagation();
-            });
+            const $container = $(this).closest('.dropdown-container');
+            const $menu = $container.find('.dropdown-menu');
+            
+            // Close all other dropdowns
+            $('.dropdown-menu').not($menu).addClass('hidden');
+            
+            // Toggle current dropdown
+            $menu.toggleClass('hidden');
         });
-
-        // --- Global Reference Data Caching ---
-        const CACHE_KEY = 'tms_reference_data';
         
-        function syncReferenceData() {
-            {% if user.is_authenticated %}
-            const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || '{}');
-            
-            $.getJSON('{% url "reference-data" %}', function(data) {
-                if (data.version !== cached.version) {
-                    console.log('TMS: Reference data updated to version', data.version);
-                    localStorage.setItem(CACHE_KEY, JSON.stringify(data));
-                    // Trigger a custom event in case pages are waiting for this data
-                    $(document).trigger('tms:data-synced', [data]);
-                } else {
-                    console.log('TMS: Reference data is up to date.');
-                }
-            }).fail(function() {
-                console.error('TMS: Failed to sync reference data.');
-            });
-            {% endif %}
-        }
+        // Close dropdowns when clicking outside
+        $(document).on('click', function(e) {
+            if (!$(e.target).closest('.dropdown-container').length) {
+                $('.dropdown-menu').addClass('hidden');
+            }
+        });
 
-        // Sync on load
-        $(document).ready(syncReferenceData);
+        // Prevent closing when clicking inside the menu
+        $(document).on('click', '.dropdown-menu', function(e) {
+            e.stopPropagation();
+        });
+    });
 
-        // Global Helper: Get Cached Reference Data
-        function getCachedData() {
-            return JSON.parse(localStorage.getItem(CACHE_KEY) || '{}');
-        }
-
-        // --- Background Upload Polling ---
-        let uploadPollingInterval;
-        let lastActiveCount = 0;
-        let uploadAutoDismissTimeout = null;
-
-        window.dismissUploadStatus = function() {
-            $('#upload-status-bar').addClass('-translate-y-full').removeClass('translate-y-0');
-            if (uploadAutoDismissTimeout) clearTimeout(uploadAutoDismissTimeout);
-            
-            // Store dismissed failed count in sessionStorage so it doesn't pop up on navigation
-            const currentFailed = $('#upload-status-bar').attr('data-failed-count') || '0';
-            sessionStorage.setItem('dismissedFailedCount', currentFailed);
-        };
-
-        function checkUploadStatus() {
-            {% if user.is_authenticated %}
-            $.getJSON('{% url "upload-status-api" %}', function(data) {
-                const $bar = $('#upload-status-bar');
-                const $text = $('#upload-status-text');
-                const $spinner = $('#upload-spinner');
-                const $stats = $('#upload-stats');
-                
-                const dismissedFailed = parseInt(sessionStorage.getItem('dismissedFailedCount') || '0');
-
-                if (data.active > 0) {
-                    // Active uploads
-                    $bar.removeClass('-translate-y-full').addClass('translate-y-0');
-                    $bar.find('> div').removeClass('bg-red-600 bg-blue-600').addClass('bg-emerald-600');
-                    $text.text(`Uploading ${data.active} files...`);
-                    $spinner.show();
-                    $stats.text(`${data.active} queued`);
-                    lastActiveCount = data.active;
-                    
-                    sessionStorage.setItem('dismissedFailedCount', '0'); // reset on new activity
-                } else if (lastActiveCount > 0 && data.active === 0) {
-                    // Just finished
-                    $bar.find('> div').removeClass('bg-emerald-600').addClass('bg-blue-600');
-                    $text.text('All uploads completed successfully!');
-                    $spinner.hide();
-                    $stats.text('Done');
-                    
-                    // Hide after 5 seconds
-                    setTimeout(() => {
-                        $bar.removeClass('translate-y-0').addClass('-translate-y-full');
-                        lastActiveCount = 0;
-                    }, 5000);
-                } else if (data.failed > 0 && data.failed > dismissedFailed) {
-                     // Failed uploads (only if not active)
-                    $bar.removeClass('-translate-y-full').addClass('translate-y-0');
-                    $bar.find('> div').removeClass('bg-emerald-600 bg-blue-600').addClass('bg-red-600');
-                    $text.text(`${data.failed} upload(s) failed. Check Document Logs.`);
-                    $spinner.hide();
-                    $stats.text('Error');
-                    $bar.attr('data-failed-count', data.failed);
-                    
-                    // Auto dismiss after 15 seconds if unattended
-                    if (uploadAutoDismissTimeout) clearTimeout(uploadAutoDismissTimeout);
-                    uploadAutoDismissTimeout = setTimeout(() => {
-                        window.dismissUploadStatus();
-                    }, 15000);
-                }
-            });
-            {% endif %}
-        }
-
-        // Start polling if user is logged in
+    // --- Global Reference Data Caching ---
+    const CACHE_KEY = 'tms_reference_data';
+    
+    function syncReferenceData() {
         {% if user.is_authenticated %}
-        uploadPollingInterval = setInterval(checkUploadStatus, 3000); // Every 3 seconds
-        $(document).ready(checkUploadStatus); // Initial check
+        const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || '{}');
+        
+        $.getJSON('{% url "reference-data" %}', function(data) {
+            if (data.version !== cached.version) {
+                console.log('TMS: Reference data updated to version', data.version);
+                localStorage.setItem(CACHE_KEY, JSON.stringify(data));
+                // Trigger a custom event in case pages are waiting for this data
+                $(document).trigger('tms:data-synced', [data]);
+            } else {
+                console.log('TMS: Reference data is up to date.');
+            }
+        }).fail(function() {
+            console.error('TMS: Failed to sync reference data.');
+        });
         {% endif %}
+    }
 
-        // Universal Fix: Disable scroll from changing numeric input values
-        $(document).on('wheel', 'input[type=number]', function(e) {
-            if (this === document.activeElement) {
-                $(this).blur();
-            }
-        });
+    // Sync on load
+    $(document).ready(syncReferenceData);
 
-        // Universal Smart Navigation: Use arrow keys to move focus between boxes
-        $(document).on('keydown', 'input, select, textarea', function(e) {
-            const key = e.which;
-            const $this = $(this);
-            const isNumber = $this.prop('type') === 'number';
-            const isSelect = $this.is('select') || $this.hasClass('select2-hidden-accessible');
+    // Global Helper: Get Cached Reference Data
+    function getCachedData() {
+        return JSON.parse(localStorage.getItem(CACHE_KEY) || '{}');
+    }
 
-            // Arrows: Left=37, Up=38, Right=39, Down=40
-            if ([37, 38, 39, 40].indexOf(key) > -1) {
+    // --- Background Upload Polling ---
+    let uploadPollingInterval;
+    let lastActiveCount = 0;
+    let uploadAutoDismissTimeout = null;
+
+    window.dismissUploadStatus = function() {
+        $('#upload-status-bar').addClass('-translate-y-full').removeClass('translate-y-0');
+        if (uploadAutoDismissTimeout) clearTimeout(uploadAutoDismissTimeout);
+        
+        // Store dismissed failed count in sessionStorage so it doesn't pop up on navigation
+        const currentFailed = $('#upload-status-bar').attr('data-failed-count') || '0';
+        sessionStorage.setItem('dismissedFailedCount', currentFailed);
+    };
+
+    function checkUploadStatus() {
+        {% if user.is_authenticated %}
+        $.getJSON('{% url "upload-status-api" %}', function(data) {
+            const $bar = $('#upload-status-bar');
+            const $text = $('#upload-status-text');
+            const $spinner = $('#upload-spinner');
+            const $stats = $('#upload-stats');
+            
+            const dismissedFailed = parseInt(sessionStorage.getItem('dismissedFailedCount') || '0');
+
+            if (data.active > 0) {
+                // Active uploads
+                $bar.removeClass('-translate-y-full').addClass('translate-y-0');
+                $bar.find('> div').removeClass('bg-red-600 bg-blue-600').addClass('bg-emerald-600');
+                $text.text(`Uploading ${data.active} files...`);
+                $spinner.show();
+                $stats.text(`${data.active} queued`);
+                lastActiveCount = data.active;
                 
-                // For number inputs, block the default up/down (increment/decrement)
-                if (isNumber && (key === 38 || key === 40)) {
-                    e.preventDefault();
-                }
-
-                // If it's a select2 being edited/opened, let it handle arrows
-                if ($this.data('select2') && $('.select2-container--open').length) return;
-
-                let $next;
-                const $allFields = $('input:visible, select:visible, textarea:visible').not('[readonly], [disabled]');
-                const currentIndex = $allFields.index($this);
-
-                if (key === 38 || key === 40) { // UP or DOWN
-                    e.preventDefault();
-                    // Vertical Navigation (Grid-aware)
-                    const $row = $this.closest('.form-row, tr');
-                    if ($row.length) {
-                        const fieldIndex = $row.find('input, select, textarea').index($this);
-                        const $targetRow = (key === 38) ? $row.prev('.form-row, tr') : $row.next('.form-row, tr');
-                        if ($targetRow.length) {
-                            $next = $targetRow.find('input, select, textarea').eq(fieldIndex);
-                        }
-                    }
-                    
-                    // Fallback to simple prev/next if not in a grid or row not found
-                    if (!$next || !$next.length) {
-                        $next = (key === 38) ? $allFields.eq(currentIndex - 1) : $allFields.eq(currentIndex + 1);
-                    }
-                } 
-                else if (key === 37 || key === 39) { // LEFT or RIGHT
-                    // Only move focus if at the start/end of text or it's a number/select
-                    const isAtStart = !this.selectionStart || this.selectionStart === 0;
-                    const isAtEnd = !this.selectionEnd || this.selectionEnd === this.value.length;
-
-                    if (isNumber || isSelect || (key === 37 && isAtStart) || (key === 39 && isAtEnd)) {
-                        $next = (key === 37) ? $allFields.eq(currentIndex - 1) : $allFields.eq(currentIndex + 1);
-                        if ($next.length) e.preventDefault();
-                    }
-                }
-
-                if ($next && $next.length) {
-                    $next.focus();
-                    if ($next.is('input')) $next.select();
-                }
+                sessionStorage.setItem('dismissedFailedCount', '0'); // reset on new activity
+            } else if (lastActiveCount > 0 && data.active === 0) {
+                // Just finished
+                $bar.find('> div').removeClass('bg-emerald-600').addClass('bg-blue-600');
+                $text.text('All uploads completed successfully!');
+                $spinner.hide();
+                $stats.text('Done');
+                
+                // Hide after 5 seconds
+                setTimeout(() => {
+                    $bar.removeClass('translate-y-0').addClass('-translate-y-full');
+                    lastActiveCount = 0;
+                }, 5000);
+            } else if (data.failed > 0 && data.failed > dismissedFailed) {
+                 // Failed uploads (only if not active)
+                $bar.removeClass('-translate-y-full').addClass('translate-y-0');
+                $bar.find('> div').removeClass('bg-emerald-600 bg-blue-600').addClass('bg-red-600');
+                $text.text(`${data.failed} upload(s) failed. Check Document Logs.`);
+                $spinner.hide();
+                $stats.text('Error');
+                $bar.attr('data-failed-count', data.failed);
+                
+                // Auto dismiss after 15 seconds if unattended
+                if (uploadAutoDismissTimeout) clearTimeout(uploadAutoDismissTimeout);
+                uploadAutoDismissTimeout = setTimeout(() => {
+                    window.dismissUploadStatus();
+                }, 15000);
             }
         });
+        {% endif %}
+    }
 
-        // Global Double-Submit Prevention for all POST forms
-        $(document).on('submit', 'form[method="post"], form[method="POST"]', function(e) {
-            const $form = $(this);
+    // Start polling if user is logged in
+    {% if user.is_authenticated %}
+    uploadPollingInterval = setInterval(checkUploadStatus, 3000); // Every 3 seconds
+    $(document).ready(checkUploadStatus); // Initial check
+    {% endif %}
 
-            if (e.isDefaultPrevented()) return;
-            if (this.checkValidity && !this.checkValidity()) return;
-            if ($form.data('allow-resubmit')) return;
+    // Universal Fix: Disable scroll from changing numeric input values
+    $(document).on('wheel', 'input[type=number]', function(e) {
+        if (this === document.activeElement) {
+            $(this).blur();
+        }
+    });
 
-            if ($form.data('is-submitting')) {
+    // Universal Smart Navigation: Use arrow keys to move focus between boxes
+    $(document).on('keydown', 'input, select, textarea', function(e) {
+        const key = e.which;
+        const $this = $(this);
+        const isNumber = $this.prop('type') === 'number';
+        const isSelect = $this.is('select') || $this.hasClass('select2-hidden-accessible');
+
+        // Arrows: Left=37, Up=38, Right=39, Down=40
+        if ([37, 38, 39, 40].indexOf(key) > -1) {
+            
+            // For number inputs, block the default up/down (increment/decrement)
+            if (isNumber && (key === 38 || key === 40)) {
                 e.preventDefault();
-                return false;
             }
 
-            $form.data('is-submitting', true);
+            // If it's a select2 being edited/opened, let it handle arrows
+            if ($this.data('select2') && $('.select2-container--open').length) return;
 
-            const $btn = $form.find('button[type="submit"]:focus, input[type="submit"]:focus').length
-                ? $form.find('button[type="submit"]:focus, input[type="submit"]:focus')
-                : $form.find('button[type="submit"], input[type="submit"]').last();
+            let $next;
+            const $allFields = $('input:visible, select:visible, textarea:visible').not('[readonly], [disabled]');
+            const currentIndex = $allFields.index($this);
 
-            if ($btn.length && !$btn.hasClass('no-disable-on-submit')) {
-                $btn.addClass('opacity-75 cursor-not-allowed pointer-events-none');
-                const $icon = $btn.find('i');
-                if ($icon.length && !$icon.hasClass('fa-spinner')) {
-                    $icon.attr('class', 'fa-solid fa-spinner fa-spin mr-1');
+            if (key === 38 || key === 40) { // UP or DOWN
+                e.preventDefault();
+                // Vertical Navigation (Grid-aware)
+                const $row = $this.closest('.form-row, tr');
+                if ($row.length) {
+                    const fieldIndex = $row.find('input, select, textarea').index($this);
+                    const $targetRow = (key === 38) ? $row.prev('.form-row, tr') : $row.next('.form-row, tr');
+                    if ($targetRow.length) {
+                        $next = $targetRow.find('input, select, textarea').eq(fieldIndex);
+                    }
+                }
+                
+                // Fallback to simple prev/next if not in a grid or row not found
+                if (!$next || !$next.length) {
+                    $next = (key === 38) ? $allFields.eq(currentIndex - 1) : $allFields.eq(currentIndex + 1);
+                }
+            } 
+            else if (key === 37 || key === 39) { // LEFT or RIGHT
+                // Only move focus if at the start/end of text or it's a number/select
+                const isAtStart = !this.selectionStart || this.selectionStart === 0;
+                const isAtEnd = !this.selectionEnd || this.selectionEnd === this.value.length;
+
+                if (isNumber || isSelect || (key === 37 && isAtStart) || (key === 39 && isAtEnd)) {
+                    $next = (key === 37) ? $allFields.eq(currentIndex - 1) : $allFields.eq(currentIndex + 1);
+                    if ($next.length) e.preventDefault();
                 }
             }
-        });
 
-        // Reset submit lock on page restore (e.g. back navigation or validation reload)
-        window.addEventListener('pageshow', function(event) {
-            $('form').removeData('is-submitting');
-            $('button[type="submit"], input[type="submit"]').removeClass('opacity-75 cursor-not-allowed pointer-events-none');
-        });
-    </script>
+            if ($next && $next.length) {
+                $next.focus();
+                if ($next.is('input')) $next.select();
+            }
+        }
+    });
+
+    // Global Double-Submit Prevention for all POST forms
+    $(document).on('submit', 'form[method="post"], form[method="POST"]', function(e) {
+        const $form = $(this);
+
+        if (e.isDefaultPrevented()) return;
+        if (this.checkValidity && !this.checkValidity()) return;
+        if ($form.data('allow-resubmit')) return;
+
+        if ($form.data('is-submitting')) {
+            e.preventDefault();
+            return false;
+        }
+
+        $form.data('is-submitting', true);
+
+        const $btn = $form.find('button[type="submit"]:focus, input[type="submit"]:focus').length
+            ? $form.find('button[type="submit"]:focus, input[type="submit"]:focus')
+            : $form.find('button[type="submit"], input[type="submit"]').last();
+
+        if ($btn.length && !$btn.hasClass('no-disable-on-submit')) {
+            $btn.addClass('opacity-75 cursor-not-allowed pointer-events-none');
+            const $icon = $btn.find('i');
+            if ($icon.length && !$icon.hasClass('fa-spinner')) {
+                $icon.attr('class', 'fa-solid fa-spinner fa-spin mr-1');
+            }
+        }
+    });
+
+    // Reset submit lock on page restore (e.g. back navigation or validation reload)
+    window.addEventListener('pageshow', function(event) {
+        $('form').removeData('is-submitting');
+        $('button[type="submit"], input[type="submit"]').removeClass('opacity-75 cursor-not-allowed pointer-events-none');
+    });
+</script>
     {% include 'includes/document_preview_modal.html' %}
     {% block extra_js %}{% endblock %}
 </body>

@@ -110,26 +110,6 @@
                     Profile
                 </button>
             </nav>
-
-            <div id="statement-action" class="px-4 py-2 sm:py-0 border-t sm:border-t-0 border-slate-200">
-                <form action="{% url 'party-statement-pdf' party.pk %}" method="GET" target="_blank" class="flex flex-wrap items-center justify-between sm:justify-start gap-2">
-                    {% if company_accounts %}
-                    <div class="flex items-center gap-1.5">
-                        <label for="statement-account-select" class="text-[9px] font-black uppercase text-slate-500 hidden md:inline">Firm:</label>
-                        <select id="statement-account-select" name="account" title="Select Firm Header for Statement" class="text-[9px] font-bold border-slate-200 rounded py-1 px-1.5 h-7 bg-white text-slate-700 focus:ring-emerald-500 focus:border-emerald-500 max-w-[130px] sm:max-w-[170px] truncate">
-                            {% for acc in company_accounts %}
-                                <option value="{{ acc.pk }}">{{ acc.name }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    {% endif %}
-                    <input type="date" name="start_date" class="text-[9px] font-bold border-slate-200 rounded py-1 px-1.5 h-7 w-24" title="Start Date">
-                    <input type="date" name="end_date" class="text-[9px] font-bold border-slate-200 rounded py-1 px-1.5 h-7 w-24" title="End Date">
-                    <button type="submit" class="bg-slate-800 text-white text-[9px] font-black uppercase px-2.5 py-1 rounded hover:bg-slate-900 transition-all h-7 flex items-center shrink-0">
-                        <i class="fa-solid fa-file-pdf mr-1"></i>Statement
-                    </button>
-                </form>
-            </div>
         </div>
 
         <div id="tab-content" class="min-h-[400px]">
@@ -388,6 +368,42 @@
 
             <!-- LEDGER TAB -->
             <div id="content-ledger" class="tab-pane {% if party.party_type == 'Creditor' %}{% else %}hidden{% endif %}">
+                <!-- Ledger Sub-Toolbar & Statement Generator -->
+                <div class="bg-slate-50 px-4 sm:px-6 py-2.5 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                    <div class="flex items-center gap-3">
+                        <span class="text-xs font-black text-slate-700 uppercase tracking-wider flex items-center">
+                            <i class="fa-solid fa-book-open mr-2 text-slate-400"></i>Ledger Entries
+                        </span>
+                        <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-200/80 text-slate-700">
+                            {{ financial_records.paginator.count }} Records
+                        </span>
+                    </div>
+
+                    <form action="{% url 'party-statement-pdf' party.pk %}" method="GET" target="_blank" class="flex flex-wrap items-center gap-2">
+                        {% if company_accounts %}
+                        <div class="flex items-center gap-1.5">
+                            <label for="statement-account-select" class="text-[10px] font-black uppercase text-slate-500 whitespace-nowrap">Firm:</label>
+                            <select id="statement-account-select" name="account" title="Select Firm Header for Statement" class="text-xs font-medium border border-slate-300 rounded-md py-1 px-2.5 h-8 bg-white text-slate-800 focus:ring-emerald-500 focus:border-emerald-500 max-w-[180px] truncate shadow-xs">
+                                {% for acc in company_accounts %}
+                                    <option value="{{ acc.pk }}">{{ acc.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        {% endif %}
+                        <div class="flex items-center gap-1.5">
+                            <label class="text-[10px] font-black uppercase text-slate-500 whitespace-nowrap">From:</label>
+                            <input type="date" name="start_date" class="text-xs font-medium border border-slate-300 rounded-md py-1 px-2 h-8 w-36 bg-white text-slate-800 focus:ring-emerald-500 focus:border-emerald-500 shadow-xs" title="Start Date">
+                        </div>
+                        <div class="flex items-center gap-1.5">
+                            <label class="text-[10px] font-black uppercase text-slate-500 whitespace-nowrap">To:</label>
+                            <input type="date" name="end_date" class="text-xs font-medium border border-slate-300 rounded-md py-1 px-2 h-8 w-36 bg-white text-slate-800 focus:ring-emerald-500 focus:border-emerald-500 shadow-xs" title="End Date">
+                        </div>
+                        <button type="submit" class="bg-slate-800 hover:bg-slate-900 text-white text-xs font-black uppercase tracking-wider px-3.5 py-1 rounded-md transition-all h-8 flex items-center shadow-xs shrink-0">
+                            <i class="fa-solid fa-file-pdf mr-1.5 text-rose-400"></i>Statement PDF
+                        </button>
+                    </form>
+                </div>
+
                 <div class="overflow-x-auto">
                     <table class="w-full text-left border-collapse">
                         <thead>
@@ -570,15 +586,6 @@ function switchTab(tabId, updateHistory = true) {
         activeBtn.classList.remove('border-transparent', 'text-slate-400');
     }
 
-    // Show/Hide statement generator based on tab
-    const statementAction = document.getElementById('statement-action');
-    if (statementAction) {
-        if (tabId === 'ledger') {
-            statementAction.classList.remove('hidden');
-        } else {
-            statementAction.classList.add('hidden');
-        }
-    }
 
     // Update URL with replaceState so browser Back button navigates to previous page, not previous tab
     if (updateHistory) {

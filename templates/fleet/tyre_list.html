@@ -235,35 +235,7 @@
     </div>
 </div>
 
-<!-- BEGIN: Pagination -->
-{% if is_paginated %}
-<nav class="mt-8 flex justify-center">
-    <div class="flex space-x-1">
-        {% if page_obj.has_previous %}
-        <a href="?page=1{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.vehicle %}&vehicle={{ request.GET.vehicle }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
-            <i class="fa-solid fa-angles-left"></i>
-        </a>
-        <a href="?page={{ page_obj.previous_page_number }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.vehicle %}&vehicle={{ request.GET.vehicle }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
-            <i class="fa-solid fa-angle-left"></i>
-        </a>
-        {% endif %}
-
-        <span class="px-4 py-2 bg-emerald-600 text-white border border-emerald-600 rounded-md text-sm font-medium">
-            Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
-        </span>
-
-        {% if page_obj.has_next %}
-        <a href="?page={{ page_obj.next_page_number }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.vehicle %}&vehicle={{ request.GET.vehicle }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
-            <i class="fa-solid fa-angle-right"></i>
-        </a>
-        <a href="?page={{ page_obj.paginator.num_pages }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.vehicle %}&vehicle={{ request.GET.vehicle }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
-            <i class="fa-solid fa-angles-right"></i>
-        </a>
-        {% endif %}
-    </div>
-</nav>
-{% endif %}
-<!-- END: Pagination -->
+{% include "includes/pagination.html" %}
 
 {% else %}
 <div class="text-center py-20 bg-white rounded-lg border border-slate-200 shadow-sm">

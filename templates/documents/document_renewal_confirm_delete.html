@@ -1,47 +1,28 @@
-{% extends 'base.html' %}
+{% extends 'confirm_delete_base.html' %}
 
 {% block title %}Delete Renewal Entry - TMS{% endblock %}
+{% block delete_header_title %}Delete Renewal Entry{% endblock %}
+{% block delete_warning %}This action cannot be undone. If this was the latest entry, the document's active validity will revert to the previous entry.{% endblock %}
+{% block delete_object %}{{ document.document_name }} renewal ({{ object.valid_from|date:"d M Y"|default:"-" }} to {{ object.valid_to|date:"d M Y"|default:"-" }}){% endblock %}
 
-{% block content %}
-<header class="mb-6">
-    <div class="flex items-center space-x-2 text-sm text-slate-500 mb-2">
-        {% if vehicle %}
-        <a href="{% url 'vehicle-list' %}" class="hover:text-emerald-600 transition-colors">Fleet</a>
-        <i class="fa-solid fa-chevron-right text-[10px]"></i>
-        <a href="{% url 'vehicle-detail' vehicle.pk %}" class="hover:text-emerald-600 transition-colors">{{ vehicle.registration_plate }}</a>
-        <i class="fa-solid fa-chevron-right text-[10px]"></i>
-        {% endif %}
-        <a href="{% url 'document-history' document.pk %}" class="hover:text-emerald-600 transition-colors">{{ document.document_name }}</a>
-        <i class="fa-solid fa-chevron-right text-[10px]"></i>
-        <span class="text-slate-900 font-bold">Delete Entry</span>
-    </div>
-    <h1 class="text-3xl font-bold text-slate-900 tracking-tight">Delete Renewal Entry</h1>
-</header>
-
-<div class="max-w-xl mx-auto bg-white border border-rose-200 rounded-xl p-6 shadow-sm">
-    <div class="flex items-start space-x-4">
-        <div class="w-10 h-10 rounded-full bg-rose-100 flex items-center justify-center text-rose-600 flex-shrink-0">
-            <i class="fa-solid fa-triangle-exclamation"></i>
+{% block delete_details %}
+<div class="bg-slate-50 border border-slate-200 rounded-lg p-4 mb-6 text-sm">
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div>
+            <span class="text-xs text-slate-500 uppercase tracking-wider block font-semibold">Document</span>
+            <span class="font-bold text-slate-800">{{ document.document_name }}</span>
         </div>
         <div>
-            <h2 class="text-lg font-bold text-slate-900">Are you sure you want to delete this renewal record?</h2>
-            <p class="text-sm text-slate-600 mt-1">
-                Document: <strong>{{ document.document_name }}</strong><br>
-                Validity: <strong>{{ object.valid_from|date:"d M Y"|default:"-" }} &rarr; {{ object.valid_to|date:"d M Y"|default:"-" }}</strong><br>
-                Cost: <strong>₹{{ object.cost|floatformat:2 }}</strong>
-            </p>
-            <p class="text-xs text-rose-600 mt-2 font-medium">This action cannot be undone. If this was the latest entry, the document's active validity will revert to the previous entry.</p>
-
-            <form method="post" class="mt-6 flex items-center space-x-3">
-                {% csrf_token %}
-                <button type="submit" class="px-5 py-2 bg-rose-600 text-white rounded-md text-sm font-bold hover:bg-rose-700 transition-colors">
-                    Yes, Delete Entry
-                </button>
-                <a href="{% url 'document-history' document.pk %}" class="px-4 py-2 border border-slate-300 rounded-md text-slate-700 bg-white hover:bg-slate-50 text-sm font-semibold transition-colors">
-                    Cancel
-                </a>
-            </form>
+            <span class="text-xs text-slate-500 uppercase tracking-wider block font-semibold">Validity</span>
+            <span class="font-bold text-slate-800">{{ object.valid_from|date:"d M Y"|default:"-" }} &rarr; {{ object.valid_to|date:"d M Y"|default:"-" }}</span>
+        </div>
+        <div>
+            <span class="text-xs text-slate-500 uppercase tracking-wider block font-semibold">Cost</span>
+            <span class="font-bold text-slate-800">₹{{ object.cost|floatformat:2 }}</span>
         </div>
     </div>
 </div>
 {% endblock %}
+
+{% block cancel_url %}{% url 'document-history' document.pk %}{% endblock %}
+{% block delete_button_text %}Yes, Delete Entry{% endblock %}

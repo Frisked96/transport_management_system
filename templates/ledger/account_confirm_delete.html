@@ -1,25 +1,9 @@
-{% extends 'base.html' %}
+{% extends 'confirm_delete_base.html' %}
 
-{% block title %}Delete Account - Transport Management System{% endblock %}
-
-{% block content %}
-<h2>Confirm Delete Account</h2>
-
-<div class="message error">
-    <strong>Warning!</strong> Are you sure you want to delete the account <strong>"{{ object.name }}"</strong>?
-    This action cannot be undone.
-</div>
-
-<p>
-    If this account has associated financial records, you may not be able to delete it (Protected).
-</p>
-
-<form method="post">
-    {% csrf_token %}
-    
-    <div style="margin-top: 1.5rem;">
-        <button type="submit" class="btn btn-danger">Yes, Delete Account</button>
-        <a href="{% url 'account-list' %}" class="btn" style="margin-left: 1rem;">Cancel</a>
-    </div>
-</form>
-{% endblock %}
+{% block title %}Delete Account: {{ object.name }} - TMS{% endblock %}
+{% block delete_header_title %}Delete Company Account{% endblock %}
+{% block delete_icon %}fa-solid fa-building-columns{% endblock %}
+{% block delete_warning %}If this account has associated financial records, deletion will be blocked to protect accounting data integrity.{% endblock %}
+{% block delete_object %}{{ object.name }}{% endblock %}
+{% block cancel_url %}{% url 'account-list' %}{% endblock %}
+{% block delete_button_text %}Yes, Delete Account{% endblock %}

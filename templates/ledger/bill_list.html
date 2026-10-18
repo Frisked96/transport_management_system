@@ -394,39 +394,7 @@
 </div>
 {% endif %}
 
-<!-- BEGIN: Pagination -->
-{% if is_paginated %}
-<nav class="mt-8 flex justify-center">
-    <div class="flex space-x-1">
-        {% if page_obj.has_previous %}
-        <a href="?page=1{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if current_issuer %}&issuer={{ current_issuer }}{% endif %}{% if current_party %}&party={{ current_party }}{% endif %}{% if current_bill_kind %}&bill_kind={{ current_bill_kind }}{% endif %}{% if request.GET.category %}&category={{ request.GET.category }}{% endif %}{% if current_status %}&payment_status={{ current_status }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
-            <i class="fa-solid fa-angles-left"></i>
-        </a>
-        <a href="?page={{ page_obj.previous_page_number }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if current_issuer %}&issuer={{ current_issuer }}{% endif %}{% if current_party %}&party={{ current_party }}{% endif %}{% if current_bill_kind %}&bill_kind={{ current_bill_kind }}{% endif %}{% if request.GET.category %}&category={{ request.GET.category }}{% endif %}{% if current_status %}&payment_status={{ current_status }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
-            <i class="fa-solid fa-angle-left"></i>
-        </a>
-        {% endif %}
-
-        {% for num in page_obj.paginator.page_range %}
-            {% if page_obj.number == num %}
-            <span class="px-4 py-2 bg-emerald-600 text-white border border-emerald-600 rounded-md text-sm font-medium">{{ num }}</span>
-            {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
-            <a href="?page={{ num }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if current_issuer %}&issuer={{ current_issuer }}{% endif %}{% if current_party %}&party={{ current_party }}{% endif %}{% if current_bill_kind %}&bill_kind={{ current_bill_kind }}{% endif %}{% if request.GET.category %}&category={{ request.GET.category }}{% endif %}{% if current_status %}&payment_status={{ current_status }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}" class="px-4 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">{{ num }}</a>
-            {% endif %}
-        {% endfor %}
-
-        {% if page_obj.has_next %}
-        <a href="?page={{ page_obj.next_page_number }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if current_issuer %}&issuer={{ current_issuer }}{% endif %}{% if current_party %}&party={{ current_party }}{% endif %}{% if current_bill_kind %}&bill_kind={{ current_bill_kind }}{% endif %}{% if request.GET.category %}&category={{ request.GET.category }}{% endif %}{% if current_status %}&payment_status={{ current_status }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
-            <i class="fa-solid fa-angle-right"></i>
-        </a>
-        <a href="?page={{ page_obj.paginator.num_pages }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if current_issuer %}&issuer={{ current_issuer }}{% endif %}{% if current_party %}&party={{ current_party }}{% endif %}{% if current_bill_kind %}&bill_kind={{ current_bill_kind }}{% endif %}{% if request.GET.category %}&category={{ request.GET.category }}{% endif %}{% if current_status %}&payment_status={{ current_status }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
-            <i class="fa-solid fa-angles-right"></i>
-        </a>
-        {% endif %}
-    </div>
-</nav>
-{% endif %}
-<!-- END: Pagination -->
+{% include "includes/pagination.html" %}
 
 {% if perms.ledger.add_financialrecord %}
 <a href="{% url 'bill-create' %}" class="fixed bottom-24 right-6 z-40 lg:hidden w-14 h-14 bg-emerald-600 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-emerald-700 active:scale-95 transition-all" title="Create Invoice">

@@ -282,6 +282,7 @@
 
     <!-- PAGE 2: ANNEXURE (DETAILS) -->
     {% if bill.bill_type != 'Standard' and bill_trips|length > 3 %}
+    <div id="invoice-annexure-card" class="invoice-annexure-card">
     <div class="page-break"></div>
     
     <div class="annexure-title">Annexure to {% if bill.is_creditor_bill %}Vendor Bill #{{ bill.display_invoice_number }}{% else %}Invoice #{{ bill.bill_number }}{% endif %}</div>
@@ -357,5 +358,6 @@
         </tfoot>
     </table>
     <div class="terms-bar" style="text-align: center;">-- End of Annexure --</div>
+    </div>
     {% endif %}
 </div>

@@ -262,3 +262,21 @@ def indian_comma(value):
 
     return res + "." + decimal
 
+
+@register.simple_tag(takes_context=True)
+def url_replace(context, **kwargs):
+    """
+    Preserves all existing GET query parameters while updating or removing specific ones.
+    Usage: {% url_replace page=page_obj.next_page_number %}
+    """
+    request = context.get('request')
+    if not request:
+        return ''
+    query = request.GET.copy()
+    for key, value in kwargs.items():
+        if value is None or value == '':
+            query.pop(key, None)
+        else:
+            query[key] = value
+    return query.urlencode()
+
