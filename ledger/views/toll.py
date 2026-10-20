@@ -34,6 +34,7 @@ class TollLedgerView(LoginRequiredMixin, PermissionRequiredMixin, BaseTollPermis
     """
     Central Toll Ledger Dashboard and Statement View.
     Displays running balance, metric cards, chronological entries, and filters.
+    Supports a combined view across all Toll Accounts or filtered to an individual account.
     """
     permission_required = 'ledger.view_tollaccount'
     template_name = 'ledger/toll_ledger.html'
@@ -56,12 +57,14 @@ class TollLedgerView(LoginRequiredMixin, PermissionRequiredMixin, BaseTollPermis
             )
             accounts = TollAccount.objects.all()
 
-        # Selected Toll Account
-        account_id = request.GET.get('account')
-        if account_id:
-            toll_account = get_object_or_404(TollAccount, pk=account_id)
+        # Selected Toll Account (defaults to combined view if empty, not provided, or 'all')
+        account_id = request.GET.get('account', '').strip()
+        is_combined = not account_id or account_id.lower() == 'all'
+
+        if is_combined:
+            toll_account = None
         else:
-            toll_account = accounts.filter(is_default=True).first() or accounts.first()
+            toll_account = get_object_or_404(TollAccount, pk=account_id)
 
         # Filters
         vehicle_id = request.GET.get('vehicle', '').strip()
@@ -84,9 +87,13 @@ class TollLedgerView(LoginRequiredMixin, PermissionRequiredMixin, BaseTollPermis
             except ValueError:
                 pass
 
-        # 1. Base querysets for this account
-        recharges_qs = toll_account.recharges.select_related('company_account', 'created_by')
-        entries_qs = toll_account.entries.select_related('vehicle', 'associated_trip', 'created_by')
+        # 1. Base querysets (combined vs single account)
+        if is_combined:
+            recharges_qs = TollRecharge.objects.select_related('toll_account', 'company_account', 'created_by').all()
+            entries_qs = TollEntry.objects.select_related('toll_account', 'vehicle', 'associated_trip', 'created_by').all()
+        else:
+            recharges_qs = toll_account.recharges.select_related('toll_account', 'company_account', 'created_by')
+            entries_qs = toll_account.entries.select_related('toll_account', 'vehicle', 'associated_trip', 'created_by')
 
         # 2. Vehicle filter
         selected_vehicle = None
@@ -101,22 +108,37 @@ class TollLedgerView(LoginRequiredMixin, PermissionRequiredMixin, BaseTollPermis
                 pass
 
         # 3. Calculate Period Starting Balance
-        # Period opening = opening_balance + sum(prior recharges) - sum(prior entries)
-        prior_recharges = Decimal('0.00')
-        prior_entries = Decimal('0.00')
-        if start_date:
-            prior_recharges = toll_account.recharges.filter(date__lt=start_date).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-            prior_entries = toll_account.entries.filter(date__lt=start_date).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-            if selected_vehicle:
-                # If vehicle filtered, opening baseline reflects prior vehicle expenses only
-                period_opening_balance = -(toll_account.entries.filter(vehicle=selected_vehicle, date__lt=start_date).aggregate(total=Sum('amount'))['total'] or Decimal('0.00'))
+        total_opening_balance = accounts.aggregate(total=Sum('opening_balance'))['total'] or Decimal('0.00')
+        total_current_balance = accounts.aggregate(total=Sum('current_balance_cached'))['total'] or Decimal('0.00')
+        earliest_opening_date = min((a.opening_balance_date for a in accounts if a.opening_balance_date), default=timezone.now().date())
+
+        if is_combined:
+            if start_date:
+                prior_recharges = TollRecharge.objects.filter(date__lt=start_date).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+                prior_entries = TollEntry.objects.filter(date__lt=start_date).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+                if selected_vehicle:
+                    period_opening_balance = -(TollEntry.objects.filter(vehicle=selected_vehicle, date__lt=start_date).aggregate(total=Sum('amount'))['total'] or Decimal('0.00'))
+                else:
+                    period_opening_balance = total_opening_balance + prior_recharges - prior_entries
             else:
-                period_opening_balance = toll_account.opening_balance + prior_recharges - prior_entries
+                if selected_vehicle:
+                    period_opening_balance = Decimal('0.00')
+                else:
+                    period_opening_balance = total_opening_balance
         else:
-            if selected_vehicle:
-                period_opening_balance = Decimal('0.00')
+            if start_date:
+                prior_recharges = toll_account.recharges.filter(date__lt=start_date).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+                prior_entries = toll_account.entries.filter(date__lt=start_date).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+                if selected_vehicle:
+                    # If vehicle filtered, opening baseline reflects prior vehicle expenses only
+                    period_opening_balance = -(toll_account.entries.filter(vehicle=selected_vehicle, date__lt=start_date).aggregate(total=Sum('amount'))['total'] or Decimal('0.00'))
+                else:
+                    period_opening_balance = toll_account.opening_balance + prior_recharges - prior_entries
             else:
-                period_opening_balance = toll_account.opening_balance
+                if selected_vehicle:
+                    period_opening_balance = Decimal('0.00')
+                else:
+                    period_opening_balance = toll_account.opening_balance
 
         # 4. Filter by Date range
         if start_date:
@@ -131,13 +153,15 @@ class TollLedgerView(LoginRequiredMixin, PermissionRequiredMixin, BaseTollPermis
             recharges_qs = recharges_qs.filter(
                 Q(reference_number__icontains=search_query) |
                 Q(description__icontains=search_query) |
-                Q(company_account__name__icontains=search_query)
+                Q(company_account__name__icontains=search_query) |
+                Q(toll_account__name__icontains=search_query)
             )
             entries_qs = entries_qs.filter(
                 Q(toll_plaza__icontains=search_query) |
                 Q(transaction_reference__icontains=search_query) |
                 Q(description__icontains=search_query) |
-                Q(vehicle__registration_plate__icontains=search_query)
+                Q(vehicle__registration_plate__icontains=search_query) |
+                Q(toll_account__name__icontains=search_query)
             )
 
         # 6. Type filter
@@ -154,6 +178,7 @@ class TollLedgerView(LoginRequiredMixin, PermissionRequiredMixin, BaseTollPermis
                     'date': r.date,
                     'created_at': r.created_at,
                     'type': 'Recharge',
+                    'toll_account': r.toll_account,
                     'vehicle': None,
                     'party_or_plaza': r.company_account.name,
                     'reference': r.reference_number or '-',
@@ -175,6 +200,7 @@ class TollLedgerView(LoginRequiredMixin, PermissionRequiredMixin, BaseTollPermis
                     'date': e.date,
                     'created_at': e.created_at,
                     'type': 'Toll',
+                    'toll_account': e.toll_account,
                     'vehicle': e.vehicle,
                     'party_or_plaza': e.toll_plaza or '-',
                     'reference': e.transaction_reference or '-',
@@ -210,13 +236,15 @@ class TollLedgerView(LoginRequiredMixin, PermissionRequiredMixin, BaseTollPermis
         context = {
             'toll_accounts': accounts,
             'current_account': toll_account,
+            'is_combined': is_combined,
             'selected_vehicle': selected_vehicle,
             'vehicles': Vehicle.objects.all().order_by('registration_plate'),
             'transactions': display_transactions,
             'period_opening_balance': period_opening_balance,
             'closing_balance': closing_balance,
-            'current_balance': toll_account.current_balance_cached,
-            'initial_starting_balance': toll_account.opening_balance,
+            'current_balance': total_current_balance if is_combined else toll_account.current_balance_cached,
+            'initial_starting_balance': total_opening_balance if is_combined else toll_account.opening_balance,
+            'earliest_opening_date': earliest_opening_date,
             'total_period_recharges': total_period_recharges,
             'total_period_spent': total_period_spent,
             'total_transactions_count': len(transactions),
@@ -226,6 +254,7 @@ class TollLedgerView(LoginRequiredMixin, PermissionRequiredMixin, BaseTollPermis
             'search_query': search_query,
         }
         return render(request, self.template_name, context)
+
 
 
 # ==========================================
@@ -517,27 +546,40 @@ class TollEntryBulkCreateView(LoginRequiredMixin, PermissionRequiredMixin, View)
 def toll_statement_print(request):
     """
     Clean, print-ready HTML view for toll ledger statements.
+    Supports individual account statements as well as combined statements for all accounts.
     """
-    account_id = request.GET.get('account')
-    toll_account = get_object_or_404(TollAccount, pk=account_id) if account_id else (TollAccount.objects.filter(is_default=True).first() or TollAccount.objects.first())
-    
+    accounts = TollAccount.objects.all().order_by('-is_default', 'name')
+    account_id = request.GET.get('account', '').strip()
+    is_combined = not account_id or account_id.lower() == 'all'
+
+    if is_combined:
+        toll_account = None
+    else:
+        toll_account = get_object_or_404(TollAccount, pk=account_id)
+
     vehicle_id = request.GET.get('vehicle', '').strip()
     start_date_str = request.GET.get('start_date', '').strip()
     end_date_str = request.GET.get('end_date', '').strip()
-    
+
     start_date = None
     end_date = None
     if start_date_str:
         try:
             start_date = timezone.datetime.strptime(start_date_str, '%Y-%m-%d').date()
-        except ValueError: pass
+        except ValueError:
+            pass
     if end_date_str:
         try:
             end_date = timezone.datetime.strptime(end_date_str, '%Y-%m-%d').date()
-        except ValueError: pass
+        except ValueError:
+            pass
 
-    recharges_qs = toll_account.recharges.all()
-    entries_qs = toll_account.entries.select_related('vehicle').all()
+    if is_combined:
+        recharges_qs = TollRecharge.objects.select_related('toll_account', 'company_account').all()
+        entries_qs = TollEntry.objects.select_related('toll_account', 'vehicle').all()
+    else:
+        recharges_qs = toll_account.recharges.select_related('toll_account', 'company_account').all()
+        entries_qs = toll_account.entries.select_related('toll_account', 'vehicle').all()
 
     selected_vehicle = None
     if vehicle_id:
@@ -545,18 +587,34 @@ def toll_statement_print(request):
             selected_vehicle = Vehicle.objects.get(pk=vehicle_id)
             entries_qs = entries_qs.filter(vehicle=selected_vehicle)
             recharges_qs = recharges_qs.none()
-        except Vehicle.DoesNotExist: pass
+        except Vehicle.DoesNotExist:
+            pass
+
+    total_opening_balance = accounts.aggregate(total=Sum('opening_balance'))['total'] or Decimal('0.00')
+    total_current_balance = accounts.aggregate(total=Sum('current_balance_cached'))['total'] or Decimal('0.00')
+    earliest_opening_date = min((a.opening_balance_date for a in accounts if a.opening_balance_date), default=timezone.now().date())
 
     # Opening balance calculation
     if start_date:
-        prior_recharges = toll_account.recharges.filter(date__lt=start_date).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-        prior_entries = toll_account.entries.filter(date__lt=start_date).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-        if selected_vehicle:
-            period_opening = -(toll_account.entries.filter(vehicle=selected_vehicle, date__lt=start_date).aggregate(total=Sum('amount'))['total'] or Decimal('0.00'))
+        if is_combined:
+            prior_recharges = TollRecharge.objects.filter(date__lt=start_date).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+            prior_entries = TollEntry.objects.filter(date__lt=start_date).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+            if selected_vehicle:
+                period_opening = -(TollEntry.objects.filter(vehicle=selected_vehicle, date__lt=start_date).aggregate(total=Sum('amount'))['total'] or Decimal('0.00'))
+            else:
+                period_opening = total_opening_balance + prior_recharges - prior_entries
         else:
-            period_opening = toll_account.opening_balance + prior_recharges - prior_entries
+            prior_recharges = toll_account.recharges.filter(date__lt=start_date).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+            prior_entries = toll_account.entries.filter(date__lt=start_date).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+            if selected_vehicle:
+                period_opening = -(toll_account.entries.filter(vehicle=selected_vehicle, date__lt=start_date).aggregate(total=Sum('amount'))['total'] or Decimal('0.00'))
+            else:
+                period_opening = toll_account.opening_balance + prior_recharges - prior_entries
     else:
-        period_opening = Decimal('0.00') if selected_vehicle else toll_account.opening_balance
+        if selected_vehicle:
+            period_opening = Decimal('0.00')
+        else:
+            period_opening = total_opening_balance if is_combined else toll_account.opening_balance
 
     if start_date:
         recharges_qs = recharges_qs.filter(date__gte=start_date)
@@ -572,6 +630,7 @@ def toll_statement_print(request):
                 'date': r.date,
                 'created_at': r.created_at,
                 'type': 'Top-up',
+                'toll_account': r.toll_account,
                 'description': f"Top-up from {r.company_account.name} (Ref: {r.reference_number or '-'})",
                 'vehicle': '-',
                 'credit': r.amount,
@@ -582,6 +641,7 @@ def toll_statement_print(request):
             'date': e.date,
             'created_at': e.created_at,
             'type': 'Toll',
+            'toll_account': e.toll_account,
             'description': f"{e.toll_plaza or 'Toll Plaza'} (Slip: {e.transaction_reference or '-'})",
             'vehicle': e.vehicle.registration_plate,
             'credit': Decimal('0.00'),
@@ -595,13 +655,22 @@ def toll_statement_print(request):
         running = running + item['credit'] - item['debit']
         item['balance'] = running
 
+    total_period_recharges = sum(it['credit'] for it in items)
+    total_period_spent = sum(it['debit'] for it in items)
+
     context = {
         'account': toll_account,
+        'is_combined': is_combined,
+        'toll_accounts': accounts,
         'selected_vehicle': selected_vehicle,
         'start_date': start_date,
         'end_date': end_date,
+        'earliest_opening_date': earliest_opening_date,
         'opening_balance': period_opening,
         'closing_balance': running,
+        'current_balance': total_current_balance if is_combined else toll_account.current_balance_cached,
+        'total_period_recharges': total_period_recharges,
+        'total_period_spent': total_period_spent,
         'items': items,
         'now': timezone.now(),
     }

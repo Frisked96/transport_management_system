@@ -1,7 +1,7 @@
 {% extends 'print_base.html' %}
 {% load ledger_extras %}
 
-{% block title %}Toll Statement - {{ account.name }}{% endblock %}
+{% block title %}Toll Statement - {% if is_combined %}All Accounts (Combined){% else %}{{ account.name }}{% endif %}{% endblock %}
 
 {% block extra_head %}
     <script src="https://cdn.tailwindcss.com"></script>
@@ -14,12 +14,17 @@
     <div class="flex flex-col sm:flex-row justify-between items-start gap-4 mb-6">
         <div>
             <h1 class="text-2xl font-black text-slate-900 tracking-tight">TOLL & FASTAG LEDGER STATEMENT</h1>
+            {% if is_combined %}
+            <p class="text-base font-bold text-emerald-600 mt-0.5">All Toll & FASTag Accounts (Combined View)</p>
+            <p class="text-xs text-slate-600 font-medium">Consolidated statement across {{ toll_accounts.count }} wallets</p>
+            {% else %}
             <p class="text-base font-bold text-emerald-600 mt-0.5">{{ account.name }}</p>
             {% if account.provider %}
             <p class="text-xs text-slate-600 font-medium">Provider: {{ account.provider }}</p>
             {% endif %}
             {% if account.account_number %}
             <p class="text-xs text-slate-500 font-mono">Wallet / Tag ID: {{ account.account_number }}</p>
+            {% endif %}
             {% endif %}
         </div>
 
@@ -44,11 +49,11 @@
         </div>
         <div>
             <span class="text-slate-500 uppercase tracking-wider block text-[10px]">Total Top-ups (+)</span>
-            <span class="font-bold text-emerald-600 text-sm">₹{{ account.total_recharged|floatformat:2 }}</span>
+            <span class="font-bold text-emerald-600 text-sm">₹{{ total_period_recharges|floatformat:2 }}</span>
         </div>
         <div>
             <span class="text-slate-500 uppercase tracking-wider block text-[10px]">Total Tolls (-)</span>
-            <span class="font-bold text-rose-600 text-sm">₹{{ account.total_spent|floatformat:2 }}</span>
+            <span class="font-bold text-rose-600 text-sm">₹{{ total_period_spent|floatformat:2 }}</span>
         </div>
         <div>
             <span class="text-slate-500 uppercase tracking-wider block text-[10px]">Closing Balance</span>
@@ -62,6 +67,7 @@
             <tr class="bg-slate-100 border-y border-slate-200 font-bold uppercase text-[10px] text-slate-600 tracking-wider">
                 <th class="py-2.5 px-3">Date</th>
                 <th class="py-2.5 px-3">Type</th>
+                <th class="py-2.5 px-3">Wallet</th>
                 <th class="py-2.5 px-3">Vehicle</th>
                 <th class="py-2.5 px-3">Description / Plaza / Source</th>
                 <th class="py-2.5 px-3 text-right">Credit (+)</th>
@@ -72,8 +78,11 @@
         <tbody class="divide-y divide-slate-100">
             <!-- Opening Balance Row -->
             <tr class="bg-slate-50/50 font-semibold">
-                <td class="py-2 px-3 text-slate-500">{{ start_date|default:account.opening_balance_date|date:"d/m/Y" }}</td>
+                <td class="py-2 px-3 text-slate-500">
+                    {% if start_date %}{{ start_date|date:"d/m/Y" }}{% elif is_combined %}{{ earliest_opening_date|date:"d/m/Y" }}{% else %}{{ account.opening_balance_date|date:"d/m/Y" }}{% endif %}
+                </td>
                 <td class="py-2 px-3 text-slate-600 uppercase text-[10px]">Opening</td>
+                <td class="py-2 px-3 text-slate-600">{% if is_combined %}All Accounts{% else %}{{ account.name }}{% endif %}</td>
                 <td class="py-2 px-3 text-slate-400">-</td>
                 <td class="py-2 px-3 text-slate-600">Starting Balance Baseline</td>
                 <td class="py-2 px-3 text-right font-medium">{% if opening_balance > 0 %}₹{{ opening_balance|floatformat:2 }}{% else %}-{% endif %}</td>
@@ -87,6 +96,7 @@
                 <td class="py-2 px-3 font-semibold {% if item.type == 'Top-up' %}text-emerald-700{% else %}text-rose-700{% endif %}">
                     {{ item.type }}
                 </td>
+                <td class="py-2 px-3 text-slate-700 whitespace-nowrap">{{ item.toll_account.name }}</td>
                 <td class="py-2 px-3 font-bold text-slate-800 whitespace-nowrap">{{ item.vehicle }}</td>
                 <td class="py-2 px-3 text-slate-700">{{ item.description }}</td>
                 <td class="py-2 px-3 text-right font-medium text-emerald-600">
@@ -101,7 +111,7 @@
             </tr>
             {% empty %}
             <tr>
-                <td colspan="7" class="py-6 text-center text-slate-400">No transaction records in this period.</td>
+                <td colspan="8" class="py-6 text-center text-slate-400">No transaction records in this period.</td>
             </tr>
             {% endfor %}
         </tbody>

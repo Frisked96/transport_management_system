@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% load humanize ledger_extras %}
 
-{% block title %}Toll & FASTag Ledger - {{ current_account.name }} - TMS{% endblock %}
+{% block title %}Toll & FASTag Ledger{% if not is_combined and current_account %} - {{ current_account.name }}{% else %} - All Accounts{% endif %} - TMS{% endblock %}
 
 {% block content %}
 <!-- BEGIN: Page Header -->
@@ -10,9 +10,22 @@
         <div class="flex items-center space-x-2 text-sm text-slate-500 mb-1">
             <a href="{% url 'financialrecord-list' %}" class="hover:text-emerald-600 transition-colors">Finance</a>
             <i class="fa-solid fa-chevron-right text-[10px]"></i>
-            <span>Toll & FASTag Ledger</span>
+            <a href="{% url 'toll-ledger' %}" class="hover:text-emerald-600 transition-colors">Toll & FASTag Ledger</a>
+            {% if not is_combined and current_account %}
+            <i class="fa-solid fa-chevron-right text-[10px]"></i>
+            <span class="text-slate-800 font-semibold">{{ current_account.name }}</span>
+            {% else %}
+            <i class="fa-solid fa-chevron-right text-[10px]"></i>
+            <span class="text-slate-800 font-semibold">Combined View</span>
+            {% endif %}
         </div>
-        <div class="flex items-center gap-3">
+        <div class="flex flex-wrap items-center gap-3">
+            {% if is_combined %}
+            <h1 class="text-3xl font-bold text-slate-900">All Toll & FASTag Accounts</h1>
+            <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-800 border border-indigo-200">
+                Combined General View ({{ toll_accounts.count }} Wallets)
+            </span>
+            {% else %}
             <h1 class="text-3xl font-bold text-slate-900">{{ current_account.name }}</h1>
             {% if current_account.provider %}
             <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-200">
@@ -24,26 +37,30 @@
                 ID: {{ current_account.account_number }}
             </span>
             {% endif %}
+            <a href="{% url 'toll-ledger' %}" class="text-xs font-semibold text-emerald-600 hover:text-emerald-700 inline-flex items-center gap-1.5 ml-2 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200 transition-colors">
+                <i class="fa-solid fa-arrow-left text-[10px]"></i> View All Accounts
+            </a>
+            {% endif %}
         </div>
     </div>
     
     <div class="flex flex-wrap items-center gap-2">
         {% if perms.ledger.add_tollrecharge %}
-        <a href="{% url 'toll-recharge-create' %}?account={{ current_account.pk }}" class="px-4 py-2 bg-emerald-600 text-white rounded-md text-sm font-bold hover:bg-emerald-700 shadow-sm transition-colors flex items-center">
+        <a href="{% url 'toll-recharge-create' %}{% if not is_combined and current_account %}?account={{ current_account.pk }}{% endif %}" class="px-4 py-2 bg-emerald-600 text-white rounded-md text-sm font-bold hover:bg-emerald-700 shadow-sm transition-colors flex items-center">
             <i class="fa-solid fa-money-bill-transfer mr-2"></i>+ Top-up Balance
         </a>
         {% endif %}
         
         {% if perms.ledger.add_tollentry %}
-        <a href="{% url 'toll-entry-create' %}?account={{ current_account.pk }}{% if selected_vehicle %}&vehicle={{ selected_vehicle.pk }}{% endif %}" class="px-4 py-2 bg-slate-800 text-white rounded-md text-sm font-bold hover:bg-slate-900 shadow-sm transition-colors flex items-center">
+        <a href="{% url 'toll-entry-create' %}{% if not is_combined and current_account %}?account={{ current_account.pk }}{% if selected_vehicle %}&vehicle={{ selected_vehicle.pk }}{% endif %}{% elif selected_vehicle %}?vehicle={{ selected_vehicle.pk }}{% endif %}" class="px-4 py-2 bg-slate-800 text-white rounded-md text-sm font-bold hover:bg-slate-900 shadow-sm transition-colors flex items-center">
             <i class="fa-solid fa-ticket mr-2"></i>+ Add Toll Entry
         </a>
-        <a href="{% url 'toll-entry-bulk-create' %}?account={{ current_account.pk }}" class="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-bold hover:bg-blue-700 shadow-sm transition-colors flex items-center">
+        <a href="{% url 'toll-entry-bulk-create' %}{% if not is_combined and current_account %}?account={{ current_account.pk }}{% endif %}" class="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-bold hover:bg-blue-700 shadow-sm transition-colors flex items-center">
             <i class="fa-solid fa-table-list mr-2"></i>+ Bulk Add Tolls
         </a>
         {% endif %}
         
-        <a href="{% url 'toll-statement-print' %}?account={{ current_account.pk }}&start_date={{ start_date }}&end_date={{ end_date }}&vehicle={{ selected_vehicle.pk|default:'' }}" target="_blank" class="px-4 py-2 border border-slate-300 rounded-md bg-white text-slate-700 text-sm font-bold hover:bg-slate-50 transition-colors flex items-center shadow-sm">
+        <a href="{% url 'toll-statement-print' %}?account={{ current_account.pk|default:'' }}&start_date={{ start_date }}&end_date={{ end_date }}&vehicle={{ selected_vehicle.pk|default:'' }}" target="_blank" class="px-4 py-2 border border-slate-300 rounded-md bg-white text-slate-700 text-sm font-bold hover:bg-slate-50 transition-colors flex items-center shadow-sm">
             <i class="fa-solid fa-print mr-2 text-slate-500"></i>Statement
         </a>
 
@@ -56,13 +73,38 @@
 </header>
 <!-- END: Page Header -->
 
+<!-- BEGIN: Wallet Quick Selector Strip -->
+{% if toll_accounts.count > 1 %}
+<div class="mb-6 flex flex-wrap items-center gap-2 bg-slate-100/70 p-2.5 rounded-xl border border-slate-200">
+    <span class="text-[11px] font-bold text-slate-500 uppercase tracking-wider mr-1 ml-1 flex items-center gap-1.5">
+        <i class="fa-solid fa-wallet text-slate-400"></i> Wallets:
+    </span>
+    <a href="{% url 'toll-ledger' %}{% if selected_vehicle %}?vehicle={{ selected_vehicle.pk }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}"
+       class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm {% if is_combined %}bg-slate-900 text-white shadow-slate-300{% else %}bg-white text-slate-700 border border-slate-200 hover:bg-slate-50{% endif %}">
+        <i class="fa-solid fa-layer-group"></i> All Accounts (Combined)
+    </a>
+    {% for acc in toll_accounts %}
+    <a href="{% url 'toll-ledger' %}?account={{ acc.pk }}{% if selected_vehicle %}&vehicle={{ selected_vehicle.pk }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}"
+       class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm {% if not is_combined and current_account and current_account.pk == acc.pk %}bg-emerald-700 text-white shadow-emerald-200{% else %}bg-white text-slate-700 border border-slate-200 hover:bg-slate-50{% endif %}">
+        <span>{{ acc.name }}</span>
+        <span class="px-1.5 py-0.5 rounded text-[10px] {% if not is_combined and current_account and current_account.pk == acc.pk %}bg-emerald-800 text-emerald-100{% elif acc.current_balance_cached < 0 %}bg-rose-100 text-rose-700 font-extrabold{% elif acc.current_balance_cached < 5000 %}bg-amber-100 text-amber-700 font-extrabold{% else %}bg-emerald-50 text-emerald-700 font-extrabold{% endif %}">
+            ₹{{ acc.current_balance_cached|floatformat:0|intcomma }}
+        </span>
+    </a>
+    {% endfor %}
+</div>
+{% endif %}
+<!-- END: Wallet Quick Selector Strip -->
+
 <!-- BEGIN: Metrics Cards -->
 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
     <!-- Current Toll Balance -->
     <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden">
         <div class="flex justify-between items-start">
             <div>
-                <p class="text-xs font-bold uppercase tracking-wider text-slate-500">Available Toll Balance</p>
+                <p class="text-xs font-bold uppercase tracking-wider text-slate-500">
+                    {% if is_combined %}Combined Available Balance{% else %}Available Toll Balance{% endif %}
+                </p>
                 <h3 class="text-2xl lg:text-3xl font-extrabold mt-1 {% if current_balance < 0 %}text-rose-600{% elif current_balance < 5000 %}text-amber-600{% else %}text-emerald-600{% endif %}">
                     ₹{{ current_balance|floatformat:2|intcomma }}
                 </h3>
@@ -72,7 +114,11 @@
             </div>
         </div>
         <div class="mt-3 flex items-center text-xs">
-            {% if current_balance < 0 %}
+            {% if is_combined %}
+            <span class="text-slate-600 font-medium flex items-center">
+                <i class="fa-solid fa-layer-group mr-1.5 text-indigo-500"></i>Across all {{ toll_accounts.count }} toll accounts
+            </span>
+            {% elif current_balance < 0 %}
             <span class="text-rose-600 font-bold flex items-center">
                 <i class="fa-solid fa-triangle-exclamation mr-1"></i>Overdrawn / Needs Top-up
             </span>
@@ -92,7 +138,9 @@
     <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
         <div class="flex justify-between items-start">
             <div>
-                <p class="text-xs font-bold uppercase tracking-wider text-slate-500">Initial Starting Balance</p>
+                <p class="text-xs font-bold uppercase tracking-wider text-slate-500">
+                    {% if is_combined %}Combined Starting Balance{% else %}Initial Starting Balance{% endif %}
+                </p>
                 <h3 class="text-2xl font-bold text-slate-900 mt-1">
                     ₹{{ initial_starting_balance|floatformat:2|intcomma }}
                 </h3>
@@ -102,7 +150,11 @@
             </div>
         </div>
         <p class="mt-3 text-xs text-slate-500">
+            {% if is_combined %}
+            Total baseline across all wallets
+            {% else %}
             Baseline as of {{ current_account.opening_balance_date|date:"d M Y" }}
+            {% endif %}
         </p>
     </div>
 
@@ -148,18 +200,17 @@
 <section class="bg-slate-50 p-4 rounded-xl border border-slate-200 mb-6 shadow-sm">
     <form method="get" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 items-end">
         <!-- Toll Account -->
-        {% if toll_accounts.count > 1 %}
         <div>
             <label class="block text-[11px] font-bold text-slate-600 uppercase mb-1">Toll Wallet</label>
             <select name="account" class="w-full rounded-md border-slate-300 text-xs py-2 bg-white focus:ring-emerald-500 focus:border-emerald-500">
+                <option value="" {% if is_combined %}selected{% endif %}>All Accounts (Combined View)</option>
                 {% for acc in toll_accounts %}
-                <option value="{{ acc.pk }}" {% if acc.pk == current_account.pk %}selected{% endif %}>{{ acc.name }}</option>
+                <option value="{{ acc.pk }}" {% if not is_combined and current_account and current_account.pk == acc.pk %}selected{% endif %}>
+                    {{ acc.name }} (₹{{ acc.current_balance_cached|floatformat:0|intcomma }})
+                </option>
                 {% endfor %}
             </select>
         </div>
-        {% else %}
-        <input type="hidden" name="account" value="{{ current_account.pk }}">
-        {% endif %}
 
         <!-- Vehicle -->
         <div>
@@ -199,7 +250,7 @@
             <button type="submit" class="flex-1 px-4 py-2 bg-slate-800 text-white rounded-md text-xs font-bold hover:bg-slate-900 transition-colors shadow-sm">
                 Filter
             </button>
-            <a href="{% url 'toll-ledger' %}?account={{ current_account.pk }}" class="px-3 py-2 bg-white border border-slate-300 text-slate-700 rounded-md text-xs font-bold hover:bg-slate-50 transition-colors">
+            <a href="{% url 'toll-ledger' %}" class="px-3 py-2 bg-white border border-slate-300 text-slate-700 rounded-md text-xs font-bold hover:bg-slate-50 transition-colors">
                 Clear
             </a>
         </div>
@@ -214,7 +265,9 @@
             <h3 class="font-bold text-slate-900 text-base">Transaction Statement & Running Balance</h3>
             <p class="text-xs text-slate-500 mt-0.5">
                 {% if selected_vehicle %}
-                Showing toll deductions incurred by <strong>{{ selected_vehicle.registration_plate }}</strong>
+                Showing toll deductions incurred by <strong>{{ selected_vehicle.registration_plate }}</strong>{% if is_combined %} across all toll accounts{% else %} on <strong>{{ current_account.name }}</strong>{% endif %}
+                {% elif is_combined %}
+                Showing combined ledger transactions across <strong>all {{ toll_accounts.count }} toll accounts</strong>
                 {% else %}
                 Showing complete ledger history for <strong>{{ current_account.name }}</strong>
                 {% endif %}
@@ -231,6 +284,7 @@
                 <tr class="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase text-[11px] tracking-wider">
                     <th class="px-4 py-3 whitespace-nowrap">Date</th>
                     <th class="px-4 py-3 whitespace-nowrap">Type</th>
+                    <th class="px-4 py-3 whitespace-nowrap">Toll Wallet</th>
                     <th class="px-4 py-3 whitespace-nowrap">Vehicle</th>
                     <th class="px-4 py-3">Plaza / Source Account</th>
                     <th class="px-4 py-3">Ref / UTR</th>
@@ -245,12 +299,21 @@
                 <!-- Row: Opening Balance -->
                 <tr class="bg-slate-50/70 font-semibold text-slate-700">
                     <td class="px-4 py-3 whitespace-nowrap text-slate-500">
-                        {{ start_date|default:current_account.opening_balance_date|date:"d M Y" }}
+                        {% if start_date %}{{ start_date|date:"d M Y" }}{% elif is_combined %}{{ earliest_opening_date|date:"d M Y" }}{% else %}{{ current_account.opening_balance_date|date:"d M Y" }}{% endif %}
                     </td>
                     <td class="px-4 py-3">
                         <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-slate-200 text-slate-700">
                             Opening Balance
                         </span>
+                    </td>
+                    <td class="px-4 py-3 text-slate-600 font-medium">
+                        {% if is_combined %}
+                        <span class="inline-flex items-center text-xs font-semibold text-slate-600">
+                            <i class="fa-solid fa-layer-group text-[10px] mr-1 text-slate-400"></i>All Accounts
+                        </span>
+                        {% else %}
+                        <span class="text-xs font-semibold text-slate-700">{{ current_account.name }}</span>
+                        {% endif %}
                     </td>
                     <td class="px-4 py-3 text-slate-400">-</td>
                     <td class="px-4 py-3 font-medium text-slate-600">
@@ -285,6 +348,15 @@
                         <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-rose-100 text-rose-800 border border-rose-200">
                             <i class="fa-solid fa-road mr-1"></i>Toll
                         </span>
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-3 whitespace-nowrap">
+                        {% if item.toll_account %}
+                        <a href="{% url 'toll-ledger' %}?account={{ item.toll_account.pk }}" class="font-semibold text-slate-800 hover:text-emerald-600 transition-colors flex items-center gap-1.5" title="Filter to this wallet">
+                            <i class="fa-solid fa-wallet text-[10px] text-slate-400"></i>{{ item.toll_account.name }}
+                        </a>
+                        {% else %}
+                        <span class="text-slate-400">-</span>
                         {% endif %}
                     </td>
                     <td class="px-4 py-3 whitespace-nowrap">
@@ -337,7 +409,7 @@
                 {% empty %}
                 {% if not transactions %}
                 <tr>
-                    <td colspan="10" class="px-4 py-8 text-center text-slate-500">
+                    <td colspan="11" class="px-4 py-8 text-center text-slate-500">
                         <i class="fa-solid fa-road text-3xl text-slate-200 mb-2 block"></i>
                         No transactions recorded for the selected period.
                     </td>

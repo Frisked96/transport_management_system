@@ -250,3 +250,122 @@ class TollLedgerSystemTests(TestCase):
         self.assertContains(response, 'Toll Expenses')
         self.assertContains(response, 'Panipat Toll')
         self.assertContains(response, '720.00')
+
+    def test_toll_ledger_combined_view_multiple_accounts(self):
+        """
+        Verify that toll ledger view shows a combined view of all toll accounts:
+        1. Default view shows transactions and consolidated balances across all accounts.
+        2. Filter by specific account shows only that account.
+        3. Filter by vehicle in combined view shows entries for that vehicle across all accounts.
+        """
+        # Create second Toll Account
+        second_account = TollAccount.objects.create(
+            name='Secondary IDFC Wallet',
+            provider='IDFC Bank FASTag',
+            account_number='FASTAG-2002',
+            opening_balance=Decimal('25000.00'),
+            opening_balance_date=timezone.now().date(),
+            is_default=False
+        )
+
+        # Recharge account 1: 10,000
+        TollRecharge.objects.create(
+            toll_account=self.toll_account,
+            company_account=self.company_account,
+            date=timezone.now().date(),
+            amount=Decimal('10000.00'),
+            payment_mode=TollRecharge.MODE_BANK_TRANSFER,
+            created_by=self.user
+        )
+
+        # Recharge account 2: 5,000
+        TollRecharge.objects.create(
+            toll_account=second_account,
+            company_account=self.company_account,
+            date=timezone.now().date(),
+            amount=Decimal('5000.00'),
+            payment_mode=TollRecharge.MODE_BANK_TRANSFER,
+            created_by=self.user
+        )
+
+        # Toll Entry on account 1 for vehicle 1: 800
+        TollEntry.objects.create(
+            toll_account=self.toll_account,
+            vehicle=self.vehicle_1,
+            date=timezone.now().date(),
+            amount=Decimal('800.00'),
+            toll_plaza='Kherki Daula',
+            created_by=self.user
+        )
+
+        # Toll Entry on account 2 for vehicle 1: 450
+        TollEntry.objects.create(
+            toll_account=second_account,
+            vehicle=self.vehicle_1,
+            date=timezone.now().date(),
+            amount=Decimal('450.00'),
+            toll_plaza='Manesar Plaza',
+            created_by=self.user
+        )
+
+        # Toll Entry on account 2 for vehicle 2: 1,200
+        TollEntry.objects.create(
+            toll_account=second_account,
+            vehicle=self.vehicle_2,
+            date=timezone.now().date(),
+            amount=Decimal('1200.00'),
+            toll_plaza='Shahjahanpur Plaza',
+            created_by=self.user
+        )
+
+        self.toll_account.refresh_from_db()
+        second_account.refresh_from_db()
+
+        # Account 1 balance: 15,000 + 10,000 - 800 = 24,200
+        self.assertEqual(self.toll_account.current_balance_cached, Decimal('24200.00'))
+        # Account 2 balance: 25,000 + 5,000 - 450 - 1,200 = 28,350
+        self.assertEqual(second_account.current_balance_cached, Decimal('28350.00'))
+        # Combined balance: 24,200 + 28,350 = 52,550
+
+        # 1. Access toll ledger without 'account' param -> Combined View
+        url = reverse('toll-ledger')
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context['is_combined'])
+        self.assertEqual(response.context['current_balance'], Decimal('52550.00'))
+        self.assertEqual(response.context['initial_starting_balance'], Decimal('40000.00'))
+        self.assertContains(response, 'All Toll & FASTag Accounts')
+        self.assertContains(response, 'Combined General View')
+        self.assertContains(response, 'Primary FASTag Wallet')
+        self.assertContains(response, 'Secondary IDFC Wallet')
+        self.assertContains(response, 'Kherki Daula')
+        self.assertContains(response, 'Manesar Plaza')
+        self.assertContains(response, 'Shahjahanpur Plaza')
+
+        # 2. Filter to single account 1 -> Single Account View
+        url_acc1 = f"{reverse('toll-ledger')}?account={self.toll_account.pk}"
+        resp_acc1 = self.client.get(url_acc1)
+        self.assertEqual(resp_acc1.status_code, 200)
+        self.assertFalse(resp_acc1.context['is_combined'])
+        self.assertEqual(resp_acc1.context['current_balance'], Decimal('24200.00'))
+        self.assertContains(resp_acc1, 'Kherki Daula')
+        self.assertNotContains(resp_acc1, 'Manesar Plaza')
+        self.assertNotContains(resp_acc1, 'Shahjahanpur Plaza')
+
+        # 3. Filter to vehicle 1 in combined view -> shows vehicle 1 entries across BOTH accounts
+        url_veh1 = f"{reverse('toll-ledger')}?vehicle={self.vehicle_1.pk}"
+        resp_veh1 = self.client.get(url_veh1)
+        self.assertEqual(resp_veh1.status_code, 200)
+        self.assertTrue(resp_veh1.context['is_combined'])
+        self.assertContains(resp_veh1, 'Kherki Daula')
+        self.assertContains(resp_veh1, 'Manesar Plaza')
+        self.assertNotContains(resp_veh1, 'Shahjahanpur Plaza')
+
+        # 4. Statement print view in combined mode
+        stmt_url = reverse('toll-statement-print')
+        resp_stmt = self.client.get(stmt_url)
+        self.assertEqual(resp_stmt.status_code, 200)
+        self.assertTrue(resp_stmt.context['is_combined'])
+        self.assertContains(resp_stmt, 'All Toll & FASTag Accounts (Combined View)')
+        self.assertContains(resp_stmt, 'Primary FASTag Wallet')
+        self.assertContains(resp_stmt, 'Secondary IDFC Wallet')
