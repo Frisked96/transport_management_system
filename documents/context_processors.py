@@ -51,8 +51,8 @@ def document_alerts(request):
 
     # Sliced querysets for the navbar dropdown (top 10 most urgent to prevent memory bloat)
     return {
-        'expiring_docs': expiring_docs_qs.select_related('vehicle', 'driver__user')[:10],
-        'expired_docs': expired_docs_qs.select_related('vehicle', 'driver__user')[:10],
+        'expiring_docs': expiring_docs_qs.select_related('vehicle', 'driver', 'driver__user')[:10],
+        'expired_docs': expired_docs_qs.select_related('vehicle', 'driver', 'driver__user')[:10],
         'due_maintenance': due_maintenance_qs.select_related('vehicle')[:10],
         'total_alerts': total_alerts,
         'is_manager': is_manager,

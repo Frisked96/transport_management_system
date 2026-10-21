@@ -35,8 +35,22 @@
                     <div class="flex items-start">
                         <div class="flex-shrink-0 pt-0.5"><i class="fa-solid fa-circle-exclamation text-red-500"></i></div>
                         <div class="ml-3 w-0 flex-1">
-                            <p class="text-sm font-medium text-slate-900">{{ doc }}</p>
-                            <p class="mt-1 text-xs text-red-600 font-medium">Expired on {{ doc.expiry_date }}</p>
+                            <p class="text-sm font-medium text-slate-900">
+                                {% if doc.vehicle %}
+                                <span class="font-bold text-slate-900">{{ doc.vehicle.registration_plate }}</span>
+                                <span class="text-slate-400 font-normal">&bull;</span>
+                                {{ doc.document_name }}
+                                {% elif doc.driver %}
+                                <span class="font-bold text-slate-900">{{ doc.driver.name }}</span>
+                                <span class="text-slate-400 font-normal">&bull;</span>
+                                {{ doc.document_name }}
+                                {% else %}
+                                {{ doc.document_name }}
+                                {% endif %}
+                            </p>
+                            <p class="mt-1 text-xs text-red-600 font-medium">
+                                Expired on {{ doc.expiry_date|date:"d M Y" }}{% if doc.document_number %} &bull; #{{ doc.document_number }}{% endif %}
+                            </p>
                         </div>
                     </div>
                 </a>
@@ -44,10 +58,24 @@
                 {% for doc in expiring_docs %}
                 <a href="{% url 'document-list' %}?type={% if doc.driver %}drivers{% else %}vehicles{% endif %}&alert=expiring" class="block px-4 py-3 hover:bg-slate-50 border-b border-slate-50 last:border-0">
                     <div class="flex items-start">
-                        <div class="flex-shrink-0 pt-0.5"><i class="fa-solid fa-triangle-exclamation text-yellow-500"></i></div>
+                        <div class="flex-shrink-0 pt-0.5"><i class="fa-solid fa-triangle-exclamation text-amber-500"></i></div>
                         <div class="ml-3 w-0 flex-1">
-                            <p class="text-sm font-medium text-slate-900">{{ doc }}</p>
-                            <p class="mt-1 text-xs text-yellow-600 font-medium">Expires on {{ doc.expiry_date }}</p>
+                            <p class="text-sm font-medium text-slate-900">
+                                {% if doc.vehicle %}
+                                <span class="font-bold text-slate-900">{{ doc.vehicle.registration_plate }}</span>
+                                <span class="text-slate-400 font-normal">&bull;</span>
+                                {{ doc.document_name }}
+                                {% elif doc.driver %}
+                                <span class="font-bold text-slate-900">{{ doc.driver.name }}</span>
+                                <span class="text-slate-400 font-normal">&bull;</span>
+                                {{ doc.document_name }}
+                                {% else %}
+                                {{ doc.document_name }}
+                                {% endif %}
+                            </p>
+                            <p class="mt-1 text-xs text-amber-600 font-medium">
+                                Expires on {{ doc.expiry_date|date:"d M Y" }}{% if doc.document_number %} &bull; #{{ doc.document_number }}{% endif %}
+                            </p>
                         </div>
                     </div>
                 </a>

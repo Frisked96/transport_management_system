@@ -21,9 +21,15 @@ class DocumentListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
     paginate_by = 10
     permission_required = 'documents.view_document'
 
+    def get_paginate_by(self, queryset):
+        alert_filter = self.request.GET.get('alert', '').strip().lower()
+        if alert_filter in ['alerts', 'all_alerts', 'active', 'expired', 'expiring', 'expiring_soon']:
+            return 25
+        return self.paginate_by
+
     def get_queryset(self):
         self.doc_type = self.request.GET.get('type', 'vehicles')
-        search_term = self.request.GET.get('search')
+        search_term = self.request.GET.get('search', '').strip()
         self.alert_filter = self.request.GET.get('alert', '').strip().lower()
         self.ownership_filter = self.request.GET.get('ownership', 'owned').strip().lower()
         if not self.ownership_filter:
@@ -31,7 +37,66 @@ class DocumentListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
         
         today = timezone.now().date()
         warning_date = today + timedelta(days=30)
+        is_alert_mode = self.alert_filter in ['alerts', 'all_alerts', 'active', 'expired', 'expiring', 'expiring_soon']
 
+        # When listing alerts, return the alerting Document instances directly
+        if is_alert_mode:
+            if self.doc_type == 'drivers':
+                queryset = Document.objects.filter(
+                    driver__isnull=False,
+                    never_expires=False,
+                    expiry_date__isnull=False
+                )
+                if self.alert_filter in ['alerts', 'all_alerts', 'active']:
+                    queryset = queryset.filter(expiry_date__lte=warning_date)
+                elif self.alert_filter == 'expired':
+                    queryset = queryset.filter(expiry_date__lt=today)
+                elif self.alert_filter in ['expiring', 'expiring_soon']:
+                    queryset = queryset.filter(expiry_date__gte=today, expiry_date__lte=warning_date)
+
+                if search_term:
+                    queryset = queryset.filter(
+                        Q(document_name__icontains=search_term) |
+                        Q(document_number__icontains=search_term) |
+                        Q(driver__user__first_name__icontains=search_term) |
+                        Q(driver__user__last_name__icontains=search_term) |
+                        Q(driver__user__username__icontains=search_term) |
+                        Q(driver__employee_id__icontains=search_term) |
+                        Q(driver__license_number__icontains=search_term)
+                    )
+
+                return queryset.select_related('driver', 'driver__user', 'added_by').prefetch_related('files', 'renewals').order_by('expiry_date', 'document_name')
+            else:
+                queryset = Document.objects.filter(
+                    vehicle__isnull=False,
+                    never_expires=False,
+                    expiry_date__isnull=False
+                )
+
+                # Ownership filter (default: Company Owned)
+                if self.ownership_filter == 'owned':
+                    queryset = queryset.filter(vehicle__ownership=Vehicle.OWNERSHIP_OWNED)
+                elif self.ownership_filter == 'attached':
+                    queryset = queryset.filter(vehicle__ownership=Vehicle.OWNERSHIP_ATTACHED)
+
+                if self.alert_filter in ['alerts', 'all_alerts', 'active']:
+                    queryset = queryset.filter(expiry_date__lte=warning_date)
+                elif self.alert_filter == 'expired':
+                    queryset = queryset.filter(expiry_date__lt=today)
+                elif self.alert_filter in ['expiring', 'expiring_soon']:
+                    queryset = queryset.filter(expiry_date__gte=today, expiry_date__lte=warning_date)
+
+                if search_term:
+                    queryset = queryset.filter(
+                        Q(document_name__icontains=search_term) |
+                        Q(document_number__icontains=search_term) |
+                        Q(vehicle__registration_plate__icontains=search_term) |
+                        Q(vehicle__make_model__icontains=search_term)
+                    )
+
+                return queryset.select_related('vehicle', 'added_by').prefetch_related('files', 'renewals').order_by('expiry_date', 'document_name')
+
+        # Normal mode (not alert filter): list vehicles or drivers
         if self.doc_type == 'drivers':
             queryset = Driver.objects.select_related('user').prefetch_related('documents').annotate(
                 total_docs=Count('documents'),
@@ -77,14 +142,6 @@ class DocumentListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
                     Q(registration_plate__icontains=search_term) |
                     Q(make_model__icontains=search_term)
                 )
-        
-        # Apply Alert filter
-        if self.alert_filter in ['alerts', 'all_alerts', 'active']:
-            queryset = queryset.filter(Q(expired_count__gt=0) | Q(expiring_count__gt=0))
-        elif self.alert_filter == 'expired':
-            queryset = queryset.filter(expired_count__gt=0)
-        elif self.alert_filter in ['expiring', 'expiring_soon']:
-            queryset = queryset.filter(expiring_count__gt=0)
 
         return queryset
 
@@ -97,20 +154,37 @@ class DocumentListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
         
         today = timezone.now().date()
         warning_date = today + timedelta(days=30)
+        is_alert_mode = self.alert_filter in ['alerts', 'all_alerts', 'active', 'expired', 'expiring', 'expiring_soon']
+        context['is_alert_mode'] = is_alert_mode
 
         if self.doc_type == 'drivers':
-            context['drivers'] = context['page_obj']
-            context['vehicles'] = []
             context['summary_counts'] = Driver.objects.aggregate(
                 total=Count('id', distinct=True),
                 expired=Count('id', filter=Q(documents__never_expires=False, documents__expiry_date__lt=today), distinct=True),
                 expiring=Count('id', filter=Q(documents__never_expires=False, documents__expiry_date__lte=warning_date, documents__expiry_date__gte=today), distinct=True),
                 alerts=Count('id', filter=Q(documents__never_expires=False, documents__expiry_date__lte=warning_date), distinct=True),
             )
+            context['alert_doc_counts'] = Document.objects.filter(
+                driver__isnull=False, never_expires=False, expiry_date__isnull=False
+            ).aggregate(
+                total=Count('id'),
+                expired=Count('id', filter=Q(expiry_date__lt=today)),
+                expiring=Count('id', filter=Q(expiry_date__lte=warning_date, expiry_date__gte=today)),
+                alerts=Count('id', filter=Q(expiry_date__lte=warning_date)),
+            )
+
+            if is_alert_mode:
+                context['alerts'] = context['page_obj']
+                context['documents'] = context['page_obj']
+                driver_ids = [doc.driver_id for doc in context['page_obj'] if doc.driver_id]
+                context['drivers'] = Driver.objects.filter(id__in=driver_ids)
+                context['vehicles'] = []
+            else:
+                context['drivers'] = context['page_obj']
+                context['vehicles'] = []
+                context['alerts'] = []
+                context['documents'] = []
         else:
-            context['vehicles'] = context['page_obj']
-            context['drivers'] = []
-            
             # Base queryset for summary counts reflecting current ownership filter
             base_veh = Vehicle.objects.all()
             if self.ownership_filter == 'owned':
@@ -124,9 +198,35 @@ class DocumentListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
                 expiring=Count('id', filter=Q(documents__never_expires=False, documents__expiry_date__lte=warning_date, documents__expiry_date__gte=today), distinct=True),
                 alerts=Count('id', filter=Q(documents__never_expires=False, documents__expiry_date__lte=warning_date), distinct=True),
             )
+
+            base_doc_qs = Document.objects.filter(vehicle__isnull=False, never_expires=False, expiry_date__isnull=False)
+            if self.ownership_filter == 'owned':
+                base_doc_qs = base_doc_qs.filter(vehicle__ownership=Vehicle.OWNERSHIP_OWNED)
+            elif self.ownership_filter == 'attached':
+                base_doc_qs = base_doc_qs.filter(vehicle__ownership=Vehicle.OWNERSHIP_ATTACHED)
+
+            context['alert_doc_counts'] = base_doc_qs.aggregate(
+                total=Count('id'),
+                expired=Count('id', filter=Q(expiry_date__lt=today)),
+                expiring=Count('id', filter=Q(expiry_date__lte=warning_date, expiry_date__gte=today)),
+                alerts=Count('id', filter=Q(expiry_date__lte=warning_date)),
+            )
+
             context['owned_vehicles_count'] = Vehicle.objects.filter(ownership=Vehicle.OWNERSHIP_OWNED).count()
             context['attached_vehicles_count'] = Vehicle.objects.filter(ownership=Vehicle.OWNERSHIP_ATTACHED).count()
             context['total_vehicles_count'] = Vehicle.objects.count()
+
+            if is_alert_mode:
+                context['alerts'] = context['page_obj']
+                context['documents'] = context['page_obj']
+                vehicle_ids = [doc.vehicle_id for doc in context['page_obj'] if doc.vehicle_id]
+                context['vehicles'] = Vehicle.objects.filter(id__in=vehicle_ids)
+                context['drivers'] = []
+            else:
+                context['vehicles'] = context['page_obj']
+                context['drivers'] = []
+                context['alerts'] = []
+                context['documents'] = []
             
         return context
 

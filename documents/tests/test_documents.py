@@ -154,7 +154,7 @@ class DocumentAlertsTests(TestCase):
         self.assertEqual(document_alerts(req_anon), {})
 
     def test_regular_user_sees_notifications_in_template(self):
-        """Verify that regular non-manager users see the notification bell and alerts in the UI."""
+        """Verify that regular non-manager users see the notification bell and alerts in the UI with vehicle numbers."""
         today = timezone.now().date()
         Document.objects.create(
             vehicle=self.vehicle,
@@ -167,6 +167,98 @@ class DocumentAlertsTests(TestCase):
         self.assertContains(response, 'fa-bell')
         self.assertContains(response, 'Alerts')
         self.assertContains(response, 'Tax Token')
+        # Check that vehicle number is also displayed with the alert in notification
+        self.assertContains(response, self.vehicle.registration_plate)
+
+    def test_notifications_include_vehicle_and_driver_identifiers(self):
+        """Verify expired/expiring docs in alerts dropdown display vehicle plate or driver name."""
+        today = timezone.now().date()
+        doc_veh = Document.objects.create(
+            vehicle=self.vehicle,
+            document_name='Road Tax',
+            document_number='RT-888',
+            expiry_date=today - timedelta(days=3)
+        )
+        u_drv = User.objects.create_user(username='sarah_d', first_name='Sarah', last_name='Connor', password='password123')
+        drv = Driver.objects.create(user=u_drv, employee_id='EMP-001')
+        doc_drv = Document.objects.create(
+            driver=drv,
+            document_name='Commercial License',
+            expiry_date=today + timedelta(days=5)
+        )
+        self.client.login(username='driver_john', password='password123')
+        response = self.client.get(reverse('trip-list'))
+        self.assertEqual(response.status_code, 200)
+        # Vehicle alert should have vehicle registration plate
+        self.assertContains(response, self.vehicle.registration_plate)
+        self.assertContains(response, 'Road Tax')
+        # Driver alert should have driver name
+        self.assertContains(response, drv.name)
+        self.assertContains(response, 'Commercial License')
+
+    def test_direct_alert_mode_lists_documents_without_vehicle_expansion(self):
+        """Test that in alert mode, documents are listed directly without requiring vehicle expansion."""
+        today = timezone.now().date()
+        veh_a = Vehicle.objects.create(registration_plate='MH 12 ALERT 1')
+        veh_b = Vehicle.objects.create(registration_plate='MH 12 ALERT 2')
+
+        doc_expired = Document.objects.create(
+            vehicle=veh_a,
+            document_name='National Permit',
+            document_number='NP-100',
+            expiry_date=today - timedelta(days=4)
+        )
+        doc_expiring = Document.objects.create(
+            vehicle=veh_b,
+            document_name='Insurance Policy',
+            document_number='INS-200',
+            expiry_date=today + timedelta(days=7)
+        )
+
+        view_perm = Permission.objects.get(codename='view_document')
+        change_perm = Permission.objects.get(codename='change_document')
+        self.regular_user.user_permissions.add(view_perm, change_perm)
+        self.client.login(username='driver_john', password='password123')
+
+        url = reverse('document-list')
+
+        # 1. Active alerts: both documents returned directly in alerts context
+        res_alerts = self.client.get(url, {'type': 'vehicles', 'alert': 'alerts'})
+        self.assertEqual(res_alerts.status_code, 200)
+        self.assertTrue(res_alerts.context['is_alert_mode'])
+        alerts_list = list(res_alerts.context['alerts'])
+        self.assertIn(doc_expired, alerts_list)
+        self.assertIn(doc_expiring, alerts_list)
+
+        # Directly contains vehicle registration plate and document name in the alert table
+        self.assertContains(res_alerts, 'MH 12 ALERT 1')
+        self.assertContains(res_alerts, 'National Permit')
+        self.assertContains(res_alerts, 'MH 12 ALERT 2')
+        self.assertContains(res_alerts, 'Insurance Policy')
+
+        # Contains direct Renew action link
+        renew_url_expired = reverse('document-renew', kwargs={'pk': doc_expired.pk})
+        renew_url_expiring = reverse('document-renew', kwargs={'pk': doc_expiring.pk})
+        self.assertContains(res_alerts, renew_url_expired)
+        self.assertContains(res_alerts, renew_url_expiring)
+
+        # 2. Expired filter: only doc_expired in alerts list
+        res_exp = self.client.get(url, {'type': 'vehicles', 'alert': 'expired'})
+        self.assertEqual(res_exp.status_code, 200)
+        self.assertTrue(res_exp.context['is_alert_mode'])
+        exp_list = list(res_exp.context['alerts'])
+        self.assertIn(doc_expired, exp_list)
+        self.assertNotIn(doc_expiring, exp_list)
+        self.assertContains(res_exp, 'MH 12 ALERT 1')
+
+        # 3. Expiring filter: only doc_expiring in alerts list
+        res_soon = self.client.get(url, {'type': 'vehicles', 'alert': 'expiring'})
+        self.assertEqual(res_soon.status_code, 200)
+        self.assertTrue(res_soon.context['is_alert_mode'])
+        soon_list = list(res_soon.context['alerts'])
+        self.assertIn(doc_expiring, soon_list)
+        self.assertNotIn(doc_expired, soon_list)
+        self.assertContains(res_soon, 'MH 12 ALERT 2')
 
     def test_document_list_view_alert_filters_vehicles(self):
         """Test filtering document list view by alert statuses (expired, expiring, alerts) for vehicles."""
@@ -184,7 +276,8 @@ class DocumentAlertsTests(TestCase):
 
         # Grant view permission to user
         view_perm = Permission.objects.get(codename='view_document')
-        self.regular_user.user_permissions.add(view_perm)
+        change_perm = Permission.objects.get(codename='change_document')
+        self.regular_user.user_permissions.add(view_perm, change_perm)
         self.client.login(username='driver_john', password='password123')
 
         url = reverse('document-list')
@@ -240,7 +333,8 @@ class DocumentAlertsTests(TestCase):
         Document.objects.create(driver=d_bad, document_name='License', expiry_date=today - timedelta(days=10))
 
         view_perm = Permission.objects.get(codename='view_document')
-        self.regular_user.user_permissions.add(view_perm)
+        change_perm = Permission.objects.get(codename='change_document')
+        self.regular_user.user_permissions.add(view_perm, change_perm)
         self.client.login(username='driver_john', password='password123')
 
         url = reverse('document-list')
@@ -256,7 +350,8 @@ class DocumentAlertsTests(TestCase):
         veh_attached = Vehicle.objects.create(registration_plate='MH 12 AT 777', ownership=Vehicle.OWNERSHIP_ATTACHED)
 
         view_perm = Permission.objects.get(codename='view_document')
-        self.regular_user.user_permissions.add(view_perm)
+        change_perm = Permission.objects.get(codename='change_document')
+        self.regular_user.user_permissions.add(view_perm, change_perm)
         self.client.login(username='driver_john', password='password123')
 
         url = reverse('document-list')

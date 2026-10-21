@@ -29,13 +29,17 @@
                     {% for doc in expired_docs %}
                     <a href="{% url 'document-list' %}?type={% if doc.driver %}drivers{% else %}vehicles{% endif %}&alert=expired" class="text-xs text-red-200 flex items-start hover:underline">
                         <i class="fa-solid fa-circle-exclamation mr-2 mt-0.5"></i>
-                        <span>{{ doc }} expired ({{ doc.expiry_date }})</span>
+                        <span>
+                            <strong>{% if doc.vehicle %}{{ doc.vehicle.registration_plate }}{% elif doc.driver %}{{ doc.driver.name }}{% endif %}</strong> - {{ doc.document_name }} expired ({{ doc.expiry_date|date:"d M Y" }})
+                        </span>
                     </a>
                     {% endfor %}
                     {% for doc in expiring_docs %}
                     <a href="{% url 'document-list' %}?type={% if doc.driver %}drivers{% else %}vehicles{% endif %}&alert=expiring" class="text-xs text-yellow-200 flex items-start hover:underline">
                         <i class="fa-solid fa-triangle-exclamation mr-2 mt-0.5"></i>
-                        <span>{{ doc }} expires ({{ doc.expiry_date }})</span>
+                        <span>
+                            <strong>{% if doc.vehicle %}{{ doc.vehicle.registration_plate }}{% elif doc.driver %}{{ doc.driver.name }}{% endif %}</strong> - {{ doc.document_name }} expires ({{ doc.expiry_date|date:"d M Y" }})
+                        </span>
                     </a>
                     {% endfor %}
                 </div>

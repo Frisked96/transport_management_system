@@ -155,6 +155,12 @@ class Document(models.Model):
         return delta.days
 
     @property
+    def days_overdue(self):
+        if self.is_expired and self.days_until_expiry is not None:
+            return abs(self.days_until_expiry)
+        return 0
+
+    @property
     def status(self):
         if self.never_expires:
             return 'Permanent'
