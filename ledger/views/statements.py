@@ -227,7 +227,6 @@ def unified_ledger_pdf(request):
     opening_bal_base = CompanyAccount.objects.aggregate(total=Sum('opening_balance'))['total'] or Decimal('0')
 
     pre_aggs = FinancialRecord.objects.filter(
-        account__isnull=False,
         date__lt=start_date
     ).exclude(
         Q(record_type=FinancialRecord.RECORD_TYPE_INVOICE) |
@@ -240,7 +239,6 @@ def unified_ledger_pdf(request):
 
     # 2. Records in range
     records = FinancialRecord.objects.filter(
-        account__isnull=False,
         date__range=[start_date, end_date]
     ).exclude(
         Q(record_type=FinancialRecord.RECORD_TYPE_INVOICE) |
@@ -271,6 +269,8 @@ def unified_ledger_pdf(request):
         extra_info = []
         if rec.account:
             extra_info.append(f"ACC: {rec.account.name}")
+        else:
+            extra_info.append("ACC: Unallocated")
         if rec.party:
             extra_info.append(f"PRT: {rec.party.name}")
         if extra_info:

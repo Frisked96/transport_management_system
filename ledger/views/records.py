@@ -15,7 +15,7 @@ from datetime import datetime
 import json
 from django.http import JsonResponse, HttpResponse
 
-from ledger.models import FinancialRecord, Party, CompanyAccount, TripAllocation, BillAllocation, TransactionCategory, Bill, BillTrip
+from ledger.models import FinancialRecord, Party, CompanyAccount, TripAllocation, BillAllocation, TransactionCategory, Bill, BillTrip, TollRecharge
 from ledger.forms import FinancialRecordForm
 from trips.models import Trip
 from ledger.services import BillingService, TripFinancialService
@@ -785,49 +785,69 @@ class FinancialRecordDeleteView(LoginRequiredMixin, PermissionRequiredMixin, Del
 @permission_required('ledger.can_view_financial_records', raise_exception=True)
 def financial_summary(request):
     """
-    Financial summary report view
+    Financial summary report view.
+    Accounts for all real-world debits and credits in the system regardless of whether
+    they are attached to a company firm account (e.g. unallocated toll top-ups),
+    excluding accruals (invoices).
     """
     now = timezone.now()
-    current_month = now.month
-    current_year = now.year
-    
+    try:
+        current_month = int(request.GET.get('month', now.month))
+        if not (1 <= current_month <= 12):
+            current_month = now.month
+    except (ValueError, TypeError):
+        current_month = now.month
+
+    try:
+        current_year = int(request.GET.get('year', now.year))
+        if current_year < 2000 or current_year > 2100:
+            current_year = now.year
+    except (ValueError, TypeError):
+        current_year = now.year
+
+    # Ensure any toll recharges without a FinancialRecord are auto-synced
+    unsynced_recharges = TollRecharge.objects.filter(financial_records__isnull=True)
+    if unsynced_recharges.exists():
+        for r in unsynced_recharges:
+            r.sync_financial_record()
+
     monthly_tds = FinancialRecord.objects.filter(
         category__name='TDS',
         date__month=current_month,
         date__year=current_year
-    ).exclude(record_type='Invoice').aggregate(total=Sum('amount'))['total'] or 0
+    ).exclude(record_type='Invoice').aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
 
     monthly_income_all = FinancialRecord.objects.filter(
         category__type=TransactionCategory.TYPE_INCOME,
         date__month=current_month,
         date__year=current_year
-    ).exclude(record_type='Invoice').aggregate(total=Sum('amount'))['total'] or 0
-    
+    ).exclude(record_type='Invoice').aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+
     monthly_income = monthly_income_all - monthly_tds
-    
+
     monthly_expenses = FinancialRecord.objects.filter(
         category__type=TransactionCategory.TYPE_EXPENSE,
         date__month=current_month,
         date__year=current_year
-    ).exclude(record_type='Invoice').aggregate(total=Sum('amount'))['total'] or 0
-    
+    ).exclude(record_type='Invoice').aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+
     # Year calculations
     yearly_tds = FinancialRecord.objects.filter(
         category__name='TDS',
         date__year=current_year
-    ).exclude(record_type='Invoice').aggregate(total=Sum('amount'))['total'] or 0
+    ).exclude(record_type='Invoice').aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
 
     yearly_income_all = FinancialRecord.objects.filter(
         category__type=TransactionCategory.TYPE_INCOME,
         date__year=current_year
-    ).exclude(record_type='Invoice').aggregate(total=Sum('amount'))['total'] or 0
+    ).exclude(record_type='Invoice').aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
 
     yearly_income = yearly_income_all - yearly_tds
-    
+
     yearly_expenses = FinancialRecord.objects.filter(
         category__type=TransactionCategory.TYPE_EXPENSE,
         date__year=current_year
-    ).exclude(record_type='Invoice').aggregate(total=Sum('amount'))['total'] or 0
+    ).exclude(record_type='Invoice').aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
 
     # Calculate GST portion from all Bills using database-level cached values
     monthly_gst = Bill.objects.filter(
@@ -837,8 +857,8 @@ def financial_summary(request):
     yearly_gst = Bill.objects.filter(
         date__year=current_year
     ).aggregate(total=Sum('gst_amount_cached'))['total'] or Decimal('0.00')
-    
-    # Category breakdown for current month (single SQL GROUP BY query)
+
+    # Category breakdown for selected month (single SQL GROUP BY query)
     cat_totals = FinancialRecord.objects.filter(
         date__month=current_month,
         date__year=current_year
@@ -854,7 +874,33 @@ def financial_summary(request):
         {'name': row['category__name'], 'type': row['category__type'], 'amount': row['total']}
         for row in cat_totals
     ]
-    
+
+    # Transparency breakdown: Unallocated expenses (e.g. FASTag recharges pending firm assignment)
+    unallocated_monthly_expenses = FinancialRecord.objects.filter(
+        account__isnull=True,
+        category__type=TransactionCategory.TYPE_EXPENSE,
+        date__month=current_month,
+        date__year=current_year
+    ).exclude(record_type='Invoice').aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+
+    unallocated_yearly_expenses = FinancialRecord.objects.filter(
+        account__isnull=True,
+        category__type=TransactionCategory.TYPE_EXPENSE,
+        date__year=current_year
+    ).exclude(record_type='Invoice').aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+
+    # Available months and years for filter selector
+    import calendar
+    months_list = [(i, calendar.month_name[i]) for i in range(1, 13)]
+    min_year = FinancialRecord.objects.order_by('date').values_list('date__year', flat=True).first() or now.year
+    years_list = list(range(min(min_year, now.year - 1), max(now.year + 1, current_year + 1) + 1))
+
+    # Calculate start and end date for unified ledger link
+    import calendar as cal
+    last_day = cal.monthrange(current_year, current_month)[1]
+    month_start_str = f"{current_year:04d}-{current_month:02d}-01"
+    month_end_str = f"{current_year:04d}-{current_month:02d}-{last_day:02d}"
+
     context = {
         'monthly_income': monthly_income,
         'monthly_expenses': monthly_expenses,
@@ -864,9 +910,17 @@ def financial_summary(request):
         'yearly_expenses': yearly_expenses,
         'yearly_net_incl_gst': yearly_income_all - yearly_expenses,
         'yearly_net_excl_gst': (yearly_income_all - yearly_gst) - yearly_expenses,
+        'unallocated_monthly_expenses': unallocated_monthly_expenses,
+        'unallocated_yearly_expenses': unallocated_yearly_expenses,
         'category_breakdown': category_breakdown,
         'current_month': datetime(current_year, current_month, 1).strftime('%B %Y'),
+        'current_month_num': current_month,
+        'current_year': current_year,
+        'months': months_list,
+        'years': years_list,
+        'month_start_date': month_start_str,
+        'month_end_date': month_end_str,
     }
-    
+
     return render(request, 'ledger/financial_summary.html', context)
 

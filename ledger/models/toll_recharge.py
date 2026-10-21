@@ -115,17 +115,13 @@ class TollRecharge(models.Model):
 
     def sync_financial_record(self):
         """
-        Creates or updates a FinancialRecord under the associated CompanyAccount
-        with category 'Toll Recharge' (Expense).
-        If company_account is None (unallocated), any existing FinancialRecord
-        is deleted and no new record is created.
+        Creates or updates a FinancialRecord with category 'Toll Recharge' (Expense).
+        If company_account is assigned, links to that CompanyAccount.
+        If company_account is None (unallocated), links with account=None so that all
+        real-world debits/credits are fully captured in the financial reports and general
+        ledger even before a specific firm is allocated.
         """
         from ledger.models import FinancialRecord, TransactionCategory
-
-        # If no company account assigned, remove any existing financial record
-        if not self.company_account:
-            FinancialRecord.objects.filter(associated_toll_recharge=self).delete()
-            return
 
         category, _ = TransactionCategory.objects.get_or_create(
             name='Toll Recharge',

@@ -914,7 +914,9 @@ class TollReconciliationView(LoginRequiredMixin, PermissionRequiredMixin, View):
 def toll_recharge_unlink_firm(request, pk):
     """
     Unlink a company account from a reconciled toll recharge,
-    reverting it to unallocated status and deleting the associated FinancialRecord.
+    reverting it to unallocated status and releasing the company account balance.
+    The underlying FinancialRecord is retained with account=None so system-wide
+    financial reports and cash outflow metrics continue to account for it.
     """
     recharge = get_object_or_404(TollRecharge, pk=pk)
 
@@ -927,7 +929,7 @@ def toll_recharge_unlink_firm(request, pk):
     with transaction.atomic():
         recharge.company_account = None
         recharge.save()
-        recharge.sync_financial_record()  # Will delete the FinancialRecord
+        recharge.sync_financial_record()  # Updates FinancialRecord.account to None
 
     messages.success(
         request,

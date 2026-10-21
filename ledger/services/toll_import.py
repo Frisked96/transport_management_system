@@ -14,7 +14,7 @@ import openpyxl
 from django.db import transaction
 from django.utils import timezone
 
-from ledger.models import TollAccount, TollRecharge, TollEntry
+from ledger.models import TollAccount, TollRecharge, TollEntry, FinancialRecord, TransactionCategory
 from fleet.models import Vehicle
 
 
@@ -527,7 +527,30 @@ def import_boss_summary(file_obj, toll_account=None, user=None):
     # Batch create in atomic transaction
     with transaction.atomic():
         if recharges_to_create:
-            TollRecharge.objects.bulk_create(recharges_to_create)
+            created_recharges = TollRecharge.objects.bulk_create(recharges_to_create)
+            category, _ = TransactionCategory.objects.get_or_create(
+                name='Toll Recharge',
+                defaults={
+                    'type': TransactionCategory.TYPE_EXPENSE,
+                    'description': 'Lumpsum recharge for Toll / FASTag balance'
+                }
+            )
+            fin_records = [
+                FinancialRecord(
+                    account=r.company_account,
+                    category=category,
+                    record_type=FinancialRecord.RECORD_TYPE_TRANSACTION,
+                    amount=r.amount,
+                    date=r.date,
+                    associated_toll_recharge=r,
+                    recorded_by=user,
+                    description=f"Toll top-up: {r.toll_account.name}" + (f" (Ref: {r.reference_number})" if r.reference_number else "") + (f" - {r.description}" if r.description else ""),
+                )
+                for r in created_recharges
+            ]
+            if fin_records:
+                FinancialRecord.objects.bulk_create(fin_records)
+
         if platform_fees_to_create:
             TollEntry.objects.bulk_create(platform_fees_to_create)
         if recharges_to_create or platform_fees_to_create:

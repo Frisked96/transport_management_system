@@ -25,7 +25,8 @@ class TollImportAndReconciliationTests(TestCase):
         self.user = User.objects.create_user(username='toll_admin', password='password123')
         # Assign permissions
         for codename in ['view_tollaccount', 'add_tollentry', 'change_tollentry',
-                         'add_tollrecharge', 'change_tollrecharge', 'delete_tollrecharge']:
+                         'add_tollrecharge', 'change_tollrecharge', 'delete_tollrecharge',
+                         'can_view_financial_records']:
             perm = Permission.objects.get(codename=codename)
             self.user.user_permissions.add(perm)
 
@@ -113,8 +114,8 @@ class TollImportAndReconciliationTests(TestCase):
         self.assertEqual(entry.vehicle, self.vehicle3)
         self.assertIn('Tag Chassis: MB1T2VHD8TPML4652', entry.description)
 
-    def test_unallocated_recharge_does_not_create_financial_record(self):
-        """An unallocated TollRecharge credits TollAccount without touching CompanyAccount."""
+    def test_unallocated_recharge_creates_financial_record_with_null_account(self):
+        """An unallocated TollRecharge creates FinancialRecord with account=None so reports account for it."""
         initial_toll_balance = self.toll_account_livquik.current_balance_cached
         recharge = TollRecharge.objects.create(
             toll_account=self.toll_account_livquik,
@@ -133,11 +134,15 @@ class TollImportAndReconciliationTests(TestCase):
             initial_toll_balance + Decimal('70000.00')
         )
 
-        # No FinancialRecord should exist
-        self.assertFalse(FinancialRecord.objects.filter(associated_toll_recharge=recharge).exists())
+        # FinancialRecord exists with account=None
+        fin_rec = FinancialRecord.objects.filter(associated_toll_recharge=recharge).first()
+        self.assertIsNotNone(fin_rec)
+        self.assertIsNone(fin_rec.account)
+        self.assertEqual(fin_rec.amount, Decimal('70000.00'))
+        self.assertEqual(fin_rec.category.name, 'Toll Recharge')
 
     def test_reconcile_and_unlink_recharge(self):
-        """Assigning a firm creates a FinancialRecord; unlinking removes it."""
+        """Assigning a firm sets FinancialRecord.account; unlinking reverts account to None."""
         recharge = TollRecharge.objects.create(
             toll_account=self.toll_account_livquik,
             company_account=None,
@@ -159,7 +164,7 @@ class TollImportAndReconciliationTests(TestCase):
         recharge.refresh_from_db()
         self.assertEqual(recharge.company_account, self.company1)
 
-        # FinancialRecord created
+        # FinancialRecord updated to company1
         fin_record = FinancialRecord.objects.filter(associated_toll_recharge=recharge).first()
         self.assertIsNotNone(fin_record)
         self.assertEqual(fin_record.account, self.company1)
@@ -171,8 +176,30 @@ class TollImportAndReconciliationTests(TestCase):
 
         recharge.refresh_from_db()
         self.assertIsNone(recharge.company_account)
-        # FinancialRecord deleted
-        self.assertFalse(FinancialRecord.objects.filter(associated_toll_recharge=recharge).exists())
+        # FinancialRecord preserved with account=None
+        fin_record.refresh_from_db()
+        self.assertIsNone(fin_record.account)
+
+    def test_financial_summary_includes_unallocated_toll_recharges(self):
+        """Financial summary report view accounts for unallocated toll recharges as real cash outflow."""
+        TollRecharge.objects.create(
+            toll_account=self.toll_account_livquik,
+            company_account=None,
+            date=date(2026, 4, 15),
+            amount=Decimal('45000.00'),
+            payment_mode=TollRecharge.MODE_NET_BANKING,
+            reference_number='TOPUP-APR-001',
+            created_by=self.user
+        )
+
+        response = self.client.get(reverse('financial-summary') + '?month=4&year=2026')
+        self.assertEqual(response.status_code, 200)
+        self.assertGreaterEqual(response.context['monthly_expenses'], Decimal('45000.00'))
+        self.assertGreaterEqual(response.context['yearly_expenses'], Decimal('45000.00'))
+        self.assertGreaterEqual(response.context['unallocated_monthly_expenses'], Decimal('45000.00'))
+
+        cat_names = [c['name'] for c in response.context['category_breakdown']]
+        self.assertIn('Toll Recharge', cat_names)
 
     def test_bulk_reconciliation(self):
         """Bulk reconciling assigns multiple unallocated recharges to a company account."""

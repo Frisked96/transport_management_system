@@ -179,6 +179,10 @@
                                 <span class="text-[9px] font-bold px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded uppercase truncate max-w-[120px]">
                                     <i class="fa-solid fa-building-columns mr-1 text-[8px]"></i>{{ record.account.name }}
                                 </span>
+                                {% elif record.associated_toll_recharge %}
+                                <span class="text-[9px] font-bold px-1.5 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded uppercase">
+                                    Unallocated
+                                </span>
                                 {% endif %}
                             </div>
                             <p class="text-xs font-bold text-slate-700 truncate mt-1">
@@ -240,6 +244,10 @@
                                 {% if record.account %}
                                 <a href="{% url 'account-detail' record.account.pk %}" class="font-bold text-slate-800 hover:text-emerald-600 block truncate max-w-[130px]" title="{{ record.account.name }}">
                                     <i class="fa-solid fa-building-columns mr-1 text-slate-400"></i>{{ record.account.name }}
+                                </a>
+                                {% elif record.associated_toll_recharge %}
+                                <a href="{% url 'toll-reconcile' %}" class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-colors" title="Pending firm allocation • Click to Reconcile">
+                                    <i class="fa-solid fa-circle-exclamation mr-1 text-amber-500"></i>Unallocated
                                 </a>
                                 {% else %}
                                 <span class="text-slate-300 text-[11px] italic">-</span>
