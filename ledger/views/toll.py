@@ -1,6 +1,7 @@
 """
 Views for Toll and FASTag Ledger application.
-Handles Toll Accounts, Recharges, Toll Entries, Bulk Entries, and Statement generation.
+Handles Toll Accounts, Recharges, Toll Entries, Bulk Entries, Statement generation,
+XLSX Statement Import, and Recharge Reconciliation.
 """
 from decimal import Decimal
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView, View
@@ -10,15 +11,18 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse_lazy, reverse
 from django.contrib import messages
 from django.db import transaction
-from django.db.models import Q, Sum
+from django.db.models import Q, Sum, Count
 from django.utils import timezone
 from django.forms import modelformset_factory
+from django.http import JsonResponse
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 
 from ledger.models import TollAccount, TollRecharge, TollEntry, CompanyAccount
 from ledger.forms import (
     TollAccountForm, TollRechargeForm, TollEntryForm,
-    TollEntryBulkRowForm
+    TollEntryBulkRowForm, TollStatementImportForm, TollRechargeReconcileForm,
 )
+from ledger.services.toll_import import import_fasttag_statement
 from fleet.models import Vehicle
 from trips.models import Trip
 
@@ -161,6 +165,7 @@ class TollLedgerView(LoginRequiredMixin, PermissionRequiredMixin, BaseTollPermis
                 Q(transaction_reference__icontains=search_query) |
                 Q(description__icontains=search_query) |
                 Q(vehicle__registration_plate__icontains=search_query) |
+                Q(vehicle__chassis_number__icontains=search_query) |
                 Q(toll_account__name__icontains=search_query)
             )
 
@@ -180,7 +185,7 @@ class TollLedgerView(LoginRequiredMixin, PermissionRequiredMixin, BaseTollPermis
                     'type': 'Recharge',
                     'toll_account': r.toll_account,
                     'vehicle': None,
-                    'party_or_plaza': r.company_account.name,
+                    'party_or_plaza': r.company_account.name if r.company_account else 'Unallocated',
                     'reference': r.reference_number or '-',
                     'payment_mode': r.payment_mode,
                     'credit': r.amount,
@@ -189,6 +194,7 @@ class TollLedgerView(LoginRequiredMixin, PermissionRequiredMixin, BaseTollPermis
                     'notes': r.description,
                     'edit_url': reverse('toll-recharge-update', kwargs={'pk': r.pk}),
                     'delete_url': reverse('toll-recharge-delete', kwargs={'pk': r.pk}),
+                    'is_unallocated': r.company_account is None,
                     'created_by': r.created_by,
                 })
 
@@ -233,13 +239,34 @@ class TollLedgerView(LoginRequiredMixin, PermissionRequiredMixin, BaseTollPermis
         # Sort reverse for displaying recent first in the table
         display_transactions = list(reversed(transactions))
 
+        # Pagination (default 50 per page)
+        per_page_param = request.GET.get('per_page', '50').strip()
+        try:
+            per_page = int(per_page_param)
+            if per_page not in (25, 50, 100, 200):
+                per_page = 50
+        except ValueError:
+            per_page = 50
+
+        paginator = Paginator(display_transactions, per_page)
+        page_number = request.GET.get('page', 1)
+        try:
+            page_obj = paginator.page(page_number)
+        except (PageNotAnInteger, ValueError):
+            page_obj = paginator.page(1)
+        except EmptyPage:
+            page_obj = paginator.page(paginator.num_pages)
+
         context = {
             'toll_accounts': accounts,
             'current_account': toll_account,
             'is_combined': is_combined,
             'selected_vehicle': selected_vehicle,
             'vehicles': Vehicle.objects.all().order_by('registration_plate'),
-            'transactions': display_transactions,
+            'transactions': page_obj,
+            'page_obj': page_obj,
+            'paginator': paginator,
+            'per_page': per_page,
             'period_opening_balance': period_opening_balance,
             'closing_balance': closing_balance,
             'current_balance': total_current_balance if is_combined else toll_account.current_balance_cached,
@@ -252,6 +279,7 @@ class TollLedgerView(LoginRequiredMixin, PermissionRequiredMixin, BaseTollPermis
             'end_date': end_date_str,
             'current_type': entry_type,
             'search_query': search_query,
+            'unallocated_recharge_count': TollRecharge.objects.filter(company_account__isnull=True).count(),
         }
         return render(request, self.template_name, context)
 
@@ -334,7 +362,8 @@ class TollRechargeCreateView(LoginRequiredMixin, PermissionRequiredMixin, Create
     def form_valid(self, form):
         form.instance.created_by = self.request.user
         response = super().form_valid(form)
-        messages.success(self.request, f"Top-up of ₹{self.object.amount:,.2f} recorded successfully from {self.object.company_account.name}.")
+        source_name = self.object.company_account.name if self.object.company_account else 'Unallocated'
+        messages.success(self.request, f"Top-up of ₹{self.object.amount:,.2f} recorded successfully from {source_name}.")
         return response
 
 
@@ -360,7 +389,7 @@ class TollRechargeDeleteView(LoginRequiredMixin, PermissionRequiredMixin, Delete
     def delete(self, request, *args, **kwargs):
         recharge = self.get_object()
         amt = recharge.amount
-        acc_name = recharge.company_account.name
+        acc_name = recharge.company_account.name if recharge.company_account else 'Unallocated'
         response = super().delete(request, *args, **kwargs)
         messages.success(request, f"Top-up of ₹{amt:,.2f} deleted. Company Account {acc_name} balance restored.")
         return response
@@ -631,7 +660,7 @@ def toll_statement_print(request):
                 'created_at': r.created_at,
                 'type': 'Top-up',
                 'toll_account': r.toll_account,
-                'description': f"Top-up from {r.company_account.name} (Ref: {r.reference_number or '-'})",
+                'description': f"Top-up from {r.company_account.name if r.company_account else 'Unallocated'} (Ref: {r.reference_number or '-'})",
                 'vehicle': '-',
                 'credit': r.amount,
                 'debit': Decimal('0.00')
@@ -643,7 +672,7 @@ def toll_statement_print(request):
             'type': 'Toll',
             'toll_account': e.toll_account,
             'description': f"{e.toll_plaza or 'Toll Plaza'} (Slip: {e.transaction_reference or '-'})",
-            'vehicle': e.vehicle.registration_plate,
+            'vehicle': e.vehicle.registration_plate if e.vehicle else '-',
             'credit': Decimal('0.00'),
             'debit': e.amount
         })
@@ -675,3 +704,233 @@ def toll_statement_print(request):
         'now': timezone.now(),
     }
     return render(request, 'ledger/toll_statement_print.html', context)
+
+
+
+# ==========================================
+# XLSX STATEMENT IMPORT VIEW
+# ==========================================
+
+class TollStatementImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
+    """
+    Upload interface for importing FASTag XLSX statement files.
+    Auto-detects bank statements (AXIS/IDFC/LIVQUIK) vs Boss Account Summary.
+    """
+    permission_required = 'ledger.add_tollentry'
+    template_name = 'ledger/toll_statement_import.html'
+
+    def get(self, request, *args, **kwargs):
+        form = TollStatementImportForm()
+        context = {
+            'form': form,
+            'toll_accounts': TollAccount.objects.all().order_by('-is_default', 'name'),
+        }
+        return render(request, self.template_name, context)
+
+    def post(self, request, *args, **kwargs):
+        form = TollStatementImportForm(request.POST, request.FILES)
+        if not form.is_valid():
+            context = {
+                'form': form,
+                'toll_accounts': TollAccount.objects.all().order_by('-is_default', 'name'),
+            }
+            return render(request, self.template_name, context)
+
+        uploaded_file = form.cleaned_data['file']
+        toll_account = form.cleaned_data.get('toll_account')
+
+        summary = import_fasttag_statement(
+            file_obj=uploaded_file,
+            toll_account=toll_account,
+            auto_link_trips=True,
+            user=request.user,
+        )
+
+        if summary.errors:
+            for err in summary.errors:
+                messages.error(request, err)
+            context = {
+                'form': form,
+                'toll_accounts': TollAccount.objects.all().order_by('-is_default', 'name'),
+            }
+            return render(request, self.template_name, context)
+
+        # Success messages
+        parts = []
+        if summary.toll_entries_created:
+            parts.append(f"{summary.toll_entries_created} toll entries (₹{summary.total_debit_amount:,.2f})")
+        if summary.platform_fees_created:
+            parts.append(f"{summary.platform_fees_created} BlackBuck platform fees (₹{summary.total_debit_amount:,.2f})")
+        if summary.recharges_created:
+            parts.append(f"{summary.recharges_created} recharges (₹{summary.total_credit_amount:,.2f})")
+        if parts:
+            messages.success(request, f"Import successful! Created: {', '.join(parts)}.")
+        else:
+            messages.info(request, "No new records to import. All transactions already exist.")
+
+        if summary.duplicate_entries_skipped or summary.duplicate_recharges_skipped:
+            skip_parts = []
+            if summary.duplicate_entries_skipped:
+                skip_parts.append(f"{summary.duplicate_entries_skipped} duplicate toll entries")
+            if summary.duplicate_recharges_skipped:
+                skip_parts.append(f"{summary.duplicate_recharges_skipped} duplicate recharges")
+            messages.info(request, f"Skipped: {', '.join(skip_parts)} (already imported).")
+
+        if summary.unmatched_vehicles:
+            plates = ', '.join(summary.unmatched_vehicles[:10])
+            extra = f" and {len(summary.unmatched_vehicles) - 10} more" if len(summary.unmatched_vehicles) > 10 else ""
+            messages.warning(request, f"Unmatched vehicles skipped: {plates}{extra}. Add these vehicles to Fleet to include their toll entries.")
+
+        if summary.detected_vendor:
+            messages.info(request, f"Detected vendor: {summary.detected_vendor}")
+
+        if summary.recharges_created:
+            messages.info(request, f"{summary.recharges_created} recharges imported as Unallocated. Use the Reconciliation window to assign firm accounts.")
+
+        return redirect('toll-ledger')
+
+
+# ==========================================
+# TOLL RECHARGE RECONCILIATION VIEWS
+# ==========================================
+
+class TollReconciliationView(LoginRequiredMixin, PermissionRequiredMixin, View):
+    """
+    Dedicated reconciliation dashboard for assigning company accounts
+    to unallocated toll recharges.
+    Supports inline single reconciliation, bulk reconciliation,
+    and viewing/unlinking previously reconciled recharges.
+    """
+    permission_required = 'ledger.change_tollrecharge'
+    template_name = 'ledger/toll_reconciliation.html'
+
+    def get(self, request, *args, **kwargs):
+        tab = request.GET.get('tab', 'pending')
+
+        # Pending (unallocated) recharges
+        pending_recharges = TollRecharge.objects.filter(
+            company_account__isnull=True
+        ).select_related('toll_account', 'created_by').order_by('-date', '-created_at')
+
+        # Reconciled recharges
+        reconciled_recharges = TollRecharge.objects.filter(
+            company_account__isnull=False
+        ).select_related('toll_account', 'company_account', 'created_by').order_by('-date', '-created_at')[:100]
+
+        # Company accounts with balances
+        company_accounts = CompanyAccount.objects.all().order_by('name')
+
+        # Summary metrics
+        pending_count = pending_recharges.count()
+        pending_total = pending_recharges.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        reconciled_count = TollRecharge.objects.filter(company_account__isnull=False).count()
+
+        # Reconcile form
+        form = TollRechargeReconcileForm()
+
+        context = {
+            'tab': tab,
+            'pending_recharges': pending_recharges,
+            'reconciled_recharges': reconciled_recharges,
+            'company_accounts': company_accounts,
+            'pending_count': pending_count,
+            'pending_total': pending_total,
+            'reconciled_count': reconciled_count,
+            'form': form,
+        }
+        return render(request, self.template_name, context)
+
+    def post(self, request, *args, **kwargs):
+        action = request.POST.get('action', '')
+
+        if action == 'reconcile_single':
+            return self._reconcile_single(request)
+        elif action == 'reconcile_bulk':
+            return self._reconcile_bulk(request)
+        else:
+            messages.error(request, 'Invalid action.')
+            return redirect('toll-reconcile')
+
+    def _reconcile_single(self, request):
+        recharge_id = request.POST.get('recharge_id')
+        company_account_id = request.POST.get('company_account')
+
+        if not recharge_id or not company_account_id:
+            messages.error(request, 'Please select both a recharge and a firm account.')
+            return redirect('toll-reconcile')
+
+        recharge = get_object_or_404(TollRecharge, pk=recharge_id, company_account__isnull=True)
+        company_account = get_object_or_404(CompanyAccount, pk=company_account_id)
+
+        with transaction.atomic():
+            recharge.company_account = company_account
+            recharge.save()
+            recharge.sync_financial_record()
+
+        messages.success(
+            request,
+            f"₹{recharge.amount:,.2f} recharge on {recharge.date} assigned to {company_account.name}."
+        )
+        return redirect('toll-reconcile')
+
+    def _reconcile_bulk(self, request):
+        recharge_ids = request.POST.getlist('recharge_ids')
+        company_account_id = request.POST.get('bulk_company_account')
+
+        if not recharge_ids:
+            messages.error(request, 'No recharges selected.')
+            return redirect('toll-reconcile')
+
+        if not company_account_id:
+            messages.error(request, 'Please select a firm account for bulk reconciliation.')
+            return redirect('toll-reconcile')
+
+        company_account = get_object_or_404(CompanyAccount, pk=company_account_id)
+
+        count = 0
+        total = Decimal('0.00')
+        with transaction.atomic():
+            recharges = TollRecharge.objects.filter(
+                pk__in=recharge_ids,
+                company_account__isnull=True
+            ).select_related('toll_account')
+
+            for recharge in recharges:
+                recharge.company_account = company_account
+                recharge.save()
+                recharge.sync_financial_record()
+                count += 1
+                total += recharge.amount
+
+        messages.success(
+            request,
+            f"Bulk reconciled {count} recharges totaling ₹{total:,.2f} to {company_account.name}."
+        )
+        return redirect('toll-reconcile')
+
+
+@login_required
+@permission_required('ledger.change_tollrecharge', raise_exception=True)
+def toll_recharge_unlink_firm(request, pk):
+    """
+    Unlink a company account from a reconciled toll recharge,
+    reverting it to unallocated status and deleting the associated FinancialRecord.
+    """
+    recharge = get_object_or_404(TollRecharge, pk=pk)
+
+    if not recharge.company_account:
+        messages.info(request, 'This recharge is already unallocated.')
+        return redirect('toll-reconcile')
+
+    old_name = recharge.company_account.name
+
+    with transaction.atomic():
+        recharge.company_account = None
+        recharge.save()
+        recharge.sync_financial_record()  # Will delete the FinancialRecord
+
+    messages.success(
+        request,
+        f"₹{recharge.amount:,.2f} recharge on {recharge.date} unlinked from {old_name}. Now unallocated."
+    )
+    return redirect('toll-reconcile')

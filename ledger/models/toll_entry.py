@@ -37,9 +37,11 @@ class TollEntry(models.Model):
     )
     vehicle = models.ForeignKey(
         'fleet.Vehicle',
-        on_delete=models.PROTECT,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
         related_name='toll_entries',
-        verbose_name='Vehicle'
+        verbose_name='Vehicle (Optional)'
     )
     date = models.DateField(default=timezone.now, verbose_name='Toll Date')
     amount = models.DecimalField(
@@ -94,8 +96,9 @@ class TollEntry(models.Model):
         ]
 
     def __str__(self):
+        veh_str = f" - {self.vehicle.registration_plate}" if self.vehicle else ""
         plaza_str = f" at {self.toll_plaza}" if self.toll_plaza else ""
-        return f"₹{self.amount} - {self.vehicle.registration_plate}{plaza_str} on {self.date}"
+        return f"₹{self.amount}{veh_str}{plaza_str} on {self.date}"
 
     def clean(self):
         if self.amount is not None and self.amount <= Decimal('0.00'):

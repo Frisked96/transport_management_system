@@ -53,9 +53,12 @@ class TollRecharge(models.Model):
     )
     company_account = models.ForeignKey(
         'ledger.CompanyAccount',
-        on_delete=models.PROTECT,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
         related_name='toll_recharges',
-        verbose_name='Company Account (Source)'
+        verbose_name='Company Account (Source)',
+        help_text='Leave blank for unallocated recharges imported from FASTag statements. Assign later via Reconciliation.'
     )
     date = models.DateField(default=timezone.now, verbose_name='Recharge Date')
     amount = models.DecimalField(
@@ -103,7 +106,8 @@ class TollRecharge(models.Model):
         ]
 
     def __str__(self):
-        return f"Top-up ₹{self.amount} to {self.toll_account.name} on {self.date}"
+        source = self.company_account.name if self.company_account else 'Unallocated'
+        return f"Top-up ₹{self.amount} to {self.toll_account.name} on {self.date} ({source})"
 
     def clean(self):
         if self.amount is not None and self.amount <= Decimal('0.00'):
@@ -113,8 +117,15 @@ class TollRecharge(models.Model):
         """
         Creates or updates a FinancialRecord under the associated CompanyAccount
         with category 'Toll Recharge' (Expense).
+        If company_account is None (unallocated), any existing FinancialRecord
+        is deleted and no new record is created.
         """
         from ledger.models import FinancialRecord, TransactionCategory
+
+        # If no company account assigned, remove any existing financial record
+        if not self.company_account:
+            FinancialRecord.objects.filter(associated_toll_recharge=self).delete()
+            return
 
         category, _ = TransactionCategory.objects.get_or_create(
             name='Toll Recharge',

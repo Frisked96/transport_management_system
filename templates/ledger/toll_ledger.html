@@ -45,18 +45,33 @@
     </div>
     
     <div class="flex flex-wrap items-center gap-2">
+        {% if perms.ledger.add_tollentry %}
+        <a href="{% url 'toll-statement-import' %}" class="px-4 py-2 bg-emerald-600 text-white rounded-md text-sm font-bold hover:bg-emerald-700 shadow-sm transition-colors flex items-center">
+            <i class="fa-solid fa-file-excel mr-2"></i>Import Statement (.xlsx)
+        </a>
+        {% endif %}
+
+        {% if perms.ledger.change_tollrecharge %}
+        <a href="{% url 'toll-reconcile' %}" class="px-4 py-2 border border-slate-300 rounded-md bg-white text-slate-700 text-sm font-bold hover:bg-slate-50 transition-colors flex items-center shadow-sm">
+            <i class="fa-solid fa-scale-balanced mr-2 text-amber-500"></i>Reconcile
+            {% if unallocated_recharge_count > 0 %}
+            <span class="ml-1.5 px-1.5 py-0.5 text-[10px] font-extrabold rounded-full bg-amber-100 text-amber-800 border border-amber-200">{{ unallocated_recharge_count }}</span>
+            {% endif %}
+        </a>
+        {% endif %}
+
         {% if perms.ledger.add_tollrecharge %}
-        <a href="{% url 'toll-recharge-create' %}{% if not is_combined and current_account %}?account={{ current_account.pk }}{% endif %}" class="px-4 py-2 bg-emerald-600 text-white rounded-md text-sm font-bold hover:bg-emerald-700 shadow-sm transition-colors flex items-center">
-            <i class="fa-solid fa-money-bill-transfer mr-2"></i>+ Top-up Balance
+        <a href="{% url 'toll-recharge-create' %}{% if not is_combined and current_account %}?account={{ current_account.pk }}{% endif %}" class="px-4 py-2 bg-slate-800 text-white rounded-md text-sm font-bold hover:bg-slate-900 shadow-sm transition-colors flex items-center">
+            <i class="fa-solid fa-money-bill-transfer mr-2"></i>+ Top-up
         </a>
         {% endif %}
         
         {% if perms.ledger.add_tollentry %}
         <a href="{% url 'toll-entry-create' %}{% if not is_combined and current_account %}?account={{ current_account.pk }}{% if selected_vehicle %}&vehicle={{ selected_vehicle.pk }}{% endif %}{% elif selected_vehicle %}?vehicle={{ selected_vehicle.pk }}{% endif %}" class="px-4 py-2 bg-slate-800 text-white rounded-md text-sm font-bold hover:bg-slate-900 shadow-sm transition-colors flex items-center">
-            <i class="fa-solid fa-ticket mr-2"></i>+ Add Toll Entry
+            <i class="fa-solid fa-ticket mr-2"></i>+ Toll Entry
         </a>
         <a href="{% url 'toll-entry-bulk-create' %}{% if not is_combined and current_account %}?account={{ current_account.pk }}{% endif %}" class="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-bold hover:bg-blue-700 shadow-sm transition-colors flex items-center">
-            <i class="fa-solid fa-table-list mr-2"></i>+ Bulk Add Tolls
+            <i class="fa-solid fa-table-list mr-2"></i>+ Bulk Add
         </a>
         {% endif %}
         
@@ -95,6 +110,23 @@
 </div>
 {% endif %}
 <!-- END: Wallet Quick Selector Strip -->
+
+{% if unallocated_recharge_count > 0 and perms.ledger.change_tollrecharge %}
+<div class="mb-6 p-4 rounded-xl bg-amber-50 border border-amber-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+    <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+        </div>
+        <div>
+            <h4 class="text-sm font-bold text-amber-900">{{ unallocated_recharge_count }} Unallocated FASTag Recharge{{ unallocated_recharge_count|pluralize }}</h4>
+            <p class="text-xs text-amber-700">Top-up credits imported without firm bank account assignments. Assign firms to sync company ledgers.</p>
+        </div>
+    </div>
+    <a href="{% url 'toll-reconcile' %}" class="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-md text-xs font-bold transition-colors whitespace-nowrap shadow-xs flex items-center gap-1.5 shrink-0">
+        <i class="fa-solid fa-scale-balanced"></i> Reconcile Now &rarr;
+    </a>
+</div>
+{% endif %}
 
 <!-- BEGIN: Metrics Cards -->
 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -273,8 +305,15 @@
                 {% endif %}
             </p>
         </div>
-        <div class="text-xs text-slate-500">
-            Closing Balance: <span class="font-extrabold text-slate-900 text-sm">₹{{ closing_balance|floatformat:2|intcomma }}</span>
+        <div class="flex items-center gap-3 text-xs text-slate-500">
+            {% if total_transactions_count > 0 %}
+            <span class="bg-slate-100 text-slate-700 px-2.5 py-1 rounded-md font-semibold border border-slate-200">
+                Showing {{ page_obj.start_index }}-{{ page_obj.end_index }} of {{ total_transactions_count }}
+            </span>
+            {% endif %}
+            <div class="border-l border-slate-200 pl-3">
+                Closing Balance: <span class="font-extrabold text-slate-900 text-sm">₹{{ closing_balance|floatformat:2|intcomma }}</span>
+            </div>
         </div>
     </div>
 
@@ -296,7 +335,8 @@
                 </tr>
             </thead>
             <tbody class="divide-y divide-slate-100">
-                <!-- Row: Opening Balance -->
+                <!-- Row: Opening Balance (Page 1 only) -->
+                {% if not page_obj or page_obj.number == 1 %}
                 <tr class="bg-slate-50/70 font-semibold text-slate-700">
                     <td class="px-4 py-3 whitespace-nowrap text-slate-500">
                         {% if start_date %}{{ start_date|date:"d M Y" }}{% elif is_combined %}{{ earliest_opening_date|date:"d M Y" }}{% else %}{{ current_account.opening_balance_date|date:"d M Y" }}{% endif %}
@@ -332,6 +372,7 @@
                     <td class="px-3 py-3 text-center text-slate-400">-</td>
                     <td class="px-4 py-3 text-right text-slate-400 text-xs">Baseline</td>
                 </tr>
+                {% endif %}
 
                 <!-- Dynamic Transaction Rows -->
                 {% for item in transactions %}
@@ -369,7 +410,20 @@
                         {% endif %}
                     </td>
                     <td class="px-4 py-3 text-slate-800">
+                        {% if item.is_unallocated %}
+                        <div class="flex items-center gap-2">
+                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                                <i class="fa-solid fa-clock text-amber-600"></i> Unallocated
+                            </span>
+                            {% if perms.ledger.change_tollrecharge %}
+                            <a href="{% url 'toll-reconcile' %}" class="text-[11px] font-bold text-amber-700 hover:text-amber-900 underline">
+                                Reconcile &rarr;
+                            </a>
+                            {% endif %}
+                        </div>
+                        {% else %}
                         <span class="font-semibold">{{ item.party_or_plaza }}</span>
+                        {% endif %}
                         {% if item.notes %}
                         <p class="text-[11px] text-slate-500 truncate max-w-xs">{{ item.notes }}</p>
                         {% endif %}
@@ -421,4 +475,6 @@
     </div>
 </div>
 <!-- END: Ledger Statement Table -->
+
+{% include 'includes/pagination.html' %}
 {% endblock %}

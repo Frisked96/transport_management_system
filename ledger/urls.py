@@ -69,4 +69,7 @@ urlpatterns = [
     path('toll/entry/<int:pk>/update/', views.TollEntryUpdateView.as_view(), name='toll-entry-update'),
     path('toll/entry/<int:pk>/delete/', views.TollEntryDeleteView.as_view(), name='toll-entry-delete'),
     path('toll/statement/', views.toll_statement_print, name='toll-statement-print'),
+    path('toll/import/', views.TollStatementImportView.as_view(), name='toll-statement-import'),
+    path('toll/reconcile/', views.TollReconciliationView.as_view(), name='toll-reconcile'),
+    path('toll/reconcile/<int:pk>/unlink/', views.toll_recharge_unlink_firm, name='toll-recharge-unlink'),
 ]

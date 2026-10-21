@@ -40,11 +40,11 @@
                 <!-- Company Account (Source) -->
                 <div class="flex flex-col">
                     <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                        {{ form.company_account.label }} *
+                        {{ form.company_account.label }} <span class="text-slate-400 font-normal">(Optional)</span>
                     </label>
                     {{ form.company_account }}
                     {% if form.company_account.errors %}<p class="mt-1 text-xs text-rose-600 font-bold">{{ form.company_account.errors.0 }}</p>{% endif %}
-                    <p class="mt-1 text-[11px] text-slate-500">Source firm/bank account paying for this top-up</p>
+                    <p class="mt-1 text-[11px] text-slate-500">Source firm/bank account paying for this top-up. Leave blank to reconcile later.</p>
                 </div>
 
                 <!-- Amount -->

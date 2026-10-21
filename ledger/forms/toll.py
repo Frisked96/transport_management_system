@@ -85,6 +85,8 @@ class TollRechargeForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields['toll_account'].queryset = TollAccount.objects.all().order_by('-is_default', 'name')
         self.fields['company_account'].queryset = CompanyAccount.objects.all().order_by('name')
+        self.fields['company_account'].required = False
+        self.fields['company_account'].empty_label = '-- Unallocated / Reconcile Later --'
 
         if not self.initial.get('toll_account') and not self.data.get('toll_account'):
             default_acc = TollAccount.objects.filter(is_default=True).first() or TollAccount.objects.first()
@@ -170,3 +172,53 @@ class TollEntryBulkRowForm(forms.ModelForm):
         self.fields['toll_plaza'].required = False
         self.fields['transaction_reference'].required = False
         self.fields['description'].required = False
+
+
+class TollStatementImportForm(forms.Form):
+    """
+    Form for uploading FASTag XLSX statement files.
+    Auto-detects whether the file is a bank statement (AXIS/IDFC/LIVQUIK)
+    or a Boss Account Summary.
+    """
+    file = forms.FileField(
+        label='FASTag Statement File (.xlsx)',
+        help_text='Upload an AXIS, IDFC, LivQuik bank statement or Boss Account Summary.',
+        widget=forms.ClearableFileInput(attrs={
+            'accept': '.xlsx',
+            'class': 'block w-full text-sm text-slate-500 file:mr-4 file:py-2.5 file:px-5 file:rounded-lg file:border-0 file:text-sm file:font-bold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 cursor-pointer'
+        })
+    )
+    toll_account = forms.ModelChoiceField(
+        queryset=TollAccount.objects.all().order_by('-is_default', 'name'),
+        required=False,
+        label='Toll Account (Optional)',
+        empty_label='-- Auto-detect from file --',
+        help_text='Leave blank to auto-detect the toll account from the file vendor column.',
+        widget=forms.Select(attrs={
+            'class': 'block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white'
+        })
+    )
+
+    def clean_file(self):
+        f = self.cleaned_data.get('file')
+        if f:
+            if not f.name.lower().endswith('.xlsx'):
+                raise forms.ValidationError('Only .xlsx files are supported.')
+            # 10 MB limit
+            if f.size > 10 * 1024 * 1024:
+                raise forms.ValidationError('File size must be under 10 MB.')
+        return f
+
+
+class TollRechargeReconcileForm(forms.Form):
+    """
+    Form for assigning a CompanyAccount to an unallocated TollRecharge.
+    """
+    company_account = forms.ModelChoiceField(
+        queryset=CompanyAccount.objects.all().order_by('name'),
+        label='Firm / Company Account',
+        empty_label='-- Select Firm --',
+        widget=forms.Select(attrs={
+            'class': 'block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white'
+        })
+    )
