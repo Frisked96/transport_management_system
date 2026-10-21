@@ -12,8 +12,14 @@ from trips.models import Trip
 
 
 class TripChoiceField(forms.ModelChoiceField):
+    def __init__(self, *args, **kwargs):
+        self.record_contributions = kwargs.pop('record_contributions', {})
+        super().__init__(*args, **kwargs)
+
     def label_from_instance(self, obj):
-        outstanding = getattr(obj, 'annotated_outstanding', 0)
+        outstanding = Decimal(str(getattr(obj, 'annotated_outstanding', 0)))
+        if hasattr(self, 'record_contributions') and obj.pk in self.record_contributions:
+            outstanding += self.record_contributions[obj.pk]
         return f"{obj} | Pending: ₹{outstanding:,.2f}"
 
 
@@ -147,19 +153,36 @@ class FinancialRecordForm(forms.ModelForm):
                         self.fields['category'].initial = p_out.id
             else:
                 # Setup trips for debtor party using dynamic payment info
-                trips_qs = Trip.objects.with_payment_info().with_billing_info().filter(
-                    party=party
-                ).exclude(
-                    annotated_status=Trip.PAYMENT_STATUS_PAID
-                )
+                record_trip_ids = set()
+                record_contributions = {}
+                if self.instance and self.instance.pk:
+                    if self.instance.associated_trip_id:
+                        record_trip_ids.add(self.instance.associated_trip_id)
+                        record_contributions[self.instance.associated_trip_id] = self.instance.amount or Decimal('0')
+                    if hasattr(self.instance, 'allocations'):
+                        for alloc in self.instance.allocations.all():
+                            record_trip_ids.add(alloc.trip_id)
+                            record_contributions[alloc.trip_id] = record_contributions.get(alloc.trip_id, Decimal('0')) + (alloc.amount or Decimal('0'))
                 
-                # Include current trip if editing or from initial
-                if self.instance and self.instance.associated_trip:
-                    trips_qs = trips_qs | Trip.objects.filter(pk=self.instance.associated_trip.pk).with_payment_info().with_billing_info()
                 initial_trip = kwargs.get('initial', {}).get('associated_trip')
                 if initial_trip:
-                    trips_qs = trips_qs | Trip.objects.filter(pk=initial_trip.pk).with_payment_info().with_billing_info()
-                
+                    initial_trip_pk = initial_trip.pk if hasattr(initial_trip, 'pk') else initial_trip
+                    try:
+                        record_trip_ids.add(int(initial_trip_pk))
+                    except (ValueError, TypeError):
+                        pass
+
+                trips_qs = Trip.objects.with_payment_info().with_billing_info().filter(
+                    party=party
+                )
+                if record_trip_ids:
+                    trips_qs = trips_qs.filter(
+                        models.Q(id__in=record_trip_ids) | ~models.Q(annotated_status=Trip.PAYMENT_STATUS_PAID)
+                    )
+                else:
+                    trips_qs = trips_qs.exclude(annotated_status=Trip.PAYMENT_STATUS_PAID)
+
+                self.fields['associated_trip'].record_contributions = record_contributions
                 self.fields['associated_trip'].queryset = trips_qs.distinct().order_by('-date')
 
                 # Filter bills for this debtor: Exclude CN/DN and already Paid bills

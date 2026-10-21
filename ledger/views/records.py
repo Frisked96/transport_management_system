@@ -714,6 +714,25 @@ class FinancialRecordUpdateView(LoginRequiredMixin, PermissionRequiredMixin, Upd
                 form.add_error(None, f"Error processing distribution: {str(e)}")
                 return self.form_invalid(form)
 
+        # Clean up old allocations if switching to a non-distribution flow
+        if not distribution_json and self.object.allocations.exists():
+            old_allocs = list(self.object.allocations.all())
+            old_trips = [a.trip for a in old_allocs]
+            for a in old_allocs:
+                a._suppress_cache_cascade = True
+                a.delete()
+            for t in old_trips:
+                TripFinancialService.update_trip_financial_caches(t)
+
+        if not bill_distribution_json and self.object.bill_allocations.exists():
+            old_bill_allocs = list(self.object.bill_allocations.all())
+            old_bills = [a.bill for a in old_bill_allocs]
+            for a in old_bill_allocs:
+                a._suppress_cache_cascade = True
+                a.delete()
+            for b in old_bills:
+                BillingService.update_bill_financial_caches(b)
+
         response = super().form_valid(form)
         messages.success(self.request, 'Financial record updated successfully!')
         return response

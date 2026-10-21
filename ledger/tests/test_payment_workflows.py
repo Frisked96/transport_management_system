@@ -246,4 +246,157 @@ class TripPaymentWorkflowTests(TestCase):
         new_acc_bal = BalanceService.refresh_account_balance(self.account)
         self.assertEqual(new_acc_bal, initial_acc_bal + Decimal('11200.00'))
 
+    def test_ajax_get_party_unpaid_trips_with_record_id_and_include_trip_id(self):
+        """Test that get_party_unpaid_trips includes a trip even if marked Paid when editing its record"""
+        # 1. Pay trip1 in full with a Trip Payment record
+        rec = FinancialRecord.objects.create(
+            date=timezone.now().date(),
+            record_type='Transaction',
+            account=self.account,
+            party=self.party,
+            category=self.cat_trip_payment,
+            associated_trip=self.trip1,
+            amount=Decimal('5000.00'),
+            recorded_by=self.user
+        )
+        self.trip1.refresh_from_db()
+        self.assertEqual(self.trip1.payment_status, 'Paid')
+        self.assertEqual(self.trip1.outstanding_balance, Decimal('0.00'))
+
+        # 2. Querying without record_id should exclude trip1 because it's Paid
+        resp1 = self.client.get(f"{reverse('get-party-unpaid-trips')}?party_id={self.party.id}")
+        self.assertEqual(resp1.status_code, 200)
+        trips_unpaid = resp1.json()['trips']
+        self.assertNotIn(self.trip1.id, [t['id'] for t in trips_unpaid])
+
+        # 3. Querying WITH record_id should include trip1 with its pre-record pending balance (5000.00)
+        resp2 = self.client.get(f"{reverse('get-party-unpaid-trips')}?party_id={self.party.id}&record_id={rec.id}")
+        self.assertEqual(resp2.status_code, 200)
+        trips_editing = resp2.json()['trips']
+        trip1_data = next((t for t in trips_editing if t['id'] == self.trip1.id), None)
+        self.assertIsNotNone(trip1_data)
+        self.assertEqual(trip1_data['balance'], 5000.00)
+        self.assertIn('Pending: ₹5,000.00', trip1_data['label'])
+
+        # 4. Querying WITH include_trip_id should also include trip1
+        resp3 = self.client.get(f"{reverse('get-party-unpaid-trips')}?party_id={self.party.id}&include_trip_id={self.trip1.id}")
+        self.assertEqual(resp3.status_code, 200)
+        self.assertIn(self.trip1.id, [t['id'] for t in resp3.json()['trips']])
+
+    def test_direct_deductions_creation_and_editing_for_trip(self):
+        """Test creating and editing a transaction directly under Deductions category attached to a trip"""
+        cat_deductions, _ = TransactionCategory.objects.get_or_create(
+            name='Deductions',
+            defaults={'type': TransactionCategory.TYPE_EXPENSE}
+        )
+
+        initial_trip_bal = self.trip1.outstanding_balance # 5000.00
+
+        # 1. Create a direct deduction record for trip1
+        post_data = {
+            'date': timezone.now().date().isoformat(),
+            'record_type': 'Transaction',
+            'party': self.party.id,
+            'category': cat_deductions.id,
+            'associated_trip': self.trip1.id,
+            'amount': '800.00',
+            'description': 'Shortage deduction of 800'
+        }
+        resp = self.client.post(reverse('financialrecord-create'), post_data)
+        self.assertIn(resp.status_code, [302, 200])
+
+        ded_rec = FinancialRecord.objects.filter(
+            party=self.party,
+            associated_trip=self.trip1,
+            category=cat_deductions
+        ).first()
+        self.assertIsNotNone(ded_rec)
+        self.assertEqual(ded_rec.amount, Decimal('800.00'))
+        self.assertIsNone(ded_rec.account) # Non-bank adjustment
+
+        # Verify trip caches updated
+        self.trip1.refresh_from_db()
+        self.assertEqual(self.trip1.amount_received, Decimal('800.00'))
+        self.assertEqual(self.trip1.outstanding_balance, Decimal('4200.00'))
+
+        # 2. Get edit view for this deduction record
+        edit_url = reverse('financialrecord-update', kwargs={'pk': ded_rec.pk})
+        get_resp = self.client.get(edit_url)
+        self.assertEqual(get_resp.status_code, 200)
+        form = get_resp.context['form']
+        # Verify trip1 is in the form queryset and initial value
+        self.assertIn(self.trip1, form.fields['associated_trip'].queryset)
+        self.assertEqual(form.initial.get('associated_trip'), self.trip1.id)
+
+        # 3. Edit the deduction record (change amount to 1000)
+        edit_data = {
+            'date': timezone.now().date().isoformat(),
+            'record_type': 'Transaction',
+            'party': self.party.id,
+            'category': cat_deductions.id,
+            'associated_trip': self.trip1.id,
+            'amount': '1000.00',
+            'description': 'Updated shortage deduction of 1000'
+        }
+        post_edit_resp = self.client.post(edit_url, edit_data)
+        self.assertIn(post_edit_resp.status_code, [302, 200])
+
+        ded_rec.refresh_from_db()
+        self.assertEqual(ded_rec.amount, Decimal('1000.00'))
+        self.assertEqual(ded_rec.associated_trip, self.trip1)
+
+        # Verify trip caches updated to reflect new deduction amount
+        self.trip1.refresh_from_db()
+        self.assertEqual(self.trip1.amount_received, Decimal('1000.00'))
+        self.assertEqual(self.trip1.outstanding_balance, Decimal('4000.00'))
+
+    def test_edit_trip_payment_retains_trip_and_updates_caches(self):
+        """Test editing a Trip Payment record where trip is marked Paid does not lose the trip"""
+        # 1. Pay trip1 in full
+        pay_rec = FinancialRecord.objects.create(
+            date=timezone.now().date(),
+            record_type='Transaction',
+            account=self.account,
+            party=self.party,
+            category=self.cat_trip_payment,
+            associated_trip=self.trip1,
+            amount=Decimal('5000.00'),
+            recorded_by=self.user
+        )
+        self.trip1.refresh_from_db()
+        self.assertEqual(self.trip1.payment_status, 'Paid')
+
+        # 2. Open edit form
+        edit_url = reverse('financialrecord-update', kwargs={'pk': pay_rec.pk})
+        get_resp = self.client.get(edit_url)
+        self.assertEqual(get_resp.status_code, 200)
+        form = get_resp.context['form']
+        # Verify trip1 is in the queryset despite being marked Paid
+        self.assertIn(self.trip1, form.fields['associated_trip'].queryset)
+
+        # 3. Submit edit with reduced payment amount (4000)
+        edit_data = {
+            'date': timezone.now().date().isoformat(),
+            'record_type': 'Transaction',
+            'account': self.account.id,
+            'party': self.party.id,
+            'category': self.cat_trip_payment.id,
+            'associated_trip': self.trip1.id,
+            'amount': '4000.00',
+            'description': 'Reduced payment'
+        }
+        post_resp = self.client.post(edit_url, edit_data)
+        self.assertIn(post_resp.status_code, [302, 200])
+
+        pay_rec.refresh_from_db()
+        self.assertEqual(pay_rec.amount, Decimal('4000.00'))
+        self.assertEqual(pay_rec.associated_trip, self.trip1)
+
+        # Trip should now have 4000 received and 1000 outstanding (Partial)
+        self.trip1.refresh_from_db()
+        self.assertEqual(self.trip1.amount_received, Decimal('4000.00'))
+        self.assertEqual(self.trip1.outstanding_balance, Decimal('1000.00'))
+        self.assertEqual(self.trip1.payment_status, Trip.PAYMENT_STATUS_PARTIAL)
+
+
 

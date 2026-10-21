@@ -94,6 +94,7 @@
             {% endfor %}
 
             <!-- Simple field slots (used for non-Trip, non-Invoice Payment categories) -->
+            <div id="simple-trip-slot"></div>
             <div id="simple-amount-slot"></div>
             <div id="simple-tds-amount-slot"></div>
             <div id="simple-tds-pct-slot"></div>
@@ -457,10 +458,14 @@
     <div id="dynamic-wrappers-pool" class="hidden">
         <!-- Associated Trip Wrapper -->
         <div id="wrapper_id_associated_trip">
+            <label class="block text-xs sm:text-sm font-semibold text-slate-700 mb-1 uppercase tracking-wider" for="id_associated_trip" id="label_id_associated_trip">
+                Associated Trip
+            </label>
             {{ form.associated_trip }}
             {% if form.associated_trip.errors %}
                 <p class="mt-1 text-xs text-red-600 font-medium">{{ form.associated_trip.errors.as_text }}</p>
             {% endif %}
+            <p class="mt-1 text-xs text-slate-500 italic" id="help_id_associated_trip">Attach this transaction to a specific trip.</p>
         </div>
 
         <!-- Amount Wrapper -->
@@ -588,8 +593,12 @@
         const wrapperDedAmount = document.getElementById('wrapper_id_deduction_amount');
         const wrapperDedNotes = document.getElementById('wrapper_id_deduction_notes');
         const wrapperAssociatedTrip = document.getElementById('wrapper_id_associated_trip');
+        const labelAssociatedTrip = document.getElementById('label_id_associated_trip');
+        const helpAssociatedTrip = document.getElementById('help_id_associated_trip');
+        const wrapperAccount = document.getElementById('wrapper_id_account');
 
         // Slots
+        const simpleTripSlot = document.getElementById('simple-trip-slot');
         const simpleAmountSlot = document.getElementById('simple-amount-slot');
         const simpleTdsAmountSlot = document.getElementById('simple-tds-amount-slot');
         const simpleTdsPctSlot = document.getElementById('simple-tds-pct-slot');
@@ -688,6 +697,7 @@
                 const isInvoicePayment = categoryName.toLowerCase().includes('invoice payment');
                 const isStandard = categoryName === 'Standard' || categoryName.toLowerCase().includes('standard');
                 const isTDS = categoryName.toLowerCase().includes('tds');
+                const isDeduction = categoryName.toLowerCase().includes('deduction');
                 const isGeneral = recordType === 'General';
 
                 // Driver field visibility
@@ -696,9 +706,18 @@
                     else driverFieldWrapper.classList.remove('hidden');
                 }
 
+                // Account field visibility (Deductions and TDS are non-bank adjustments)
+                if (wrapperAccount) {
+                    if (isDeduction || isTDS) {
+                        wrapperAccount.classList.add('hidden');
+                    } else {
+                        wrapperAccount.classList.remove('hidden');
+                    }
+                }
+
                 // Associated Bill field visibility
                 if (associatedBillWrapper) {
-                    if (isInvoicePayment || isStandard || isTDS || categoryName.toLowerCase().includes('deduction')) {
+                    if (isInvoicePayment || isStandard || isTDS || isDeduction) {
                         associatedBillWrapper.classList.remove('hidden');
                     } else {
                         associatedBillWrapper.classList.add('hidden');
@@ -719,6 +738,8 @@
                         singleTripSection.classList.remove('hidden');
                         multiTripSection.classList.add('hidden');
                         moveToSlot(wrapperAssociatedTrip, slotSingleTrip, true);
+                        if (labelAssociatedTrip) labelAssociatedTrip.classList.add('hidden');
+                        if (helpAssociatedTrip) helpAssociatedTrip.classList.add('hidden');
                         moveToSlot(wrapperAmount, slotSingleAmount, true);
                         moveToSlot(wrapperTdsAmount, slotSingleTds, true);
                         moveToSlot(wrapperDedAmount, slotSingleDedAmount, true);
@@ -732,7 +753,7 @@
                     } else {
                         singleTripSection.classList.add('hidden');
                         multiTripSection.classList.remove('hidden');
-                        wrapperAssociatedTrip.classList.add('hidden');
+                        if (wrapperAssociatedTrip) wrapperAssociatedTrip.classList.add('hidden');
                         wrapperAmount.classList.add('hidden');
                         wrapperTdsAmount.classList.add('hidden');
                         wrapperDedAmount.classList.add('hidden');
@@ -752,6 +773,7 @@
                 if (isInvoicePayment) {
                     paymentDetailsBlock.classList.remove('hidden');
                     multiBillArea.classList.add('hidden');
+                    if (wrapperAssociatedTrip) wrapperAssociatedTrip.classList.add('hidden');
                     moveToSlot(wrapperAmount, paymentBlockFields, true);
                     moveToSlot(wrapperTdsAmount, paymentBlockFields, true);
                     if (btnSinglePayFull) btnSinglePayFull.classList.add('hidden');
@@ -778,8 +800,23 @@
                     if (billDistributionInput) billDistributionInput.value = '';
                 }
 
-                // 4. GENERAL / OTHER CATEGORIES
+                // 4. GENERAL / OTHER CATEGORIES (Deductions, TDS, Payment In, Standard, etc.)
+                // Allow attaching a trip when debtor party is selected
+                if (wrapperAssociatedTrip && simpleTripSlot) {
+                    const showTrip = hasParty && (isDeduction || isTDS || categoryName.toLowerCase().includes('payment in') || isStandard);
+                    moveToSlot(wrapperAssociatedTrip, simpleTripSlot, showTrip);
+                    if (labelAssociatedTrip) labelAssociatedTrip.classList.remove('hidden');
+                    if (helpAssociatedTrip) helpAssociatedTrip.classList.remove('hidden');
+                }
+
                 moveToSlot(wrapperAmount, simpleAmountSlot, true);
+                const amtLabel = document.getElementById('amount-label-text');
+                if (amtLabel) {
+                    if (isDeduction) amtLabel.textContent = 'Deduction Amount';
+                    else if (isTDS) amtLabel.textContent = 'TDS Amount';
+                    else amtLabel.textContent = 'Payment Amount';
+                }
+
                 const showSimpleTds = isStandard || categoryName.toLowerCase().includes('payment out');
                 moveToSlot(wrapperTdsAmount, simpleTdsAmountSlot, showSimpleTds);
                 moveToSlot(wrapperTdsPct, simpleTdsPctSlot, isTDS);
@@ -912,7 +949,13 @@
             associatedTripSelect.addEventListener('change', function() {
                 const tripId = parseInt(this.value);
                 const trip = unpaidTrips.find(t => t.id === tripId);
-                if (trip) {
+                let categoryName = '';
+                if (categorySelect && categorySelect.selectedIndex >= 0) {
+                    categoryName = categorySelect.options[categorySelect.selectedIndex].text;
+                }
+                const isTripPayment = categoryName.toLowerCase().includes('trip payment');
+
+                if (trip && isTripPayment) {
                     if (!amountInput.value || parseFloat(amountInput.value) === 0) {
                         amountInput.value = trip.balance.toFixed(2);
                     }
@@ -1249,25 +1292,62 @@
             const loader = document.getElementById('single-trip-loading');
             if (loader) loader.classList.remove('hidden');
 
-            fetch(`{% url 'get-party-unpaid-trips' %}?party_id=${partyId}`)
+            const currentVal = $(associatedTripSelect).val();
+            const recordId = "{{ object.pk|default:'' }}";
+            let url = `{% url 'get-party-unpaid-trips' %}?party_id=${encodeURIComponent(partyId)}`;
+            if (recordId) {
+                url += `&record_id=${encodeURIComponent(recordId)}`;
+            }
+            if (currentVal) {
+                url += `&include_trip_id=${encodeURIComponent(currentVal)}`;
+            }
+
+            fetch(url)
                 .then(r => r.json())
                 .then(data => {
                     if (loader) loader.classList.add('hidden');
                     unpaidTrips = data.trips || [];
 
-                    const currentVal = $(associatedTripSelect).val();
+                    const selectedVal = currentVal;
                     associatedTripSelect.innerHTML = '<option value="">---------</option>';
                     unpaidTrips.forEach(trip => {
                         const opt = document.createElement('option');
                         opt.value = trip.id;
                         opt.textContent = trip.label;
-                        if (trip.id == currentVal) opt.selected = true;
+                        if (String(trip.id) === String(selectedVal)) opt.selected = true;
                         associatedTripSelect.appendChild(opt);
                     });
 
                     isInternalChange = true;
                     $(associatedTripSelect).trigger('change.select2');
                     isInternalChange = false;
+
+                    // Handle initial multi-trip distribution on edit
+                    if (isInitialLoad && distributionInput && distributionInput.value) {
+                        try {
+                            const initData = JSON.parse(distributionInput.value);
+                            if (Array.isArray(initData) && initData.length > 0) {
+                                initData.forEach(item => {
+                                    const trip = unpaidTrips.find(t => t.id === item.trip_id);
+                                    if (trip) {
+                                        selectedMultiTrips[item.trip_id] = {
+                                            trip: trip,
+                                            payment: item.payment || item.amount || 0,
+                                            tds: item.tds || 0,
+                                            deduction: item.deduction || 0,
+                                            deduction_notes: item.deduction_notes || ''
+                                        };
+                                    }
+                                });
+                                if (Object.keys(selectedMultiTrips).length > 0) {
+                                    setTripMode('multi');
+                                }
+                            }
+                        } catch (e) {
+                            console.error("Error parsing initial distribution:", e);
+                        }
+                    }
+                    isInitialLoad = false;
 
                     renderMultiTripPills();
                     if (currentTripMode === 'single') {
@@ -1477,6 +1557,8 @@
         // --- Core Listeners ---
         if (partySelect) {
             partySelect.addEventListener('change', function() {
+                $(associatedTripSelect).val('').trigger('change.select2');
+                $(associatedBillSelect).val('').trigger('change.select2');
                 updateUIState();
                 selectedMultiTrips = {};
                 selectedBillIds = [];

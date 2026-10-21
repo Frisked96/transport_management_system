@@ -222,31 +222,86 @@ class PartyDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
 
 def get_party_unpaid_trips(request):
     """
-    AJAX endpoint to get unpaid trips for a party (used in payment distribution)
+    AJAX endpoint to get unpaid trips for a party (used in payment distribution).
+    Can include trips associated with a specific FinancialRecord being edited,
+    or explicitly included trip IDs, with balances adjusted to reflect their pending
+    amount before this record was applied.
     """
     party_id = request.GET.get('party_id')
     if not party_id:
         return JsonResponse({'trips': []})
     
+    record_id = request.GET.get('record_id')
+    include_trip_id = request.GET.get('include_trip_id')
+    
+    include_ids = set()
+    record_contributions = {}
+    
+    if include_trip_id:
+        for part in str(include_trip_id).split(','):
+            part = part.strip()
+            if part.isdigit():
+                include_ids.add(int(part))
+                
+    if record_id:
+        try:
+            from ledger.models import FinancialRecord
+            record = FinancialRecord.objects.filter(pk=record_id).select_related(
+                'associated_trip'
+            ).prefetch_related('allocations').first()
+            if record:
+                rec_amount = record.amount or Decimal('0')
+                if record.associated_trip_id:
+                    include_ids.add(record.associated_trip_id)
+                    record_contributions[record.associated_trip_id] = (
+                        record_contributions.get(record.associated_trip_id, Decimal('0')) + rec_amount
+                    )
+                for alloc in record.allocations.all():
+                    include_ids.add(alloc.trip_id)
+                    record_contributions[alloc.trip_id] = (
+                        record_contributions.get(alloc.trip_id, Decimal('0')) + (alloc.amount or Decimal('0'))
+                    )
+        except Exception:
+            pass
+    
     try:
-        trips = Trip.objects.with_payment_info().filter(
-            party_id=party_id
-        ).exclude(
-            annotated_status=Trip.PAYMENT_STATUS_PAID
-        ).select_related('vehicle', 'route').order_by('date')
+        from django.db import models
+        base_qs = Trip.objects.with_payment_info().filter(party_id=party_id)
+        if include_ids:
+            trips = base_qs.filter(
+                models.Q(id__in=include_ids) | ~models.Q(annotated_status=Trip.PAYMENT_STATUS_PAID)
+            ).select_related('vehicle', 'route').order_by('date')
+        else:
+            trips = base_qs.exclude(
+                annotated_status=Trip.PAYMENT_STATUS_PAID
+            ).select_related('vehicle', 'route').order_by('date')
         
-        data = [{
-            'id': trip.id,
-            'trip_number': trip.trip_number,
-            'lr_no': trip.lr_no or '',
-            'vehicle': trip.vehicle.registration_plate if trip.vehicle else 'No Vehicle',
-            'date': trip.date.strftime('%d/%m/%Y') if trip.date else '',
-            'route': str(trip.route) if trip.route else (f"{trip.pickup_location} → {trip.delivery_location}" if trip.pickup_location else ''),
-            'total': float(trip.total_revenue),
-            'received': float(trip.amount_received),
-            'balance': float(trip.outstanding_balance),
-            'label': f"{(trip.date.strftime('%d/%m/%Y') if trip.date else '')} - {trip.vehicle.registration_plate if trip.vehicle else ''} (Pending: ₹{trip.outstanding_balance:,.2f})",
-        } for trip in trips]
+        data = []
+        for trip in trips:
+            contributed = record_contributions.get(trip.id, Decimal('0'))
+            
+            orig_received = Decimal(str(trip.amount_received))
+            orig_balance = Decimal(str(trip.outstanding_balance))
+            
+            adj_received = max(Decimal('0'), orig_received - contributed)
+            adj_balance = max(Decimal('0'), orig_balance + contributed)
+            
+            # If not in include_ids and adjusted balance is 0 or less, skip it
+            if trip.id not in include_ids and adj_balance <= Decimal('0'):
+                continue
+                
+            data.append({
+                'id': trip.id,
+                'trip_number': trip.trip_number,
+                'lr_no': trip.lr_no or '',
+                'vehicle': trip.vehicle.registration_plate if trip.vehicle else 'No Vehicle',
+                'date': trip.date.strftime('%d/%m/%Y') if trip.date else '',
+                'route': str(trip.route) if trip.route else (f"{trip.pickup_location} → {trip.delivery_location}" if trip.pickup_location else ''),
+                'total': float(trip.total_revenue),
+                'received': float(adj_received),
+                'balance': float(adj_balance),
+                'label': f"{(trip.date.strftime('%d/%m/%Y') if trip.date else '')} - {trip.vehicle.registration_plate if trip.vehicle else ''} (Pending: ₹{adj_balance:,.2f})",
+            })
         
         return JsonResponse({'trips': data})
     except Exception as e:
