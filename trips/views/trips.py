@@ -2,6 +2,7 @@
 Core CRUD views for Trip model.
 """
 from datetime import datetime, timedelta
+from decimal import Decimal
 import hashlib
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView, FormView
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
@@ -190,6 +191,21 @@ class TripDetailView(LoginRequiredMixin, BaseTripPermissionMixin, DetailView):
             'payment_allocations__financial_record',
             'payment_allocations__financial_record__category'
         )
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        trip = self.object
+        next_trip = trip.get_next_trip()
+        toll_entries = list(trip.get_toll_entries())
+        total_tolls = sum((t.amount for t in toll_entries), Decimal('0.00'))
+        vendor_hire = trip.vendor_hire_amount or Decimal('0.00')
+
+        context['next_trip'] = next_trip
+        context['toll_entries'] = toll_entries
+        context['total_tolls'] = total_tolls
+        context['toll_count'] = len(toll_entries)
+        context['net_trip_profit'] = trip.total_revenue - total_tolls - vendor_hire
+        return context
 
 
 class TripBulkCreateView(LoginRequiredMixin, PermissionRequiredMixin, FormView):

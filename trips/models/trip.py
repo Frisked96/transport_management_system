@@ -635,3 +635,57 @@ class Trip(models.Model):
         if hasattr(self, 'annotated_outstanding'):
             return self.annotated_outstanding
         return self.total_revenue - self.amount_received
+
+    def get_next_trip(self):
+        """
+        Returns the subsequent trip for the same vehicle (if any),
+        ordered chronologically by trip date and ID.
+        """
+        if not self.vehicle_id:
+            return None
+        return Trip.objects.filter(
+            vehicle_id=self.vehicle_id
+        ).filter(
+            models.Q(date__gt=self.date) | models.Q(date=self.date, id__gt=self.id)
+        ).order_by('date', 'id').first()
+
+    def get_toll_entries(self):
+        """
+        Returns TollEntry records incurred during this trip's operational window.
+        A trip begins on trip.date and runs until the next trip for this vehicle starts.
+        Also includes any toll entries explicitly associated with this trip.
+        """
+        from ledger.models import TollEntry
+
+        if not self.vehicle_id:
+            return self.toll_entries.all().select_related('toll_account')
+
+        next_trip = self.get_next_trip()
+        if next_trip:
+            if next_trip.date > self.date:
+                window_q = models.Q(vehicle_id=self.vehicle_id, date__gte=self.date, date__lt=next_trip.date)
+            else:
+                window_q = models.Q(vehicle_id=self.vehicle_id, date=self.date)
+        else:
+            window_q = models.Q(vehicle_id=self.vehicle_id, date__gte=self.date)
+
+        return TollEntry.objects.filter(
+            window_q | models.Q(associated_trip=self)
+        ).distinct().select_related('toll_account').order_by('date', 'created_at')
+
+    @property
+    def total_toll_expense(self):
+        """
+        Returns the total toll expense incurred during this trip's operational window.
+        """
+        from django.db.models import Sum
+        val = self.get_toll_entries().aggregate(total=Sum('amount'))['total']
+        return val or Decimal('0.00')
+
+    @property
+    def net_trip_profit(self):
+        """
+        Net trip profit = Total Revenue - Toll Expense - (Vendor Hire Amount if attached)
+        """
+        hire = self.vendor_hire_amount or Decimal('0.00')
+        return self.total_revenue - self.total_toll_expense - hire

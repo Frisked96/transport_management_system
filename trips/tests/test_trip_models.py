@@ -10,7 +10,8 @@ from django.urls import reverse
 from trips.models import Route, Trip, TripQuerySet
 from fleet.models import Vehicle
 from ledger.models import (
-    FinancialRecord, Party, TransactionCategory, CompanyAccount, Bill, BillTrip
+    FinancialRecord, Party, TransactionCategory, CompanyAccount, Bill, BillTrip,
+    TollAccount, TollEntry
 )
 
 class TripNumberingModelTests(TestCase):
@@ -387,5 +388,108 @@ class TripQuerySetModelTests(TestCase):
         annotated_trip = Trip.objects.with_billing_info().get(pk=self.trip.pk)
         self.assertFalse(annotated_trip.annotated_is_billed)
         self.assertEqual(annotated_trip.annotated_gst_type, 'GST')
+
+
+class TripTollIntegrationTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_superuser(username='trip_admin', password='password123')
+        self.client = Client()
+        self.client.login(username='trip_admin', password='password123')
+
+        self.party = Party.objects.create(name='Toll Test Party', party_type=Party.TYPE_DEBTOR)
+        self.vehicle = Vehicle.objects.create(registration_plate='CG 04 PJ 8276')
+
+        self.toll_account = TollAccount.objects.create(
+            name='BlackBuck',
+            provider='BlackBuck',
+            opening_balance=Decimal('50000.00'),
+            is_default=True
+        )
+
+        # Trip 1: 2026-10-10
+        self.trip1 = Trip.objects.create(
+            vehicle=self.vehicle,
+            party=self.party,
+            date=timezone.datetime(2026, 10, 10).date(),
+            revenue_type=Trip.REVENUE_FIXED,
+            rate_per_ton=Decimal('25000.00')
+        )
+
+        # Trip 2: 2026-10-15
+        self.trip2 = Trip.objects.create(
+            vehicle=self.vehicle,
+            party=self.party,
+            date=timezone.datetime(2026, 10, 15).date(),
+            revenue_type=Trip.REVENUE_FIXED,
+            rate_per_ton=Decimal('30000.00')
+        )
+
+        # Toll 1: During Trip 1 (2026-10-11)
+        self.toll1 = TollEntry.objects.create(
+            toll_account=self.toll_account,
+            vehicle=self.vehicle,
+            date=timezone.datetime(2026, 10, 11).date(),
+            amount=Decimal('550.00'),
+            toll_plaza='Mathni - Maharashtra',
+            transaction_reference='TXN-TOLL-01',
+            created_by=self.user
+        )
+
+        # Toll 2: During Trip 1 (2026-10-14)
+        self.toll2 = TollEntry.objects.create(
+            toll_account=self.toll_account,
+            vehicle=self.vehicle,
+            date=timezone.datetime(2026, 10, 14).date(),
+            amount=Decimal('450.00'),
+            toll_plaza='Arambha Toll Plaza',
+            transaction_reference='TXN-TOLL-02',
+            created_by=self.user
+        )
+
+        # Toll 3: During Trip 2 (2026-10-15)
+        self.toll3 = TollEntry.objects.create(
+            toll_account=self.toll_account,
+            vehicle=self.vehicle,
+            date=timezone.datetime(2026, 10, 15).date(),
+            amount=Decimal('600.00'),
+            toll_plaza='Khed Toll Plaza',
+            transaction_reference='TXN-TOLL-03',
+            created_by=self.user
+        )
+
+    def test_get_next_trip(self):
+        """Trip 1 should identify Trip 2 as its next trip; Trip 2 should have None."""
+        self.assertEqual(self.trip1.get_next_trip(), self.trip2)
+        self.assertIsNone(self.trip2.get_next_trip())
+
+    def test_get_toll_entries_during_trip_period(self):
+        """Trip 1 should have tolls from 10-10 to 10-15 (tolls 1 & 2); Trip 2 has toll 3."""
+        trip1_tolls = list(self.trip1.get_toll_entries())
+        self.assertEqual(len(trip1_tolls), 2)
+        self.assertIn(self.toll1, trip1_tolls)
+        self.assertIn(self.toll2, trip1_tolls)
+        self.assertNotIn(self.toll3, trip1_tolls)
+        self.assertEqual(self.trip1.total_toll_expense, Decimal('1000.00'))
+
+        trip2_tolls = list(self.trip2.get_toll_entries())
+        self.assertEqual(len(trip2_tolls), 1)
+        self.assertIn(self.toll3, trip2_tolls)
+        self.assertEqual(self.trip2.total_toll_expense, Decimal('600.00'))
+
+    def test_trip_detail_view_renders_toll_dropdown(self):
+        """Trip detail view should include toll entries, total tolls, and toll table in context and HTML."""
+        response = self.client.get(reverse('trip-detail', kwargs={'pk': self.trip1.pk}))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['toll_count'], 2)
+        self.assertEqual(response.context['total_tolls'], Decimal('1000.00'))
+        self.assertEqual(response.context['next_trip'], self.trip2)
+
+        # Assert HTML contains toll details and collapsed by default
+        self.assertContains(response, 'Expenses')
+        self.assertContains(response, 'Toll Expense')
+        self.assertContains(response, 'Mathni - Maharashtra')
+        self.assertContains(response, 'Arambha Toll Plaza')
+        self.assertContains(response, '₹1,000')
+        self.assertNotContains(response, '<details class="group" open>')
 
 
