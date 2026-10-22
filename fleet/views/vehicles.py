@@ -140,9 +140,12 @@ class VehicleDetailView(LoginRequiredMixin, PermissionRequiredMixin, BaseFleetPe
         total_doc_cost = Decimal(str(self.object.total_compliance_expenses or '0.00'))
         context['total_doc_cost'] = total_doc_cost
         context['doc_count'] = self.object.documents.count()
+        base_docs = self.object.base_documents
+        context['expired_doc_count'] = sum(1 for d in base_docs if getattr(d, 'status', None) == 'Expired')
 
         # Total Tracked Vehicle Expenses Till Date (Documents + Tolls)
         context['total_vehicle_expenses'] = Decimal(str(total_toll_cost)) + total_doc_cost
+        context['pending_maintenance_count'] = self.object.maintenance_records.filter(is_completed=False).count()
 
         return context
 

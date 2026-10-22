@@ -466,6 +466,39 @@ class VehicleDetailExpensesAndTripsPaginationTest(TestCase):
         self.assertEqual(page2_obj.object_list[0].pk, self.trips[4].pk)
         self.assertEqual(page2_obj.object_list[-1].pk, self.trips[0].pk)
 
+    def test_vehicle_detail_collapsible_sections_with_summary_cards(self):
+        """
+        Vehicle detail view renders the 6 sections as collapsible cards,
+        defaulting to collapsed with summary cards in each header.
+        """
+        url = reverse('vehicle-detail', kwargs={'pk': self.vehicle.pk})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+
+        # 1. Verify all 6 collapsible bodies are collapsed (hidden) by default
+        self.assertContains(response, 'id="tyres-body" class="hidden')
+        self.assertContains(response, 'id="maintenance-body" class="hidden')
+        self.assertContains(response, 'id="docs-body" class="hidden')
+        self.assertContains(response, 'id="expenses-body" class="hidden')
+        self.assertContains(response, 'id="toll-body" class="hidden')
+        self.assertContains(response, 'id="trips-body" class="hidden')
+
+        # 2. Verify all 6 cards have the toggle button with "Expand" label
+        self.assertContains(response, 'id="tyres-toggle-btn"')
+        self.assertContains(response, 'id="maintenance-toggle-btn"')
+        self.assertContains(response, 'id="docs-toggle-btn"')
+        self.assertContains(response, 'id="expenses-toggle-btn"')
+        self.assertContains(response, 'id="toll-toggle-btn"')
+        self.assertContains(response, 'id="trips-toggle-btn"')
+
+        # 3. Verify summary metric labels exist in the card headers
+        self.assertContains(response, 'Mounted')
+        self.assertContains(response, 'Vacant')
+        self.assertContains(response, 'Lifetime Cost')
+        self.assertContains(response, 'Total Tracked')
+        self.assertContains(response, 'Total Tolls')
+        self.assertContains(response, 'Total Trips')
+
 
 
 

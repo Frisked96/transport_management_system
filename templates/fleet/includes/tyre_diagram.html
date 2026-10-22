@@ -1,33 +1,43 @@
 <!-- Tyre Positions: compact layout (6 horse + 12 trailer + 1 stepney) -->
 <section id="tyre-diagram-section" class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-    <header class="flex flex-col gap-3 border-b border-slate-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-        <div>
-            <h2 class="flex items-center text-sm font-bold text-slate-800">
-                <i class="fa-solid fa-truck-moving mr-2 text-slate-400"></i>Tyre Positions
-            </h2>
-            <p class="mt-0.5 text-xs text-slate-500">Horse 6 &middot; Trailer 12 &middot; Stepney 1 (19 slots)</p>
+    <div class="flex flex-col gap-3 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5 cursor-pointer bg-slate-50/70 hover:bg-slate-50 transition-colors" onclick="toggleCard('tyres')">
+        <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-sm">
+                <i class="fa-solid fa-truck-moving"></i>
+            </div>
+            <div>
+                <h2 class="text-sm font-bold text-slate-800">Tyre Positions</h2>
+                <p class="text-[11px] text-slate-500">Horse 6 &middot; Trailer 12 &middot; Stepney 1 (19 slots)</p>
+            </div>
         </div>
         <div class="flex flex-wrap items-center gap-2">
-            <span class="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700 ring-1 ring-inset ring-emerald-200">
-                Mounted {{ tyre_layout.stats.total_mounted }}/19
-            </span>
-            <span class="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-600 ring-1 ring-inset ring-slate-200">
-                Vacant {{ tyre_layout.stats.total_vacant }}
-            </span>
+            <div class="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-left shadow-2xs">
+                <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block leading-tight">Mounted</span>
+                <span class="text-xs font-bold text-emerald-700">{{ tyre_layout.stats.total_mounted|default:"0" }}/19</span>
+            </div>
+            <div class="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-left shadow-2xs">
+                <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block leading-tight">Vacant</span>
+                <span class="text-xs font-bold text-slate-600">{{ tyre_layout.stats.total_vacant|default:"19" }}</span>
+            </div>
             {% if perms.fleet.change_tyre %}
-            <a href="{% url 'tyre-log-create' %}?action=Mount&vehicle={{ vehicle.pk }}"
-               class="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition-colors hover:bg-emerald-700">
-                <i class="fa-solid fa-plus text-[10px]"></i> Mount Tyre
+            <a href="{% url 'tyre-log-create' %}?action=Mount&vehicle={{ vehicle.pk }}" onclick="event.stopPropagation();"
+               class="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-2.5 py-1.5 text-xs font-bold text-white shadow-sm transition-colors hover:bg-emerald-700">
+                <i class="fa-solid fa-plus text-[10px]"></i> Mount
             </a>
             {% endif %}
-            <a href="{% url 'tyre-list' %}?vehicle={{ vehicle.pk }}"
-               class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-50">
+            <a href="{% url 'tyre-list' %}?vehicle={{ vehicle.pk }}" onclick="event.stopPropagation();"
+               class="rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-50">
                 Inventory
             </a>
+            <button type="button" id="tyres-toggle-btn" onclick="toggleCard('tyres'); event.stopPropagation();"
+                    class="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-700 shadow-2xs hover:bg-slate-50 transition-colors">
+                <span class="toggle-text">Expand</span>
+                <i class="fa-solid fa-chevron-down text-[10px] text-slate-400 transition-transform duration-200"></i>
+            </button>
         </div>
-    </header>
+    </div>
 
-    <div class="bg-slate-50 p-4 sm:p-5">
+    <div id="tyres-body" class="hidden border-t border-slate-200 bg-slate-50 p-4 sm:p-5">
         <div class="grid items-start gap-4 md:grid-cols-2">
 
             <!-- Left column: Horse + Stepney -->
