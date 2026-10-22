@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load ledger_extras %}
 
 {% block title %}{{ document.document_name }} History - TMS{% endblock %}
 
@@ -85,13 +86,13 @@
 
         <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
             <span class="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1">Current Renewal Cost</span>
-            <p class="text-xl font-black text-slate-900">₹{{ document.cost|floatformat:2 }}</p>
+            <p class="text-xl font-black text-slate-900">₹{{ document.cost|indian_comma }}</p>
             <p class="text-xs text-slate-400 mt-0.5">Active cycle expense</p>
         </div>
 
         <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
             <span class="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1">Total Lifetime Expenses</span>
-            <p class="text-xl font-black text-emerald-700">₹{{ total_cost|floatformat:2 }}</p>
+            <p class="text-xl font-black text-emerald-700">₹{{ total_cost|indian_comma }}</p>
             <p class="text-xs text-slate-500 mt-0.5">Across {{ renewals.count }} recorded cycle{{ renewals.count|pluralize }}</p>
         </div>
     </div>
@@ -117,7 +118,7 @@
                         </span>
                         <span class="text-[11px] text-slate-500 block mt-0.5">Doc #: {{ item.document_number|default:"-" }}</span>
                     </div>
-                    <span class="text-sm font-black text-emerald-700">₹{{ item.cost|floatformat:2 }}</span>
+                    <span class="text-sm font-black text-emerald-700">₹{{ item.cost|indian_comma }}</span>
                 </div>
                 {% if item.notes %}
                 <p class="text-xs text-slate-600 bg-slate-50 p-2 rounded">{{ item.notes }}</p>
@@ -170,7 +171,7 @@
                             {{ item.document_number|default:"-" }}
                         </td>
                         <td class="px-6 py-3.5 text-right font-black text-slate-900 whitespace-nowrap">
-                            ₹{{ item.cost|floatformat:2 }}
+                            ₹{{ item.cost|indian_comma }}
                         </td>
                         <td class="px-6 py-3.5 text-xs text-slate-500 whitespace-nowrap">
                             {{ item.created_at|date:"d M Y, H:i" }}

@@ -199,12 +199,17 @@ class TripDetailView(LoginRequiredMixin, BaseTripPermissionMixin, DetailView):
         toll_entries = list(trip.get_toll_entries())
         total_tolls = sum((t.amount for t in toll_entries), Decimal('0.00'))
         vendor_hire = trip.vendor_hire_amount or Decimal('0.00')
+        total_expenses = total_tolls + vendor_hire
+        net_profit = trip.total_revenue - total_expenses
 
         context['next_trip'] = next_trip
         context['toll_entries'] = toll_entries
         context['total_tolls'] = total_tolls
         context['toll_count'] = len(toll_entries)
-        context['net_trip_profit'] = trip.total_revenue - total_tolls - vendor_hire
+        context['vendor_hire'] = vendor_hire
+        context['total_expenses'] = total_expenses
+        context['net_profit'] = net_profit
+        context['net_trip_profit'] = net_profit
         return context
 
 

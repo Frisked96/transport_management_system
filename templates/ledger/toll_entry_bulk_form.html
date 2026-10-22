@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load ledger_extras %}
 
 {% block title %}Bulk Add Toll Charges - TMS{% endblock %}
 
@@ -31,7 +32,7 @@
                 <select name="toll_account" id="id_toll_account" class="rounded-md border-slate-300 text-sm py-2 px-3 bg-white focus:ring-emerald-500 focus:border-emerald-500 font-bold text-slate-800">
                     {% for acc in accounts %}
                     <option value="{{ acc.pk }}" {% if acc.pk == default_account.pk %}selected{% endif %}>
-                        {{ acc.name }} (Bal: ₹{{ acc.current_balance_cached|floatformat:2 }})
+                        {{ acc.name }} (Bal: ₹{{ acc.current_balance_cached|indian_comma }})
                     </option>
                     {% endfor %}
                 </select>

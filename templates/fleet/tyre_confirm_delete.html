@@ -1,4 +1,5 @@
 {% extends 'confirm_delete_base.html' %}
+{% load ledger_extras %}
 
 {% block title %}Delete Tyre: {{ object.serial_number }} - TMS{% endblock %}
 {% block delete_header_title %}Confirm Delete Tyre{% endblock %}
@@ -59,7 +60,7 @@ Are you sure you want to delete this tyre? This action <strong>cannot be undone<
     </div>
     <p class="text-sm mb-3">
         This tyre has <strong>{{ associated_records.count }}</strong> linked financial ledger entry 
-        (Invoice: ₹{{ associated_records.first.amount|floatformat:2 }}{% if associated_records.first.party %} from {{ associated_records.first.party.name }}{% endif %}).
+        (Invoice: ₹{{ associated_records.first.amount|indian_comma }}{% if associated_records.first.party %} from {{ associated_records.first.party.name }}{% endif %}).
         How would you like to handle this financial record?
     </p>
     <div class="space-y-3 bg-white p-3 rounded-lg border border-amber-100 text-sm">

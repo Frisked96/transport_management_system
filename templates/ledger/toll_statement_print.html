@@ -45,19 +45,19 @@
     <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 border border-slate-200 rounded-lg p-3 mb-6 text-xs">
         <div>
             <span class="text-slate-500 uppercase tracking-wider block text-[10px]">Opening Balance</span>
-            <span class="font-bold text-slate-900 text-sm">₹{{ opening_balance|floatformat:2 }}</span>
+            <span class="font-bold text-slate-900 text-sm">₹{{ opening_balance|indian_comma }}</span>
         </div>
         <div>
             <span class="text-slate-500 uppercase tracking-wider block text-[10px]">Total Top-ups (+)</span>
-            <span class="font-bold text-emerald-600 text-sm">₹{{ total_period_recharges|floatformat:2 }}</span>
+            <span class="font-bold text-emerald-600 text-sm">₹{{ total_period_recharges|indian_comma }}</span>
         </div>
         <div>
             <span class="text-slate-500 uppercase tracking-wider block text-[10px]">Total Tolls (-)</span>
-            <span class="font-bold text-rose-600 text-sm">₹{{ total_period_spent|floatformat:2 }}</span>
+            <span class="font-bold text-rose-600 text-sm">₹{{ total_period_spent|indian_comma }}</span>
         </div>
         <div>
             <span class="text-slate-500 uppercase tracking-wider block text-[10px]">Closing Balance</span>
-            <span class="font-black {% if closing_balance < 0 %}text-rose-600{% else %}text-slate-900{% endif %} text-sm">₹{{ closing_balance|floatformat:2 }}</span>
+            <span class="font-black {% if closing_balance < 0 %}text-rose-600{% else %}text-slate-900{% endif %} text-sm">₹{{ closing_balance|indian_comma }}</span>
         </div>
     </div>
 
@@ -85,9 +85,9 @@
                 <td class="py-2 px-3 text-slate-600">{% if is_combined %}All Accounts{% else %}{{ account.name }}{% endif %}</td>
                 <td class="py-2 px-3 text-slate-400">-</td>
                 <td class="py-2 px-3 text-slate-600">Starting Balance Baseline</td>
-                <td class="py-2 px-3 text-right font-medium">{% if opening_balance > 0 %}₹{{ opening_balance|floatformat:2 }}{% else %}-{% endif %}</td>
-                <td class="py-2 px-3 text-right font-medium">{% if opening_balance < 0 %}₹{{ opening_balance|abs|floatformat:2 }}{% else %}-{% endif %}</td>
-                <td class="py-2 px-3 text-right font-bold text-slate-900">₹{{ opening_balance|floatformat:2 }}</td>
+                <td class="py-2 px-3 text-right font-medium">{% if opening_balance > 0 %}₹{{ opening_balance|indian_comma }}{% else %}-{% endif %}</td>
+                <td class="py-2 px-3 text-right font-medium">{% if opening_balance < 0 %}₹{{ opening_balance|abs_val|indian_comma }}{% else %}-{% endif %}</td>
+                <td class="py-2 px-3 text-right font-bold text-slate-900">₹{{ opening_balance|indian_comma }}</td>
             </tr>
 
             {% for item in items %}
@@ -100,13 +100,13 @@
                 <td class="py-2 px-3 font-bold text-slate-800 whitespace-nowrap">{{ item.vehicle }}</td>
                 <td class="py-2 px-3 text-slate-700">{{ item.description }}</td>
                 <td class="py-2 px-3 text-right font-medium text-emerald-600">
-                    {% if item.credit > 0 %}₹{{ item.credit|floatformat:2 }}{% else %}-{% endif %}
+                    {% if item.credit > 0 %}₹{{ item.credit|indian_comma }}{% else %}-{% endif %}
                 </td>
                 <td class="py-2 px-3 text-right font-medium text-rose-600">
-                    {% if item.debit > 0 %}₹{{ item.debit|floatformat:2 }}{% else %}-{% endif %}
+                    {% if item.debit > 0 %}₹{{ item.debit|indian_comma }}{% else %}-{% endif %}
                 </td>
                 <td class="py-2 px-3 text-right font-bold {% if item.balance < 0 %}text-rose-600{% else %}text-slate-900{% endif %}">
-                    ₹{{ item.balance|floatformat:2 }}
+                    {% if item.balance < 0 %}-₹{{ item.balance|abs_val|indian_comma }}{% else %}₹{{ item.balance|indian_comma }}{% endif %}
                 </td>
             </tr>
             {% empty %}

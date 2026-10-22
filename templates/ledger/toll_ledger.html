@@ -103,7 +103,7 @@
        class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm {% if not is_combined and current_account and current_account.pk == acc.pk %}bg-emerald-700 text-white shadow-emerald-200{% else %}bg-white text-slate-700 border border-slate-200 hover:bg-slate-50{% endif %}">
         <span>{{ acc.name }}</span>
         <span class="px-1.5 py-0.5 rounded text-[10px] {% if not is_combined and current_account and current_account.pk == acc.pk %}bg-emerald-800 text-emerald-100{% elif acc.current_balance_cached < 0 %}bg-rose-100 text-rose-700 font-extrabold{% elif acc.current_balance_cached < 5000 %}bg-amber-100 text-amber-700 font-extrabold{% else %}bg-emerald-50 text-emerald-700 font-extrabold{% endif %}">
-            ₹{{ acc.current_balance_cached|floatformat:0|intcomma }}
+            ₹{{ acc.current_balance_cached|indian_comma }}
         </span>
     </a>
     {% endfor %}
@@ -138,7 +138,7 @@
                     {% if is_combined %}Combined Available Balance{% else %}Available Toll Balance{% endif %}
                 </p>
                 <h3 class="text-2xl lg:text-3xl font-extrabold mt-1 {% if current_balance < 0 %}text-rose-600{% elif current_balance < 5000 %}text-amber-600{% else %}text-emerald-600{% endif %}">
-                    ₹{{ current_balance|floatformat:2|intcomma }}
+                    ₹{{ current_balance|indian_comma }}
                 </h3>
             </div>
             <div class="w-10 h-10 rounded-full {% if current_balance < 0 %}bg-rose-100 text-rose-600{% else %}bg-emerald-100 text-emerald-600{% endif %} flex items-center justify-center text-lg">
@@ -174,7 +174,7 @@
                     {% if is_combined %}Combined Starting Balance{% else %}Initial Starting Balance{% endif %}
                 </p>
                 <h3 class="text-2xl font-bold text-slate-900 mt-1">
-                    ₹{{ initial_starting_balance|floatformat:2|intcomma }}
+                    ₹{{ initial_starting_balance|indian_comma }}
                 </h3>
             </div>
             <div class="w-10 h-10 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center text-lg">
@@ -196,7 +196,7 @@
             <div>
                 <p class="text-xs font-bold uppercase tracking-wider text-slate-500">Period Top-ups (+)</p>
                 <h3 class="text-2xl font-bold text-emerald-600 mt-1">
-                    ₹{{ total_period_recharges|floatformat:2|intcomma }}
+                    ₹{{ total_period_recharges|indian_comma }}
                 </h3>
             </div>
             <div class="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center text-lg">
@@ -214,7 +214,7 @@
             <div>
                 <p class="text-xs font-bold uppercase tracking-wider text-slate-500">Period Tolls Consumed (-)</p>
                 <h3 class="text-2xl font-bold text-rose-600 mt-1">
-                    ₹{{ total_period_spent|floatformat:2|intcomma }}
+                    ₹{{ total_period_spent|indian_comma }}
                 </h3>
             </div>
             <div class="w-10 h-10 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center text-lg">
@@ -238,7 +238,7 @@
                 <option value="" {% if is_combined %}selected{% endif %}>All Accounts (Combined View)</option>
                 {% for acc in toll_accounts %}
                 <option value="{{ acc.pk }}" {% if not is_combined and current_account and current_account.pk == acc.pk %}selected{% endif %}>
-                    {{ acc.name }} (₹{{ acc.current_balance_cached|floatformat:0|intcomma }})
+                    {{ acc.name }} (₹{{ acc.current_balance_cached|indian_comma }})
                 </option>
                 {% endfor %}
             </select>
@@ -312,7 +312,7 @@
             </span>
             {% endif %}
             <div class="border-l border-slate-200 pl-3">
-                Closing Balance: <span class="font-extrabold text-slate-900 text-sm">₹{{ closing_balance|floatformat:2|intcomma }}</span>
+                Closing Balance: <span class="font-extrabold text-slate-900 text-sm">₹{{ closing_balance|indian_comma }}</span>
             </div>
         </div>
     </div>
@@ -361,13 +361,13 @@
                     </td>
                     <td class="px-4 py-3 text-slate-400 font-mono text-xs">-</td>
                     <td class="px-4 py-3 text-right text-emerald-700 font-bold">
-                        {% if period_opening_balance > 0 %}₹{{ period_opening_balance|floatformat:2|intcomma }}{% else %}-{% endif %}
+                        {% if period_opening_balance > 0 %}₹{{ period_opening_balance|indian_comma }}{% else %}-{% endif %}
                     </td>
                     <td class="px-4 py-3 text-right text-rose-700 font-bold">
-                        {% if period_opening_balance < 0 %}₹{{ period_opening_balance|abs|floatformat:2|intcomma }}{% else %}-{% endif %}
+                        {% if period_opening_balance < 0 %}₹{{ period_opening_balance|abs_val|indian_comma }}{% else %}-{% endif %}
                     </td>
                     <td class="px-4 py-3 text-right font-black text-slate-900">
-                        ₹{{ period_opening_balance|floatformat:2|intcomma }}
+                        ₹{{ period_opening_balance|indian_comma }}
                     </td>
                     <td class="px-3 py-3 text-center text-slate-400">-</td>
                     <td class="px-4 py-3 text-right text-slate-400 text-xs">Baseline</td>
@@ -432,13 +432,13 @@
                         {{ item.reference }}
                     </td>
                     <td class="px-4 py-3 text-right font-bold text-emerald-600 whitespace-nowrap">
-                        {% if item.credit %}+₹{{ item.credit|floatformat:2|intcomma }}{% else %}-{% endif %}
+                        {% if item.credit %}+₹{{ item.credit|indian_comma }}{% else %}-{% endif %}
                     </td>
                     <td class="px-4 py-3 text-right font-bold text-rose-600 whitespace-nowrap">
-                        {% if item.debit %}-₹{{ item.debit|floatformat:2|intcomma }}{% else %}-{% endif %}
+                        {% if item.debit %}-₹{{ item.debit|indian_comma }}{% else %}-{% endif %}
                     </td>
                     <td class="px-4 py-3 text-right font-black whitespace-nowrap {% if item.running_balance < 0 %}text-rose-600{% else %}text-slate-900{% endif %}">
-                        ₹{{ item.running_balance|floatformat:2|intcomma }}
+                        {% if item.running_balance < 0 %}-₹{{ item.running_balance|abs_val|indian_comma }}{% else %}₹{{ item.running_balance|indian_comma }}{% endif %}
                     </td>
                     <td class="px-3 py-3 text-center">
                         {% if item.document %}

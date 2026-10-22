@@ -228,11 +228,11 @@
                 </tr>
                 <tr>
                     <td class="meta-label">Total Debits (+):</td>
-                    <td class="meta-value font-mono">₹{{ total_debit|intcomma }}</td>
+                    <td class="meta-value font-mono">₹{{ total_debit|indian_comma }}</td>
                 </tr>
                 <tr>
                     <td class="meta-label">Total Credits (-):</td>
-                    <td class="meta-value font-mono">₹{{ total_credit|intcomma }}</td>
+                    <td class="meta-value font-mono">₹{{ total_credit|indian_comma }}</td>
                 </tr>
                 <tr style="border-top: 1px solid #cbd5e1;">
                     <td class="meta-label" style="font-weight: 800; color: #0f172a; padding-top: 4px;">Closing Balance:</td>
@@ -273,10 +273,10 @@
                 <td class="nowrap font-mono" style="font-size: 9.5px;">{{ row.reference }}</td>
                 <td>{{ row.description }}</td>
                 <td class="text-right font-mono">
-                    {% if row.debit > 0 %}₹{{ row.debit|intcomma }}{% else %}-{% endif %}
+                    {% if row.debit > 0 %}₹{{ row.debit|indian_comma }}{% else %}-{% endif %}
                 </td>
                 <td class="text-right font-mono">
-                    {% if row.credit > 0 %}₹{{ row.credit|intcomma }}{% else %}-{% endif %}
+                    {% if row.credit > 0 %}₹{{ row.credit|indian_comma }}{% else %}-{% endif %}
                 </td>
                 <td class="text-right font-mono {{ row.balance_class }}">
                     {{ row.balance_formatted }}
@@ -293,8 +293,8 @@
             <!-- Total Row -->
             <tr class="total-row">
                 <td colspan="3" class="text-right"><strong>PERIOD TOTALS & CLOSING BALANCE:</strong></td>
-                <td class="text-right font-mono">₹{{ total_debit|intcomma }}</td>
-                <td class="text-right font-mono">₹{{ total_credit|intcomma }}</td>
+                <td class="text-right font-mono">₹{{ total_debit|indian_comma }}</td>
+                <td class="text-right font-mono">₹{{ total_credit|indian_comma }}</td>
                 <td class="text-right font-mono font-bold">{{ closing_balance_formatted }}</td>
             </tr>
         </tbody>

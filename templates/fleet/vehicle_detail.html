@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load ledger_extras %}
 
 {% block title %}Vehicle Details: {{ vehicle.registration_plate }} - TMS{% endblock %}
 
@@ -140,7 +141,7 @@
                             </tr>
                             <tr>
                                 <td class="py-2 text-slate-500 font-medium whitespace-nowrap pr-4">Lifetime Cost</td>
-                                <td class="py-2 text-emerald-700 font-black">₹{{ total_maintenance_cost|floatformat:2 }}</td>
+                                <td class="py-2 text-emerald-700 font-black">₹{{ total_maintenance_cost|indian_comma }}</td>
                             </tr>
                         </table>
                     </div>
@@ -205,7 +206,7 @@
                                     {{ record.is_completed|yesno:"Done,Pending" }}
                                 </span>
                             </td>
-                            <td class="px-6 py-3 text-right font-black text-slate-900">₹{{ record.cost|floatformat:0 }}</td>
+                            <td class="px-6 py-3 text-right font-black text-slate-900">₹{{ record.cost|indian_comma }}</td>
                         </tr>
                         {% empty %}
                         <tr><td colspan="4" class="px-6 py-10 text-center text-slate-400 italic">No maintenance history recorded.</td></tr>
@@ -229,7 +230,7 @@
                             <i class="fa-solid fa-shield-halved mr-2 text-emerald-600"></i>Compliance Docs
                         </h3>
                         <p class="text-[10px] text-slate-400 font-bold uppercase mt-0.5">
-                            Total Expenses: ₹{{ vehicle.total_compliance_expenses|floatformat:2 }}
+                            Total Expenses: ₹{{ vehicle.total_compliance_expenses|indian_comma }}
                         </p>
                     </div>
                     {% if perms.documents.add_document %}
@@ -272,7 +273,7 @@
                                 {% endif %}
                                 
                                 {% if doc.cost > 0 or doc.total_expenses > 0 %}
-                                <span class="text-slate-700 font-bold">Cost: ₹{{ doc.cost|floatformat:0 }}</span>
+                                <span class="text-slate-700 font-bold">Cost: ₹{{ doc.cost|indian_comma }}</span>
                                 {% endif %}
                                 {% if doc.document_number %}
                                 <span class="text-slate-400">#{{ doc.document_number }}</span>
@@ -316,7 +317,7 @@
                                 <p class="text-xs font-bold text-slate-800 truncate uppercase">{{ doc.document_name }}</p>
                                 <p class="text-[10px] text-slate-400 font-medium">
                                     Exp: {{ doc.expiry_date|date:"d M Y"|default:"N/A" }}
-                                    {% if doc.cost > 0 %}&bull; ₹{{ doc.cost|floatformat:0 }}{% endif %}
+                                    {% if doc.cost > 0 %}&bull; ₹{{ doc.cost|indian_comma }}{% endif %}
                                 </p>
                             </div>
                             <div class="flex items-center space-x-1">
@@ -362,7 +363,7 @@
                     <h3 class="text-xs font-bold text-slate-600 uppercase tracking-widest flex items-center">
                         <i class="fa-solid fa-road mr-2 text-slate-400"></i>Toll Expenses
                     </h3>
-                    <span class="text-xs font-black text-rose-600">₹{{ total_toll_cost|floatformat:2 }}</span>
+                    <span class="text-xs font-black text-rose-600">₹{{ total_toll_cost|indian_comma }}</span>
                 </div>
                 <div class="p-4 space-y-2">
                     <div class="flex items-center justify-between pb-1 border-b border-slate-100">
@@ -383,7 +384,7 @@
                             <span class="font-bold text-slate-800">{{ toll.toll_plaza|default:"Toll Plaza" }}</span>
                             <span class="block text-[10px] text-slate-400">{{ toll.date|date:"d M Y" }}{% if toll.transaction_reference %} &bull; Ref: {{ toll.transaction_reference }}{% endif %}</span>
                         </div>
-                        <span class="font-bold text-rose-600">-₹{{ toll.amount|floatformat:2 }}</span>
+                        <span class="font-bold text-rose-600">-₹{{ toll.amount|indian_comma }}</span>
                     </div>
                     {% empty %}
                     <p class="text-center py-4 text-xs text-slate-400 italic">No toll charges recorded for this vehicle.</p>

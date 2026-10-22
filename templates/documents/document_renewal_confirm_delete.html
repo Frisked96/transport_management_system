@@ -1,4 +1,5 @@
 {% extends 'confirm_delete_base.html' %}
+{% load ledger_extras %}
 
 {% block title %}Delete Renewal Entry - TMS{% endblock %}
 {% block delete_header_title %}Delete Renewal Entry{% endblock %}
@@ -18,7 +19,7 @@
         </div>
         <div>
             <span class="text-xs text-slate-500 uppercase tracking-wider block font-semibold">Cost</span>
-            <span class="font-bold text-slate-800">₹{{ object.cost|floatformat:2 }}</span>
+            <span class="font-bold text-slate-800">₹{{ object.cost|indian_comma }}</span>
         </div>
     </div>
 </div>

@@ -36,7 +36,7 @@
                 </div>
                 <p class="text-xs md:text-sm text-slate-500 font-medium">
                     Route Intelligence & Pricing Performance Dashboard • Suggested Benchmark Rate:
-                    <strong class="text-slate-800">₹{{ route.default_rate|intcomma }}/Ton</strong>
+                    <strong class="text-slate-800">₹{{ route.default_rate|indian_comma }}/Ton</strong>
                 </p>
             </div>
 
@@ -144,10 +144,10 @@
                 <i class="fa-solid fa-scale-balanced text-emerald-600 opacity-60"></i>
             </div>
             <div class="text-xl md:text-2xl font-black text-slate-900">
-                ₹{{ weighted_avg_rate|floatformat:2|intcomma }}<span class="text-xs text-slate-400 font-semibold">/Ton</span>
+                ₹{{ weighted_avg_rate|indian_comma }}<span class="text-xs text-slate-400 font-semibold">/Ton</span>
             </div>
             <p class="text-[10px] text-slate-500 mt-1">
-                Spread: <strong class="text-slate-700">₹{{ min_rate|floatformat:0 }} - ₹{{ max_rate|floatformat:0 }}</strong>
+                Spread: <strong class="text-slate-700">₹{{ min_rate|indian_comma }} - ₹{{ max_rate|indian_comma }}</strong>
             </p>
         </div>
 
@@ -158,16 +158,16 @@
                 <i class="fa-solid fa-tag text-blue-600 opacity-60"></i>
             </div>
             <div class="text-xl md:text-2xl font-black text-slate-900">
-                ₹{{ latest_rate|floatformat:2|intcomma }}<span class="text-xs text-slate-400 font-semibold">/Ton</span>
+                ₹{{ latest_rate|indian_comma }}<span class="text-xs text-slate-400 font-semibold">/Ton</span>
             </div>
             <div class="text-[10px] mt-1 font-semibold flex items-center gap-1">
                 {% if rate_variance > 0 %}
                     <span class="text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded flex items-center gap-1">
-                        <i class="fa-solid fa-arrow-trend-up"></i> +₹{{ rate_variance|floatformat:2 }} vs suggested
+                        <i class="fa-solid fa-arrow-trend-up"></i> +₹{{ rate_variance|indian_comma }} vs suggested
                     </span>
                 {% elif rate_variance < 0 %}
                     <span class="text-rose-700 font-bold bg-rose-50 px-1.5 py-0.5 rounded flex items-center gap-1">
-                        <i class="fa-solid fa-arrow-trend-down"></i> -₹{{ rate_variance_abs|floatformat:2 }} vs suggested
+                        <i class="fa-solid fa-arrow-trend-down"></i> -₹{{ rate_variance_abs|indian_comma }} vs suggested
                     </span>
                 {% else %}
                     <span class="text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">Matches suggested rate</span>
@@ -182,7 +182,7 @@
                 <i class="fa-solid fa-weight-hanging text-indigo-600 opacity-60"></i>
             </div>
             <div class="text-xl md:text-2xl font-black text-slate-900">
-                {{ total_weight|floatformat:1|intcomma }}<span class="text-xs text-slate-400 font-semibold"> MT</span>
+                {{ total_weight|indian_comma }}<span class="text-xs text-slate-400 font-semibold"> MT</span>
             </div>
             <p class="text-[10px] text-slate-500 mt-1">
                 Avg Load: <strong class="text-slate-700">{{ avg_load_per_trip|floatformat:1 }} MT/Trip</strong>
@@ -196,7 +196,7 @@
                 <i class="fa-solid fa-indian-rupee-sign text-amber-600 opacity-60"></i>
             </div>
             <div class="text-xl md:text-2xl font-black text-slate-900 truncate">
-                ₹{{ total_revenue|floatformat:0|intcomma }}
+                ₹{{ total_revenue|indian_comma }}
             </div>
             <p class="text-[10px] text-slate-500 mt-1">
                 Period Freight Earned
@@ -224,10 +224,10 @@
                 <i class="fa-solid fa-chart-line text-teal-600 opacity-60"></i>
             </div>
             <div class="text-xl md:text-2xl font-black text-slate-900">
-                ±₹{{ rate_spread|floatformat:0 }}<span class="text-xs text-slate-400 font-semibold">/Ton</span>
+                ±₹{{ rate_spread|indian_comma }}<span class="text-xs text-slate-400 font-semibold">/Ton</span>
             </div>
             <p class="text-[10px] text-slate-500 mt-1">
-                Min: ₹{{ min_rate|floatformat:0 }} | Max: ₹{{ max_rate|floatformat:0 }}
+                Min: ₹{{ min_rate|indian_comma }} | Max: ₹{{ max_rate|indian_comma }}
             </p>
         </div>
     </section>
@@ -322,15 +322,15 @@
                             </a>
                         </td>
                         <td class="px-5 py-3.5 text-right font-semibold text-slate-700">{{ p.trips }}</td>
-                        <td class="px-5 py-3.5 text-right font-mono font-medium text-slate-700">{{ p.total_weight|floatformat:2|intcomma }} MT</td>
+                        <td class="px-5 py-3.5 text-right font-mono font-medium text-slate-700">{{ p.total_weight|indian_comma }} MT</td>
                         <td class="px-5 py-3.5 text-right font-mono font-black text-emerald-700 text-sm">
-                            ₹{{ p.avg_rate|floatformat:2|intcomma }}
+                            ₹{{ p.avg_rate|indian_comma }}
                         </td>
                         <td class="px-5 py-3.5 text-right font-mono text-slate-500 text-[11px]">
-                            ₹{{ p.min_rate|floatformat:0 }} – ₹{{ p.max_rate|floatformat:0 }}
+                            ₹{{ p.min_rate|indian_comma }} – ₹{{ p.max_rate|indian_comma }}
                         </td>
                         <td class="px-5 py-3.5 text-right font-mono font-bold text-slate-900">
-                            ₹{{ p.total_revenue|floatformat:0|intcomma }}
+                            ₹{{ p.total_revenue|indian_comma }}
                         </td>
                         <td class="px-5 py-3.5 text-right text-slate-500">{{ p.latest_date|date:"d M Y"|default:"-" }}</td>
                     </tr>
@@ -373,11 +373,11 @@
                 <div class="text-[11px] text-slate-500 uppercase">{{ v.vehicle__make_model|default:"Commercial Vehicle" }}</div>
                 <div class="pt-1 flex justify-between items-baseline text-xs">
                     <span class="text-slate-400 text-[10px]">Total Hauled:</span>
-                    <strong class="font-mono text-slate-800">{{ v.total_weight|floatformat:1 }} MT</strong>
+                    <strong class="font-mono text-slate-800">{{ v.total_weight|indian_comma }} MT</strong>
                 </div>
                 <div class="flex justify-between items-baseline text-xs">
                     <span class="text-slate-400 text-[10px]">Freight:</span>
-                    <strong class="font-mono text-emerald-700">₹{{ v.total_revenue|floatformat:0|intcomma }}</strong>
+                    <strong class="font-mono text-emerald-700">₹{{ v.total_revenue|indian_comma }}</strong>
                 </div>
             </div>
             {% endfor %}
@@ -430,10 +430,10 @@
                         <td class="px-5 py-3 font-medium text-slate-700">{{ trip.party.name }}</td>
                         <td class="px-5 py-3 text-right font-mono text-slate-800">{{ trip.weight|default:"-" }}</td>
                         <td class="px-5 py-3 text-right font-mono font-bold text-emerald-700">
-                            ₹{{ trip.rate_per_ton|floatformat:2|intcomma }}
+                            ₹{{ trip.rate_per_ton|indian_comma }}
                         </td>
                         <td class="px-5 py-3 text-right font-mono font-bold text-slate-900">
-                            ₹{{ trip.revenue|floatformat:2|intcomma }}
+                            ₹{{ trip.revenue|indian_comma }}
                         </td>
                         <td class="px-5 py-3 text-center">
                             {% if trip.annotated_is_billed %}

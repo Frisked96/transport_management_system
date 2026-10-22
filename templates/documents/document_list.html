@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load ledger_extras %}
 
 {% block title %}Documents - Transport Management System{% endblock %}
 
@@ -214,7 +215,7 @@
                         </div>
                         <p class="text-xs text-slate-500 mt-0.5">
                             Doc #: {{ doc.document_number|default:"-" }}
-                            {% if doc.cost > 0 %}&bull; ₹{{ doc.cost|floatformat:0 }}{% endif %}
+                            {% if doc.cost > 0 %}&bull; ₹{{ doc.cost|indian_comma }}{% endif %}
                         </p>
                     </div>
 
@@ -391,7 +392,7 @@
 
                         <!-- Cost -->
                         <td class="px-4 py-3 text-sm text-right font-bold text-slate-800 whitespace-nowrap align-middle">
-                            {% if doc.cost > 0 %}₹{{ doc.cost|floatformat:0 }}{% else %}-{% endif %}
+                            {% if doc.cost > 0 %}₹{{ doc.cost|indian_comma }}{% else %}-{% endif %}
                         </td>
 
                         <!-- Status Badge -->
@@ -565,7 +566,7 @@
                                 </div>
                                 <p class="text-xs text-slate-500 mt-0.5">
                                     Doc #: {{ doc.document_number|default:"-" }}
-                                    {% if doc.cost > 0 %}&bull; ₹{{ doc.cost|floatformat:0 }}{% endif %}
+                                    {% if doc.cost > 0 %}&bull; ₹{{ doc.cost|indian_comma }}{% endif %}
                                 </p>
                             </div>
                             <div class="flex-shrink-0">
@@ -672,7 +673,7 @@
                                     {% endif %}
                                 </td>
                                 <td class="px-4 py-3 text-sm text-right font-bold text-slate-800 whitespace-nowrap">
-                                    {% if doc.cost > 0 %}₹{{ doc.cost|floatformat:0 }}{% else %}-{% endif %}
+                                    {% if doc.cost > 0 %}₹{{ doc.cost|indian_comma }}{% else %}-{% endif %}
                                 </td>
                                 <td class="px-4 py-3">
                                     {% if doc.never_expires %}

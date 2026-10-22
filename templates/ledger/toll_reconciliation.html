@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load humanize %}
+{% load humanize ledger_extras %}
 
 {% block title %}Toll Recharge Reconciliation - TMS{% endblock %}
 
@@ -49,7 +49,7 @@
         </div>
         <div>
             <div class="text-xs font-bold text-amber-700 uppercase tracking-wider">Unallocated Recharges</div>
-            <div class="text-2xl font-black text-amber-950 mt-0.5">₹{{ pending_total|floatformat:2|intcomma }}</div>
+            <div class="text-2xl font-black text-amber-950 mt-0.5">₹{{ pending_total|indian_comma }}</div>
             <div class="text-xs text-amber-800 mt-0.5">{{ pending_count }} top-ups pending firm assignment</div>
         </div>
     </div>
@@ -73,7 +73,7 @@
             {% for ca in company_accounts %}
             <span class="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-semibold bg-white border border-slate-200 text-slate-800 shadow-2xs">
                 <span>{{ ca.name }}</span>
-                <span class="font-mono text-emerald-700 font-bold">₹{{ ca.current_balance_cached|floatformat:0|intcomma }}</span>
+                <span class="font-mono text-emerald-700 font-bold">₹{{ ca.current_balance_cached|indian_comma }}</span>
             </span>
             {% empty %}
             <span class="text-xs text-slate-400">No firm accounts found.</span>
@@ -120,7 +120,7 @@
             <select name="bulk_company_account" required class="rounded-md bg-slate-800 border-slate-700 text-white text-xs py-1.5 px-3 focus:ring-emerald-500 font-medium">
                 <option value="">-- Choose Firm Account --</option>
                 {% for ca in company_accounts %}
-                <option value="{{ ca.pk }}">{{ ca.name }} (₹{{ ca.current_balance_cached|floatformat:0|intcomma }})</option>
+                <option value="{{ ca.pk }}">{{ ca.name }} (₹{{ ca.current_balance_cached|indian_comma }})</option>
                 {% endfor %}
             </select>
             <button type="submit" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-md text-xs font-bold transition-colors shadow-sm flex items-center gap-1.5">
@@ -154,7 +154,7 @@
                             {{ r.date|date:"d M Y" }}
                         </td>
                         <td class="px-4 py-3 text-right font-black text-emerald-700 text-sm whitespace-nowrap">
-                            +₹{{ r.amount|floatformat:2|intcomma }}
+                            +₹{{ r.amount|indian_comma }}
                         </td>
                         <td class="px-4 py-3 font-semibold text-slate-700">
                             {{ r.toll_account.name }}
@@ -229,7 +229,7 @@
                             {{ r.date|date:"d M Y" }}
                         </td>
                         <td class="px-4 py-3 text-right font-black text-emerald-700 text-sm whitespace-nowrap">
-                            +₹{{ r.amount|floatformat:2|intcomma }}
+                            +₹{{ r.amount|indian_comma }}
                         </td>
                         <td class="px-4 py-3 font-semibold text-slate-700">
                             {{ r.toll_account.name }}
