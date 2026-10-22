@@ -18,7 +18,7 @@ from ledger.models import FinancialRecord, Party, CompanyAccount, TripAllocation
 from ledger.forms import PartyForm
 from trips.models import Trip
 from ledger.views.base import BaseLedgerPermissionMixin
-from ledger.utils import format_indian_comma, format_balance
+from ledger.utils import format_indian_comma, format_balance, sort_trips_for_bill_generation
 
 class PartyListView(LoginRequiredMixin, PermissionRequiredMixin, BaseLedgerPermissionMixin, ListView):
     """
@@ -391,6 +391,8 @@ def get_party_unbilled_trips(request):
         if bill_id and trips:
             for bt in BillTrip.objects.filter(bill_id=bill_id, trip__in=trips):
                 bill_trips_map[bt.trip_id] = bt
+
+        trips = sort_trips_for_bill_generation(trips, bill_trips_map=bill_trips_map)
 
         data = []
         for trip in trips:

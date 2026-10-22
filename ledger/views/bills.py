@@ -23,7 +23,7 @@ from ledger.models import FinancialRecord, Party, CompanyAccount, TripAllocation
 from ledger.forms import BillForm, VendorBillUpdateForm
 from trips.models import Trip
 from ledger.views.base import BaseLedgerPermissionMixin
-from ledger.utils import format_indian_comma, format_balance
+from ledger.utils import format_indian_comma, format_balance, sort_bill_trips
 
 class BillListView(LoginRequiredMixin, PermissionRequiredMixin, BaseLedgerPermissionMixin, ListView):
     model = Bill
@@ -191,7 +191,7 @@ class VendorBillUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateVi
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         bill = self.object
-        bill_trips = list(bill.bill_trips.select_related('trip', 'trip__vehicle', 'trip__route').order_by('trip__date'))
+        bill_trips = sort_bill_trips(bill.bill_trips.select_related('trip', 'trip__vehicle', 'trip__route'))
         context['bill_trips'] = bill_trips
         context['bill_trips_count'] = len(bill_trips)
         context['total_hire'] = sum((bt.trip.vendor_hire_amount or Decimal('0')) for bt in bill_trips if bt.trip)
@@ -243,7 +243,7 @@ class BillDetailView(LoginRequiredMixin, PermissionRequiredMixin, BaseLedgerPerm
             context['creditor_bills'] = list(bill.creditor_bills.select_related('party').all())
         else:
             context['creditor_bills'] = []
-        bill_trips = list(bill.bill_trips.select_related('trip', 'trip__vehicle', 'trip__vehicle__vendor').order_by('trip__date'))
+        bill_trips = sort_bill_trips(bill.bill_trips.select_related('trip', 'trip__vehicle', 'trip__vehicle__vendor'))
         context['bill_trips'] = bill_trips
         context['bill_trips_count'] = len(bill_trips)
 
@@ -428,7 +428,7 @@ def group_trips_for_bill(bill, bill_trips=None):
             'discount': total_discount,
             'amount': total_amount,
             'count': len(items),
-            'bill_trips': items, # Keep track of actual bill_trips in this group
+            'bill_trips': sort_bill_trips(items), # Keep track of actual bill_trips in this group
         })
 
     return grouped_items
@@ -436,12 +436,13 @@ def group_trips_for_bill(bill, bill_trips=None):
 def _get_combined_bill_context(bill):
     """Helper to construct context for invoice & annexure print view."""
     # For annexure
-    bill_trips = list(bill.bill_trips.select_related('trip', 'trip__vehicle').order_by('trip__date'))
+    bill_trips = sort_bill_trips(bill.bill_trips.select_related('trip', 'trip__vehicle'))
 
     # For invoice section
     invoice_items = group_trips_for_bill(bill, bill_trips=bill_trips)
     date_groups = []
-    for date, group in groupby(bill_trips, key=lambda bt: bt.trip.date if bt.trip else None):
+    sorted_by_date = sorted(bill_trips, key=lambda bt: bt.trip.date if (bt.trip and bt.trip.date) else datetime.min.date())
+    for date, group in groupby(sorted_by_date, key=lambda bt: bt.trip.date if bt.trip else None):
         bt_list = list(group)
         date_groups.append({
             'date': date,
@@ -641,8 +642,8 @@ def get_bulk_invoices_context(request):
 
     all_bill_contexts = []
     for bill in bills:
-        invoice_items = group_trips_for_bill(bill)
-        bill_trips = bill.bill_trips.select_related('trip', 'trip__vehicle').order_by('trip__date')
+        bill_trips = sort_bill_trips(bill.bill_trips.select_related('trip', 'trip__vehicle'))
+        invoice_items = group_trips_for_bill(bill, bill_trips=bill_trips)
         
         has_discount = False
         if bill.bill_type == 'Standard':

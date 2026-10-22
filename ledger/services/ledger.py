@@ -12,28 +12,19 @@ class LedgerService:
     @staticmethod
     def resequence_financial_records(from_date=None, from_created_at=None):
         """
-        Resequence entry numbers to maintain gapless numbering without loading the full table.
+        Resequence entry numbers to maintain gapless numbering.
         """
         from ledger.models import FinancialRecord, Sequence
-        from django.db.models import Max, Q
+        from django.db.models import Max
         
         with transaction.atomic():
-            if from_date and from_created_at:
-                prior_filter = Q(date__lt=from_date) | Q(date=from_date, created_at__lt=from_created_at)
-                start_index = FinancialRecord.objects.filter(prior_filter).count() + 1
-                subsequent_filter = Q(date__gt=from_date) | Q(date=from_date, created_at__gte=from_created_at)
-                records = list(FinancialRecord.objects.filter(subsequent_filter).only('id', 'entry_number').order_by('date', 'created_at'))
-            else:
-                start_index = 1
-                records = list(FinancialRecord.objects.all().only('id', 'entry_number').order_by('date', 'created_at'))
+            records = list(FinancialRecord.objects.all().only('id', 'entry_number').order_by('date', 'created_at', 'id'))
             
             records_to_update = []
-            current_index = start_index
-            for record in records:
+            for current_index, record in enumerate(records, start=1):
                 if record.entry_number != current_index:
                     record._new_entry_number = current_index
                     records_to_update.append(record)
-                current_index += 1
             
             if records_to_update:
                 max_val = FinancialRecord.objects.aggregate(max_val=Max('entry_number'))['max_val'] or 0

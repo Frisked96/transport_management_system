@@ -6,6 +6,7 @@ from django import forms
 from django.db import models, transaction
 
 from ledger.models import Bill, BillTrip, CompanyAccount, TransactionCategory
+from ledger.utils import sort_trips_for_bill_generation, parse_numeric_lr
 from trips.models import Trip
 
 
@@ -121,9 +122,19 @@ class BillForm(forms.ModelForm):
                 qs = Trip.objects.filter(party_id=party_id)
                 if self.instance and self.instance.pk:
                     qs = qs.filter(models.Q(bills__isnull=True) | models.Q(bills=self.instance))
+                    bt_map = {bt.trip_id: bt.lr_no for bt in self.instance.bill_trips.all()}
                 else:
                     qs = qs.filter(bills__isnull=True)
-                self.fields['trips'].queryset = qs.distinct().order_by('-date')
+                    bt_map = {}
+
+                trips_list = list(qs.distinct().order_by('-date', '-created_at'))
+                sorted_trips = sort_trips_for_bill_generation(trips_list, bill_trips_map=bt_map)
+                sorted_ids = [t.id for t in sorted_trips]
+                if sorted_ids:
+                    preserved = models.Case(*[models.When(id=tid, then=pos) for pos, tid in enumerate(sorted_ids)])
+                    self.fields['trips'].queryset = qs.filter(id__in=sorted_ids).order_by(preserved)
+                else:
+                    self.fields['trips'].queryset = qs.none()
 
                 # Show original bills for this party
                 self.fields['original_bill'].queryset = Bill.objects.filter(
@@ -188,13 +199,31 @@ class BillForm(forms.ModelForm):
                 instance._suppress_billtrip_sync = True
                 instance.save()
                 
-                selected_trips = self.cleaned_data.get('trips', [])
+                selected_trips = list(self.cleaned_data.get('trips', []))
                 trips_data_json = self.cleaned_data.get('trips_data', '{}')
                 
                 try:
                     trips_extra = json.loads(trips_data_json) if trips_data_json else {}
                 except json.JSONDecodeError:
                     trips_extra = {}
+
+                def get_trip_lr(t):
+                    extra = trips_extra.get(str(t.id)) or trips_extra.get(t.id)
+                    if isinstance(extra, dict):
+                        return extra.get('lr_no') or t.lr_no
+                    elif extra:
+                        return extra
+                    return t.lr_no
+
+                import datetime
+                selected_trips = sorted(
+                    selected_trips,
+                    key=lambda t: (
+                        (0, parse_numeric_lr(get_trip_lr(t)), t.date or datetime.date.min, t.id)
+                        if parse_numeric_lr(get_trip_lr(t)) is not None
+                        else (1, 0, t.date or datetime.date.min, t.id)
+                    )
+                )
 
                 instance.bill_trips.exclude(trip__in=selected_trips).delete()
 

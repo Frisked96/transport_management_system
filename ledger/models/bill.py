@@ -348,6 +348,15 @@ class Bill(models.Model):
         return max(Decimal('0'), trip_subtotal - (Decimal(str(self.discount or 0))))
 
     @property
+    def sorted_bill_trips(self):
+        """
+        Returns bill_trips sequenced by older LR no. on top and newer at bottom.
+        Falls back to trip date if LR is not numeric.
+        """
+        from ledger.utils import sort_bill_trips
+        return sort_bill_trips(self.bill_trips.select_related('trip', 'trip__vehicle'))
+
+    @property
     def gst_amount(self):
         """Returns GST amount, prioritizing cached value"""
         if getattr(self, '_bypass_cache', False):

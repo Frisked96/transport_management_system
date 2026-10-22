@@ -1,4 +1,5 @@
 import os
+import datetime
 from decimal import Decimal
 from django.test import TestCase
 from django.contrib.auth.models import User
@@ -173,6 +174,48 @@ class FinancialRecordModelTests(TestCase):
         self.assertIsNotNone(rec1.entry_number)
         self.assertIsNotNone(rec2.entry_number)
         self.assertEqual(rec2.entry_number, rec1.entry_number + 1)
+
+    def test_resequence_entry_numbers_on_delete_with_non_chronological_dates(self):
+        """
+        Verify deleting a FinancialRecord resequences gaplessly without UNIQUE constraint errors
+        even when records are created out of chronological date order.
+        """
+        today = timezone.now().date()
+        yesterday = today - datetime.timedelta(days=1)
+        two_days_ago = today - datetime.timedelta(days=2)
+
+        # Create records out of date order
+        rec1 = FinancialRecord.objects.create(
+            date=today,
+            account=self.account,
+            party=self.party_debtor,
+            category=self.category_income,
+            amount=Decimal('1000.00')
+        )
+        rec2 = FinancialRecord.objects.create(
+            date=yesterday,
+            account=self.account,
+            party=self.party_debtor,
+            category=self.category_income,
+            amount=Decimal('2000.00')
+        )
+        rec3 = FinancialRecord.objects.create(
+            date=two_days_ago,
+            account=self.account,
+            party=self.party_debtor,
+            category=self.category_income,
+            amount=Decimal('3000.00')
+        )
+
+        # Delete the middle record
+        rec2.delete()
+
+        # Resequenced records must be gapless starting from 1
+        records = list(FinancialRecord.objects.filter(pk__in=[rec1.pk, rec3.pk]).order_by('entry_number'))
+        self.assertEqual([r.entry_number for r in records], [1, 2])
+        # Earliest date (two_days_ago) should be entry_number 1
+        self.assertEqual(records[0].pk, rec3.pk)
+        self.assertEqual(records[1].pk, rec1.pk)
 
     def test_financial_record_auto_populate_party_from_trip(self):
         """Verify FinancialRecord auto-fills party from associated_trip if omitted."""
