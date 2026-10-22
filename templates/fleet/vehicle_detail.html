@@ -340,20 +340,50 @@
                 </div>
             </div>
 
-            <!-- Recent Trips -->
+            <!-- Vehicle Expenses Till Date -->
             <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-                <div class="bg-slate-50 px-6 py-3 border-b border-slate-200">
-                    <h3 class="text-xs font-bold text-slate-600 uppercase tracking-widest">Recent Activity</h3>
+                <div class="bg-slate-50 px-6 py-3 border-b border-slate-200 flex items-center justify-between">
+                    <h3 class="text-xs font-bold text-slate-600 uppercase tracking-widest flex items-center">
+                        <i class="fa-solid fa-receipt mr-2 text-slate-400"></i>Expenses Till Date
+                    </h3>
+                    <span class="text-xs font-black text-slate-900">₹{{ total_vehicle_expenses|indian_comma }}</span>
                 </div>
                 <div class="p-4 space-y-3">
-                    {% for trip in recent_trips %}
-                    <a href="{% url 'trip-detail' trip.pk %}" class="flex items-center justify-between p-3 rounded-lg border border-slate-100 hover:border-emerald-500 hover:bg-emerald-50 transition-all">
-                        <span class="text-xs font-bold text-slate-700">{{ trip.trip_number }}</span>
-                        <span class="text-[10px] font-bold text-slate-400 uppercase">{{ trip.date|date:"d M" }}</span>
-                    </a>
-                    {% empty %}
-                    <p class="text-center py-4 text-xs text-slate-400 italic">No recent trips.</p>
-                    {% endfor %}
+                    <div class="flex items-center justify-between text-xs pb-2 border-b border-slate-100">
+                        <div>
+                            <span class="font-semibold text-slate-700">FASTag Tolls</span>
+                            <span class="block text-[10px] text-slate-400">{{ toll_entries_count }} transaction{{ toll_entries_count|pluralize }}</span>
+                        </div>
+                        <div class="text-right">
+                            <span class="font-bold text-rose-600">₹{{ total_toll_cost|indian_comma }}</span>
+                            <a href="{% url 'toll-ledger' %}?vehicle={{ vehicle.pk }}" class="block text-[10px] font-bold text-blue-600 hover:underline">View Ledger &rarr;</a>
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-between text-xs pb-2 border-b border-slate-100">
+                        <div>
+                            <span class="font-semibold text-slate-700">Documents & Compliance</span>
+                            <span class="block text-[10px] text-slate-400">{{ doc_count }} document{{ doc_count|pluralize }}</span>
+                        </div>
+                        <div class="text-right">
+                            <span class="font-bold text-amber-700">₹{{ total_doc_cost|indian_comma }}</span>
+                            <a href="{% url 'document-list' %}?search={{ vehicle.registration_plate }}" class="block text-[10px] font-bold text-blue-600 hover:underline">View Docs &rarr;</a>
+                        </div>
+                    </div>
+                    {% if total_maintenance_cost > 0 %}
+                    <div class="flex items-center justify-between text-xs pb-2 border-b border-slate-100">
+                        <div>
+                            <span class="font-semibold text-slate-700">Maintenance</span>
+                            <span class="block text-[10px] text-slate-400">{{ maintenance_records_count }} service{{ maintenance_records_count|pluralize }}</span>
+                        </div>
+                        <div class="text-right">
+                            <span class="font-bold text-slate-800">₹{{ total_maintenance_cost|indian_comma }}</span>
+                        </div>
+                    </div>
+                    {% endif %}
+                    <div class="flex items-center justify-between text-xs pt-1 font-bold">
+                        <span class="text-slate-800">Total Tracked Expenses</span>
+                        <span class="text-slate-900 font-black">₹{{ total_vehicle_expenses|indian_comma }}</span>
+                    </div>
                 </div>
             </div>
 
@@ -392,6 +422,135 @@
                 </div>
             </div>
         </div>
+    </div>
+
+    <!-- Full Trip History (Paginated) -->
+    <div id="trips" class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+        <div class="bg-slate-50 px-6 py-3 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+            <div>
+                <h3 class="text-xs font-bold text-slate-700 uppercase tracking-widest flex items-center">
+                    <i class="fa-solid fa-truck-moving mr-2 text-slate-400"></i>Trip History
+                </h3>
+                <p class="text-[10px] text-slate-500 font-medium">All trips operated by this vehicle (latest to oldest)</p>
+            </div>
+            <div class="flex items-center gap-3">
+                <span class="text-xs font-bold text-slate-600">{{ total_trips_count }} Total Trip{{ total_trips_count|pluralize }}</span>
+                {% if perms.trips.add_trip %}
+                <a href="{% url 'trip-create' %}?vehicle={{ vehicle.pk }}" class="text-xs font-bold text-emerald-600 hover:text-emerald-700">
+                    + New Trip
+                </a>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-slate-200 text-left text-xs">
+                <thead class="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
+                    <tr>
+                        <th class="px-5 py-3">Date</th>
+                        <th class="px-5 py-3">Trip #</th>
+                        <th class="px-5 py-3">Route</th>
+                        <th class="px-5 py-3">Party</th>
+                        <th class="px-5 py-3 text-right">Weight (MT)</th>
+                        <th class="px-5 py-3 text-right">Rate</th>
+                        <th class="px-5 py-3 text-right">Gross Freight</th>
+                        <th class="px-5 py-3 text-right">Toll</th>
+                        <th class="px-5 py-3">Driver</th>
+                        <th class="px-5 py-3 text-center">Status</th>
+                        <th class="px-5 py-3 text-right">Action</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 bg-white">
+                    {% for trip in trips_page_obj %}
+                    <tr class="hover:bg-slate-50 transition-colors">
+                        <td class="px-5 py-3 font-medium text-slate-600 whitespace-nowrap">{{ trip.date|date:"d M Y" }}</td>
+                        <td class="px-5 py-3 font-bold text-slate-900 whitespace-nowrap">
+                            <a href="{% url 'trip-detail' trip.pk %}" class="hover:text-emerald-600">
+                                {{ trip.trip_number }}
+                            </a>
+                        </td>
+                        <td class="px-5 py-3 text-slate-700">
+                            {% if trip.pickup_location and trip.delivery_location %}
+                                {{ trip.pickup_location }} &rarr; {{ trip.delivery_location }}
+                            {% elif trip.route %}
+                                {{ trip.route.pickup_location }} &rarr; {{ trip.route.delivery_location }}
+                            {% else %}
+                                <span class="text-slate-400">-</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-5 py-3 font-medium text-slate-700">{{ trip.party.name }}</td>
+                        <td class="px-5 py-3 text-right font-mono text-slate-800">{{ trip.weight|default:"-" }}</td>
+                        <td class="px-5 py-3 text-right font-mono font-bold text-emerald-700">
+                            ₹{{ trip.rate_per_ton|indian_comma }}
+                        </td>
+                        <td class="px-5 py-3 text-right font-mono font-bold text-slate-900">
+                            ₹{{ trip.revenue|indian_comma }}
+                        </td>
+                        <td class="px-5 py-3 text-right font-mono font-medium whitespace-nowrap">
+                            {% if trip.annotated_toll_expense > 0 %}
+                                <span class="text-rose-600 font-bold">₹{{ trip.annotated_toll_expense|indian_comma }}</span>
+                            {% else %}
+                                <span class="text-slate-400">₹0</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-5 py-3 text-slate-600 whitespace-nowrap">
+                            {% if trip.driver and trip.driver.user %}
+                                {{ trip.driver.user.get_full_name|default:trip.driver.user.username }}
+                            {% elif trip.driver %}
+                                {{ trip.driver }}
+                            {% else %}
+                                <span class="text-slate-400">-</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-5 py-3 text-center">
+                            {% if trip.annotated_is_billed %}
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                                    Billed
+                                </span>
+                            {% else %}
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                                    Unbilled
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td class="px-5 py-3 text-right whitespace-nowrap">
+                            <a href="{% url 'trip-detail' trip.pk %}" class="text-xs font-bold text-indigo-600 hover:text-indigo-900">
+                                View &rarr;
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="11" class="px-5 py-8 text-center text-slate-400 italic">No trips recorded for this vehicle.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% if trips_page_obj.paginator.num_pages > 1 %}
+        <!-- Pagination Footer -->
+        <div class="px-6 py-3 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-600">
+            <span>Showing {{ trips_page_obj.start_index }} to {{ trips_page_obj.end_index }} of {{ total_trips_count }} trips</span>
+            <div class="flex items-center space-x-1">
+                {% if trips_page_obj.has_previous %}
+                <a href="?page={{ trips_page_obj.previous_page_number }}#trips" class="px-2.5 py-1 border border-slate-300 rounded bg-white hover:bg-slate-50 text-slate-700 font-medium">Previous</a>
+                {% endif %}
+
+                {% for p in trips_page_obj.paginator.page_range %}
+                    {% if p == trips_page_obj.number %}
+                    <span class="px-2.5 py-1 bg-slate-800 text-white font-bold rounded">{{ p }}</span>
+                    {% elif p >= trips_page_obj.number|add:"-2" and p <= trips_page_obj.number|add:"2" %}
+                    <a href="?page={{ p }}#trips" class="px-2.5 py-1 border border-slate-300 rounded bg-white hover:bg-slate-50 text-slate-700">{{ p }}</a>
+                    {% endif %}
+                {% endfor %}
+
+                {% if trips_page_obj.has_next %}
+                <a href="?page={{ trips_page_obj.next_page_number }}#trips" class="px-2.5 py-1 border border-slate-300 rounded bg-white hover:bg-slate-50 text-slate-700 font-medium">Next</a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
     </div>
 
     {% if vehicle.created_at or vehicle.created_by %}

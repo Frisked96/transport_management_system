@@ -65,23 +65,23 @@
             <!-- Period Quick Pills -->
             <div class="flex flex-wrap items-center gap-1.5">
                 <span class="text-xs font-bold text-slate-500 uppercase tracking-wider mr-1">Period:</span>
-                <a href="?period=all{% if selected_route_type %}&route_type={{ selected_route_type }}{% endif %}{% if selected_party %}&party={{ selected_party }}{% endif %}" 
+                <a href="?period=all{% if selected_route_type %}&route_type={{ selected_route_type }}{% endif %}{% if selected_party %}&party={{ selected_party }}{% endif %}{% if selected_ownership %}&ownership={{ selected_ownership }}{% endif %}" 
                    class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all {% if period == 'all' %}bg-emerald-600 text-white shadow-sm{% else %}bg-slate-100 text-slate-600 hover:bg-slate-200{% endif %}">
                     All Time
                 </a>
-                <a href="?period=1y{% if selected_route_type %}&route_type={{ selected_route_type }}{% endif %}{% if selected_party %}&party={{ selected_party }}{% endif %}" 
+                <a href="?period=1y{% if selected_route_type %}&route_type={{ selected_route_type }}{% endif %}{% if selected_party %}&party={{ selected_party }}{% endif %}{% if selected_ownership %}&ownership={{ selected_ownership }}{% endif %}" 
                    class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all {% if period == '1y' %}bg-emerald-600 text-white shadow-sm{% else %}bg-slate-100 text-slate-600 hover:bg-slate-200{% endif %}">
                     Last 12M
                 </a>
-                <a href="?period=6m{% if selected_route_type %}&route_type={{ selected_route_type }}{% endif %}{% if selected_party %}&party={{ selected_party }}{% endif %}" 
+                <a href="?period=6m{% if selected_route_type %}&route_type={{ selected_route_type }}{% endif %}{% if selected_party %}&party={{ selected_party }}{% endif %}{% if selected_ownership %}&ownership={{ selected_ownership }}{% endif %}" 
                    class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all {% if period == '6m' %}bg-emerald-600 text-white shadow-sm{% else %}bg-slate-100 text-slate-600 hover:bg-slate-200{% endif %}">
                     Last 6M
                 </a>
-                <a href="?period=90d{% if selected_route_type %}&route_type={{ selected_route_type }}{% endif %}{% if selected_party %}&party={{ selected_party }}{% endif %}" 
+                <a href="?period=90d{% if selected_route_type %}&route_type={{ selected_route_type }}{% endif %}{% if selected_party %}&party={{ selected_party }}{% endif %}{% if selected_ownership %}&ownership={{ selected_ownership }}{% endif %}" 
                    class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all {% if period == '90d' %}bg-emerald-600 text-white shadow-sm{% else %}bg-slate-100 text-slate-600 hover:bg-slate-200{% endif %}">
                     Last 90D
                 </a>
-                <a href="?period=30d{% if selected_route_type %}&route_type={{ selected_route_type }}{% endif %}{% if selected_party %}&party={{ selected_party }}{% endif %}" 
+                <a href="?period=30d{% if selected_route_type %}&route_type={{ selected_route_type }}{% endif %}{% if selected_party %}&party={{ selected_party }}{% endif %}{% if selected_ownership %}&ownership={{ selected_ownership }}{% endif %}" 
                    class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all {% if period == '30d' %}bg-emerald-600 text-white shadow-sm{% else %}bg-slate-100 text-slate-600 hover:bg-slate-200{% endif %}">
                     Last 30D
                 </a>
@@ -89,6 +89,15 @@
 
             <!-- Granular Selectors & Custom Date Range -->
             <div class="flex flex-wrap items-center gap-3">
+                <!-- Vehicle Ownership Filter -->
+                <div class="w-40">
+                    <select name="ownership" onchange="this.form.submit()" class="block w-full py-1.5 px-3 border border-slate-300 rounded-lg text-xs font-medium focus:ring-emerald-500 focus:border-emerald-500 bg-white">
+                        <option value="">All Vehicles</option>
+                        <option value="owned" {% if selected_ownership == 'owned' %}selected{% endif %}>Company Fleet</option>
+                        <option value="attached" {% if selected_ownership == 'attached' %}selected{% endif %}>Market / Attached</option>
+                    </select>
+                </div>
+
                 <!-- Route Type Filter -->
                 <div class="w-40">
                     <select name="route_type" onchange="this.form.submit()" class="block w-full py-1.5 px-3 border border-slate-300 rounded-lg text-xs font-medium focus:ring-emerald-500 focus:border-emerald-500 bg-white">
@@ -122,7 +131,7 @@
                     <button type="submit" class="px-2.5 py-1 bg-slate-800 text-white rounded-md text-xs font-bold hover:bg-slate-700 transition-colors">
                         Filter
                     </button>
-                    {% if period != 'all' or selected_route_type or selected_party %}
+                    {% if period != 'all' or selected_route_type or selected_party or selected_ownership %}
                     <a href="{% url 'routes-dashboard' %}" class="text-xs text-rose-600 hover:underline ml-1">Reset</a>
                     {% endif %}
                 </div>

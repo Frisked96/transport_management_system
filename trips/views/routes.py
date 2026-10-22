@@ -14,6 +14,8 @@ from django.utils import timezone
 
 from trips.models import Route, Trip
 from trips.forms import RouteForm
+from trips.services.toll_service import calculate_route_toll_stats
+from fleet.models import Vehicle
 from ledger.models import Party
 
 
@@ -52,12 +54,13 @@ class RoutesDashboardView(LoginRequiredMixin, PermissionRequiredMixin, TemplateV
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
 
-        # 1. Filters: Period, Route Type, Party
+        # 1. Filters: Period, Route Type, Party, Ownership
         period = self.request.GET.get('period', 'all')
         start_date_str = self.request.GET.get('start_date')
         end_date_str = self.request.GET.get('end_date')
         selected_route_type = self.request.GET.get('route_type', '')
         party_id = self.request.GET.get('party', '')
+        ownership = self.request.GET.get('ownership', '')
 
         now = timezone.now().date()
         start_date = None
@@ -99,6 +102,10 @@ class RoutesDashboardView(LoginRequiredMixin, PermissionRequiredMixin, TemplateV
             trips_qs = trips_qs.filter(date__lte=end_date)
         if selected_route_type:
             trips_qs = trips_qs.filter(route__route_type=selected_route_type)
+        if ownership == 'owned':
+            trips_qs = trips_qs.filter(vehicle__ownership=Vehicle.OWNERSHIP_OWNED)
+        elif ownership == 'attached':
+            trips_qs = trips_qs.filter(vehicle__ownership=Vehicle.OWNERSHIP_ATTACHED)
         if party_id:
             try:
                 trips_qs = trips_qs.filter(party_id=int(party_id))
@@ -293,6 +300,7 @@ class RoutesDashboardView(LoginRequiredMixin, PermissionRequiredMixin, TemplateV
             'end_date': end_date_str or (end_date.strftime('%Y-%m-%d') if end_date else ''),
             'selected_route_type': selected_route_type,
             'selected_party': int(party_id) if party_id and party_id.isdigit() else '',
+            'selected_ownership': ownership,
             'route_type_choices': Route.ROUTE_TYPE_CHOICES,
             'all_parties': all_parties,
 
@@ -405,6 +413,21 @@ class RouteDashboardView(LoginRequiredMixin, PermissionRequiredMixin, DetailView
                 trips_qs = trips_qs.filter(party_id=int(party_id))
             except (ValueError, TypeError):
                 pass
+
+        # Ownership filter
+        ownership = self.request.GET.get('ownership', 'all')
+        if ownership == 'owned':
+            trips_qs = trips_qs.filter(vehicle__ownership=Vehicle.OWNERSHIP_OWNED)
+        elif ownership == 'attached':
+            trips_qs = trips_qs.filter(vehicle__ownership=Vehicle.OWNERSHIP_ATTACHED)
+
+        # Toll Statistics for Route (calculated from company-owned fleet trips)
+        toll_stats = calculate_route_toll_stats(trips_qs)
+        total_toll_expense = toll_stats['total_toll']
+        avg_toll_per_trip = toll_stats['avg_toll']
+        owned_trips_count = toll_stats['owned_trips_count']
+        trips_with_tolls_count = toll_stats['trips_with_tolls_count']
+        toll_map = toll_stats['toll_map']
 
         # 3. Overall Route Aggregate Metrics
         agg = trips_qs.aggregate(
@@ -528,9 +551,12 @@ class RouteDashboardView(LoginRequiredMixin, PermissionRequiredMixin, DetailView
         ).order_by('-trips')[:10]
 
         # 7. Recent Trips
-        recent_trips = trips_qs.select_related(
+        recent_trips = list(trips_qs.select_related(
             'vehicle', 'party', 'driver__user'
-        ).with_billing_info().order_by('-date', '-created_at')[:15]
+        ).with_billing_info().order_by('-date', '-created_at')[:15])
+
+        for t in recent_trips:
+            t.annotated_toll_expense = toll_map.get(t.id, Decimal('0.00'))
 
         # 8. All routes list for switcher dropdown
         all_routes = Route.objects.all().order_by('pickup_location', 'delivery_location')
@@ -544,7 +570,14 @@ class RouteDashboardView(LoginRequiredMixin, PermissionRequiredMixin, DetailView
             'start_date': start_date_str or (start_date.strftime('%Y-%m-%d') if start_date else ''),
             'end_date': end_date_str or (end_date.strftime('%Y-%m-%d') if end_date else ''),
             'selected_party': int(party_id) if party_id and party_id.isdigit() else '',
+            'selected_ownership': ownership,
             'participating_parties': participating_parties,
+
+            # Toll Metrics
+            'total_toll_expense': total_toll_expense,
+            'avg_toll_per_trip': avg_toll_per_trip,
+            'owned_trips_count': owned_trips_count,
+            'trips_with_tolls_count': trips_with_tolls_count,
 
             # Metrics
             'total_trips': total_trips,

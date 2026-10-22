@@ -1,6 +1,7 @@
 """
 Vehicle CRUD and management views for Fleet app.
 """
+from decimal import Decimal
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.contrib.auth.decorators import login_required, permission_required
@@ -8,6 +9,7 @@ from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.contrib import messages
 from django.db.models import Q, Count, Sum
+from django.core.paginator import Paginator
 
 from ledger.models import Party, CompanyAccount
 from fleet.models import Vehicle
@@ -98,21 +100,49 @@ class VehicleDetailView(LoginRequiredMixin, PermissionRequiredMixin, BaseFleetPe
         # Get recent maintenance records
         context['maintenance_records'] = self.object.maintenance_records.order_by('is_completed', 'expiry_date', '-completion_date')[:10]
         
-        # Get recent trips
-        context['recent_trips'] = self.object.trips.order_by('-created_at')[:10]
+        # All trips for this vehicle: sorted latest to oldest, paginated
+        trips_qs = self.object.trips.select_related(
+            'party', 'route', 'driver__user'
+        ).with_billing_info().order_by('-date', '-created_at')
         
-        # Calculate total maintenance cost (using model property or queryset)
-        context['total_maintenance_cost'] = self.object.total_maintenance_cost
+        total_trips_count = trips_qs.count()
+        paginator = Paginator(trips_qs, 15)
+        page_num = self.request.GET.get('page') or 1
+        trips_page_obj = paginator.get_page(page_num)
+
+        # Pre-compute toll expense for trips on this page
+        from trips.services.toll_service import calculate_trips_toll_map
+        page_tolls = calculate_trips_toll_map(trips_page_obj.object_list)
+        for t in trips_page_obj.object_list:
+            t.annotated_toll_expense = page_tolls.get(t.id, Decimal('0.00'))
+
+        context['trips_page_obj'] = trips_page_obj
+        context['recent_trips'] = trips_page_obj  # Backward compatibility
+        context['total_trips_count'] = total_trips_count
+        
+        # Calculate maintenance cost
+        total_maint_cost = self.object.total_maintenance_cost or Decimal('0.00')
+        context['total_maintenance_cost'] = total_maint_cost
+        context['maintenance_records_count'] = self.object.maintenance_records.filter(is_completed=True).count()
         
         # 18-Wheel + 1 Stepney Tyre Layout
         context['tyre_layout'] = self.object.tyre_layout
 
-        # Toll Expenses
-        toll_entries = self.object.toll_entries.select_related('toll_account').order_by('-date', '-created_at')
+        # Toll Expenses Till Date
+        toll_entries = self.object.toll_entries.select_related('toll_account').order_by('-date', '-time', '-created_at')
         context['recent_toll_entries'] = toll_entries[:8]
         toll_stats = self.object.toll_entries.aggregate(total=Sum('amount'), count=Count('id'))
-        context['total_toll_cost'] = toll_stats['total'] or 0
-        context['toll_entries_count'] = toll_stats['count']
+        total_toll_cost = toll_stats['total'] or Decimal('0.00')
+        context['total_toll_cost'] = total_toll_cost
+        context['toll_entries_count'] = toll_stats['count'] or 0
+
+        # Document / Compliance Expenses Till Date
+        total_doc_cost = Decimal(str(self.object.total_compliance_expenses or '0.00'))
+        context['total_doc_cost'] = total_doc_cost
+        context['doc_count'] = self.object.documents.count()
+
+        # Total Tracked Vehicle Expenses Till Date (Documents + Tolls)
+        context['total_vehicle_expenses'] = Decimal(str(total_toll_cost)) + total_doc_cost
 
         return context
 

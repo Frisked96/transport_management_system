@@ -239,5 +239,164 @@ class RouteUpdateViewTests(TestCase):
         self.assertEqual(self.trip.total_revenue_cached, Decimal('11800.00'))
 
 
+class RouteAnalyticsOwnershipAndTollTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create_superuser(
+            username='route_analyst',
+            email='analyst@example.com',
+            password='password123'
+        )
+        self.client.force_login(self.user)
+
+        self.party = Party.objects.create(name='Steel Corp', party_type=Party.TYPE_DEBTOR)
+
+        self.route = Route.objects.create(
+            pickup_location='Ghugus',
+            delivery_location='Jalna',
+            route_type=Route.ROUTE_TYPE_LOCAL,
+            default_rate=Decimal('2000.00')
+        )
+
+        # Company-owned vehicle
+        self.veh_owned = Vehicle.objects.create(
+            registration_plate='MH 40 DC 9982',
+            ownership=Vehicle.OWNERSHIP_OWNED,
+            status=Vehicle.STATUS_ACTIVE
+        )
+
+        # Market/Attached vehicle
+        self.veh_attached = Vehicle.objects.create(
+            registration_plate='CG 04 AT 1234',
+            ownership=Vehicle.OWNERSHIP_ATTACHED,
+            status=Vehicle.STATUS_ACTIVE
+        )
+
+        from ledger.models import TollAccount, TollEntry
+
+        self.toll_account = TollAccount.objects.create(name='FASTag ICICI', provider='ICICI')
+
+        # Trips on Route:
+        # Trip 1: Owned, Date Day 1
+        self.trip_owned_1 = Trip.objects.create(
+            vehicle=self.veh_owned,
+            party=self.party,
+            route=self.route,
+            date=timezone.now().date() - timedelta(days=10),
+            trip_number='TRIP-OWN-01',
+            revenue_type=Trip.REVENUE_FIXED,
+            rate_per_ton=Decimal('50000.00')
+        )
+
+        # Toll for Trip 1
+        self.toll_1 = TollEntry.objects.create(
+            toll_account=self.toll_account,
+            vehicle=self.veh_owned,
+            date=timezone.now().date() - timedelta(days=9),
+            amount=Decimal('6000.00'),
+            toll_plaza='Nagewadi Plaza'
+        )
+
+        # Trip 2: Owned, Date Day 5
+        self.trip_owned_2 = Trip.objects.create(
+            vehicle=self.veh_owned,
+            party=self.party,
+            route=self.route,
+            date=timezone.now().date() - timedelta(days=5),
+            trip_number='TRIP-OWN-02',
+            revenue_type=Trip.REVENUE_FIXED,
+            rate_per_ton=Decimal('52000.00')
+        )
+
+        # Toll for Trip 2
+        self.toll_2 = TollEntry.objects.create(
+            toll_account=self.toll_account,
+            vehicle=self.veh_owned,
+            date=timezone.now().date() - timedelta(days=4),
+            amount=Decimal('4000.00'),
+            toll_plaza='Khed Plaza'
+        )
+
+        # Trip 3: Attached (Market), Date Day 3
+        self.trip_attached = Trip.objects.create(
+            vehicle=self.veh_attached,
+            party=self.party,
+            route=self.route,
+            date=timezone.now().date() - timedelta(days=7),
+            trip_number='TRIP-ATT-01',
+            revenue_type=Trip.REVENUE_FIXED,
+            rate_per_ton=Decimal('48000.00')
+        )
+
+    def test_route_analytics_filter_company_owned(self):
+        """Route analytics with ownership=owned shows only company fleet trips and tolls."""
+        url = reverse('route-dashboard', kwargs={'pk': self.route.pk})
+        resp = self.client.get(url, {'ownership': 'owned'})
+        self.assertEqual(resp.status_code, 200)
+
+        # Total trips should be 2 (owned only)
+        self.assertEqual(resp.context['total_trips'], 2)
+        self.assertEqual(resp.context['selected_ownership'], 'owned')
+
+        # Toll metrics
+        # Total toll: 6000 + 4000 = 10000
+        # Avg toll: 10000 / 2 = 5000
+        self.assertEqual(resp.context['total_toll_expense'], Decimal('10000.00'))
+        self.assertEqual(resp.context['avg_toll_per_trip'], Decimal('5000.00'))
+        self.assertEqual(resp.context['owned_trips_count'], 2)
+        self.assertEqual(resp.context['trips_with_tolls_count'], 2)
+
+        # Recent trips should only contain owned trips
+        trips = list(resp.context['recent_trips'])
+        self.assertEqual(len(trips), 2)
+        self.assertIn(self.trip_owned_1, trips)
+        self.assertIn(self.trip_owned_2, trips)
+        self.assertNotIn(self.trip_attached, trips)
+
+        # HTML assertions
+        self.assertContains(resp, 'Avg Toll Expense')
+        self.assertContains(resp, '₹5,000')
+
+    def test_route_analytics_filter_attached(self):
+        """Route analytics with ownership=attached shows only attached trips."""
+        url = reverse('route-dashboard', kwargs={'pk': self.route.pk})
+        resp = self.client.get(url, {'ownership': 'attached'})
+        self.assertEqual(resp.status_code, 200)
+
+        self.assertEqual(resp.context['total_trips'], 1)
+        self.assertEqual(resp.context['selected_ownership'], 'attached')
+        trips = list(resp.context['recent_trips'])
+        self.assertEqual(len(trips), 1)
+        self.assertIn(self.trip_attached, trips)
+        self.assertNotIn(self.trip_owned_1, trips)
+
+    def test_route_analytics_all_vehicles(self):
+        """Route analytics with ownership=all shows all 3 trips, but toll metrics only average owned trips."""
+        url = reverse('route-dashboard', kwargs={'pk': self.route.pk})
+        resp = self.client.get(url, {'ownership': 'all'})
+        self.assertEqual(resp.status_code, 200)
+
+        self.assertEqual(resp.context['total_trips'], 3)
+        # Toll stats still reflect owned fleet trips on that route
+        self.assertEqual(resp.context['total_toll_expense'], Decimal('10000.00'))
+        self.assertEqual(resp.context['avg_toll_per_trip'], Decimal('5000.00'))
+        self.assertEqual(resp.context['owned_trips_count'], 2)
+
+        # Check trip-level annotated toll
+        trips_by_id = {t.id: t for t in resp.context['recent_trips']}
+        self.assertEqual(trips_by_id[self.trip_owned_1.id].annotated_toll_expense, Decimal('6000.00'))
+        self.assertEqual(trips_by_id[self.trip_owned_2.id].annotated_toll_expense, Decimal('4000.00'))
+        self.assertEqual(trips_by_id[self.trip_attached.id].annotated_toll_expense, Decimal('0.00'))
+
+    def test_routes_network_dashboard_ownership_filter(self):
+        """Network dashboard respects ownership=owned filter."""
+        url = reverse('routes-dashboard')
+        resp = self.client.get(url, {'ownership': 'owned'})
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.context['selected_ownership'], 'owned')
+        self.assertEqual(resp.context['total_trips'], 2)
+
+
+
 
 

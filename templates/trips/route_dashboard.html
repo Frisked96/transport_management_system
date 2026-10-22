@@ -82,32 +82,41 @@
             <!-- Period Chips -->
             <div class="flex flex-wrap items-center gap-1.5">
                 <span class="text-xs font-bold text-slate-500 uppercase tracking-wider mr-1">Period:</span>
-                <a href="?period=all{% if selected_party %}&party={{ selected_party }}{% endif %}" 
+                <a href="?period=all{% if selected_party %}&party={{ selected_party }}{% endif %}{% if selected_ownership %}&ownership={{ selected_ownership }}{% endif %}" 
                    class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all {% if period == 'all' %}bg-emerald-600 text-white shadow-sm{% else %}bg-slate-100 text-slate-600 hover:bg-slate-200{% endif %}">
                     All Time
                 </a>
-                <a href="?period=1y{% if selected_party %}&party={{ selected_party }}{% endif %}" 
+                <a href="?period=1y{% if selected_party %}&party={{ selected_party }}{% endif %}{% if selected_ownership %}&ownership={{ selected_ownership }}{% endif %}" 
                    class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all {% if period == '1y' %}bg-emerald-600 text-white shadow-sm{% else %}bg-slate-100 text-slate-600 hover:bg-slate-200{% endif %}">
                     Last 12M
                 </a>
-                <a href="?period=6m{% if selected_party %}&party={{ selected_party }}{% endif %}" 
+                <a href="?period=6m{% if selected_party %}&party={{ selected_party }}{% endif %}{% if selected_ownership %}&ownership={{ selected_ownership }}{% endif %}" 
                    class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all {% if period == '6m' %}bg-emerald-600 text-white shadow-sm{% else %}bg-slate-100 text-slate-600 hover:bg-slate-200{% endif %}">
                     Last 6M
                 </a>
-                <a href="?period=90d{% if selected_party %}&party={{ selected_party }}{% endif %}" 
+                <a href="?period=90d{% if selected_party %}&party={{ selected_party }}{% endif %}{% if selected_ownership %}&ownership={{ selected_ownership }}{% endif %}" 
                    class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all {% if period == '90d' %}bg-emerald-600 text-white shadow-sm{% else %}bg-slate-100 text-slate-600 hover:bg-slate-200{% endif %}">
                     Last 90D
                 </a>
-                <a href="?period=30d{% if selected_party %}&party={{ selected_party }}{% endif %}" 
+                <a href="?period=30d{% if selected_party %}&party={{ selected_party }}{% endif %}{% if selected_ownership %}&ownership={{ selected_ownership }}{% endif %}" 
                    class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all {% if period == '30d' %}bg-emerald-600 text-white shadow-sm{% else %}bg-slate-100 text-slate-600 hover:bg-slate-200{% endif %}">
                     Last 30D
                 </a>
             </div>
 
-            <!-- Custom Date Range & Party Selector -->
+            <!-- Ownership, Party & Custom Date Filters -->
             <div class="flex flex-wrap items-center gap-3">
+                <!-- Vehicle Ownership Filter -->
+                <div class="w-44">
+                    <select name="ownership" onchange="this.form.submit()" class="block w-full py-1.5 px-3 border border-slate-300 rounded-lg text-xs font-medium focus:ring-emerald-500 focus:border-emerald-500 bg-white">
+                        <option value="all" {% if selected_ownership == 'all' or not selected_ownership %}selected{% endif %}>All Vehicles</option>
+                        <option value="owned" {% if selected_ownership == 'owned' %}selected{% endif %}>Company Fleet Only</option>
+                        <option value="attached" {% if selected_ownership == 'attached' %}selected{% endif %}>Market / Attached</option>
+                    </select>
+                </div>
+
                 {% if participating_parties %}
-                <div class="w-48">
+                <div class="w-44">
                     <select name="party" onchange="this.form.submit()" class="block w-full py-1.5 px-3 border border-slate-300 rounded-lg text-xs font-medium focus:ring-emerald-500 focus:border-emerald-500 bg-white">
                         <option value="">All Parties</option>
                         {% for p in participating_parties %}
@@ -127,7 +136,7 @@
                     <button type="submit" class="px-2.5 py-1 bg-slate-800 text-white rounded-md text-xs font-bold hover:bg-slate-700 transition-colors">
                         Filter
                     </button>
-                    {% if period != 'all' or selected_party %}
+                    {% if period != 'all' or selected_party or selected_ownership and selected_ownership != 'all' %}
                     <a href="{% url 'route-dashboard' route.pk %}" class="text-xs text-rose-600 hover:underline ml-1">Reset</a>
                     {% endif %}
                 </div>
@@ -136,7 +145,7 @@
     </section>
 
     <!-- 3. Primary KPI Summary Cards -->
-    <section class="grid grid-cols-2 lg:grid-cols-6 gap-4">
+    <section class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
         <!-- Weighted Actual Rate -->
         <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm border-l-4 border-l-emerald-600">
             <div class="flex items-center justify-between text-slate-400 mb-1">
@@ -214,6 +223,24 @@
             </div>
             <p class="text-[10px] text-slate-500 mt-1">
                 Completed Route Runs
+            </p>
+        </div>
+
+        <!-- Avg Toll Expense -->
+        <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm border-l-4 border-l-rose-500">
+            <div class="flex items-center justify-between text-slate-400 mb-1">
+                <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Avg Toll Expense</span>
+                <i class="fa-solid fa-road text-rose-500 opacity-60"></i>
+            </div>
+            <div class="text-xl md:text-2xl font-black text-slate-900">
+                ₹{{ avg_toll_per_trip|indian_comma }}<span class="text-xs text-slate-400 font-semibold">/Trip</span>
+            </div>
+            <p class="text-[10px] text-slate-500 mt-1">
+                {% if owned_trips_count > 0 %}
+                Total: <strong class="text-slate-700">₹{{ total_toll_expense|indian_comma }}</strong> ({{ owned_trips_count }} company trip{{ owned_trips_count|pluralize }})
+                {% else %}
+                <span class="text-slate-400">No company fleet trips</span>
+                {% endif %}
             </p>
         </div>
 
@@ -411,6 +438,7 @@
                         <th class="px-5 py-3 text-right">Weight (MT)</th>
                         <th class="px-5 py-3 text-right">Actual Rate</th>
                         <th class="px-5 py-3 text-right">Gross Freight</th>
+                        <th class="px-5 py-3 text-right">Toll</th>
                         <th class="px-5 py-3 text-center">Billed Status</th>
                         <th class="px-5 py-3 text-right">Action</th>
                     </tr>
@@ -435,6 +463,17 @@
                         <td class="px-5 py-3 text-right font-mono font-bold text-slate-900">
                             ₹{{ trip.revenue|indian_comma }}
                         </td>
+                        <td class="px-5 py-3 text-right font-mono font-medium whitespace-nowrap">
+                            {% if trip.vehicle.ownership == 'Owned' %}
+                                {% if trip.annotated_toll_expense > 0 %}
+                                    <span class="text-rose-600 font-bold">₹{{ trip.annotated_toll_expense|indian_comma }}</span>
+                                {% else %}
+                                    <span class="text-slate-400">₹0</span>
+                                {% endif %}
+                            {% else %}
+                                <span class="text-slate-400 italic text-[11px]" title="Market vehicle - tolls paid by vendor/driver">Market</span>
+                            {% endif %}
+                        </td>
                         <td class="px-5 py-3 text-center">
                             {% if trip.annotated_is_billed %}
                                 <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
@@ -454,7 +493,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="9" class="px-5 py-8 text-center text-slate-400">
+                        <td colspan="10" class="px-5 py-8 text-center text-slate-400">
                             No trips found matching the selected criteria.
                         </td>
                     </tr>

@@ -358,4 +358,114 @@ class VehicleListViewOwnershipFilterTest(TestCase):
         self.assertEqual(response.context['current_ownership'], 'all')
 
 
+class VehicleDetailExpensesAndTripsPaginationTest(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_superuser(username='fleet_admin', password='password123')
+        self.client = Client()
+        self.client.login(username='fleet_admin', password='password123')
+
+        self.vehicle = Vehicle.objects.create(
+            registration_plate='MH 40 DC 9982',
+            make_model='Tata Prima',
+            ownership=Vehicle.OWNERSHIP_OWNED,
+            status=Vehicle.STATUS_ACTIVE
+        )
+
+        from ledger.models import TollAccount, TollEntry, Party
+        from documents.models import Document, DocumentRenewal
+        from trips.models import Trip
+
+        self.party = Party.objects.create(name='Test Customer', party_type=Party.TYPE_DEBTOR)
+
+        # Toll Account & Tolls
+        self.toll_account = TollAccount.objects.create(name='FASTag Wallet', provider='AXIS')
+        self.toll1 = TollEntry.objects.create(
+            toll_account=self.toll_account,
+            vehicle=self.vehicle,
+            date=timezone.now().date(),
+            amount=Decimal('500.00'),
+            toll_plaza='Plaza A'
+        )
+        self.toll2 = TollEntry.objects.create(
+            toll_account=self.toll_account,
+            vehicle=self.vehicle,
+            date=timezone.now().date(),
+            amount=Decimal('750.00'),
+            toll_plaza='Plaza B'
+        )
+
+        # Document & Renewal
+        self.doc = Document.objects.create(
+            vehicle=self.vehicle,
+            document_name='Insurance',
+            expiry_date=timezone.now().date() + timedelta(days=180),
+            cost=Decimal('15000.00')
+        )
+        self.renewal = DocumentRenewal.objects.create(
+            document=self.doc,
+            valid_from=timezone.now().date(),
+            valid_to=timezone.now().date() + timedelta(days=180),
+            cost=Decimal('15000.00')
+        )
+
+        # Create 20 trips with different dates to test pagination & latest-to-oldest sorting
+        self.trips = []
+        base_date = timezone.now().date() - timedelta(days=30)
+        for i in range(20):
+            t = Trip.objects.create(
+                vehicle=self.vehicle,
+                party=self.party,
+                date=base_date + timedelta(days=i),
+                trip_number=f"TRIP-{i+1:03d}",
+                revenue_type=Trip.REVENUE_FIXED,
+                rate_per_ton=Decimal('1000.00')
+            )
+            self.trips.append(t)
+
+    def test_vehicle_detail_expenses_till_date(self):
+        """Vehicle detail view provides total toll cost, document cost, and total expenses."""
+        url = reverse('vehicle-detail', kwargs={'pk': self.vehicle.pk})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+
+        # Toll cost: 500 + 750 = 1250
+        self.assertEqual(response.context['total_toll_cost'], Decimal('1250.00'))
+        self.assertEqual(response.context['toll_entries_count'], 2)
+
+        # Document cost: 15000
+        self.assertEqual(response.context['total_doc_cost'], Decimal('15000.00'))
+
+        # Total expenses: 1250 + 15000 = 16250
+        self.assertEqual(response.context['total_vehicle_expenses'], Decimal('16250.00'))
+
+        # Check HTML renders expenses card cleanly
+        self.assertContains(response, 'Expenses Till Date')
+        self.assertContains(response, '₹1,250')
+        self.assertContains(response, '₹15,000')
+        self.assertContains(response, '₹16,250')
+
+    def test_vehicle_detail_trips_pagination_latest_to_oldest(self):
+        """Vehicle detail view paginates all trips ordered latest to oldest."""
+        url = reverse('vehicle-detail', kwargs={'pk': self.vehicle.pk})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+
+        self.assertEqual(response.context['total_trips_count'], 20)
+        page_obj = response.context['trips_page_obj']
+        self.assertEqual(len(page_obj.object_list), 15)  # 15 per page
+
+        # Verify ordering is latest to oldest: first trip on page 1 should be the latest (self.trips[19])
+        self.assertEqual(page_obj.object_list[0].pk, self.trips[19].pk)
+        self.assertEqual(page_obj.object_list[-1].pk, self.trips[5].pk)
+
+        # Check Page 2
+        response_p2 = self.client.get(url, {'page': 2})
+        self.assertEqual(response_p2.status_code, 200)
+        page2_obj = response_p2.context['trips_page_obj']
+        self.assertEqual(len(page2_obj.object_list), 5)
+        self.assertEqual(page2_obj.object_list[0].pk, self.trips[4].pk)
+        self.assertEqual(page2_obj.object_list[-1].pk, self.trips[0].pk)
+
+
+
 
