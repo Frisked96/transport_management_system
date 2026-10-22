@@ -33,12 +33,12 @@ class LedgerService:
                 # Step A: Temporary high numbers to avoid unique constraint collision
                 for record in records_to_update:
                     record.entry_number = offset + record.pk
-                FinancialRecord.objects.bulk_update(records_to_update, ['entry_number'])
+                FinancialRecord.objects.bulk_update(records_to_update, ['entry_number'], batch_size=1000)
 
                 # Step B: Final numbers
                 for record in records_to_update:
                     record.entry_number = record._new_entry_number
-                FinancialRecord.objects.bulk_update(records_to_update, ['entry_number'])
+                FinancialRecord.objects.bulk_update(records_to_update, ['entry_number'], batch_size=1000)
                 
             total_records = FinancialRecord.objects.count()
             Sequence.objects.filter(key='financial_record_entry_number').update(value=total_records)
