@@ -223,7 +223,7 @@
                             <tbody class="divide-y divide-slate-100">
                                 {% for toll in toll_entries %}
                                 <tr class="hover:bg-slate-50">
-                                    <td class="px-3 py-2 text-slate-600 whitespace-nowrap">{{ toll.date|date:"d M Y" }}</td>
+                                    <td class="px-3 py-2 text-slate-600 whitespace-nowrap">{{ toll.date|date:"d M Y" }}{% if toll.time %} <span class="text-slate-400 font-mono text-[11px]">{{ toll.time|time:"h:i A" }}</span>{% endif %}</td>
                                     <td class="px-3 py-2 font-medium text-slate-800">{{ toll.toll_plaza|default:"Toll Crossing" }}</td>
                                     <td class="px-3 py-2 text-slate-500 whitespace-nowrap">{{ toll.toll_account.name }}</td>
                                     <td class="px-3 py-2 text-right font-bold text-rose-600 whitespace-nowrap">₹{{ toll.amount|indian_comma }}</td>

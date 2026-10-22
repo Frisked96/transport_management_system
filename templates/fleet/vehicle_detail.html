@@ -382,7 +382,7 @@
                     <div class="flex items-center justify-between p-2 rounded-lg border border-slate-100 hover:bg-slate-50 text-xs transition-colors">
                         <div>
                             <span class="font-bold text-slate-800">{{ toll.toll_plaza|default:"Toll Plaza" }}</span>
-                            <span class="block text-[10px] text-slate-400">{{ toll.date|date:"d M Y" }}{% if toll.transaction_reference %} &bull; Ref: {{ toll.transaction_reference }}{% endif %}</span>
+                            <span class="block text-[10px] text-slate-400">{{ toll.date|date:"d M Y" }}{% if toll.time %} {{ toll.time|time:"h:i A" }}{% endif %}{% if toll.transaction_reference %} &bull; Ref: {{ toll.transaction_reference }}{% endif %}</span>
                         </div>
                         <span class="font-bold text-rose-600">-₹{{ toll.amount|indian_comma }}</span>
                     </div>

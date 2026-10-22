@@ -4,6 +4,7 @@ Handles Toll Accounts, Recharges, Toll Entries, Bulk Entries, Statement generati
 XLSX Statement Import, and Recharge Reconciliation.
 """
 from decimal import Decimal
+import datetime as dt_module
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView, View
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.contrib.auth.decorators import login_required, permission_required
@@ -181,6 +182,7 @@ class TollLedgerView(LoginRequiredMixin, PermissionRequiredMixin, BaseTollPermis
                     'id': f"recharge_{r.pk}",
                     'raw_id': r.pk,
                     'date': r.date,
+                    'time': r.time,
                     'created_at': r.created_at,
                     'type': 'Recharge',
                     'toll_account': r.toll_account,
@@ -204,6 +206,7 @@ class TollLedgerView(LoginRequiredMixin, PermissionRequiredMixin, BaseTollPermis
                     'id': f"entry_{e.pk}",
                     'raw_id': e.pk,
                     'date': e.date,
+                    'time': e.time,
                     'created_at': e.created_at,
                     'type': 'Toll',
                     'toll_account': e.toll_account,
@@ -220,8 +223,8 @@ class TollLedgerView(LoginRequiredMixin, PermissionRequiredMixin, BaseTollPermis
                     'created_by': e.created_by,
                 })
 
-        # Sort ascending by date & created_at to calculate running balance accurately
-        transactions.sort(key=lambda x: (x['date'], x['created_at']))
+        # Sort ascending by date, time & created_at to calculate running balance accurately
+        transactions.sort(key=lambda x: (x['date'], x.get('time') or dt_module.time.min, x['created_at']))
 
         running = period_opening_balance
         for item in transactions:
@@ -486,6 +489,7 @@ class TollEntryBulkCreateView(LoginRequiredMixin, PermissionRequiredMixin, View)
         toll_account = get_object_or_404(TollAccount, pk=account_id)
 
         dates = request.POST.getlist('date[]')
+        times = request.POST.getlist('time[]')
         vehicles = request.POST.getlist('vehicle[]')
         amounts = request.POST.getlist('amount[]')
         plazas = request.POST.getlist('toll_plaza[]')
@@ -502,6 +506,7 @@ class TollEntryBulkCreateView(LoginRequiredMixin, PermissionRequiredMixin, View)
             amt_str = amounts[i].strip() if i < len(amounts) else ''
             veh_id = vehicles[i].strip() if i < len(vehicles) else ''
             date_str = dates[i].strip() if i < len(dates) else ''
+            time_str = times[i].strip() if i < len(times) else ''
             plaza = plazas[i].strip() if i < len(plazas) else ''
             ref = refs[i].strip() if i < len(refs) else ''
             desc = descriptions[i].strip() if i < len(descriptions) else ''
@@ -535,11 +540,20 @@ class TollEntryBulkCreateView(LoginRequiredMixin, PermissionRequiredMixin, View)
             except ValueError:
                 entry_date = timezone.now().date()
 
+            # Parse time (optional)
+            entry_time = None
+            if time_str:
+                try:
+                    entry_time = timezone.datetime.strptime(time_str, '%H:%M').time()
+                except ValueError:
+                    pass
+
             entries_to_create.append(
                 TollEntry(
                     toll_account=toll_account,
                     vehicle=vehicle,
                     date=entry_date,
+                    time=entry_time,
                     amount=amt,
                     toll_plaza=plaza,
                     transaction_reference=ref,
@@ -657,6 +671,7 @@ def toll_statement_print(request):
         for r in recharges_qs:
             items.append({
                 'date': r.date,
+                'time': r.time,
                 'created_at': r.created_at,
                 'type': 'Top-up',
                 'toll_account': r.toll_account,
@@ -668,6 +683,7 @@ def toll_statement_print(request):
     for e in entries_qs:
         items.append({
             'date': e.date,
+            'time': e.time,
             'created_at': e.created_at,
             'type': 'Toll',
             'toll_account': e.toll_account,
@@ -677,7 +693,7 @@ def toll_statement_print(request):
             'debit': e.amount
         })
 
-    items.sort(key=lambda x: (x['date'], x['created_at']))
+    items.sort(key=lambda x: (x['date'], x.get('time') or dt_module.time.min, x['created_at']))
 
     running = period_opening
     for item in items:

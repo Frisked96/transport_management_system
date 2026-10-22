@@ -378,7 +378,10 @@
                 {% for item in transactions %}
                 <tr class="hover:bg-slate-50 transition-colors">
                     <td class="px-4 py-3 text-slate-600 whitespace-nowrap font-medium">
-                        {{ item.date|date:"d M Y" }}
+                        <div>{{ item.date|date:"d M Y" }}</div>
+                        {% if item.time %}
+                        <div class="text-[11px] text-slate-400 font-mono">{{ item.time|time:"h:i A" }}</div>
+                        {% endif %}
                     </td>
                     <td class="px-4 py-3 whitespace-nowrap">
                         {% if item.type == 'Recharge' %}

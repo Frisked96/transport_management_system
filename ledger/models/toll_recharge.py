@@ -61,6 +61,7 @@ class TollRecharge(models.Model):
         help_text='Leave blank for unallocated recharges imported from FASTag statements. Assign later via Reconciliation.'
     )
     date = models.DateField(default=timezone.now, verbose_name='Recharge Date')
+    time = models.TimeField(null=True, blank=True, verbose_name='Recharge Time')
     amount = models.DecimalField(
         max_digits=12,
         decimal_places=2,
@@ -98,9 +99,9 @@ class TollRecharge(models.Model):
     class Meta:
         verbose_name = 'Toll Recharge'
         verbose_name_plural = 'Toll Recharges'
-        ordering = ['-date', '-created_at']
+        ordering = ['-date', '-time', '-created_at']
         indexes = [
-            models.Index(fields=['date', 'created_at']),
+            models.Index(fields=['date', 'time']),
             models.Index(fields=['toll_account', 'date']),
             models.Index(fields=['company_account', 'date']),
         ]

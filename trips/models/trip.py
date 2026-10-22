@@ -671,7 +671,7 @@ class Trip(models.Model):
 
         return TollEntry.objects.filter(
             window_q | models.Q(associated_trip=self)
-        ).distinct().select_related('toll_account').order_by('date', 'created_at')
+        ).distinct().select_related('toll_account').order_by('date', 'time', 'created_at')
 
     @property
     def total_toll_expense(self):

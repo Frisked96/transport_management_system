@@ -1,6 +1,6 @@
 import io
 from decimal import Decimal
-from datetime import date
+from datetime import date, time, datetime
 import openpyxl
 
 from django.test import TestCase, Client
@@ -16,6 +16,7 @@ from ledger.services.toll_import import (
     import_boss_summary,
     normalize_plate,
     build_vehicle_lookup,
+    parse_timestamp,
 )
 
 
@@ -82,6 +83,34 @@ class TollImportAndReconciliationTests(TestCase):
         self.assertEqual(normalize_plate('CG 04 PJ 8276'), 'CG04PJ8276')
         self.assertEqual(normalize_plate('cg-04-pj-8276'), 'CG04PJ8276')
         self.assertEqual(normalize_plate('MH 40 DC 7782'), 'MH40DC7782')
+
+    def test_parse_timestamp(self):
+        """Test parsing timestamps for both date and time components."""
+        # String with AM/PM
+        d, t = parse_timestamp('21 Oct 26 07:05 AM')
+        self.assertEqual(d, date(2026, 10, 21))
+        self.assertEqual(t, time(7, 5))
+
+        # String with 4-digit year
+        d, t = parse_timestamp('21 Oct 2026 10:15 PM')
+        self.assertEqual(d, date(2026, 10, 21))
+        self.assertEqual(t, time(22, 15))
+
+        # Native datetime
+        dt = datetime(2026, 4, 1, 14, 30, 45)
+        d, t = parse_timestamp(dt)
+        self.assertEqual(d, date(2026, 4, 1))
+        self.assertEqual(t, time(14, 30, 45))
+
+        # Date only formats
+        d, t = parse_timestamp('2026-05-15')
+        self.assertEqual(d, date(2026, 5, 15))
+        self.assertIsNone(t)
+
+        # Empty or invalid
+        d, t = parse_timestamp('')
+        self.assertIsNone(d)
+        self.assertIsNone(t)
 
     def test_build_vehicle_lookup_includes_chassis(self):
         """Vehicle lookup maps both registration plate and chassis number."""
@@ -271,6 +300,8 @@ class TollImportAndReconciliationTests(TestCase):
         self.assertEqual(entry1.vehicle, self.vehicle1)
         self.assertEqual(entry1.amount, Decimal('375.00'))
         self.assertEqual(entry1.toll_plaza, 'Mathni - Maharashtra')
+        self.assertEqual(entry1.date, date(2026, 10, 21))
+        self.assertEqual(entry1.time, time(7, 5))
 
         # Re-importing same buffer should skip duplicates
         buf.seek(0)
@@ -314,6 +345,8 @@ class TollImportAndReconciliationTests(TestCase):
         self.assertIsNone(recharge.company_account)
         self.assertEqual(recharge.amount, Decimal('70000.00'))
         self.assertEqual(recharge.payment_mode, TollRecharge.MODE_NET_BANKING)
+        self.assertEqual(recharge.date, date(2026, 4, 2))
+        self.assertEqual(recharge.time, time(4, 49))
 
         # Re-importing should skip duplicates
         buf.seek(0)

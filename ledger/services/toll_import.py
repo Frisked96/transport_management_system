@@ -81,21 +81,29 @@ def parse_timestamp(raw_value):
     """
     Parse a transaction timestamp from the XLSX file.
     Handles both string format ('21 Oct 26 07:09 AM') and native datetime objects.
-    Returns a date object.
+    Returns a (date, time) tuple. Time may be None for date-only formats.
     """
     if isinstance(raw_value, datetime):
-        return raw_value.date()
+        return (raw_value.date(), raw_value.time())
     if isinstance(raw_value, date_type):
-        return raw_value
+        return (raw_value, None)
     if not raw_value or not str(raw_value).strip():
-        return None
+        return (None, None)
     raw_str = str(raw_value).strip()
-    for fmt in ('%d %b %y %I:%M %p', '%d %b %Y %I:%M %p', '%Y-%m-%d', '%d/%m/%Y'):
+    # Formats that include time
+    for fmt in ('%d %b %y %I:%M %p', '%d %b %Y %I:%M %p'):
         try:
-            return datetime.strptime(raw_str, fmt).date()
+            dt = datetime.strptime(raw_str, fmt)
+            return (dt.date(), dt.time())
         except ValueError:
             continue
-    return None
+    # Date-only formats
+    for fmt in ('%Y-%m-%d', '%d/%m/%Y'):
+        try:
+            return (datetime.strptime(raw_str, fmt).date(), None)
+        except ValueError:
+            continue
+    return (None, None)
 
 
 def extract_toll_plaza(description, vendor=''):
@@ -291,8 +299,8 @@ def import_bank_statement(file_obj, toll_account=None, auto_link_trips=True, use
         except (InvalidOperation, TypeError, ValueError):
             continue
 
-        # Parse date
-        entry_date = parse_timestamp(raw_date)
+        # Parse date and time
+        entry_date, entry_time = parse_timestamp(raw_date)
         if not entry_date:
             entry_date = timezone.now().date()
 
@@ -323,6 +331,7 @@ def import_bank_statement(file_obj, toll_account=None, auto_link_trips=True, use
             toll_account=target_account,
             vehicle=vehicle,
             date=entry_date,
+            time=entry_time,
             amount=amount,
             toll_plaza=toll_plaza,
             transaction_reference=txn_id,
@@ -440,8 +449,8 @@ def import_boss_summary(file_obj, toll_account=None, user=None):
         except (InvalidOperation, TypeError, ValueError):
             continue
 
-        # Parse date
-        entry_date = parse_timestamp(raw_date)
+        # Parse date and time
+        entry_date, entry_time = parse_timestamp(raw_date)
         if not entry_date:
             entry_date = timezone.now().date()
 
@@ -468,6 +477,7 @@ def import_boss_summary(file_obj, toll_account=None, user=None):
                 toll_account=target_account,
                 company_account=None,  # Unallocated - to be reconciled later
                 date=entry_date,
+                time=entry_time,
                 amount=amount,
                 payment_mode=payment_mode,
                 reference_number=txn_id,
@@ -510,6 +520,7 @@ def import_boss_summary(file_obj, toll_account=None, user=None):
                 toll_account=target_account,
                 vehicle=matched_vehicle,
                 date=entry_date,
+                time=entry_time,
                 amount=amount,
                 toll_plaza=f"BlackBuck: {description}"[:200],
                 transaction_reference=txn_id,

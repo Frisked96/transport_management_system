@@ -71,11 +71,12 @@ class TollRechargeForm(forms.ModelForm):
     class Meta:
         model = TollRecharge
         fields = [
-            'toll_account', 'company_account', 'date', 'amount',
+            'toll_account', 'company_account', 'date', 'time', 'amount',
             'payment_mode', 'reference_number', 'receipt_document', 'description'
         ]
         widgets = {
             'date': forms.DateInput(attrs={'type': 'date'}),
+            'time': forms.TimeInput(attrs={'type': 'time'}),
             'amount': forms.NumberInput(attrs={'step': '0.01', 'min': '0.01', 'placeholder': 'Amount in ₹'}),
             'reference_number': forms.TextInput(attrs={'placeholder': 'UTR / Txn ID / Cheque No / Reference'}),
             'description': forms.Textarea(attrs={'rows': 2, 'placeholder': 'Optional recharge notes or bank narration'}),
@@ -112,11 +113,12 @@ class TollEntryForm(forms.ModelForm):
     class Meta:
         model = TollEntry
         fields = [
-            'toll_account', 'vehicle', 'date', 'amount', 'toll_plaza',
+            'toll_account', 'vehicle', 'date', 'time', 'amount', 'toll_plaza',
             'associated_trip', 'transaction_reference', 'receipt_document', 'description'
         ]
         widgets = {
             'date': forms.DateInput(attrs={'type': 'date'}),
+            'time': forms.TimeInput(attrs={'type': 'time'}),
             'amount': forms.NumberInput(attrs={'step': '0.01', 'min': '0.01', 'placeholder': 'Toll Amount in ₹'}),
             'toll_plaza': forms.TextInput(attrs={'placeholder': 'e.g. Kherki Daula, Shahjahanpur, Barhi'}),
             'transaction_reference': forms.TextInput(attrs={'placeholder': 'Slip No / FASTag Txn ID'}),
@@ -156,9 +158,10 @@ class TollEntryBulkRowForm(forms.ModelForm):
     """
     class Meta:
         model = TollEntry
-        fields = ['date', 'vehicle', 'amount', 'toll_plaza', 'transaction_reference', 'description']
+        fields = ['date', 'time', 'vehicle', 'amount', 'toll_plaza', 'transaction_reference', 'description']
         widgets = {
             'date': forms.DateInput(attrs={'type': 'date', 'class': 'w-full px-2 py-1.5 border border-slate-300 rounded text-xs'}),
+            'time': forms.TimeInput(attrs={'type': 'time', 'class': 'w-full px-2 py-1.5 border border-slate-300 rounded text-xs'}),
             'vehicle': forms.Select(attrs={'class': 'w-full px-2 py-1.5 border border-slate-300 rounded text-xs'}),
             'amount': forms.NumberInput(attrs={'step': '0.01', 'min': '0.01', 'placeholder': '₹', 'class': 'w-full px-2 py-1.5 border border-slate-300 rounded text-xs'}),
             'toll_plaza': forms.TextInput(attrs={'placeholder': 'Plaza name', 'class': 'w-full px-2 py-1.5 border border-slate-300 rounded text-xs'}),

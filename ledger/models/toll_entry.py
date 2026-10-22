@@ -44,6 +44,7 @@ class TollEntry(models.Model):
         verbose_name='Vehicle (Optional)'
     )
     date = models.DateField(default=timezone.now, verbose_name='Toll Date')
+    time = models.TimeField(null=True, blank=True, verbose_name='Toll Time')
     amount = models.DecimalField(
         max_digits=10,
         decimal_places=2,
@@ -88,9 +89,9 @@ class TollEntry(models.Model):
     class Meta:
         verbose_name = 'Toll Entry'
         verbose_name_plural = 'Toll Entries'
-        ordering = ['-date', '-created_at']
+        ordering = ['-date', '-time', '-created_at']
         indexes = [
-            models.Index(fields=['date', 'created_at']),
+            models.Index(fields=['date', 'time']),
             models.Index(fields=['toll_account', 'date']),
             models.Index(fields=['vehicle', 'date']),
         ]

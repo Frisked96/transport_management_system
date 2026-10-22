@@ -424,22 +424,24 @@ class TripTollIntegrationTests(TestCase):
             rate_per_ton=Decimal('30000.00')
         )
 
-        # Toll 1: During Trip 1 (2026-10-11)
+        # Toll 1: During Trip 1 (2026-10-11 08:30)
         self.toll1 = TollEntry.objects.create(
             toll_account=self.toll_account,
             vehicle=self.vehicle,
             date=timezone.datetime(2026, 10, 11).date(),
+            time=timezone.datetime(2026, 10, 11, 8, 30).time(),
             amount=Decimal('550.00'),
             toll_plaza='Mathni - Maharashtra',
             transaction_reference='TXN-TOLL-01',
             created_by=self.user
         )
 
-        # Toll 2: During Trip 1 (2026-10-14)
+        # Toll 2: During Trip 1 (2026-10-14 16:45)
         self.toll2 = TollEntry.objects.create(
             toll_account=self.toll_account,
             vehicle=self.vehicle,
             date=timezone.datetime(2026, 10, 14).date(),
+            time=timezone.datetime(2026, 10, 14, 16, 45).time(),
             amount=Decimal('450.00'),
             toll_plaza='Arambha Toll Plaza',
             transaction_reference='TXN-TOLL-02',
@@ -489,6 +491,8 @@ class TripTollIntegrationTests(TestCase):
         self.assertContains(response, 'Toll Expense')
         self.assertContains(response, 'Mathni - Maharashtra')
         self.assertContains(response, 'Arambha Toll Plaza')
+        self.assertContains(response, '08:30 AM')
+        self.assertContains(response, '04:45 PM')
         self.assertContains(response, '₹1,000')
         self.assertNotContains(response, '<details class="group" open>')
 
