@@ -5,6 +5,7 @@ import os
 from decimal import Decimal
 from django.db import models
 from django.utils import timezone
+from django.utils.functional import cached_property
 from django.contrib.auth.models import User
 from django.core.exceptions import PermissionDenied
 from .party import Party
@@ -18,6 +19,26 @@ def voucher_upload_path(instance, filename):
     ext = os.path.splitext(filename)[1]
     timestamp = timezone.now().strftime('%Y%m%d_%H%M%S')
     return os.path.join('vouchers', safe_ref, f"doc_{timestamp}{ext}")
+
+
+class VoucherEntityList(list):
+    """
+    Lightweight list subclass providing QuerySet-like convenience helpers
+    (.count(), .exists(), .first(), .last()) without triggering database queries.
+    """
+    def count(self, *args):
+        if not args:
+            return len(self)
+        return super().count(*args)
+
+    def exists(self):
+        return len(self) > 0
+
+    def first(self):
+        return self[0] if self else None
+
+    def last(self):
+        return self[-1] if self else None
 
 
 class FinancialVoucher(models.Model):
@@ -228,10 +249,21 @@ class FinancialVoucher(models.Model):
     @property
     def all_records(self):
         """Returns all records belonging to this voucher including soft-deleted ones"""
+        if hasattr(self, 'prefetched_all_records'):
+            return VoucherEntityList(self.prefetched_all_records)
+        if hasattr(self, '_cached_all_records'):
+            return self._cached_all_records
         from ledger.models import FinancialRecord
-        return FinancialRecord.all_objects.filter(voucher=self).select_related(
-            'category', 'account', 'party', 'associated_trip__vehicle', 'associated_bill', 'deleted_by'
-        )
+        self._cached_all_records = VoucherEntityList(FinancialRecord.all_objects.filter(voucher=self).select_related(
+            'category', 'account', 'party', 'associated_trip__vehicle', 'associated_trip__route',
+            'associated_trip__party', 'associated_bill__party', 'associated_bill__category',
+            'associated_bill__original_bill', 'associated_bill__customer_bill', 'deleted_by'
+        ).prefetch_related(
+            'allocations__trip__vehicle', 'allocations__trip__route', 'allocations__trip__party',
+            'bill_allocations__bill__party', 'bill_allocations__bill__category',
+            'bill_allocations__bill__original_bill', 'bill_allocations__bill__customer_bill'
+        ))
+        return self._cached_all_records
 
     def soft_delete(self, user=None, reason=''):
         from ledger.services import VoucherService
@@ -295,39 +327,63 @@ class FinancialVoucher(models.Model):
                 'total_settled_amount'
             ])
 
-    @property
+    @cached_property
     def affected_trips(self):
         """
         Returns all trips affected by this voucher, whether directly or via allocations.
+        Leverages prefetched objects in memory to avoid N+1 queries.
         """
         from trips.models import Trip
-        trip_ids = set()
+        trips_dict = {}
+        missing_ids = set()
+
         for r in self.all_records:
             if r.associated_trip_id:
-                trip_ids.add(r.associated_trip_id)
+                if getattr(r, 'associated_trip', None):
+                    trips_dict[r.associated_trip_id] = r.associated_trip
+                else:
+                    missing_ids.add(r.associated_trip_id)
             for alloc in r.allocations.all():
-                trip_ids.add(alloc.trip_id)
-        if not trip_ids:
-            return Trip.objects.none()
-        return Trip.objects.filter(id__in=trip_ids).select_related('vehicle', 'party', 'route')
+                if getattr(alloc, 'trip', None):
+                    trips_dict[alloc.trip_id] = alloc.trip
+                else:
+                    missing_ids.add(alloc.trip_id)
 
-    @property
+        if missing_ids:
+            for trip in Trip.objects.filter(id__in=missing_ids).select_related('vehicle', 'party', 'route'):
+                trips_dict[trip.id] = trip
+
+        return VoucherEntityList(trips_dict.values())
+
+    @cached_property
     def affected_bills(self):
         """
         Returns all bills affected by this voucher, directly or via bill allocations.
+        Leverages prefetched objects in memory to avoid N+1 queries.
         """
         from ledger.models import Bill
-        bill_ids = set()
+        bills_dict = {}
+        missing_ids = set()
+
         for r in self.all_records:
             if r.associated_bill_id:
-                bill_ids.add(r.associated_bill_id)
+                if getattr(r, 'associated_bill', None):
+                    bills_dict[r.associated_bill_id] = r.associated_bill
+                else:
+                    missing_ids.add(r.associated_bill_id)
             for alloc in r.bill_allocations.all():
-                bill_ids.add(alloc.bill_id)
-        if not bill_ids:
-            return Bill.objects.none()
-        return Bill.objects.filter(id__in=bill_ids).select_related('party', 'category', 'original_bill', 'customer_bill')
+                if getattr(alloc, 'bill', None):
+                    bills_dict[alloc.bill_id] = alloc.bill
+                else:
+                    missing_ids.add(alloc.bill_id)
 
-    @property
+        if missing_ids:
+            for b in Bill.objects.filter(id__in=missing_ids).select_related('party', 'category', 'original_bill', 'customer_bill'):
+                bills_dict[b.id] = b
+
+        return VoucherEntityList(bills_dict.values())
+
+    @cached_property
     def is_credit_note(self):
         """Checks if this voucher contains any Credit Note bills or records."""
         return any(
@@ -338,7 +394,7 @@ class FinancialVoucher(models.Model):
             for r in self.all_records
         )
 
-    @property
+    @cached_property
     def is_debit_note(self):
         """Checks if this voucher contains any Debit Note bills or records."""
         return any(
@@ -349,7 +405,7 @@ class FinancialVoucher(models.Model):
             for r in self.all_records
         )
 
-    @property
+    @cached_property
     def settlement_breakdown(self):
         """
         Returns structured per-trip settlement details showing starting revenue,

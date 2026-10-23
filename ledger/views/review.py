@@ -35,17 +35,24 @@ class FinancialEntryReviewView(LoginRequiredMixin, PermissionRequiredMixin, Base
         if self.has_driver_profile():
             return FinancialVoucher.objects.none()
 
-        queryset = FinancialVoucher.objects.select_related(
-            'party', 'account', 'driver__user', 'created_by', 'verified_by'
+        from django.db.models import Prefetch
+
+        records_prefetch_qs = FinancialRecord.all_objects.select_related(
+            'category', 'account', 'party',
+            'associated_trip__vehicle', 'associated_trip__route', 'associated_trip__party',
+            'associated_bill__party', 'associated_bill__category',
+            'associated_bill__original_bill', 'associated_bill__customer_bill',
+            'deleted_by'
         ).prefetch_related(
-            'financial_records__category',
-            'financial_records__account',
-            'financial_records__associated_trip__vehicle',
-            'financial_records__associated_trip__route',
-            'financial_records__associated_bill',
-            'financial_records__allocations__trip__vehicle',
-            'financial_records__allocations__trip__route',
-            'financial_records__bill_allocations__bill',
+            'allocations__trip__vehicle', 'allocations__trip__route', 'allocations__trip__party',
+            'bill_allocations__bill__party', 'bill_allocations__bill__category',
+            'bill_allocations__bill__original_bill', 'bill_allocations__bill__customer_bill'
+        )
+
+        queryset = FinancialVoucher.objects.select_related(
+            'party', 'account', 'driver__user', 'created_by', 'verified_by', 'deleted_by'
+        ).prefetch_related(
+            Prefetch('financial_records', queryset=records_prefetch_qs, to_attr='prefetched_all_records')
         )
 
         # Status filter (default to 'pending' to keep review focused)

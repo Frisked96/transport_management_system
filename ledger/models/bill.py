@@ -376,7 +376,7 @@ class Bill(models.Model):
         """Returns total amount, prioritizing cached value"""
         if getattr(self, '_bypass_cache', False):
             return self.subtotal + self.gst_amount
-        if self.total_amount_cached:
+        if self.total_amount_cached is not None:
             return self.total_amount_cached
         if hasattr(self, 'annotated_total_amount'):
             return self.annotated_total_amount
@@ -389,7 +389,7 @@ class Bill(models.Model):
             if not self.use_roundoff:
                 return self.total_amount
             return self.total_amount.quantize(Decimal('1'), rounding='ROUND_HALF_UP')
-        if self.total_amount_cached:
+        if self.total_amount_cached is not None:
             return self.total_amount_cached # rounded_total is stored in total_amount_cached
             
         if not self.use_roundoff:
@@ -399,7 +399,7 @@ class Bill(models.Model):
     @property
     def amount_received(self):
         """Returns amount received, prioritizing cached value"""
-        if self.amount_received_cached:
+        if self.amount_received_cached is not None:
             return self.amount_received_cached
         if hasattr(self, 'annotated_received'):
             return self.annotated_received
@@ -408,7 +408,7 @@ class Bill(models.Model):
     @property
     def outstanding_balance(self):
         """Returns outstanding balance, prioritizing cached value"""
-        if self.outstanding_balance_cached:
+        if self.outstanding_balance_cached is not None:
             return self.outstanding_balance_cached
         if hasattr(self, 'annotated_outstanding'):
             return self.annotated_outstanding or Decimal('0.00')
@@ -426,6 +426,11 @@ class Bill(models.Model):
         if received >= total: return self.PAYMENT_STATUS_PAID
         elif received > 0: return self.PAYMENT_STATUS_PARTIAL
         return self.PAYMENT_STATUS_UNPAID
+
+    @property
+    def is_paid(self):
+        """Helper returning True if payment status is paid."""
+        return self.payment_status == self.PAYMENT_STATUS_PAID
 
     @property
     def cgst_amount(self):

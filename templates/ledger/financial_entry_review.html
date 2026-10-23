@@ -350,14 +350,14 @@
             </div>
 
             <!-- TRIP ACCRUAL DETAILS (When Trip is Invoiced / Booked) -->
-            {% if voucher.voucher_type == 'trip_accrual' and voucher.affected_trips.exists %}
+            {% if voucher.voucher_type == 'trip_accrual' and voucher.affected_trips %}
             <div class="p-3.5 bg-blue-50/60 border border-blue-200 rounded-lg text-xs space-y-2.5">
                 <div class="flex items-center justify-between">
                     <h4 class="text-xs font-bold text-blue-900 uppercase tracking-wider flex items-center gap-1.5">
                         <i class="fa-solid fa-truck-moving text-blue-600"></i>
                         <span>
-                            {% if voucher.affected_trips.count > 1 %}
-                                Bulk Trip Accrual ({{ voucher.affected_trips.count }} Trips)
+                            {% if voucher.affected_trips|length > 1 %}
+                                Bulk Trip Accrual ({{ voucher.affected_trips|length }} Trips)
                             {% else %}
                                 Trip Revenue Accrual
                             {% endif %}
@@ -368,8 +368,8 @@
                     </span>
                 </div>
 
-                {% if voucher.affected_trips.count == 1 %}
-                {% with trip=voucher.affected_trips.first %}
+                {% if voucher.affected_trips|length == 1 %}
+                {% with trip=voucher.affected_trips.0 %}
                 <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
                     <div>
                         <span class="text-[10px] text-slate-500 block uppercase font-bold tracking-wider">Trip Number</span>
@@ -443,7 +443,7 @@
             {% endif %}
 
             <!-- INVOICE & ADJUSTMENT NOTE DETAILS (Credit / Debit Notes & Invoices) -->
-            {% if voucher.affected_bills.exists %}
+            {% if voucher.affected_bills %}
             <div class="p-3.5 {% if voucher.is_credit_note %}bg-purple-50/60 border-purple-200{% elif voucher.is_debit_note %}bg-amber-50/60 border-amber-200{% else %}bg-slate-50/80 border-slate-200{% endif %} border rounded-lg text-xs space-y-2.5">
                 <div class="flex items-center justify-between">
                     <h4 class="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 {% if voucher.is_credit_note %}text-purple-900{% elif voucher.is_debit_note %}text-amber-900{% else %}text-slate-800{% endif %}">
@@ -451,7 +451,7 @@
                         <span>
                             {% if voucher.is_credit_note %}Credit Note Details (Balance Reduction)
                             {% elif voucher.is_debit_note %}Debit Note Details (Shortage / Extra Charge)
-                            {% else %}Invoice Details ({{ voucher.affected_bills.count }} Bill{{ voucher.affected_bills.count|pluralize }}){% endif %}
+                            {% else %}Invoice Details ({{ voucher.affected_bills|length }} Bill{{ voucher.affected_bills|length|pluralize }}){% endif %}
                         </span>
                     </h4>
                     <span class="text-[10px] font-bold px-2 py-0.5 rounded border
@@ -616,7 +616,7 @@
             <!-- INDIVIDUAL FINANCIAL RECORDS IN THIS VOUCHER -->
             <div class="space-y-2">
                 <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">
-                    Financial Records in this Voucher ({{ voucher.all_records.count }})
+                    Financial Records in this Voucher ({{ voucher.all_records|length }})
                 </span>
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
                     {% for rec in voucher.all_records %}
@@ -697,10 +697,12 @@
         <!-- Voucher Footer Actions -->
         <div class="px-4 py-2.5 bg-slate-50 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
             <div class="flex items-center space-x-3">
-                {% if voucher.financial_records.first %}
-                <a href="{% url 'financialrecord-detail' voucher.financial_records.first.pk %}" class="text-slate-600 hover:text-emerald-600 font-semibold inline-flex items-center gap-1">
+                {% if voucher.all_records %}
+                {% with rec=voucher.all_records.0 %}
+                <a href="{% url 'financialrecord-detail' rec.pk %}" class="text-slate-600 hover:text-emerald-600 font-semibold inline-flex items-center gap-1">
                     <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i> View Full Details
                 </a>
+                {% endwith %}
                 {% endif %}
                 {% if voucher.document_ref %}
                 <a href="{{ voucher.document_ref.url }}" target="_blank" class="text-emerald-600 hover:underline font-semibold inline-flex items-center gap-1">

@@ -588,7 +588,7 @@ class Trip(models.Model):
         """Returns total revenue, prioritizing cached value"""
         if getattr(self, '_bypass_cache', False):
             return self.revenue + self.gst_amount
-        if self.total_revenue_cached:
+        if self.total_revenue_cached is not None:
             return self.total_revenue_cached
         if hasattr(self, 'annotated_total_revenue'):
             return self.annotated_total_revenue
@@ -599,7 +599,7 @@ class Trip(models.Model):
         """Returns amount received, prioritizing cached value"""
         if getattr(self, '_bypass_cache', False):
             return self.calculate_amount_received()
-        if self.amount_received_cached:
+        if self.amount_received_cached is not None:
             return self.amount_received_cached
         if hasattr(self, 'annotated_received'):
             return self.annotated_received
@@ -630,7 +630,7 @@ class Trip(models.Model):
         """Returns outstanding balance, prioritizing cached value"""
         if getattr(self, '_bypass_cache', False):
             return self.total_revenue - self.amount_received
-        if self.outstanding_balance_cached:
+        if self.outstanding_balance_cached is not None:
             return self.outstanding_balance_cached
         if hasattr(self, 'annotated_outstanding'):
             return self.annotated_outstanding
