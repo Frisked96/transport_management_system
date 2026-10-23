@@ -335,12 +335,208 @@
 
                 <!-- Net Settled Value -->
                 <div class="text-left sm:text-right">
-                    <span class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Settled Amount</span>
+                    <span class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                        {% if voucher.is_credit_note %}Credit Note Total
+                        {% elif voucher.is_debit_note %}Debit Note Total
+                        {% elif voucher.voucher_type == 'trip_accrual' %}Accrued Revenue
+                        {% elif voucher.voucher_type == 'bill_invoice' %}Invoice Total
+                        {% elif voucher.voucher_type == 'tyre_purchase' %}Purchase Cost
+                        {% else %}Total Settled Amount{% endif %}
+                    </span>
                     <p class="text-lg font-black text-slate-900 mt-0.5">
                         ₹{{ voucher.total_settled_amount|indian_comma }}
                     </p>
                 </div>
             </div>
+
+            <!-- TRIP ACCRUAL DETAILS (When Trip is Invoiced / Booked) -->
+            {% if voucher.voucher_type == 'trip_accrual' and voucher.affected_trips.exists %}
+            <div class="p-3.5 bg-blue-50/60 border border-blue-200 rounded-lg text-xs space-y-2.5">
+                <div class="flex items-center justify-between">
+                    <h4 class="text-xs font-bold text-blue-900 uppercase tracking-wider flex items-center gap-1.5">
+                        <i class="fa-solid fa-truck-moving text-blue-600"></i>
+                        <span>
+                            {% if voucher.affected_trips.count > 1 %}
+                                Bulk Trip Accrual ({{ voucher.affected_trips.count }} Trips)
+                            {% else %}
+                                Trip Revenue Accrual
+                            {% endif %}
+                        </span>
+                    </h4>
+                    <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-800 border border-blue-200">
+                        Receivable Accrual (No Bank Movement)
+                    </span>
+                </div>
+
+                {% if voucher.affected_trips.count == 1 %}
+                {% with trip=voucher.affected_trips.first %}
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
+                    <div>
+                        <span class="text-[10px] text-slate-500 block uppercase font-bold tracking-wider">Trip Number</span>
+                        <a href="{% url 'trip-detail' trip.pk %}" class="font-bold text-emerald-600 hover:underline inline-flex items-center gap-1 mt-0.5">
+                            <span>{{ trip.trip_number }}</span>
+                            <i class="fa-solid fa-arrow-up-right-from-square text-[9px] text-slate-400"></i>
+                        </a>
+                    </div>
+                    <div>
+                        <span class="text-[10px] text-slate-500 block uppercase font-bold tracking-wider">Vehicle & LR</span>
+                        <p class="font-bold text-slate-800 mt-0.5">{{ trip.vehicle.registration_plate|default:"—" }} {% if trip.lr_no %}<span class="text-slate-400 font-mono text-[10px]">({{ trip.lr_no }})</span>{% endif %}</p>
+                    </div>
+                    <div>
+                        <span class="text-[10px] text-slate-500 block uppercase font-bold tracking-wider">Route</span>
+                        <p class="font-bold text-slate-800 truncate mt-0.5" title="{{ trip.route }}">{{ trip.route|default:"—" }}</p>
+                    </div>
+                    <div class="text-left sm:text-right">
+                        <span class="text-[10px] text-slate-500 block uppercase font-bold tracking-wider">Current Trip Due</span>
+                        <p class="font-mono font-bold mt-0.5 {% if trip.outstanding_balance_cached <= 0 %}text-emerald-600{% else %}text-amber-800{% endif %}">
+                            ₹{{ trip.outstanding_balance_cached|indian_comma }}
+                        </p>
+                    </div>
+                </div>
+                {% endwith %}
+                {% else %}
+                <!-- Multiple trips in this bulk add voucher -->
+                <div class="overflow-x-auto border border-blue-200/70 rounded-lg">
+                    <table class="w-full text-left text-xs bg-white">
+                        <thead class="bg-blue-100/50 text-blue-900 uppercase text-[10px] font-bold tracking-wider border-b border-blue-200">
+                            <tr>
+                                <th class="px-3 py-2">Trip #</th>
+                                <th class="px-3 py-2">Vehicle / LR</th>
+                                <th class="px-3 py-2">Party</th>
+                                <th class="px-3 py-2">Route</th>
+                                <th class="px-3 py-2 text-right">Accrued Revenue</th>
+                                <th class="px-3 py-2 text-right">Outstanding Due</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-blue-50">
+                            {% for trip in voucher.affected_trips %}
+                            <tr class="hover:bg-blue-50/40 transition-colors">
+                                <td class="px-3 py-2 font-bold">
+                                    <a href="{% url 'trip-detail' trip.pk %}" class="text-emerald-600 hover:underline inline-flex items-center gap-1">
+                                        <span>{{ trip.trip_number }}</span>
+                                        <i class="fa-solid fa-arrow-up-right-from-square text-[9px] text-slate-400"></i>
+                                    </a>
+                                </td>
+                                <td class="px-3 py-2">
+                                    <span class="font-bold text-slate-800">{{ trip.vehicle.registration_plate|default:"—" }}</span>
+                                    {% if trip.lr_no %}<span class="text-slate-400 font-mono text-[10px] block">LR: {{ trip.lr_no }}</span>{% endif %}
+                                </td>
+                                <td class="px-3 py-2">
+                                    {% if trip.party %}
+                                    <a href="{% url 'party-detail' trip.party.pk %}" class="font-bold text-slate-700 hover:text-emerald-600 truncate block max-w-[130px]">
+                                        {{ trip.party.name }}
+                                    </a>
+                                    {% else %}—{% endif %}
+                                </td>
+                                <td class="px-3 py-2 text-slate-600 truncate max-w-[140px]" title="{{ trip.route }}">{{ trip.route|default:"—" }}</td>
+                                <td class="px-3 py-2 text-right font-mono font-bold text-slate-900">₹{{ trip.total_revenue_cached|indian_comma }}</td>
+                                <td class="px-3 py-2 text-right font-mono font-bold {% if trip.outstanding_balance_cached <= 0 %}text-emerald-600{% else %}text-amber-700{% endif %}">
+                                    ₹{{ trip.outstanding_balance_cached|indian_comma }}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            <!-- INVOICE & ADJUSTMENT NOTE DETAILS (Credit / Debit Notes & Invoices) -->
+            {% if voucher.affected_bills.exists %}
+            <div class="p-3.5 {% if voucher.is_credit_note %}bg-purple-50/60 border-purple-200{% elif voucher.is_debit_note %}bg-amber-50/60 border-amber-200{% else %}bg-slate-50/80 border-slate-200{% endif %} border rounded-lg text-xs space-y-2.5">
+                <div class="flex items-center justify-between">
+                    <h4 class="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 {% if voucher.is_credit_note %}text-purple-900{% elif voucher.is_debit_note %}text-amber-900{% else %}text-slate-800{% endif %}">
+                        <i class="fa-solid {% if voucher.is_credit_note %}fa-file-circle-minus text-purple-600{% elif voucher.is_debit_note %}fa-file-circle-plus text-amber-600{% else %}fa-file-invoice-dollar text-slate-600{% endif %}"></i>
+                        <span>
+                            {% if voucher.is_credit_note %}Credit Note Details (Balance Reduction)
+                            {% elif voucher.is_debit_note %}Debit Note Details (Shortage / Extra Charge)
+                            {% else %}Invoice Details ({{ voucher.affected_bills.count }} Bill{{ voucher.affected_bills.count|pluralize }}){% endif %}
+                        </span>
+                    </h4>
+                    <span class="text-[10px] font-bold px-2 py-0.5 rounded border
+                        {% if voucher.is_credit_note %}bg-purple-100 text-purple-800 border-purple-200
+                        {% elif voucher.is_debit_note %}bg-amber-100 text-amber-800 border-amber-200
+                        {% else %}bg-blue-100 text-blue-800 border-blue-200{% endif %}">
+                        {% if voucher.is_credit_note %}Reduces Debtor Balance
+                        {% elif voucher.is_debit_note %}Reduces Vendor Payable
+                        {% else %}Receivable Accrual{% endif %}
+                    </span>
+                </div>
+
+                <div class="overflow-x-auto border border-slate-200 rounded-lg bg-white">
+                    <table class="w-full text-left text-xs">
+                        <thead class="bg-slate-50 text-slate-500 uppercase text-[10px] font-bold tracking-wider border-b border-slate-200">
+                            <tr>
+                                <th class="px-3 py-2">Document / Number</th>
+                                <th class="px-3 py-2">Type</th>
+                                <th class="px-3 py-2">Party</th>
+                                <th class="px-3 py-2">Against Reference</th>
+                                <th class="px-3 py-2">Item / Reason</th>
+                                <th class="px-3 py-2 text-right">Amount</th>
+                                <th class="px-3 py-2 text-center">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            {% for bill in voucher.affected_bills %}
+                            <tr class="hover:bg-slate-50/70 transition-colors">
+                                <td class="px-3 py-2 font-bold">
+                                    <a href="{% url 'bill-detail' bill.pk %}" class="text-emerald-600 hover:underline inline-flex items-center gap-1">
+                                        <span>{{ bill.bill_number|default:"Draft" }}</span>
+                                        <i class="fa-solid fa-arrow-up-right-from-square text-[9px] text-slate-400"></i>
+                                    </a>
+                                </td>
+                                <td class="px-3 py-2">
+                                    {% if bill.category and bill.category.name == 'Credit Note' %}
+                                        <span class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-purple-100 text-purple-800 uppercase">Credit Note</span>
+                                    {% elif bill.category and bill.category.name == 'Debit Note' %}
+                                        <span class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-800 uppercase">Debit Note</span>
+                                    {% elif bill.is_creditor_bill %}
+                                        <span class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 text-emerald-800 uppercase">Creditor Bill</span>
+                                    {% else %}
+                                        <span class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-100 text-blue-800 uppercase">Customer Invoice</span>
+                                    {% endif %}
+                                </td>
+                                <td class="px-3 py-2">
+                                    <a href="{% url 'party-detail' bill.party.pk %}" class="font-bold text-slate-800 hover:text-emerald-600 truncate block max-w-[130px]">
+                                        {{ bill.party.name }}
+                                    </a>
+                                    <span class="text-[9px] text-slate-400 uppercase font-bold">{{ bill.party.party_type }}</span>
+                                </td>
+                                <td class="px-3 py-2 font-mono text-slate-600 text-[11px]">
+                                    {% if bill.original_bill %}
+                                        <a href="{% url 'bill-detail' bill.original_bill.pk %}" class="hover:underline text-blue-600">
+                                            {{ bill.original_bill.bill_number }}
+                                        </a>
+                                    {% elif bill.customer_bill %}
+                                        <a href="{% url 'bill-detail' bill.customer_bill.pk %}" class="hover:underline text-blue-600">
+                                            {{ bill.customer_bill.bill_number }}
+                                        </a>
+                                    {% elif bill.manual_original_bill_number %}
+                                        {{ bill.manual_original_bill_number }}
+                                    {% else %}
+                                        —
+                                    {% endif %}
+                                </td>
+                                <td class="px-3 py-2 text-slate-600">{{ bill.item_type|default:"—" }}</td>
+                                <td class="px-3 py-2 text-right font-mono font-black text-slate-900">
+                                    ₹{{ bill.rounded_total|indian_comma }}
+                                </td>
+                                <td class="px-3 py-2 text-center">
+                                    <span class="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase
+                                        {% if bill.is_paid %}bg-emerald-100 text-emerald-800
+                                        {% elif bill.amount_received > 0 %}bg-amber-100 text-amber-800
+                                        {% else %}bg-slate-100 text-slate-700{% endif %}">
+                                        {{ bill.payment_status }}
+                                    </span>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% endif %}
 
             <!-- SETTLEMENT DETAILS (The "How It Was Made Zero" View) -->
             {% if voucher.settlement_breakdown %}
@@ -424,12 +620,13 @@
                 </span>
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
                     {% for rec in voucher.all_records %}
-                    <div class="{% if rec.is_deleted %}bg-rose-50/60 border-rose-200 opacity-80{% else %}bg-slate-50 border-slate-200{% endif %} border rounded-lg p-2.5 text-xs flex flex-col justify-between">
+                    <div class="{% if rec.is_deleted %}bg-rose-50/60 border-rose-200 opacity-80{% else %}bg-slate-50 border-slate-200 hover:border-emerald-300 hover:bg-slate-50/80{% endif %} border rounded-lg p-2.5 text-xs flex flex-col justify-between transition-colors group">
                         <div class="flex items-center justify-between mb-1">
-                            <span class="font-bold {% if rec.is_deleted %}text-rose-800 line-through{% else %}text-slate-800{% endif %}">
-                                #{{ rec.entry_number|default:rec.pk }}
+                            <a href="{% url 'financialrecord-detail' rec.pk %}" class="font-bold hover:underline {% if rec.is_deleted %}text-rose-800 line-through{% else %}text-emerald-700 hover:text-emerald-900{% endif %} inline-flex items-center gap-1.5" title="View Financial Record #{{ rec.entry_number|default:rec.pk }}">
+                                <span>#{{ rec.entry_number|default:rec.pk }}</span>
+                                <i class="fa-solid fa-arrow-up-right-from-square text-[9px] text-slate-400 group-hover:text-emerald-600"></i>
                                 {% if rec.is_deleted %}<span class="text-[9px] text-rose-600 no-underline font-bold ml-1 uppercase">[Deleted]</span>{% endif %}
-                            </span>
+                            </a>
                             <span class="px-1.5 py-0.2 rounded text-[9px] font-bold uppercase
                                 {% if rec.is_deleted %}bg-rose-100 text-rose-800
                                 {% elif rec.debit_amount or rec.is_income %}bg-emerald-100 text-emerald-800
@@ -438,10 +635,12 @@
                             </span>
                         </div>
                         <div class="flex items-center justify-between mt-1">
-                            <span class="text-slate-500 truncate max-w-[150px]">{{ rec.description|default:"No narration" }}</span>
-                            <span class="font-mono font-black {% if rec.is_deleted %}text-rose-600 line-through{% elif rec.debit_amount or rec.is_income %}text-emerald-700{% else %}text-rose-700{% endif %}">
+                            <a href="{% url 'financialrecord-detail' rec.pk %}" class="text-slate-500 hover:text-slate-800 truncate max-w-[150px]" title="{{ rec.description|default:'No narration' }}">
+                                {{ rec.description|default:"No narration" }}
+                            </a>
+                            <a href="{% url 'financialrecord-detail' rec.pk %}" class="font-mono font-black hover:underline {% if rec.is_deleted %}text-rose-600 line-through{% elif rec.debit_amount or rec.is_income %}text-emerald-700{% else %}text-rose-700{% endif %}">
                                 ₹{{ rec.amount|indian_comma }}
-                            </span>
+                            </a>
                         </div>
                         {% if rec.document_ref %}
                         <div class="mt-2 pt-1 border-t border-slate-200 flex justify-end">

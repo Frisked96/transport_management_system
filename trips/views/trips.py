@@ -254,11 +254,39 @@ class TripBulkCreateView(LoginRequiredMixin, PermissionRequiredMixin, FormView):
 
         with transaction.atomic():
             instances = form.save(commit=False)
+            if not instances:
+                return super().form_valid(form)
+
+            batch_voucher = None
+            if len(instances) > 1:
+                from ledger.services import VoucherService
+                from ledger.models import FinancialVoucher, CompanyAccount
+                first_party = instances[0].party
+                same_party = all(inst.party == first_party for inst in instances)
+                batch_party = first_party if same_party else None
+                first_date = instances[0].date or timezone.now().date()
+                account = CompanyAccount.objects.first()
+
+                batch_voucher = VoucherService.create_voucher(
+                    date=first_date,
+                    voucher_type=FinancialVoucher.VOUCHER_TYPE_TRIP_ACCRUAL,
+                    created_by=self.request.user,
+                    party=batch_party,
+                    account=account,
+                    description=f"Bulk Trip Creation ({len(instances)} Trips)"
+                )
+
             for instance in instances:
                 instance.created_by = self.request.user
                 if not instance.date:
                      instance.date = timezone.now().date()
+                if batch_voucher:
+                    instance._batch_voucher = batch_voucher
                 instance.save()
+
+            if batch_voucher:
+                batch_voucher.update_totals()
+
         messages.success(self.request, f'{len(instances)} Trips created successfully!')
         return super().form_valid(form)
 

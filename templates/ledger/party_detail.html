@@ -421,7 +421,12 @@
                         <tbody class="divide-y divide-slate-100">
                             {% for record in financial_records %}
                             <tr class="hover:bg-slate-50/80 transition-colors group">
-                                <td class="px-6 py-3 text-xs font-bold text-slate-500">{{ record.date|date:"d/m/y" }}</td>
+                                <td class="px-6 py-3 text-xs font-bold text-slate-500">
+                                    <a href="{% url 'financialrecord-detail' record.pk %}" class="hover:text-emerald-600 hover:underline transition-colors">
+                                        {{ record.date|date:"d/m/y" }}
+                                        {% if record.entry_number %}<span class="text-[10px] text-slate-400 font-mono block">#{{ record.entry_number }}</span>{% endif %}
+                                    </a>
+                                </td>
                                 <td class="px-6 py-3">
                                     {% if record.is_invoice %}
                                         {% if record.associated_bill and record.associated_bill.is_adjustment %}

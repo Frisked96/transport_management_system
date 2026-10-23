@@ -48,9 +48,12 @@ class TripFinancialService:
         trip_date = trip.date or timezone.now().date()
         user = trip.created_by or getattr(trip, '_current_user', None)
 
+        batch_voucher = getattr(trip, '_batch_voucher', None)
         existing_rec = FinancialRecord.all_objects.filter(associated_trip=trip, record_type=FinancialRecord.RECORD_TYPE_INVOICE).first()
         if existing_rec and existing_rec.voucher:
             voucher = existing_rec.voucher
+        elif batch_voucher:
+            voucher = batch_voucher
         else:
             voucher = VoucherService.create_voucher(
                 date=trip_date,

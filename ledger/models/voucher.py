@@ -257,16 +257,21 @@ class FinancialVoucher(models.Model):
     def update_totals(self, save=True):
         """
         Recalculate cached totals from associated active financial records.
+        Distinguishes cash/bank payments from revenue/invoice accruals.
         """
+        from ledger.models import FinancialRecord
         records = list(self.financial_records.select_related('category').all())
         payment_amt = Decimal('0.00')
         tds_amt = Decimal('0.00')
         ded_amt = Decimal('0.00')
+        invoice_amt = Decimal('0.00')
 
         for r in records:
             cat_name = (r.category.name if r.category else '').lower()
             amt = r.amount or Decimal('0.00')
-            if 'tds' in cat_name:
+            if r.record_type == FinancialRecord.RECORD_TYPE_INVOICE:
+                invoice_amt += amt
+            elif 'tds' in cat_name:
                 tds_amt += amt
             elif 'deduction' in cat_name or 'shortage' in cat_name:
                 ded_amt += amt
@@ -276,7 +281,11 @@ class FinancialVoucher(models.Model):
         self.total_payment_amount = payment_amt
         self.total_tds_amount = tds_amt
         self.total_deduction_amount = ded_amt
-        self.total_settled_amount = payment_amt + tds_amt + ded_amt
+        
+        if self.voucher_type in [self.VOUCHER_TYPE_TRIP_ACCRUAL, self.VOUCHER_TYPE_BILL_INVOICE]:
+            self.total_settled_amount = invoice_amt
+        else:
+            self.total_settled_amount = payment_amt + tds_amt + ded_amt
 
         if save:
             self.save(update_fields=[
@@ -316,14 +325,42 @@ class FinancialVoucher(models.Model):
                 bill_ids.add(alloc.bill_id)
         if not bill_ids:
             return Bill.objects.none()
-        return Bill.objects.filter(id__in=bill_ids).select_related('party')
+        return Bill.objects.filter(id__in=bill_ids).select_related('party', 'category', 'original_bill', 'customer_bill')
+
+    @property
+    def is_credit_note(self):
+        """Checks if this voucher contains any Credit Note bills or records."""
+        return any(
+            (b.category and b.category.name == 'Credit Note')
+            for b in self.affected_bills
+        ) or any(
+            (r.category and r.category.name == 'Credit Note')
+            for r in self.all_records
+        )
+
+    @property
+    def is_debit_note(self):
+        """Checks if this voucher contains any Debit Note bills or records."""
+        return any(
+            (b.category and b.category.name == 'Debit Note')
+            for b in self.affected_bills
+        ) or any(
+            (r.category and r.category.name == 'Debit Note')
+            for r in self.all_records
+        )
 
     @property
     def settlement_breakdown(self):
         """
         Returns structured per-trip settlement details showing starting revenue,
         allocated payment, TDS, deductions, and resulting balance.
+        Only applicable for settlement / payment vouchers. Accruals and invoices
+        represent earned revenue and do not settle trips.
         """
+        from ledger.models import FinancialRecord
+        if self.voucher_type in [self.VOUCHER_TYPE_TRIP_ACCRUAL, self.VOUCHER_TYPE_BILL_INVOICE]:
+            return []
+
         trips = list(self.affected_trips)
         if not trips:
             return []
@@ -336,6 +373,10 @@ class FinancialVoucher(models.Model):
             d_allocated = Decimal('0.00')
 
             for r in self.all_records:
+                if r.record_type == FinancialRecord.RECORD_TYPE_INVOICE:
+                    # Invoice accruals are earned revenue, not cash/bank settlement
+                    continue
+
                 cat_name = (r.category.name if r.category else '').lower()
                 amt = Decimal('0.00')
 
@@ -356,6 +397,10 @@ class FinancialVoucher(models.Model):
                     p_allocated += amt
 
             total_voucher_contribution = p_allocated + t_allocated + d_allocated
+            if total_voucher_contribution <= Decimal('0.00'):
+                # Skip trips that did not have payment/settlement applied in this voucher
+                continue
+
             is_zero = (trip.outstanding_balance_cached <= Decimal('0.00'))
 
             breakdown.append({

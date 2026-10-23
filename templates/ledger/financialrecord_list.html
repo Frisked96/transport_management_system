@@ -241,7 +241,9 @@
                         {% for record in financial_records %}
                         <tr class="hover:bg-slate-50 transition-colors">
                             <td class="px-4 py-3 whitespace-nowrap">
-                                <p class="font-bold text-slate-900">#{{ record.entry_number|default:record.pk }}</p>
+                                <a href="{% url 'financialrecord-detail' record.pk %}" class="font-bold text-slate-900 hover:text-emerald-600 hover:underline transition-colors block">
+                                    #{{ record.entry_number|default:record.pk }}
+                                </a>
                                 <p class="text-[10px] text-slate-400 uppercase">{{ record.date|date:"d M Y" }}</p>
                                 {% if record.voucher %}
                                 <a href="{% url 'financial-entry-review' %}?search={{ record.voucher.voucher_number }}" class="text-[9px] font-mono font-bold text-emerald-700 hover:underline block truncate max-w-[110px]" title="{{ record.voucher.voucher_number }}">
@@ -323,9 +325,9 @@
                                 {% endif %}
                             </td>
                             <td class="px-4 py-3 text-right whitespace-nowrap">
-                                <p class="font-black {% if record.debit_amount %}text-emerald-600{% else %}text-red-600{% endif %}">
+                                <a href="{% url 'financialrecord-detail' record.pk %}" class="font-black hover:underline block {% if record.debit_amount %}text-emerald-600 hover:text-emerald-800{% else %}text-red-600 hover:text-red-800{% endif %}">
                                     ₹{{ record.amount|indian_comma }}
-                                </p>
+                                </a>
                                 <p class="text-[9px] font-bold uppercase tracking-tighter text-slate-400">{% if record.debit_amount %}Debit (In){% else %}Credit (Out){% endif %}</p>
                             </td>
                             <td class="px-4 py-3 text-right">

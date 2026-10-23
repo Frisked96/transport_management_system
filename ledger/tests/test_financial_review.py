@@ -34,7 +34,8 @@ class FinancialReviewTestCase(TestCase):
         perm_view = Permission.objects.get(codename='can_view_financial_records')
         perm_party = Permission.objects.get(codename='view_party')
         perm_trip = Permission.objects.get(codename='view_trip')
-        self.operator_user.user_permissions.add(perm_add, perm_change, perm_view, perm_party, perm_trip)
+        perm_add_trip = Permission.objects.get(codename='add_trip')
+        self.operator_user.user_permissions.add(perm_add, perm_change, perm_view, perm_party, perm_trip, perm_add_trip)
 
         # Create manager/reviewer user
         self.manager_user = User.objects.create_user(
@@ -329,3 +330,162 @@ class FinancialReviewTestCase(TestCase):
 
         voucher.refresh_from_db()
         self.assertEqual(voucher.verification_status, FinancialVoucher.STATUS_PENDING)
+
+    def test_trip_accrual_has_zero_bank_payment_and_no_settlement_breakdown(self):
+        """
+        Verify that trip accruals represent revenue invoices, so total_payment_amount is 0.00
+        and settlement_breakdown is empty (preventing false 'Bank Received' values).
+        """
+        # self.trip was created in setUp, which triggered sync_ledger_invoice
+        accrual_record = FinancialRecord.objects.get(
+            associated_trip=self.trip,
+            record_type=FinancialRecord.RECORD_TYPE_INVOICE
+        )
+        voucher = accrual_record.voucher
+        self.assertIsNotNone(voucher)
+        self.assertEqual(voucher.voucher_type, FinancialVoucher.VOUCHER_TYPE_TRIP_ACCRUAL)
+        self.assertEqual(voucher.total_payment_amount, Decimal('0.00'))  # NOT bank received!
+        self.assertEqual(voucher.total_settled_amount, self.trip.total_revenue_cached)
+        self.assertEqual(voucher.settlement_breakdown, [])  # No false settlement table
+
+    def test_review_template_renders_clickable_financial_record_links(self):
+        """
+        Verify that in the review dashboard, financial records within a voucher render
+        clickable <a> tags linking directly to the financial record detail view.
+        """
+        self.client.login(username='manager', password='password123')
+        review_url = reverse('financial-entry-review')
+        response = self.client.get(review_url)
+        self.assertEqual(response.status_code, 200)
+
+        accrual_record = FinancialRecord.objects.get(
+            associated_trip=self.trip,
+            record_type=FinancialRecord.RECORD_TYPE_INVOICE
+        )
+        record_detail_url = reverse('financialrecord-detail', kwargs={'pk': accrual_record.pk})
+        self.assertContains(response, f'href="{record_detail_url}"')
+
+    def test_bulk_trip_creation_shares_single_voucher_and_card(self):
+        """
+        Verify that multiple trips created via bulk add are grouped into a single parent voucher
+        and rendered together inside a single card with the bulk trips breakdown table.
+        """
+        from trips.models import Route
+        route = Route.objects.create(
+            pickup_location='Raipur',
+            delivery_location='Nagpur',
+            default_rate=Decimal('1000.00')
+        )
+        self.client.login(username='akash', password='password123')
+        bulk_url = reverse('trip-bulk-create')
+
+        # Formset data for 2 trips in one bulk submission
+        data = {
+            'form-TOTAL_FORMS': '2',
+            'form-INITIAL_FORMS': '0',
+            'form-MIN_NUM_FORMS': '0',
+            'form-MAX_NUM_FORMS': '1000',
+            'form-0-date': str(timezone.now().date()),
+            'form-0-vehicle': str(self.vehicle.pk),
+            'form-0-party': str(self.debtor_party.pk),
+            'form-0-route': str(route.pk),
+            'form-0-revenue_type': 'per_ton',
+            'form-0-weight': '25.00',
+            'form-0-rate_per_ton': '1000.00',
+            'form-0-vendor_hire_amount': '0.00',
+            'form-1-date': str(timezone.now().date()),
+            'form-1-vehicle': str(self.vehicle.pk),
+            'form-1-party': str(self.debtor_party.pk),
+            'form-1-route': str(route.pk),
+            'form-1-revenue_type': 'per_ton',
+            'form-1-weight': '30.00',
+            'form-1-rate_per_ton': '1000.00',
+            'form-1-vendor_hire_amount': '0.00',
+        }
+        resp = self.client.post(bulk_url, data, follow=True)
+        self.assertEqual(resp.status_code, 200)
+
+        # Retrieve the newly created trips
+        new_trips = Trip.objects.filter(route=route).order_by('id')
+        self.assertEqual(new_trips.count(), 2)
+        trip1, trip2 = new_trips[0], new_trips[1]
+
+        # Verify both trips share the exact same voucher
+        r1 = FinancialRecord.objects.get(associated_trip=trip1, record_type=FinancialRecord.RECORD_TYPE_INVOICE)
+        r2 = FinancialRecord.objects.get(associated_trip=trip2, record_type=FinancialRecord.RECORD_TYPE_INVOICE)
+        self.assertIsNotNone(r1.voucher)
+        self.assertEqual(r1.voucher, r2.voucher)
+        batch_voucher = r1.voucher
+
+        # The voucher total must equal sum of both trips
+        expected_total = trip1.total_revenue_cached + trip2.total_revenue_cached
+        self.assertEqual(batch_voucher.total_settled_amount, expected_total)
+        self.assertEqual(batch_voucher.affected_trips.count(), 2)
+
+        # In review pane, check that bulk trip table renders both trips in the same card
+        self.client.login(username='manager', password='password123')
+        review_resp = self.client.get(reverse('financial-entry-review') + f'?search={batch_voucher.voucher_number}')
+        self.assertEqual(review_resp.status_code, 200)
+        self.assertContains(review_resp, 'Bulk Trip Accrual (2 Trips)')
+        self.assertContains(review_resp, trip1.trip_number)
+        self.assertContains(review_resp, trip2.trip_number)
+
+    def test_credit_note_and_debit_note_voucher_accounting_and_display(self):
+        """
+        Verify that Credit Notes and Debit Notes are accurately accounted:
+        1. Debtor balance reduces on Credit Note issuance.
+        2. Voucher properties is_credit_note / is_debit_note are accurate.
+        3. Review dashboard renders Credit Note Details with original invoice reference.
+        """
+        from ledger.models import Bill
+        from ledger.services import BillingService
+        # Create parent invoice
+        parent_bill = Bill.objects.create(
+            party=self.debtor_party,
+            bill_type=Bill.TYPE_STANDARD,
+            date=timezone.now().date(),
+            issuer=self.company_account,
+            item_type='Transport Freight',
+            amount_override=Decimal('20000.00'),
+            gst_rate=Decimal('0.00')
+        )
+        parent_bill.sync_to_ledger()
+        self.debtor_party.refresh_balance()
+        initial_debtor_bal = self.debtor_party.current_balance_value
+
+        # Issue Credit Note against invoice for shortage concession
+        cn_category, _ = TransactionCategory.objects.get_or_create(
+            name='Credit Note',
+            defaults={'type': TransactionCategory.TYPE_INCOME}
+        )
+        cn_bill = Bill.objects.create(
+            party=self.debtor_party,
+            bill_type=Bill.TYPE_STANDARD,
+            category=cn_category,
+            original_bill=parent_bill,
+            date=timezone.now().date(),
+            issuer=self.company_account,
+            item_type='Shortage Concession',
+            amount_override=Decimal('3000.00'),
+            gst_rate=Decimal('0.00')
+        )
+        cn_bill.sync_to_ledger()
+
+        # 1. Debtor balance must be reduced by 3000
+        self.debtor_party.refresh_balance()
+        self.assertEqual(self.debtor_party.current_balance_value, initial_debtor_bal - Decimal('3000.00'))
+
+        # 2. Voucher must identify as Credit Note
+        cn_rec = FinancialRecord.objects.get(associated_bill=cn_bill, record_type=FinancialRecord.RECORD_TYPE_INVOICE)
+        cn_voucher = cn_rec.voucher
+        self.assertIsNotNone(cn_voucher)
+        self.assertTrue(cn_voucher.is_credit_note)
+        self.assertFalse(cn_voucher.is_debit_note)
+
+        # 3. Review dashboard renders Credit Note Details and links to original bill
+        self.client.login(username='manager', password='password123')
+        review_resp = self.client.get(reverse('financial-entry-review') + f'?search={cn_voucher.voucher_number}')
+        self.assertEqual(review_resp.status_code, 200)
+        self.assertContains(review_resp, 'Credit Note Details')
+        self.assertContains(review_resp, 'Credit Note Total')
+        self.assertContains(review_resp, parent_bill.bill_number)
