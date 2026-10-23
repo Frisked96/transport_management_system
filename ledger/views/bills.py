@@ -223,7 +223,7 @@ class BillDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
         if payments > 0:
             impact.append(f"₹{payments:,.2f} in payments made against these trips will REMAIN in the system as Payments In/Deductions, protecting your cash balance.")
             
-        impact.append("Ledger entry numbers will be automatically re-sequenced to prevent gaps.")
+        impact.append("The consolidated entry will be soft-deleted and archived under its voucher.")
         context['impact_statements'] = impact
         return context
 

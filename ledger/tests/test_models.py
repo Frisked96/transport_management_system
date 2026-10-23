@@ -175,11 +175,10 @@ class FinancialRecordModelTests(TestCase):
         self.assertIsNotNone(rec2.entry_number)
         self.assertEqual(rec2.entry_number, rec1.entry_number + 1)
 
-    def test_resequence_entry_numbers_on_delete_with_non_chronological_dates(self):
+    def test_permanent_entry_numbers_preserved_on_delete_without_resequencing(self):
         """
         Verify deleting a FinancialRecord soft-deletes the record and preserves its entry_number
-        without automatic resequencing overhead. When resequence_entry_numbers is explicitly
-        invoked, active records are resequenced gaplessly.
+        permanently without resequencing overhead.
         """
         FinancialRecord.objects.all().delete()
         today = timezone.now().date()

@@ -268,14 +268,6 @@ class FinancialRecord(models.Model):
     all_objects = models.Manager()
     deleted_objects = DeletedFinancialRecordManager()
 
-    @classmethod
-    def resequence_entry_numbers(cls, from_date=None, from_created_at=None):
-        """
-        Resequence entry numbers to remove gaps.
-        """
-        from ledger.services import LedgerService
-        return LedgerService.resequence_financial_records(from_date=from_date, from_created_at=from_created_at)
-
     def soft_delete(self, user=None, reason=''):
         """Soft-deletes record, retains entry_number, updates parent voucher & balances."""
         from ledger.services import VoucherService
