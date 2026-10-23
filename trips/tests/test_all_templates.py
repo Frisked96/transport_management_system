@@ -327,6 +327,7 @@ class AllTemplatesTest(TestCase):
 
             # Ledger
             ('financialrecord-list', {}),
+            ('financial-entry-review', {}),
             ('financialrecord-detail', {'pk': self.financial_record.pk}),
             ('financialrecord-create', {}),
             ('financialrecord-update', {'pk': self.financial_record.pk}),
@@ -571,6 +572,7 @@ class AllTemplatesTest(TestCase):
             reverse('tyre-brand-update', kwargs={'pk': self.tyre_brand.pk}),
             reverse('tyre-brand-delete', kwargs={'pk': self.tyre_brand.pk}),
             reverse('financialrecord-list'),
+            reverse('financial-entry-review'),
             reverse('financialrecord-detail', kwargs={'pk': self.financial_record.pk}),
             reverse('financialrecord-create'),
             reverse('financialrecord-update', kwargs={'pk': self.financial_record.pk}),

@@ -11,6 +11,10 @@
         <p class="text-sm text-slate-600 mt-1">Manage and track all financial transactions</p>
     </div>
     <div class="mt-4 md:mt-0 flex space-x-3">
+        <a href="{% url 'financial-entry-review' %}" class="flex items-center space-x-2 px-4 py-2 border border-amber-300 rounded-md bg-amber-50 text-amber-800 text-sm font-semibold hover:bg-amber-100 transition-colors shadow-sm">
+            <i class="fa-solid fa-clipboard-check text-amber-600"></i>
+            <span>Entry Verification</span>
+        </a>
         <a href="{% url 'unified-ledger-pdf' %}?start_date={{ request.GET.start_date }}&end_date={{ request.GET.end_date }}" target="_blank" class="flex items-center space-x-2 px-4 py-2 border border-red-200 rounded-md bg-red-50 text-red-700 text-sm font-medium hover:bg-red-100 transition-colors shadow-sm">
             <i class="fa-solid fa-file-pdf"></i>
             <span>Unified Ledger</span>
@@ -239,6 +243,11 @@
                             <td class="px-4 py-3 whitespace-nowrap">
                                 <p class="font-bold text-slate-900">#{{ record.entry_number|default:record.pk }}</p>
                                 <p class="text-[10px] text-slate-400 uppercase">{{ record.date|date:"d M Y" }}</p>
+                                {% if record.voucher %}
+                                <a href="{% url 'financial-entry-review' %}?search={{ record.voucher.voucher_number }}" class="text-[9px] font-mono font-bold text-emerald-700 hover:underline block truncate max-w-[110px]" title="{{ record.voucher.voucher_number }}">
+                                    {{ record.voucher.voucher_number }}
+                                </a>
+                                {% endif %}
                             </td>
                             <td class="px-4 py-3">
                                 {% if record.account %}
@@ -271,6 +280,11 @@
                             <td class="px-4 py-3 whitespace-nowrap">
                                 <span class="text-[9px] font-bold px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded uppercase">{{ record.category.name|truncatechars:18 }}</span>
                                 {% if record.is_invoice %}<span class="text-[9px] font-bold px-1.5 py-0.5 bg-blue-100 text-blue-600 rounded uppercase ml-1">Inv</span>{% endif %}
+                                {% if record.verification_status == 'pending' %}
+                                <span class="text-[8px] font-bold px-1 py-0.5 bg-amber-100 text-amber-800 rounded uppercase ml-1">Pending</span>
+                                {% elif record.verification_status == 'flagged' %}
+                                <span class="text-[8px] font-bold px-1 py-0.5 bg-rose-100 text-rose-800 rounded uppercase ml-1">Flagged</span>
+                                {% endif %}
                             </td>
                             <td class="px-4 py-3">
                                 {% if record.linked_bill or record.linked_trip %}

@@ -153,6 +153,19 @@ class DocumentRenewal(models.Model):
                 if updated:
                     record.save()
             else:
+                from ledger.models import FinancialVoucher
+                v_num = FinancialVoucher.generate_voucher_number(date)
+                v = FinancialVoucher.objects.create(
+                    voucher_number=v_num,
+                    date=date,
+                    voucher_type=FinancialVoucher.VOUCHER_TYPE_DOCUMENT_RENEWAL,
+                    account=vehicle.company_account,
+                    created_by=self.renewed_by,
+                    verification_status=FinancialVoucher.STATUS_PENDING,
+                    total_payment_amount=self.cost,
+                    total_settled_amount=self.cost,
+                    description=description
+                )
                 FinancialRecord.objects.create(
                     account=vehicle.company_account,
                     category=category,
@@ -161,6 +174,8 @@ class DocumentRenewal(models.Model):
                     date=date,
                     associated_document_renewal=self,
                     recorded_by=self.renewed_by,
+                    voucher=v,
+                    verification_status=FinancialVoucher.STATUS_PENDING,
                     description=description
                 )
         else:

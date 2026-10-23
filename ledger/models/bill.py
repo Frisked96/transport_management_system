@@ -266,11 +266,15 @@ class Bill(models.Model):
 
                 affected_trips = list(self.trips.all())
 
-                # Delete only the consolidated invoice record associated with this bill
-                FinancialRecord.objects.filter(
+                # Soft-delete the consolidated invoice record associated with this bill
+                # Detach associated_bill reference so foreign key constraint is satisfied on bill deletion
+                for r in list(FinancialRecord.all_objects.filter(
                     associated_bill=self,
                     record_type=FinancialRecord.RECORD_TYPE_INVOICE
-                ).delete()
+                )):
+                    r.associated_bill = None
+                    r.save(update_fields=['associated_bill'])
+                    r.soft_delete(reason=f"Associated Bill #{self.bill_number or self.pk} deleted")
 
                 super().delete(*args, **kwargs)
 

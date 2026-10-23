@@ -114,6 +114,10 @@
                 <a class="flex items-center px-3 py-3 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-700 hover:text-white transition-colors" href="{% url 'financialrecord-list' %}">
                     <i class="fa-solid fa-book mr-3 w-5 text-center text-slate-500"></i>Ledger
                 </a>
+                <a class="flex items-center justify-between px-3 py-3 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-700 hover:text-white transition-colors" href="{% url 'financial-entry-review' %}">
+                    <span class="flex items-center"><i class="fa-solid fa-clipboard-check mr-3 w-5 text-center text-amber-500"></i>Verification</span>
+                    <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">Review</span>
+                </a>
                 {% endif %}
                 {% if user.is_superuser or perms.ledger.view_party %}
                 <a class="flex items-center px-3 py-3 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-700 hover:text-white transition-colors" href="{% url 'party-list' %}">

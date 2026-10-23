@@ -50,6 +50,30 @@ def financial_record_upload_path(instance, filename):
     return os.path.join('financial_records', folder, safe_identifier, new_filename)
 
 
+class ActiveFinancialRecordQuerySet(models.QuerySet):
+    def delete(self, user=None, reason=''):
+        """Soft delete all records in this queryset without releasing entry numbers"""
+        count = 0
+        for record in self:
+            record.soft_delete(user=user, reason=reason)
+            count += 1
+        return count, {'ledger.FinancialRecord': count}
+
+    def hard_delete(self):
+        """Permanent database deletion when explicitly required"""
+        return super().delete()
+
+
+class ActiveFinancialRecordManager(models.Manager):
+    def get_queryset(self):
+        return ActiveFinancialRecordQuerySet(self.model, using=self._db).filter(is_deleted=False)
+
+
+class DeletedFinancialRecordManager(models.Manager):
+    def get_queryset(self):
+        return models.QuerySet(self.model, using=self._db).filter(is_deleted=True)
+
+
 class FinancialRecord(models.Model):
     """
     Financial record for managing income and expenses
@@ -100,7 +124,7 @@ class FinancialRecord(models.Model):
     )
     associated_bill = models.ForeignKey(
         'Bill',
-        on_delete=models.CASCADE,
+        on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name='financial_records',
@@ -178,6 +202,72 @@ class FinancialRecord(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='Created At')
 
+    voucher = models.ForeignKey(
+        'FinancialVoucher',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='financial_records',
+        verbose_name='Voucher / Reference'
+    )
+    verification_status = models.CharField(
+        max_length=20,
+        choices=[
+            ('pending', 'Pending Verification'),
+            ('verified', 'Verified'),
+            ('flagged', 'Flagged / Discrepancy'),
+        ],
+        default='verified',
+        db_index=True,
+        verbose_name='Verification Status'
+    )
+    verified_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='verified_financial_records',
+        verbose_name='Verified By'
+    )
+    verified_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name='Verified At'
+    )
+    verification_notes = models.TextField(
+        blank=True,
+        verbose_name='Verification Remarks'
+    )
+
+    # Soft delete and audit fields
+    is_deleted = models.BooleanField(
+        default=False,
+        db_index=True,
+        verbose_name='Is Deleted'
+    )
+    deleted_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='deleted_financial_records',
+        verbose_name='Deleted By'
+    )
+    deleted_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name='Deleted At'
+    )
+    deletion_reason = models.TextField(
+        blank=True,
+        default='',
+        verbose_name='Deletion Reason'
+    )
+
+    objects = ActiveFinancialRecordManager()
+    all_objects = models.Manager()
+    deleted_objects = DeletedFinancialRecordManager()
+
     @classmethod
     def resequence_entry_numbers(cls, from_date=None, from_created_at=None):
         """
@@ -185,6 +275,16 @@ class FinancialRecord(models.Model):
         """
         from ledger.services import LedgerService
         return LedgerService.resequence_financial_records(from_date=from_date, from_created_at=from_created_at)
+
+    def soft_delete(self, user=None, reason=''):
+        """Soft-deletes record, retains entry_number, updates parent voucher & balances."""
+        from ledger.services import VoucherService
+        return VoucherService.soft_delete_record(self, user=user, reason=reason)
+
+    def restore(self, user=None, reason=''):
+        """Restores soft-deleted record without resequencing."""
+        from ledger.services import VoucherService
+        return VoucherService.restore_record(self, user=user, reason=reason)
 
     def save(self, *args, **kwargs):
         if not self.entry_number:
@@ -198,34 +298,40 @@ class FinancialRecord(models.Model):
         if self.is_deduction:
             self.account = None
 
+        # Guarantee system-generated immutable voucher attachment
+        if not self.voucher_id:
+            from ledger.services import VoucherService
+            VoucherService.get_or_create_voucher_for_record(self)
+
         super().save(*args, **kwargs)
 
     def delete(self, *args, **kwargs):
         """
-        If a ledger entry representing an Invoice is deleted, the Bill itself should be deleted.
+        Soft delete override. Per user instruction, entry numbers are retained and
+        ledgers are not resequenced on deletion.
         """
-        deleted_date = self.date
-        deleted_created_at = self.created_at
+        user = kwargs.pop('user', None)
+        reason = kwargs.pop('reason', '')
 
         if self.record_type == self.RECORD_TYPE_INVOICE and self.associated_bill:
-            # We must be careful not to recurse. super().delete() should be called 
-            # after deleting the bill if Bill doesn't CASCADE back here.
-            # But Bill DOES CASCADE back here. So deleting the bill will delete this record.
             bill = self.associated_bill
-            # Set to None to prevent CASCADE from trying to delete an already-deleting instance
-            self.associated_bill = None 
+            self.associated_bill = None
+            self.soft_delete(user=user, reason=reason or 'Associated Bill deleted')
             bill.delete()
         else:
-            super().delete(*args, **kwargs)
-        
-        # Resequence after deletion starting from the deleted record's timestamp
-        FinancialRecord.resequence_entry_numbers(from_date=deleted_date, from_created_at=deleted_created_at)
+            self.soft_delete(user=user, reason=reason)
+
+    def hard_delete(self, *args, **kwargs):
+        """Permanent physical deletion for internal database cleanup or test teardowns"""
+        super().delete(*args, **kwargs)
 
     class Meta:
         verbose_name = 'Financial Record'
         verbose_name_plural = 'Financial Records'
         ordering = ['-date']
+        base_manager_name = 'all_objects'
         indexes = [
+            models.Index(fields=['is_deleted', 'date']),
             models.Index(fields=['date', 'created_at']),
             models.Index(fields=['account', 'date']),
             models.Index(fields=['party', 'date']),
@@ -235,6 +341,7 @@ class FinancialRecord(models.Model):
         permissions = [
             ('can_view_financial_records', 'Can view financial records'),
             ('can_manage_financial_records', 'Can manage financial records'),
+            ('can_verify_financial_records', 'Can verify financial records'),
         ]
 
     def __str__(self):
@@ -269,6 +376,16 @@ class FinancialRecord(models.Model):
                 return f"{category_name} - Toll Top-up #{self.associated_toll_recharge_id} - {self.amount}"
 
         return f"{category_name} - {self.amount}"
+
+    @property
+    def reference_number(self):
+        """Returns voucher reference number if attached, otherwise formatted entry number"""
+        try:
+            if self.voucher:
+                return self.voucher.voucher_number
+        except ObjectDoesNotExist:
+            pass
+        return f"REC-{self.entry_number}" if self.entry_number else f"REC-{self.pk}"
 
     @property
     def linked_bill(self):

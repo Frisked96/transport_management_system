@@ -162,6 +162,20 @@ class TollRecharge(models.Model):
             if updated:
                 record.save()
         else:
+            from .voucher import FinancialVoucher
+            v_num = FinancialVoucher.generate_voucher_number(self.date)
+            v = FinancialVoucher.objects.create(
+                voucher_number=v_num,
+                date=self.date,
+                voucher_type=FinancialVoucher.VOUCHER_TYPE_TOLL_RECHARGE,
+                account=self.company_account,
+                created_by=self.created_by,
+                verification_status=FinancialVoucher.STATUS_PENDING,
+                total_payment_amount=self.amount,
+                total_settled_amount=self.amount,
+                description=desc,
+                document_ref=self.receipt_document if self.receipt_document else None
+            )
             FinancialRecord.objects.create(
                 account=self.company_account,
                 category=category,
@@ -170,6 +184,8 @@ class TollRecharge(models.Model):
                 date=self.date,
                 associated_toll_recharge=self,
                 recorded_by=self.created_by,
+                voucher=v,
+                verification_status=FinancialVoucher.STATUS_PENDING,
                 description=desc,
                 document_ref=self.receipt_document if self.receipt_document else None
             )

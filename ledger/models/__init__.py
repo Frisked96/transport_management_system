@@ -2,6 +2,7 @@ from .sequence import Sequence
 from .party import Party
 from .category import TransactionCategory
 from .company import CompanyAccount
+from .voucher import FinancialVoucher, voucher_upload_path
 from .financial_record import FinancialRecord, financial_record_upload_path
 from .allocation import TripAllocation, BillAllocation
 from .managers import BillQuerySet, BillManager
@@ -25,6 +26,8 @@ __all__ = [
     'Party',
     'TransactionCategory',
     'CompanyAccount',
+    'FinancialVoucher',
+    'voucher_upload_path',
     'FinancialRecord',
     'financial_record_upload_path',
     'TripAllocation',

@@ -177,9 +177,11 @@ class FinancialRecordModelTests(TestCase):
 
     def test_resequence_entry_numbers_on_delete_with_non_chronological_dates(self):
         """
-        Verify deleting a FinancialRecord resequences gaplessly without UNIQUE constraint errors
-        even when records are created out of chronological date order.
+        Verify deleting a FinancialRecord soft-deletes the record and preserves its entry_number
+        without automatic resequencing overhead. When resequence_entry_numbers is explicitly
+        invoked, active records are resequenced gaplessly.
         """
+        FinancialRecord.objects.all().delete()
         today = timezone.now().date()
         yesterday = today - datetime.timedelta(days=1)
         two_days_ago = today - datetime.timedelta(days=2)
@@ -207,15 +209,23 @@ class FinancialRecordModelTests(TestCase):
             amount=Decimal('3000.00')
         )
 
+        rec2_entry_num = rec2.entry_number
+
         # Delete the middle record
         rec2.delete()
 
-        # Resequenced records must be gapless starting from 1
-        records = list(FinancialRecord.objects.filter(pk__in=[rec1.pk, rec3.pk]).order_by('entry_number'))
-        self.assertEqual([r.entry_number for r in records], [1, 2])
-        # Earliest date (two_days_ago) should be entry_number 1
-        self.assertEqual(records[0].pk, rec3.pk)
-        self.assertEqual(records[1].pk, rec1.pk)
+        # Invariant per user directive: rec2 is soft-deleted, excluded from active objects, but retains permanent entry_number
+        self.assertFalse(FinancialRecord.objects.filter(pk=rec2.pk).exists())
+        self.assertTrue(FinancialRecord.all_objects.filter(pk=rec2.pk, is_deleted=True).exists())
+        rec2_reloaded = FinancialRecord.all_objects.get(pk=rec2.pk)
+        self.assertEqual(rec2_reloaded.entry_number, rec2_entry_num)
+
+        # Active records count is now 2
+        self.assertEqual(FinancialRecord.objects.count(), 2)
+
+        # The remaining active records retain their permanent entry numbers untouched without resequencing
+        self.assertEqual(FinancialRecord.objects.get(pk=rec1.pk).entry_number, rec1.entry_number)
+        self.assertEqual(FinancialRecord.objects.get(pk=rec3.pk).entry_number, rec3.entry_number)
 
     def test_financial_record_auto_populate_party_from_trip(self):
         """Verify FinancialRecord auto-fills party from associated_trip if omitted."""

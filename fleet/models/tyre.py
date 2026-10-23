@@ -218,7 +218,8 @@ class Tyre(models.Model):
         """
         Creates, updates, or deletes the ledger entry linked to this tyre purchase.
         """
-        from ledger.models import FinancialRecord, TransactionCategory
+        from ledger.models import FinancialRecord, FinancialVoucher, TransactionCategory
+        from ledger.services import VoucherService
         from django.utils import timezone
         
         final_vendor = self.vendor
@@ -230,7 +231,7 @@ class Tyre(models.Model):
                 pass
                 
         # Find existing record
-        record = FinancialRecord.objects.filter(associated_tyre=self).first()
+        record = FinancialRecord.all_objects.filter(associated_tyre=self).first()
         
         if self.purchase_cost > 0 and final_vendor:
             category, _ = TransactionCategory.objects.get_or_create(
@@ -241,6 +242,7 @@ class Tyre(models.Model):
                 }
             )
             
+            p_date = self.purchase_date or getattr(self, '_created_date', None) or timezone.now().date()
             if record:
                 # Update existing record
                 updated = False
@@ -257,20 +259,41 @@ class Tyre(models.Model):
                 if record.record_type != FinancialRecord.RECORD_TYPE_INVOICE:
                     record.record_type = FinancialRecord.RECORD_TYPE_INVOICE
                     updated = True
+
+                if not record.voucher_id:
+                    voucher = VoucherService.create_voucher(
+                        date=p_date,
+                        voucher_type=FinancialVoucher.VOUCHER_TYPE_TYRE_PURCHASE,
+                        party=final_vendor,
+                        description=f"Tyre Purchase: {self.serial_number} ({self.brand})"
+                    )
+                    record.voucher = voucher
+                    updated = True
                     
                 if updated:
                     record.save()
+                    if record.voucher:
+                        record.voucher.update_totals()
             else:
-                # Create new record
+                # Create new record with dedicated voucher
+                voucher = VoucherService.create_voucher(
+                    date=p_date,
+                    voucher_type=FinancialVoucher.VOUCHER_TYPE_TYRE_PURCHASE,
+                    party=final_vendor,
+                    description=f"Tyre Purchase: {self.serial_number} ({self.brand})"
+                )
                 FinancialRecord.objects.create(
-                    date=self.purchase_date or getattr(self, '_created_date', None) or timezone.now().date(),
+                    date=p_date,
                     party=final_vendor,
                     record_type=FinancialRecord.RECORD_TYPE_INVOICE,
                     category=category,
                     amount=self.purchase_cost,
                     associated_tyre=self,
+                    voucher=voucher,
+                    verification_status=FinancialVoucher.STATUS_PENDING,
                     description=f"Auto-generated entry for tyre purchase: {self.serial_number} ({self.brand})"
                 )
+                voucher.update_totals()
         else:
             # Delete record if it exists but condition is no longer met
             if record:

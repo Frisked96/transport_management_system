@@ -59,8 +59,9 @@ class BillingService:
         """
         Synchronize the bill to the ledger by creating/updating a consolidated invoice record.
         """
-        from ledger.models import FinancialRecord, TransactionCategory, BillTrip, Bill
-        
+        from ledger.models import FinancialRecord, FinancialVoucher, TransactionCategory, BillTrip, Bill
+        from ledger.services import VoucherService
+
         if not bill.pk:
             return
 
@@ -69,6 +70,27 @@ class BillingService:
                 name='Lorry Hire',
                 defaults={'type': TransactionCategory.TYPE_EXPENSE}
             )
+
+            # Resolve or create voucher for this bill
+            voucher = None
+            if bill.customer_bill:
+                cust_rec = FinancialRecord.all_objects.filter(associated_bill=bill.customer_bill).first()
+                if cust_rec and cust_rec.voucher:
+                    voucher = cust_rec.voucher
+
+            if not voucher:
+                existing_rec = FinancialRecord.all_objects.filter(associated_bill=bill).first()
+                if existing_rec and existing_rec.voucher:
+                    voucher = existing_rec.voucher
+                else:
+                    voucher = VoucherService.create_voucher(
+                        date=bill.date,
+                        voucher_type=FinancialVoucher.VOUCHER_TYPE_BILL_INVOICE,
+                        created_by=bill.created_by or getattr(bill, '_current_user', None),
+                        party=bill.party,
+                        account=bill.issuer,
+                        description=f"Bill #{bill.bill_number or 'Draft'}"
+                    )
 
             # Case A: If this bill is a Creditor Bill or Creditor Debit Note (linked to a customer bill)
             if bill.customer_bill:
@@ -93,8 +115,12 @@ class BillingService:
                         'category': cat,
                         'amount': bill.rounded_total,
                         'description': desc,
+                        'voucher': voucher,
+                        'recorded_by': bill.created_by or getattr(bill, '_current_user', None),
+                        'verification_status': FinancialVoucher.STATUS_PENDING,
                     }
                 )
+                voucher.update_totals()
                 if bill.original_bill:
                     BillingService.update_bill_financial_caches(bill.original_bill)
                 bill.party.refresh_balance()
@@ -135,8 +161,12 @@ class BillingService:
                     'category': category,
                     'amount': total_revenue,
                     'description': description,
+                    'voucher': voucher,
+                    'recorded_by': bill.created_by or getattr(bill, '_current_user', None),
+                    'verification_status': FinancialVoucher.STATUS_PENDING,
                 }
             )
+            voucher.update_totals()
 
             # Auto-mirror Customer Credit Notes as Debit Notes for Creditors of attached vehicles
             if bill.category and bill.category.name == 'Credit Note' and bill.original_bill:

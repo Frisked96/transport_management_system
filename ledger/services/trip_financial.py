@@ -19,7 +19,8 @@ class TripFinancialService:
         Manage accrual-based revenue for this trip.
         Also manages vendor hire accruals for attached vehicles.
         """
-        from ledger.models import FinancialRecord, TransactionCategory, CompanyAccount
+        from ledger.models import FinancialRecord, FinancialVoucher, TransactionCategory, CompanyAccount
+        from ledger.services import VoucherService
 
         if trip.is_billed:
             FinancialRecord.objects.filter(
@@ -44,8 +45,23 @@ class TripFinancialService:
         if not account:
              return
 
-        # Customer revenue accrual
         trip_date = trip.date or timezone.now().date()
+        user = trip.created_by or getattr(trip, '_current_user', None)
+
+        existing_rec = FinancialRecord.all_objects.filter(associated_trip=trip, record_type=FinancialRecord.RECORD_TYPE_INVOICE).first()
+        if existing_rec and existing_rec.voucher:
+            voucher = existing_rec.voucher
+        else:
+            voucher = VoucherService.create_voucher(
+                date=trip_date,
+                voucher_type=FinancialVoucher.VOUCHER_TYPE_TRIP_ACCRUAL,
+                created_by=user,
+                party=trip.party,
+                account=account,
+                description=f"Trip #{trip.trip_number} Accrual"
+            )
+
+        # Customer revenue accrual
         FinancialRecord.objects.update_or_create(
             associated_trip=trip,
             record_type=FinancialRecord.RECORD_TYPE_INVOICE,
@@ -56,6 +72,9 @@ class TripFinancialService:
                 'category': category,
                 'amount': trip.total_revenue,
                 'description': f"Accrual for Trip {trip.trip_number}",
+                'voucher': voucher,
+                'recorded_by': user,
+                'verification_status': FinancialVoucher.STATUS_PENDING,
             }
         )
 
@@ -76,6 +95,9 @@ class TripFinancialService:
                     'category': lorry_hire_cat,
                     'amount': trip.vendor_hire_amount,
                     'description': f"Lorry Hire accrual for Trip {trip.trip_number}",
+                    'voucher': voucher,
+                    'recorded_by': user,
+                    'verification_status': FinancialVoucher.STATUS_PENDING,
                 }
             )
         else:
@@ -89,6 +111,8 @@ class TripFinancialService:
                     record_type=FinancialRecord.RECORD_TYPE_INVOICE,
                     category=lorry_hire_cat
                 ).delete()
+
+        voucher.update_totals()
 
     @staticmethod
     def update_trip_financial_caches(trip):

@@ -318,8 +318,6 @@ class VendorBillUpdateForm(forms.ModelForm):
                 description=f"Lorry Hire Inv #{inv_disp} (Against Bill {cust_ref})"
             )
 
-            FinancialRecord.resequence_entry_numbers(from_date=instance.date)
-
             # Sync back to linked customer bill if it has a single vendor bill
             if instance.customer_bill:
                 cust_bill = instance.customer_bill

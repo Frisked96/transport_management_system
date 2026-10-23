@@ -4,7 +4,7 @@
 {% block title %}Delete Ledger Entry #{{ object.entry_number }} - TMS{% endblock %}
 {% block delete_header_title %}Delete Ledger Entry #{{ object.entry_number }}{% endblock %}
 {% block delete_icon %}fa-solid fa-receipt{% endblock %}
-{% block delete_warning %}You are about to permanently delete this ledger record. This action cannot be reversed. Please review the details below before proceeding.{% endblock %}
+{% block delete_warning %}You are about to soft-delete this financial entry. It will be removed from active balances and archived under its immutable voucher, where it can be reviewed and restored at any time in the Verification tab.{% endblock %}
 {% block delete_object %}Entry #{{ object.entry_number }} - {{ object.category.name }} (₹{{ object.amount|indian_comma }}){% endblock %}
 
 {% block delete_details %}
@@ -49,11 +49,20 @@
 </div>
 
 {% if object.description %}
-<div class="bg-slate-50 rounded-lg p-3 border border-slate-200 italic text-slate-600 text-xs mb-6">
+<div class="bg-slate-50 rounded-lg p-3 border border-slate-200 italic text-slate-600 text-xs mb-4">
     "{{ object.description }}"
 </div>
 {% endif %}
 {% endblock %}
 
+{% block delete_form_extra %}
+<div class="w-full mb-3 text-left">
+    <label for="deletion_reason" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+        Reason for Deletion (Recorded in Audit Log):
+    </label>
+    <textarea name="deletion_reason" id="deletion_reason" rows="2" placeholder="e.g. Duplicate entry, incorrect amount, cancelled booking..." class="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-rose-500 focus:border-rose-500"></textarea>
+</div>
+{% endblock %}
+
 {% block cancel_url %}{% url 'financialrecord-detail' object.pk %}{% endblock %}
-{% block delete_button_text %}Yes, Delete Permanently{% endblock %}
+{% block delete_button_text %}Confirm Deletion{% endblock %}

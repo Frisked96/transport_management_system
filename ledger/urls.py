@@ -15,6 +15,13 @@ urlpatterns = [
     # Financial Summary URL
     path('summary/', views.financial_summary, name='financial-summary'),
 
+    # Entry Review & Verification URLs
+    path('review/', views.FinancialEntryReviewView.as_view(), name='financial-entry-review'),
+    path('review/<int:pk>/verify/', views.verify_financial_entry, name='verify-financial-entry'),
+    path('review/<int:pk>/flag/', views.flag_financial_entry, name='flag-financial-entry'),
+    path('review/<int:pk>/restore/', views.restore_financial_entry, name='restore-financial-entry'),
+    path('review/bulk-verify/', views.bulk_verify_financial_entries, name='bulk-verify-financial-entries'),
+
     # Party URLs
     path('parties/', views.PartyListView.as_view(), name='party-list'),
     path('parties/create/', views.PartyCreateView.as_view(), name='party-create'),

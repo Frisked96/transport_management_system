@@ -15,7 +15,7 @@ from datetime import datetime
 import json
 from django.http import JsonResponse, HttpResponse
 
-from ledger.models import FinancialRecord, Party, CompanyAccount, TripAllocation, BillAllocation, TransactionCategory, Bill, BillTrip, TollRecharge
+from ledger.models import FinancialRecord, FinancialVoucher, Party, CompanyAccount, TripAllocation, BillAllocation, TransactionCategory, Bill, BillTrip, TollRecharge
 from ledger.forms import FinancialRecordForm
 from trips.models import Trip
 from ledger.services import BillingService, TripFinancialService
@@ -270,6 +270,38 @@ class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, Cre
         has_tds = bool(tds_amount and tds_amount > 0)
         has_deduction = bool(deduction_amount and deduction_amount > 0)
 
+        # Determine voucher type and generate unified voucher reference
+        if distribution_json:
+            v_type = FinancialVoucher.VOUCHER_TYPE_TRIP_PAYMENT
+        elif bill_distribution_json:
+            v_type = FinancialVoucher.VOUCHER_TYPE_BILL_PAYMENT
+        elif form.cleaned_data.get('associated_trip'):
+            v_type = FinancialVoucher.VOUCHER_TYPE_TRIP_PAYMENT
+        elif form.cleaned_data.get('associated_bill'):
+            v_type = FinancialVoucher.VOUCHER_TYPE_BILL_PAYMENT
+        elif form.cleaned_data.get('category') and form.cleaned_data['category'].name == 'Payment Out':
+            v_type = FinancialVoucher.VOUCHER_TYPE_PAYMENT_OUT
+        elif form.cleaned_data.get('category') and form.cleaned_data['category'].type == TransactionCategory.TYPE_EXPENSE:
+            v_type = FinancialVoucher.VOUCHER_TYPE_EXPENSE
+        elif form.cleaned_data.get('driver'):
+            v_type = FinancialVoucher.VOUCHER_TYPE_DRIVER_SETTLEMENT
+        else:
+            v_type = FinancialVoucher.VOUCHER_TYPE_DIRECT
+
+        voucher_ref = FinancialVoucher.generate_voucher_number(form.cleaned_data['date'])
+        voucher = FinancialVoucher.objects.create(
+            voucher_number=voucher_ref,
+            date=form.cleaned_data['date'],
+            voucher_type=v_type,
+            party=form.cleaned_data.get('party'),
+            account=form.cleaned_data.get('account'),
+            driver=form.cleaned_data.get('driver'),
+            created_by=self.request.user,
+            verification_status=FinancialVoucher.STATUS_PENDING,
+            description=form.cleaned_data.get('description') or '',
+            document_ref=form.cleaned_data.get('document_ref')
+        )
+
         # 1. Multi-Trip Distribution Flow
         if distribution_json:
             try:
@@ -298,6 +330,8 @@ class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, Cre
                         self.object = form.save(commit=False)
                         self.object.amount = total_payment
                         self.object.recorded_by = self.request.user
+                        self.object.voucher = voucher
+                        self.object.verification_status = FinancialVoucher.STATUS_PENDING
                         self.object.save()
 
                         for item in distribution_data:
@@ -327,7 +361,9 @@ class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, Cre
                             category=tds_category,
                             amount=total_tds,
                             description=f"Auto-generated TDS for Trip Payment across {len(distribution_data)} trips",
-                            recorded_by=self.request.user
+                            recorded_by=self.request.user,
+                            voucher=voucher,
+                            verification_status=FinancialVoucher.STATUS_PENDING
                         )
                         if not self.object:
                             self.object = tds_record
@@ -373,7 +409,9 @@ class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, Cre
                             category=deductions_category,
                             amount=total_deduction,
                             description=ded_desc,
-                            recorded_by=self.request.user
+                            recorded_by=self.request.user,
+                            voucher=voucher,
+                            verification_status=FinancialVoucher.STATUS_PENDING
                         )
                         if not self.object:
                             self.object = ded_record
@@ -403,6 +441,8 @@ class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, Cre
                     if not self.object:
                         self.object = form.save(commit=False)
                         self.object.recorded_by = self.request.user
+                        self.object.voucher = voucher
+                        self.object.verification_status = FinancialVoucher.STATUS_PENDING
                         self.object.save()
 
                     # Single consolidated cache refresh pass on unique touched trips and bills
@@ -420,7 +460,8 @@ class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, Cre
                             self.object.description = f"Paid across trips: {', '.join(trip_nums)}"
                             self.object.save(update_fields=['description'])
 
-                    messages.success(self.request, f'Settlement recorded across {len(distribution_data)} trips!')
+                    voucher.update_totals()
+                    messages.success(self.request, f'Settlement recorded across {len(distribution_data)} trips under Reference #{voucher.voucher_number}. (Pending Verification)')
                     if '_save_same_party' in self.request.POST:
                         return self._redirect_same_party(form)
                     if self.object.party:
@@ -438,6 +479,8 @@ class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, Cre
                     bill_data = json.loads(bill_distribution_json)
                     self.object = form.save(commit=False)
                     self.object.recorded_by = self.request.user
+                    self.object.voucher = voucher
+                    self.object.verification_status = FinancialVoucher.STATUS_PENDING
                     self.object.save()
 
                     # TDS record if specified
@@ -457,7 +500,9 @@ class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, Cre
                             category=tds_category,
                             amount=tds_amount,
                             description=f"Auto-generated TDS for {self.object.category.name} entry #{self.object.entry_number}",
-                            recorded_by=self.request.user
+                            recorded_by=self.request.user,
+                            voucher=voucher,
+                            verification_status=FinancialVoucher.STATUS_PENDING
                         )
 
                     bill_ids = [item.get('bill_id') for item in bill_data if item.get('bill_id')]
@@ -501,7 +546,8 @@ class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, Cre
                             self.object.description = f"Paid across invoices: {', '.join(bill_nums)}"
                             self.object.save(update_fields=['description'])
 
-                    messages.success(self.request, f'Financial record created and distributed across {len(bill_data)} bills!')
+                    voucher.update_totals()
+                    messages.success(self.request, f'Payment recorded across {len(bill_data)} bills under Reference #{voucher.voucher_number}. (Pending Verification)')
                     if '_save_same_party' in self.request.POST:
                         return self._redirect_same_party(form)
                     if self.object.party:
@@ -520,6 +566,8 @@ class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, Cre
             if payment_amount > 0:
                 self.object = form.save(commit=False)
                 self.object.recorded_by = self.request.user
+                self.object.voucher = voucher
+                self.object.verification_status = FinancialVoucher.STATUS_PENDING
                 self.object.save()
 
             # Auto-create TDS record if specified
@@ -539,7 +587,9 @@ class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, Cre
                     category=tds_category,
                     amount=tds_amount,
                     description=f"Auto-generated TDS for {form.cleaned_data.get('associated_trip') or self.object or 'Trip'}",
-                    recorded_by=self.request.user
+                    recorded_by=self.request.user,
+                    voucher=voucher,
+                    verification_status=FinancialVoucher.STATUS_PENDING
                 )
                 if not self.object:
                     self.object = tds_record
@@ -562,7 +612,9 @@ class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, Cre
                     category=deductions_category,
                     amount=deduction_amount,
                     description=ded_desc,
-                    recorded_by=self.request.user
+                    recorded_by=self.request.user,
+                    voucher=voucher,
+                    verification_status=FinancialVoucher.STATUS_PENDING
                 )
                 if not self.object:
                     self.object = ded_record
@@ -571,9 +623,13 @@ class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, Cre
             if not self.object:
                 self.object = form.save(commit=False)
                 self.object.recorded_by = self.request.user
+                self.object.voucher = voucher
+                self.object.verification_status = FinancialVoucher.STATUS_PENDING
                 self.object.save()
 
-        messages.success(self.request, 'Financial record created successfully!')
+            voucher.update_totals()
+
+        messages.success(self.request, f'Financial record recorded under Reference #{voucher.voucher_number}. (Pending Verification)')
 
         if '_save_same_party' in self.request.POST:
             return self._redirect_same_party(form)
@@ -626,6 +682,17 @@ class FinancialRecordUpdateView(LoginRequiredMixin, PermissionRequiredMixin, Upd
         return initial
 
     def form_valid(self, form):
+        # Capture pre-update state for alteration auditing
+        old_record = FinancialRecord.all_objects.filter(pk=self.object.pk).first()
+        old_data = {
+            'amount': old_record.amount if old_record else None,
+            'date': str(old_record.date) if old_record else None,
+            'party': str(old_record.party) if old_record and old_record.party else 'None',
+            'account': str(old_record.account) if old_record and old_record.account else 'None',
+            'category': str(old_record.category) if old_record and old_record.category else 'None',
+            'description': old_record.description if old_record else '',
+        }
+
         distribution_json = form.cleaned_data.get('payment_distribution')
         bill_distribution_json = form.cleaned_data.get('bill_distribution')
         
@@ -734,7 +801,32 @@ class FinancialRecordUpdateView(LoginRequiredMixin, PermissionRequiredMixin, Upd
                 BillingService.update_bill_financial_caches(b)
 
         response = super().form_valid(form)
-        messages.success(self.request, 'Financial record updated successfully!')
+
+        # Check for field diffs and log to voucher audit history
+        new_data = {
+            'amount': self.object.amount,
+            'date': str(self.object.date),
+            'party': str(self.object.party) if self.object.party else 'None',
+            'account': str(self.object.account) if self.object.account else 'None',
+            'category': str(self.object.category) if self.object.category else 'None',
+            'description': self.object.description or '',
+        }
+        diffs = {}
+        for k, old_val in old_data.items():
+            if old_val != new_data[k]:
+                diffs[k] = (old_val, new_data[k])
+
+        # Mark record and associated voucher as pending re-verification upon edit
+        self.object.verification_status = FinancialVoucher.STATUS_PENDING
+        self.object.verified_by = None
+        self.object.verified_at = None
+        self.object.save(update_fields=['verification_status', 'verified_by', 'verified_at'])
+        if self.object.voucher:
+            from ledger.services import VoucherService
+            VoucherService.record_alteration(self.object.voucher, self.request.user, diffs)
+            self.object.voucher.update_totals()
+
+        messages.success(self.request, 'Financial record updated successfully! (Submitted for re-verification)')
         return response
     
     def get_success_url(self):
@@ -744,6 +836,7 @@ class FinancialRecordUpdateView(LoginRequiredMixin, PermissionRequiredMixin, Upd
 class FinancialRecordDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
     """
     Delete view for financial records
+    Soft-deletes the record and archives it under its immutable voucher.
     Permission: Only admin can delete financial records
     """
     model = FinancialRecord
@@ -770,15 +863,20 @@ class FinancialRecordDeleteView(LoginRequiredMixin, PermissionRequiredMixin, Del
             else:
                 impact.append("Deleting this will directly adjust the party and account balances.")
         
-        impact.append("Ledger entry numbers will be automatically re-sequenced to prevent gaps.")
+        impact.append("This entry will be soft-deleted and preserved in the Verification tab where it can be inspected or restored.")
         context['impact_statements'] = impact
         return context
     
     def delete(self, request, *args, **kwargs):
         self.object = self.get_object()
-        response = super().delete(request, *args, **kwargs)
-        messages.success(self.request, 'Financial record deleted successfully!')
-        return response
+        reason = request.POST.get('deletion_reason', '').strip()
+        v_num = self.object.voucher.voucher_number if self.object.voucher else f"#{self.object.entry_number}"
+        self.object.soft_delete(user=self.request.user, reason=reason)
+        messages.success(
+            self.request,
+            f'Financial record #{self.object.entry_number} has been soft-deleted and archived under Voucher {v_num}. You can review or restore it in Entry Verification.'
+        )
+        return redirect(self.get_success_url())
 
 
 @login_required
