@@ -118,10 +118,19 @@ class Document(models.Model):
         verbose_name = 'Document'
         verbose_name_plural = 'Documents'
         ordering = ['expiry_date', '-created_at']
+        indexes = [
+            models.Index(fields=['never_expires', 'expiry_date']),
+            models.Index(fields=['vehicle', 'is_base_document']),
+            models.Index(fields=['driver', 'expiry_date']),
+        ]
 
     def __str__(self):
         if self.document_number:
             return f"{self.document_name} - {self.document_number}"
+        return self.document_name
+
+    @property
+    def document_type(self):
         return self.document_name
 
     @property
@@ -144,6 +153,12 @@ class Document(models.Model):
             return None
         delta = self.expiry_date - timezone.now().date()
         return delta.days
+
+    @property
+    def days_overdue(self):
+        if self.is_expired and self.days_until_expiry is not None:
+            return abs(self.days_until_expiry)
+        return 0
 
     @property
     def status(self):

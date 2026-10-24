@@ -4,6 +4,7 @@ from django.contrib.auth.models import User
 from django.utils import timezone
 from django.db.models.signals import post_delete, pre_save
 from django.dispatch import receiver
+from transport_mgmt.utils import get_local_time_str, get_local_iso_timestamp
 
 
 def renewal_file_upload_path(instance, filename):
@@ -22,7 +23,7 @@ def renewal_file_upload_path(instance, filename):
 
     safe_name = "".join([c for c in document.document_name if c.isalnum() or c in (' ', '_', '-')]).strip().replace(' ', '_')
     ext = os.path.splitext(filename)[1]
-    timestamp = timezone.now().strftime('%Y%m%d_%H%M%S')
+    timestamp = get_local_time_str('%Y%m%d_%H%M%S')
     new_filename = f"{safe_name}_renewal_{timestamp}{ext}"
     return os.path.join('documents', identifier, 'renewals', new_filename)
 
@@ -153,6 +154,28 @@ class DocumentRenewal(models.Model):
                 if updated:
                     record.save()
             else:
+                from ledger.models import FinancialVoucher
+                v_num = FinancialVoucher.generate_voucher_number(date)
+                v = FinancialVoucher.objects.create(
+                    voucher_number=v_num,
+                    date=date,
+                    voucher_type=FinancialVoucher.VOUCHER_TYPE_DOCUMENT_RENEWAL,
+                    account=vehicle.company_account,
+                    created_by=self.renewed_by,
+                    verification_status=FinancialVoucher.STATUS_PENDING,
+                    total_payment_amount=self.cost,
+                    total_settled_amount=self.cost,
+                    description=description,
+                    audit_log=[{
+                        'timestamp': get_local_iso_timestamp(),
+                        'action': 'created',
+                        'user': self.renewed_by.username if self.renewed_by else 'System',
+                        'details': {
+                            'voucher_type': FinancialVoucher.VOUCHER_TYPE_DOCUMENT_RENEWAL,
+                            'reference': v_num,
+                        }
+                    }]
+                )
                 FinancialRecord.objects.create(
                     account=vehicle.company_account,
                     category=category,
@@ -161,6 +184,8 @@ class DocumentRenewal(models.Model):
                     date=date,
                     associated_document_renewal=self,
                     recorded_by=self.renewed_by,
+                    voucher=v,
+                    verification_status=FinancialVoucher.STATUS_PENDING,
                     description=description
                 )
         else:

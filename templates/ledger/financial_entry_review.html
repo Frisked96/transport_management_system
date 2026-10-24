@@ -1,0 +1,972 @@
+{% extends 'base.html' %}
+{% load ledger_extras %}
+
+{% block title %}Financial Entry Verification & Review - Transport Management System{% endblock %}
+
+{% block extra_css %}
+<style>
+    .voucher-card {
+        transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+    }
+    .voucher-card:hover {
+        box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.05);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- BEGIN: Page Header -->
+<header class="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+    <div>
+        <div class="flex items-center space-x-2 text-xs text-slate-500 mb-1">
+            <a href="{% url 'financialrecord-list' %}" class="hover:text-emerald-600 transition-colors">Finance</a>
+            <i class="fa-solid fa-chevron-right text-[9px] text-slate-400"></i>
+            <span class="text-slate-800 font-bold">Entry Verification</span>
+        </div>
+        <h1 class="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">Financial Entry Verification</h1>
+        <p class="text-xs sm:text-sm text-slate-600 mt-1">Audit, inspect, and verify all operational vouchers and financial entries. Vouchers are system-generated and immutable.</p>
+    </div>
+    <div class="flex items-center gap-2 flex-wrap">
+        <a href="{% url 'financialrecord-list' %}" class="px-3.5 py-2 border border-slate-300 rounded-lg bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors shadow-sm inline-flex items-center gap-1.5">
+            <i class="fa-solid fa-table-list"></i>
+            <span>All Ledger Records</span>
+        </a>
+        {% if perms.ledger.add_financialrecord %}
+        <a href="{% url 'financialrecord-create' %}" class="px-3.5 py-2 bg-emerald-600 text-white rounded-lg text-xs font-semibold hover:bg-emerald-700 transition-colors shadow-sm inline-flex items-center gap-1.5">
+            <i class="fa-solid fa-plus"></i>
+            <span>New Financial Entry</span>
+        </a>
+        {% endif %}
+    </div>
+</header>
+<!-- END: Page Header -->
+
+<!-- BEGIN: Metrics Dashboard -->
+<div class="grid grid-cols-2 sm:grid-cols-5 gap-3 sm:gap-4 mb-6">
+    <a href="?status=pending{% if current_user %}&user={{ current_user }}{% endif %}" class="bg-white border rounded-xl p-4 shadow-sm transition-all hover:border-amber-400 {% if current_status == 'pending' %}border-amber-400 ring-2 ring-amber-400/20{% else %}border-slate-200{% endif %}">
+        <div class="flex items-center justify-between">
+            <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Pending Review</span>
+            <span class="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
+        </div>
+        <p class="text-2xl font-black text-amber-600 mt-2">{{ pending_count }}</p>
+        <p class="text-[11px] text-slate-500 font-medium mt-1">₹{{ pending_total_amount|indian_comma }} to verify</p>
+    </a>
+
+    <a href="?status=verified{% if current_user %}&user={{ current_user }}{% endif %}" class="bg-white border rounded-xl p-4 shadow-sm transition-all hover:border-emerald-400 {% if current_status == 'verified' %}border-emerald-400 ring-2 ring-emerald-400/20{% else %}border-slate-200{% endif %}">
+        <div class="flex items-center justify-between">
+            <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Verified</span>
+            <i class="fa-solid fa-circle-check text-emerald-500 text-xs"></i>
+        </div>
+        <p class="text-2xl font-black text-emerald-600 mt-2">{{ verified_count }}</p>
+        <p class="text-[11px] text-slate-500 font-medium mt-1">Approved vouchers</p>
+    </a>
+
+    <a href="?status=flagged{% if current_user %}&user={{ current_user }}{% endif %}" class="bg-white border rounded-xl p-4 shadow-sm transition-all hover:border-rose-400 {% if current_status == 'flagged' %}border-rose-400 ring-2 ring-rose-400/20{% else %}border-slate-200{% endif %}">
+        <div class="flex items-center justify-between">
+            <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Flagged</span>
+            <i class="fa-solid fa-circle-exclamation text-rose-500 text-xs"></i>
+        </div>
+        <p class="text-2xl font-black text-rose-600 mt-2">{{ flagged_count }}</p>
+        <p class="text-[11px] text-slate-500 font-medium mt-1">Discrepancies noted</p>
+    </a>
+
+    <a href="?status=deleted{% if current_user %}&user={{ current_user }}{% endif %}" class="bg-white border rounded-xl p-4 shadow-sm transition-all hover:border-red-400 {% if current_status == 'deleted' %}border-red-500 ring-2 ring-red-400/20{% else %}border-slate-200{% endif %}">
+        <div class="flex items-center justify-between">
+            <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Deleted / Archived</span>
+            <i class="fa-solid fa-trash-can text-red-500 text-xs"></i>
+        </div>
+        <p class="text-2xl font-black text-red-600 mt-2">{{ deleted_count }}</p>
+        <p class="text-[11px] text-slate-500 font-medium mt-1">Audit & Restore</p>
+    </a>
+
+    <a href="?status=all{% if current_user %}&user={{ current_user }}{% endif %}" class="bg-white border rounded-xl p-4 shadow-sm transition-all hover:border-slate-400 col-span-2 sm:col-span-1 {% if current_status == 'all' %}border-slate-400 ring-2 ring-slate-400/20{% else %}border-slate-200{% endif %}">
+        <div class="flex items-center justify-between">
+            <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Total Vouchers</span>
+            <i class="fa-solid fa-folder-tree text-slate-400 text-xs"></i>
+        </div>
+        <p class="text-2xl font-black text-slate-800 mt-2">{{ all_count }}</p>
+        <p class="text-[11px] text-slate-500 font-medium mt-1">All audit containers</p>
+    </a>
+</div>
+<!-- END: Metrics Dashboard -->
+
+<!-- BEGIN: Filter & Submitter Controls -->
+<div class="bg-white border border-slate-200 rounded-xl p-4 sm:p-5 shadow-sm mb-6 space-y-4">
+    <!-- Submitter Pills -->
+    <div class="flex items-center justify-between flex-wrap gap-2 pb-3 border-b border-slate-100">
+        <div class="flex items-center gap-2 flex-wrap">
+            <span class="text-xs font-bold text-slate-500 uppercase tracking-wider mr-1">
+                <i class="fa-solid fa-user-check mr-1 text-slate-400"></i>Submitter:
+            </span>
+            <a href="?status={{ current_status }}{% if current_type %}&type={{ current_type }}{% endif %}" 
+               class="px-2.5 py-1 rounded-full text-xs font-semibold transition-all {% if not current_user %}bg-slate-900 text-white shadow-sm{% else %}bg-slate-100 text-slate-600 hover:bg-slate-200{% endif %}">
+                All Users
+            </a>
+            {% for u in submitter_users %}
+            <a href="?status={{ current_status }}&user={{ u.username }}{% if current_type %}&type={{ current_type }}{% endif %}"
+               class="px-2.5 py-1 rounded-full text-xs font-semibold transition-all {% if current_user == u.username %}bg-emerald-600 text-white shadow-sm{% else %}bg-slate-100 text-slate-600 hover:bg-slate-200{% endif %}">
+                <i class="fa-regular fa-user mr-1 text-[10px]"></i>{{ u.username }}
+            </a>
+            {% endfor %}
+        </div>
+
+        <!-- Status Filter Tabs -->
+        <div class="inline-flex p-1 bg-slate-100 rounded-lg text-xs font-semibold overflow-x-auto max-w-full">
+            <a href="?status=pending{% if current_user %}&user={{ current_user }}{% endif %}{% if current_type %}&type={{ current_type }}{% endif %}" 
+               class="px-3 py-1 rounded-md transition-colors {% if current_status == 'pending' %}bg-white text-slate-900 shadow-sm font-bold{% else %}text-slate-600 hover:text-slate-900{% endif %}">
+                Pending ({{ pending_count }})
+            </a>
+            <a href="?status=verified{% if current_user %}&user={{ current_user }}{% endif %}{% if current_type %}&type={{ current_type }}{% endif %}" 
+               class="px-3 py-1 rounded-md transition-colors {% if current_status == 'verified' %}bg-white text-slate-900 shadow-sm font-bold{% else %}text-slate-600 hover:text-slate-900{% endif %}">
+                Verified
+            </a>
+            <a href="?status=flagged{% if current_user %}&user={{ current_user }}{% endif %}{% if current_type %}&type={{ current_type }}{% endif %}" 
+               class="px-3 py-1 rounded-md transition-colors {% if current_status == 'flagged' %}bg-white text-slate-900 shadow-sm font-bold{% else %}text-slate-600 hover:text-slate-900{% endif %}">
+                Flagged
+            </a>
+            <a href="?status=deleted{% if current_user %}&user={{ current_user }}{% endif %}{% if current_type %}&type={{ current_type }}{% endif %}" 
+               class="px-3 py-1 rounded-md transition-colors {% if current_status == 'deleted' %}bg-white text-rose-700 shadow-sm font-bold{% else %}text-slate-600 hover:text-rose-700{% endif %}">
+                Deleted ({{ deleted_count }})
+            </a>
+            <a href="?status=all{% if current_user %}&user={{ current_user }}{% endif %}{% if current_type %}&type={{ current_type }}{% endif %}" 
+               class="px-3 py-1 rounded-md transition-colors {% if current_status == 'all' %}bg-white text-slate-900 shadow-sm font-bold{% else %}text-slate-600 hover:text-slate-900{% endif %}">
+                All
+            </a>
+        </div>
+    </div>
+
+    <!-- Search and Date Filter Form -->
+    <form method="get" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end">
+        <input type="hidden" name="status" value="{{ current_status }}">
+        {% if current_user %}<input type="hidden" name="user" value="{{ current_user }}">{% endif %}
+
+        <div class="lg:col-span-2">
+            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Search (Ref #, Trip #, LR #, Vehicle, Party)</label>
+            <div class="relative">
+                <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                <input type="text" name="search" value="{{ current_search }}" placeholder="e.g. REF-2610-00042, CG 04, LR-8821..." 
+                       class="w-full pl-9 pr-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white focus:ring-emerald-500 focus:border-emerald-500">
+            </div>
+        </div>
+
+        <div>
+            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Voucher Type</label>
+            <select name="type" class="w-full py-1.5 px-3 border border-slate-300 rounded-lg text-xs bg-white focus:ring-emerald-500 focus:border-emerald-500">
+                <option value="">All Types</option>
+                {% for code, label in voucher_type_choices %}
+                    <option value="{{ code }}" {% if current_type == code %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div>
+            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">From Date</label>
+            <input type="date" name="start_date" value="{{ request.GET.start_date }}" class="w-full py-1.5 px-3 border border-slate-300 rounded-lg text-xs bg-white focus:ring-emerald-500 focus:border-emerald-500">
+        </div>
+
+        <div class="flex items-center gap-2">
+            <div class="flex-1">
+                <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">To Date</label>
+                <input type="date" name="end_date" value="{{ request.GET.end_date }}" class="w-full py-1.5 px-3 border border-slate-300 rounded-lg text-xs bg-white focus:ring-emerald-500 focus:border-emerald-500">
+            </div>
+            <button type="submit" class="px-3 py-1.5 bg-slate-800 text-white rounded-lg text-xs font-bold hover:bg-slate-900 transition-colors mt-auto self-end">
+                Filter
+            </button>
+            <a href="{% url 'financial-entry-review' %}" class="px-2.5 py-1.5 bg-slate-100 text-slate-600 rounded-lg text-xs font-semibold hover:bg-slate-200 transition-colors mt-auto self-end" title="Reset Filters">
+                <i class="fa-solid fa-rotate-left"></i>
+            </a>
+        </div>
+    </form>
+</div>
+<!-- END: Filter & Submitter Controls -->
+
+<!-- BEGIN: Bulk Verification Toolbar (Visible when checkboxes are selected) -->
+{% if can_verify %}
+<div id="bulk-toolbar" class="hidden mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between text-xs animate-fadeIn">
+    <div class="flex items-center space-x-3">
+        <span class="font-bold text-emerald-900 flex items-center">
+            <i class="fa-solid fa-list-check mr-2 text-emerald-600"></i>
+            <span id="bulk-selected-count">0</span> vouchers selected
+        </span>
+    </div>
+    <form method="post" action="{% url 'bulk-verify-financial-entries' %}" id="bulk-verify-form" class="inline">
+        {% csrf_token %}
+        <input type="hidden" name="voucher_ids_str" id="bulk-voucher-ids" value="">
+        <button type="submit" class="px-4 py-1.5 bg-emerald-600 text-white rounded-lg font-bold hover:bg-emerald-700 transition-colors shadow-sm flex items-center gap-1.5">
+            <i class="fa-solid fa-check-double"></i>
+            <span>Verify Selected</span>
+        </button>
+    </form>
+</div>
+{% endif %}
+<!-- END: Bulk Verification Toolbar -->
+
+<!-- BEGIN: Vouchers List -->
+{% if vouchers %}
+<div class="space-y-4">
+    {% for voucher in vouchers %}
+    <div class="voucher-card {% if voucher.verification_status == 'deleted' %}border-rose-300 bg-rose-50/10{% else %}border-slate-200 bg-white{% endif %} border rounded-xl overflow-hidden shadow-sm transition-all" id="voucher-card-{{ voucher.pk }}">
+        <!-- Voucher Header -->
+        <div class="px-4 py-3 {% if voucher.verification_status == 'deleted' %}bg-rose-50/80 border-rose-200{% else %}bg-slate-50/80 border-slate-200{% endif %} border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div class="flex items-center space-x-3 flex-wrap gap-y-1">
+                {% if can_verify and voucher.verification_status != 'verified' and voucher.verification_status != 'deleted' %}
+                <input type="checkbox" class="voucher-checkbox rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 h-4 w-4" value="{{ voucher.pk }}">
+                {% endif %}
+
+                <!-- Reference Badge (Immutable) -->
+                <span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-mono font-black {% if voucher.verification_status == 'deleted' %}bg-rose-900{% else %}bg-slate-800{% endif %} text-white tracking-wide shadow-sm" title="System-generated immutable reference number">
+                    <i class="fa-solid fa-receipt mr-1.5 text-slate-400 text-[10px]"></i>{{ voucher.voucher_number }}
+                </span>
+
+                <!-- Voucher Type Badge -->
+                <span class="px-2 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider
+                    {% if voucher.voucher_type == 'trip_payment' %}bg-blue-50 text-blue-700 border border-blue-200
+                    {% elif voucher.voucher_type == 'bill_payment' %}bg-indigo-50 text-indigo-700 border border-indigo-200
+                    {% elif voucher.voucher_type == 'bill_invoice' %}bg-sky-50 text-sky-800 border border-sky-200
+                    {% elif voucher.voucher_type == 'trip_accrual' %}bg-cyan-50 text-cyan-800 border border-cyan-200
+                    {% elif voucher.voucher_type == 'payment_out' %}bg-amber-50 text-amber-700 border border-amber-200
+                    {% elif voucher.voucher_type == 'expense' %}bg-purple-50 text-purple-700 border border-purple-200
+                    {% elif voucher.voucher_type == 'tyre_purchase' %}bg-emerald-50 text-emerald-800 border border-emerald-200
+                    {% elif voucher.voucher_type == 'document_renewal' %}bg-teal-50 text-teal-700 border border-teal-200
+                    {% elif voucher.voucher_type == 'toll_recharge' %}bg-orange-50 text-orange-700 border border-orange-200
+                    {% else %}bg-slate-100 text-slate-700 border border-slate-200{% endif %}">
+                    {{ voucher.get_voucher_type_display }}
+                </span>
+
+                <!-- Altered Badge -->
+                {% if voucher.audit_log %}
+                    {% for event in voucher.audit_log %}
+                        {% if event.action == 'altered' and forloop.first %}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 shadow-xs" title="{{ event.summary }}">
+                            <i class="fa-solid fa-clock-rotate-left mr-1 text-amber-600"></i>Altered
+                        </span>
+                        {% endif %}
+                    {% endfor %}
+                {% endif %}
+
+                <!-- Submitter Badge -->
+                <span class="text-xs text-slate-600 flex items-center font-medium">
+                    <i class="fa-solid fa-user-pen mr-1.5 text-slate-400"></i>
+                    Recorded by <strong class="text-slate-800 ml-1">{% if voucher.created_by %}{{ voucher.created_by.get_full_name|default:voucher.created_by.username }}{% else %}System{% endif %}</strong>
+                    <span class="text-slate-400 mx-1.5">•</span>
+                    <span class="text-slate-500">{{ voucher.created_at|date:"d M Y, H:i" }}</span>
+                </span>
+            </div>
+
+            <!-- Status Pill & Timestamp -->
+            <div class="flex items-center space-x-2 self-start sm:self-auto">
+                <span id="badge-status-{{ voucher.pk }}" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold
+                    {% if voucher.verification_status == 'verified' %}bg-emerald-100 text-emerald-800 border border-emerald-200
+                    {% elif voucher.verification_status == 'flagged' %}bg-rose-100 text-rose-800 border border-rose-200
+                    {% elif voucher.verification_status == 'deleted' %}bg-rose-100 text-rose-800 border border-rose-300
+                    {% else %}bg-amber-100 text-amber-800 border border-amber-200{% endif %}">
+                    {% if voucher.verification_status == 'verified' %}
+                        <i class="fa-solid fa-circle-check mr-1 text-emerald-600"></i>Verified
+                    {% elif voucher.verification_status == 'flagged' %}
+                        <i class="fa-solid fa-circle-exclamation mr-1 text-rose-600"></i>Flagged
+                    {% elif voucher.verification_status == 'deleted' %}
+                        <i class="fa-solid fa-trash-can mr-1 text-rose-600"></i>Deleted / Archived
+                    {% else %}
+                        <i class="fa-solid fa-clock mr-1 text-amber-600"></i>Pending Verification
+                    {% endif %}
+                </span>
+            </div>
+        </div>
+
+        <!-- Voucher Body -->
+        <div class="p-4 sm:p-5 space-y-4">
+            <!-- Soft-Delete Audit Callout Banner -->
+            {% if voucher.verification_status == 'deleted' %}
+            <div class="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div class="space-y-1">
+                    <span class="font-bold flex items-center gap-1.5 text-rose-800">
+                        <i class="fa-solid fa-trash-can text-rose-600"></i>
+                        <span>Soft-deleted by <strong>{% if voucher.deleted_by %}{{ voucher.deleted_by.get_full_name|default:voucher.deleted_by.username }}{% else %}System{% endif %}</strong> on {{ voucher.deleted_at|date:"d M Y, H:i" }}</span>
+                    </span>
+                    {% if voucher.deletion_reason %}
+                    <p class="text-rose-700 italic bg-white/60 px-2 py-1 rounded border border-rose-100">Reason: "{{ voucher.deletion_reason }}"</p>
+                    {% endif %}
+                    <p class="text-[11px] text-rose-600">Archived from active ledgers. Permanent entry numbers are preserved. Click Restore below to return this entry to active status.</p>
+                </div>
+                {% if can_verify %}
+                <button type="button" onclick="openRestoreModal({{ voucher.pk }}, '{{ voucher.voucher_number }}')" class="px-3.5 py-2 bg-emerald-600 text-white rounded-lg font-bold hover:bg-emerald-700 transition-colors shadow-sm inline-flex items-center gap-1.5 self-start sm:self-auto flex-shrink-0">
+                    <i class="fa-solid fa-rotate-left"></i>
+                    <span>Restore Entry</span>
+                </button>
+                {% endif %}
+            </div>
+            {% endif %}
+            <!-- Entities & Overall Totals Bar -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pb-3 border-b border-slate-100 text-xs">
+                <!-- Transaction Date -->
+                <div>
+                    <span class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Transaction Date</span>
+                    <p class="font-bold text-slate-800 mt-0.5">{{ voucher.date|date:"F d, Y" }}</p>
+                </div>
+
+                <!-- Party / Entity -->
+                <div>
+                    <span class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Associated Party / Entity</span>
+                    {% if voucher.party %}
+                        <a href="{% url 'party-detail' voucher.party.pk %}" class="font-bold text-slate-800 hover:text-emerald-600 transition-colors mt-0.5 inline-flex items-center gap-1">
+                            {{ voucher.party.name }}
+                            <span class="text-[9px] px-1 py-0.2 rounded font-bold uppercase {% if voucher.party.party_type == 'Debtor' %}bg-blue-50 text-blue-700{% else %}bg-amber-50 text-amber-700{% endif %}">
+                                {{ voucher.party.party_type }}
+                            </span>
+                        </a>
+                    {% elif voucher.driver %}
+                        <p class="font-bold text-purple-700 mt-0.5"><i class="fa-solid fa-id-card mr-1"></i>Driver: {{ voucher.driver }}</p>
+                    {% else %}
+                        <p class="text-slate-400 italic mt-0.5">Direct Transaction</p>
+                    {% endif %}
+                </div>
+
+                <!-- Account -->
+                <div>
+                    <span class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Company Account</span>
+                    {% if voucher.account %}
+                        <p class="font-bold text-slate-800 mt-0.5 flex items-center">
+                            <i class="fa-solid fa-building-columns text-emerald-600 mr-1.5 text-xs"></i>{{ voucher.account.name }}
+                        </p>
+                    {% else %}
+                        <p class="text-slate-400 italic mt-0.5">Non-Bank Adjustment</p>
+                    {% endif %}
+                </div>
+
+                <!-- Net Settled Value -->
+                <div class="text-left sm:text-right">
+                    <span class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                        {% if voucher.is_credit_note %}Credit Note Total
+                        {% elif voucher.is_debit_note %}Debit Note Total
+                        {% elif voucher.voucher_type == 'trip_accrual' %}Accrued Revenue
+                        {% elif voucher.voucher_type == 'bill_invoice' %}Invoice Total
+                        {% elif voucher.voucher_type == 'tyre_purchase' %}Purchase Cost
+                        {% else %}Total Settled Amount{% endif %}
+                    </span>
+                    <p class="text-lg font-black text-slate-900 mt-0.5">
+                        ₹{{ voucher.total_settled_amount|indian_comma }}
+                    </p>
+                </div>
+            </div>
+
+            <!-- TRIP ACCRUAL DETAILS (When Trip is Invoiced / Booked) -->
+            {% if voucher.voucher_type == 'trip_accrual' and voucher.affected_trips %}
+            <div class="p-3.5 bg-blue-50/60 border border-blue-200 rounded-lg text-xs space-y-2.5">
+                <div class="flex items-center justify-between">
+                    <h4 class="text-xs font-bold text-blue-900 uppercase tracking-wider flex items-center gap-1.5">
+                        <i class="fa-solid fa-truck-moving text-blue-600"></i>
+                        <span>
+                            {% if voucher.affected_trips|length > 1 %}
+                                Bulk Trip Accrual ({{ voucher.affected_trips|length }} Trips)
+                            {% else %}
+                                Trip Revenue Accrual
+                            {% endif %}
+                        </span>
+                    </h4>
+                    <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-800 border border-blue-200">
+                        Receivable Accrual (No Bank Movement)
+                    </span>
+                </div>
+
+                {% if voucher.affected_trips|length == 1 %}
+                {% with trip=voucher.affected_trips.0 %}
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
+                    <div>
+                        <span class="text-[10px] text-slate-500 block uppercase font-bold tracking-wider">Trip Number</span>
+                        <a href="{% url 'trip-detail' trip.pk %}" class="font-bold text-emerald-600 hover:underline inline-flex items-center gap-1 mt-0.5">
+                            <span>{{ trip.trip_number }}</span>
+                            <i class="fa-solid fa-arrow-up-right-from-square text-[9px] text-slate-400"></i>
+                        </a>
+                    </div>
+                    <div>
+                        <span class="text-[10px] text-slate-500 block uppercase font-bold tracking-wider">Vehicle & LR</span>
+                        <p class="font-bold text-slate-800 mt-0.5">{{ trip.vehicle.registration_plate|default:"—" }} {% if trip.lr_no %}<span class="text-slate-400 font-mono text-[10px]">({{ trip.lr_no }})</span>{% endif %}</p>
+                    </div>
+                    <div>
+                        <span class="text-[10px] text-slate-500 block uppercase font-bold tracking-wider">Route</span>
+                        <p class="font-bold text-slate-800 truncate mt-0.5" title="{{ trip.route }}">{{ trip.route|default:"—" }}</p>
+                    </div>
+                    <div class="text-left sm:text-right">
+                        <span class="text-[10px] text-slate-500 block uppercase font-bold tracking-wider">Current Trip Due</span>
+                        <p class="font-mono font-bold mt-0.5 {% if trip.outstanding_balance_cached <= 0 %}text-emerald-600{% else %}text-amber-800{% endif %}">
+                            ₹{{ trip.outstanding_balance_cached|indian_comma }}
+                        </p>
+                    </div>
+                </div>
+                {% endwith %}
+                {% else %}
+                <!-- Multiple trips in this bulk add voucher -->
+                <div class="overflow-x-auto border border-blue-200/70 rounded-lg">
+                    <table class="w-full text-left text-xs bg-white whitespace-nowrap">
+                        <thead class="bg-blue-100/50 text-blue-900 uppercase text-[10px] font-bold tracking-wider border-b border-blue-200">
+                            <tr>
+                                <th class="px-3 py-2">Trip #</th>
+                                <th class="px-3 py-2">Vehicle / LR</th>
+                                <th class="px-3 py-2">Party</th>
+                                <th class="px-3 py-2">Route</th>
+                                <th class="px-3 py-2 text-right">Accrued Revenue</th>
+                                <th class="px-3 py-2 text-right">Outstanding Due</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-blue-50">
+                            {% for trip in voucher.affected_trips %}
+                            <tr class="hover:bg-blue-50/40 transition-colors">
+                                <td class="px-3 py-2 font-bold">
+                                    <a href="{% url 'trip-detail' trip.pk %}" class="text-emerald-600 hover:underline inline-flex items-center gap-1">
+                                        <span>{{ trip.trip_number }}</span>
+                                        <i class="fa-solid fa-arrow-up-right-from-square text-[9px] text-slate-400"></i>
+                                    </a>
+                                </td>
+                                <td class="px-3 py-2">
+                                    <span class="font-bold text-slate-800">{{ trip.vehicle.registration_plate|default:"—" }}</span>
+                                    {% if trip.lr_no %}<span class="text-slate-400 font-mono text-[10px] block">LR: {{ trip.lr_no }}</span>{% endif %}
+                                </td>
+                                <td class="px-3 py-2">
+                                    {% if trip.party %}
+                                    <a href="{% url 'party-detail' trip.party.pk %}" class="font-bold text-slate-700 hover:text-emerald-600 truncate block max-w-[130px]">
+                                        {{ trip.party.name }}
+                                    </a>
+                                    {% else %}—{% endif %}
+                                </td>
+                                <td class="px-3 py-2 text-slate-600 truncate max-w-[140px]" title="{{ trip.route }}">{{ trip.route|default:"—" }}</td>
+                                <td class="px-3 py-2 text-right font-mono font-bold text-slate-900">₹{{ trip.total_revenue_cached|indian_comma }}</td>
+                                <td class="px-3 py-2 text-right font-mono font-bold {% if trip.outstanding_balance_cached <= 0 %}text-emerald-600{% else %}text-amber-700{% endif %}">
+                                    ₹{{ trip.outstanding_balance_cached|indian_comma }}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            <!-- INVOICE & ADJUSTMENT NOTE DETAILS (Credit / Debit Notes & Invoices) -->
+            {% if voucher.affected_bills %}
+            <div class="p-3.5 {% if voucher.is_credit_note %}bg-purple-50/60 border-purple-200{% elif voucher.is_debit_note %}bg-amber-50/60 border-amber-200{% else %}bg-slate-50/80 border-slate-200{% endif %} border rounded-lg text-xs space-y-2.5">
+                <div class="flex items-center justify-between">
+                    <h4 class="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 {% if voucher.is_credit_note %}text-purple-900{% elif voucher.is_debit_note %}text-amber-900{% else %}text-slate-800{% endif %}">
+                        <i class="fa-solid {% if voucher.is_credit_note %}fa-file-circle-minus text-purple-600{% elif voucher.is_debit_note %}fa-file-circle-plus text-amber-600{% else %}fa-file-invoice-dollar text-slate-600{% endif %}"></i>
+                        <span>
+                            {% if voucher.is_credit_note %}Credit Note Details (Balance Reduction)
+                            {% elif voucher.is_debit_note %}Debit Note Details (Shortage / Extra Charge)
+                            {% else %}Invoice Details ({{ voucher.affected_bills|length }} Bill{{ voucher.affected_bills|length|pluralize }}){% endif %}
+                        </span>
+                    </h4>
+                    <span class="text-[10px] font-bold px-2 py-0.5 rounded border
+                        {% if voucher.is_credit_note %}bg-purple-100 text-purple-800 border-purple-200
+                        {% elif voucher.is_debit_note %}bg-amber-100 text-amber-800 border-amber-200
+                        {% else %}bg-blue-100 text-blue-800 border-blue-200{% endif %}">
+                        {% if voucher.is_credit_note %}Reduces Debtor Balance
+                        {% elif voucher.is_debit_note %}Reduces Vendor Payable
+                        {% else %}Receivable Accrual{% endif %}
+                    </span>
+                </div>
+
+                <div class="overflow-x-auto border border-slate-200 rounded-lg bg-white">
+                    <table class="w-full text-left text-xs whitespace-nowrap">
+                        <thead class="bg-slate-50 text-slate-500 uppercase text-[10px] font-bold tracking-wider border-b border-slate-200">
+                            <tr>
+                                <th class="px-3 py-2">Document / Number</th>
+                                <th class="px-3 py-2">Type</th>
+                                <th class="px-3 py-2">Party</th>
+                                <th class="px-3 py-2">Against Reference</th>
+                                <th class="px-3 py-2">Item / Reason</th>
+                                <th class="px-3 py-2 text-right">Amount</th>
+                                <th class="px-3 py-2 text-center">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            {% for bill in voucher.affected_bills %}
+                            <tr class="hover:bg-slate-50/70 transition-colors">
+                                <td class="px-3 py-2 font-bold">
+                                    <a href="{% url 'bill-detail' bill.pk %}" class="text-emerald-600 hover:underline inline-flex items-center gap-1">
+                                        <span>{{ bill.bill_number|default:"Draft" }}</span>
+                                        <i class="fa-solid fa-arrow-up-right-from-square text-[9px] text-slate-400"></i>
+                                    </a>
+                                </td>
+                                <td class="px-3 py-2">
+                                    {% if bill.category and bill.category.name == 'Credit Note' %}
+                                        <span class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-purple-100 text-purple-800 uppercase">Credit Note</span>
+                                    {% elif bill.category and bill.category.name == 'Debit Note' %}
+                                        <span class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-800 uppercase">Debit Note</span>
+                                    {% elif bill.is_creditor_bill %}
+                                        <span class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 text-emerald-800 uppercase">Creditor Bill</span>
+                                    {% else %}
+                                        <span class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-100 text-blue-800 uppercase">Customer Invoice</span>
+                                    {% endif %}
+                                </td>
+                                <td class="px-3 py-2">
+                                    <a href="{% url 'party-detail' bill.party.pk %}" class="font-bold text-slate-800 hover:text-emerald-600 truncate block max-w-[130px]">
+                                        {{ bill.party.name }}
+                                    </a>
+                                    <span class="text-[9px] text-slate-400 uppercase font-bold">{{ bill.party.party_type }}</span>
+                                </td>
+                                <td class="px-3 py-2 font-mono text-slate-600 text-[11px]">
+                                    {% if bill.original_bill %}
+                                        <a href="{% url 'bill-detail' bill.original_bill.pk %}" class="hover:underline text-blue-600">
+                                            {{ bill.original_bill.bill_number }}
+                                        </a>
+                                    {% elif bill.customer_bill %}
+                                        <a href="{% url 'bill-detail' bill.customer_bill.pk %}" class="hover:underline text-blue-600">
+                                            {{ bill.customer_bill.bill_number }}
+                                        </a>
+                                    {% elif bill.manual_original_bill_number %}
+                                        {{ bill.manual_original_bill_number }}
+                                    {% else %}
+                                        —
+                                    {% endif %}
+                                </td>
+                                <td class="px-3 py-2 text-slate-600">{{ bill.item_type|default:"—" }}</td>
+                                <td class="px-3 py-2 text-right font-mono font-black text-slate-900">
+                                    ₹{{ bill.rounded_total|indian_comma }}
+                                </td>
+                                <td class="px-3 py-2 text-center">
+                                    <span class="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase
+                                        {% if bill.is_paid %}bg-emerald-100 text-emerald-800
+                                        {% elif bill.amount_received > 0 %}bg-amber-100 text-amber-800
+                                        {% else %}bg-slate-100 text-slate-700{% endif %}">
+                                        {{ bill.payment_status }}
+                                    </span>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- SETTLEMENT DETAILS (The "How It Was Made Zero" View) -->
+            {% if voucher.settlement_breakdown %}
+            <div class="space-y-3">
+                <div class="flex items-center justify-between">
+                    <h4 class="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                        <i class="fa-solid fa-truck-moving text-emerald-600"></i>
+                        <span>Trip Settlement Details ({{ voucher.settlement_breakdown|length }} Trip{{ voucher.settlement_breakdown|length|pluralize }})</span>
+                    </h4>
+                    <span class="text-[11px] text-slate-500 font-medium">Verify how balances were cleared</span>
+                </div>
+
+                <div class="overflow-x-auto border border-slate-200 rounded-lg">
+                    <table class="w-full text-left text-xs whitespace-nowrap">
+                        <thead class="bg-slate-50 text-slate-500 uppercase text-[10px] font-bold tracking-wider border-b border-slate-200">
+                            <tr>
+                                <th class="px-3 py-2.5">Trip / Vehicle</th>
+                                <th class="px-3 py-2.5">LR Number</th>
+                                <th class="px-3 py-2.5 text-right">Total Revenue</th>
+                                <th class="px-3 py-2.5 text-right bg-emerald-50/50 text-emerald-800">Bank Received</th>
+                                <th class="px-3 py-2.5 text-right bg-amber-50/50 text-amber-800">TDS</th>
+                                <th class="px-3 py-2.5 text-right bg-rose-50/50 text-rose-800">Deductions</th>
+                                <th class="px-3 py-2.5 text-right bg-slate-100 font-black">Settled in Voucher</th>
+                                <th class="px-3 py-2.5 text-right">Trip Due Balance</th>
+                                <th class="px-3 py-2.5 text-center">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            {% for item in voucher.settlement_breakdown %}
+                            <tr class="hover:bg-slate-50/70 transition-colors">
+                                <td class="px-3 py-2.5">
+                                    <a href="{% url 'trip-detail' item.trip.pk %}" class="font-bold text-emerald-600 hover:underline block truncate max-w-[140px]">
+                                        {{ item.trip_number }}
+                                    </a>
+                                    <span class="text-[10px] text-slate-500 font-mono">{{ item.vehicle_plate }}</span>
+                                </td>
+                                <td class="px-3 py-2.5 font-mono text-slate-700 font-semibold">
+                                    {{ item.lr_no|default:"—" }}
+                                </td>
+                                <td class="px-3 py-2.5 text-right font-mono font-bold text-slate-700">
+                                    ₹{{ item.total_revenue|indian_comma }}
+                                </td>
+                                <td class="px-3 py-2.5 text-right font-mono font-bold text-emerald-700 bg-emerald-50/30">
+                                    ₹{{ item.payment_amount|indian_comma }}
+                                </td>
+                                <td class="px-3 py-2.5 text-right font-mono font-bold text-amber-700 bg-amber-50/30">
+                                    ₹{{ item.tds_amount|indian_comma }}
+                                </td>
+                                <td class="px-3 py-2.5 text-right font-mono font-bold text-rose-700 bg-rose-50/30">
+                                    ₹{{ item.deduction_amount|indian_comma }}
+                                </td>
+                                <td class="px-3 py-2.5 text-right font-mono font-black text-slate-900 bg-slate-50">
+                                    ₹{{ item.total_settled_in_voucher|indian_comma }}
+                                </td>
+                                <td class="px-3 py-2.5 text-right font-mono font-bold {% if item.is_zero_balance %}text-emerald-600{% else %}text-amber-800{% endif %}">
+                                    ₹{{ item.remaining_balance|indian_comma }}
+                                </td>
+                                <td class="px-3 py-2.5 text-center">
+                                    {% if item.is_zero_balance %}
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                                        <i class="fa-solid fa-check mr-1 text-[8px]"></i>PAID (Zero)
+                                    </span>
+                                    {% else %}
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">
+                                        {{ item.payment_status }}
+                                    </span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- INDIVIDUAL FINANCIAL RECORDS IN THIS VOUCHER -->
+            <div class="space-y-2">
+                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">
+                    Financial Records in this Voucher ({{ voucher.all_records|length }})
+                </span>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                    {% for rec in voucher.all_records %}
+                    <div class="{% if rec.is_deleted %}bg-rose-50/60 border-rose-200 opacity-80{% else %}bg-slate-50 border-slate-200 hover:border-emerald-300 hover:bg-slate-50/80{% endif %} border rounded-lg p-2.5 text-xs flex flex-col justify-between transition-colors group">
+                        <div class="flex items-center justify-between mb-1">
+                            <a href="{% url 'financialrecord-detail' rec.pk %}" class="font-bold hover:underline {% if rec.is_deleted %}text-rose-800 line-through{% else %}text-emerald-700 hover:text-emerald-900{% endif %} inline-flex items-center gap-1.5" title="View Financial Record #{{ rec.entry_number|default:rec.pk }}">
+                                <span>#{{ rec.entry_number|default:rec.pk }}</span>
+                                <i class="fa-solid fa-arrow-up-right-from-square text-[9px] text-slate-400 group-hover:text-emerald-600"></i>
+                                {% if rec.is_deleted %}<span class="text-[9px] text-rose-600 no-underline font-bold ml-1 uppercase">[Deleted]</span>{% endif %}
+                            </a>
+                            <span class="px-1.5 py-0.2 rounded text-[9px] font-bold uppercase
+                                {% if rec.is_deleted %}bg-rose-100 text-rose-800
+                                {% elif rec.debit_amount or rec.is_income %}bg-emerald-100 text-emerald-800
+                                {% else %}bg-rose-100 text-rose-800{% endif %}">
+                                {{ rec.category.name }}
+                            </span>
+                        </div>
+                        <div class="flex items-center justify-between mt-1">
+                            <a href="{% url 'financialrecord-detail' rec.pk %}" class="text-slate-500 hover:text-slate-800 truncate max-w-[150px]" title="{{ rec.description|default:'No narration' }}">
+                                {{ rec.description|default:"No narration" }}
+                            </a>
+                            <a href="{% url 'financialrecord-detail' rec.pk %}" class="font-mono font-black hover:underline {% if rec.is_deleted %}text-rose-600 line-through{% elif rec.debit_amount or rec.is_income %}text-emerald-700{% else %}text-rose-700{% endif %}">
+                                ₹{{ rec.amount|indian_comma }}
+                            </a>
+                        </div>
+                        {% if rec.document_ref %}
+                        <div class="mt-2 pt-1 border-t border-slate-200 flex justify-end">
+                            <a href="{{ rec.document_ref.url }}" target="_blank" class="text-[10px] font-bold text-emerald-600 hover:underline inline-flex items-center gap-1">
+                                <i class="fa-solid fa-paperclip"></i> Attachment
+                            </a>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Audit History / Alterations Drawer -->
+            {% if voucher.audit_log %}
+            <details class="group bg-slate-50 border border-slate-200 rounded-lg text-xs overflow-hidden">
+                <summary class="px-3 py-2 cursor-pointer font-bold text-slate-700 flex items-center justify-between hover:bg-slate-100 transition-colors">
+                    <span class="flex items-center gap-1.5">
+                        <i class="fa-solid fa-timeline text-slate-500"></i>
+                        <span>Audit Trail & Alterations ({{ voucher.audit_log|length }})</span>
+                    </span>
+                    <i class="fa-solid fa-chevron-down text-slate-400 group-open:rotate-180 transition-transform"></i>
+                </summary>
+                <div class="p-3 border-t border-slate-200 space-y-2 bg-white">
+                    {% for item in voucher.audit_log %}
+                    <div class="flex items-start justify-between text-[11px] pb-2 border-b border-slate-100 last:border-b-0 last:pb-0">
+                        <div>
+                            <span class="font-bold text-slate-800">{{ item.summary|default:item.action|title }}</span>
+                            <span class="text-slate-500 ml-1">• by <strong>{{ item.user }}</strong></span>
+                        </div>
+                        <span class="text-slate-400 font-mono text-[10px] whitespace-nowrap ml-2">{{ item.timestamp|audit_timestamp }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </details>
+            {% endif %}
+
+            <!-- Reviewer Notes / Flagged Callout -->
+            <div id="remarks-box-{{ voucher.pk }}" class="{% if not voucher.verification_notes or voucher.verification_status == 'deleted' %}hidden{% endif %} p-3 rounded-lg bg-rose-50 border border-rose-200 text-xs">
+                <span class="font-bold text-rose-900 block mb-0.5"><i class="fa-solid fa-comment-dots mr-1 text-rose-500"></i>Reviewer Remarks:</span>
+                <p class="text-rose-800" id="remarks-text-{{ voucher.pk }}">{{ voucher.verification_notes }}</p>
+            </div>
+
+            <!-- Auditor Verification Stamp -->
+            <div id="stamp-box-{{ voucher.pk }}" class="{% if voucher.verification_status != 'verified' %}hidden{% endif %} flex items-center justify-between p-2.5 rounded-lg bg-emerald-50/70 border border-emerald-200/80 text-xs">
+                <span class="text-emerald-800 font-medium flex items-center gap-1.5">
+                    <i class="fa-solid fa-shield-check text-emerald-600"></i>
+                    <span>Verified by <strong id="verified-by-{{ voucher.pk }}">{% if voucher.verified_by %}{{ voucher.verified_by.get_full_name|default:voucher.verified_by.username }}{% endif %}</strong> on <span id="verified-at-{{ voucher.pk }}">{{ voucher.verified_at|date:"d M Y, H:i" }}</span></span>
+                </span>
+                <span class="text-[10px] font-bold uppercase tracking-wider text-emerald-700">Audit Confirmed</span>
+            </div>
+        </div>
+
+        <!-- Voucher Footer Actions -->
+        <div class="px-4 py-2.5 bg-slate-50 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+            <div class="flex items-center space-x-3">
+                {% if voucher.all_records %}
+                {% with rec=voucher.all_records.0 %}
+                <a href="{% url 'financialrecord-detail' rec.pk %}" class="text-slate-600 hover:text-emerald-600 font-semibold inline-flex items-center gap-1">
+                    <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i> View Full Details
+                </a>
+                {% endwith %}
+                {% endif %}
+                {% if voucher.document_ref %}
+                <a href="{{ voucher.document_ref.url }}" target="_blank" class="text-emerald-600 hover:underline font-semibold inline-flex items-center gap-1">
+                    <i class="fa-solid fa-file-pdf"></i> Supporting Document
+                </a>
+                {% endif %}
+            </div>
+
+            <!-- Verification / Restoration Action Buttons -->
+            {% if can_verify %}
+            <div class="flex items-center space-x-2 w-full sm:w-auto justify-end">
+                {% if voucher.verification_status == 'deleted' %}
+                <button type="button" 
+                        onclick="openRestoreModal({{ voucher.pk }}, '{{ voucher.voucher_number }}')" 
+                        class="px-3 py-1.5 bg-emerald-600 text-white rounded-lg font-bold hover:bg-emerald-700 transition-colors shadow-sm inline-flex items-center gap-1.5">
+                    <i class="fa-solid fa-rotate-left"></i>
+                    <span>Restore Entry</span>
+                </button>
+                {% else %}
+                    {% if voucher.verification_status != 'verified' %}
+                    <button type="button" 
+                            onclick="verifySingleVoucher({{ voucher.pk }})" 
+                            id="btn-verify-{{ voucher.pk }}"
+                            class="px-3 py-1.5 bg-emerald-600 text-white rounded-lg font-bold hover:bg-emerald-700 transition-colors shadow-sm inline-flex items-center gap-1.5">
+                        <i class="fa-solid fa-check"></i>
+                        <span>Verify Entry</span>
+                    </button>
+                    {% endif %}
+
+                    <button type="button" 
+                            onclick="openFlagModal({{ voucher.pk }}, '{{ voucher.voucher_number }}')" 
+                            class="px-2.5 py-1.5 bg-slate-200 text-slate-700 rounded-lg font-semibold hover:bg-slate-300 transition-colors inline-flex items-center gap-1.5"
+                            title="Flag a discrepancy or enter reviewer remarks">
+                        <i class="fa-solid fa-flag text-rose-500"></i>
+                        <span>Flag / Note</span>
+                    </button>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{% include "includes/pagination.html" %}
+
+{% else %}
+<div class="text-center py-16 bg-white rounded-xl border border-dashed border-slate-300">
+    <div class="w-12 h-12 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto mb-3">
+        <i class="fa-solid fa-check-double text-xl"></i>
+    </div>
+    <h3 class="text-base font-bold text-slate-800">No Vouchers Found</h3>
+    <p class="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+        {% if current_status == 'pending' %}
+            All financial entries have been verified! There are no pending vouchers requiring your review right now.
+        {% else %}
+            No vouchers match your selected filters. Try resetting the filters.
+        {% endif %}
+    </p>
+    <a href="{% url 'financial-entry-review' %}" class="mt-4 inline-flex items-center px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition-colors">
+        Reset Filters
+    </a>
+</div>
+{% endif %}
+<!-- END: Vouchers List -->
+
+<!-- Flag Discrepancy Modal -->
+<div id="flag-modal" class="hidden fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full shadow-2xl overflow-hidden animate-scaleIn">
+        <div class="px-5 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+            <h3 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <i class="fa-solid fa-flag text-rose-500"></i>
+                <span>Flag Voucher <span id="modal-voucher-num" class="font-mono text-emerald-700"></span></span>
+            </h3>
+            <button type="button" onclick="closeFlagModal()" class="text-slate-400 hover:text-slate-600">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+        <form method="post" id="flag-form" class="p-5 space-y-4">
+            {% csrf_token %}
+            <div>
+                <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1" for="modal-notes">
+                    Reason / Reviewer Remarks
+                </label>
+                <textarea name="notes" id="modal-notes" rows="3" required placeholder="e.g. TDS rate mismatch, bank receipt missing, shortage amount differs from LR..."
+                          class="w-full p-3 border border-slate-300 rounded-lg text-xs focus:ring-rose-500 focus:border-rose-500"></textarea>
+                <p class="text-[11px] text-slate-500 mt-1">This remark will be attached to the voucher and flagged for the operator to correct.</p>
+            </div>
+            <div class="flex items-center justify-end space-x-2 pt-2 border-t border-slate-100">
+                <button type="button" onclick="closeFlagModal()" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition-colors">
+                    Cancel
+                </button>
+                <button type="submit" class="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg transition-colors shadow-sm">
+                    Submit Flag
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Restore Voucher Modal -->
+<div id="restore-modal" class="hidden fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full shadow-2xl overflow-hidden animate-scaleIn">
+        <div class="px-5 py-4 bg-emerald-50 border-b border-emerald-100 flex items-center justify-between">
+            <h3 class="text-sm font-bold text-emerald-900 flex items-center gap-2">
+                <i class="fa-solid fa-rotate-left text-emerald-600"></i>
+                <span>Restore Voucher <span id="modal-restore-num" class="font-mono text-slate-900"></span></span>
+            </h3>
+            <button type="button" onclick="closeRestoreModal()" class="text-slate-400 hover:text-slate-600">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+        <form method="post" id="restore-form" class="p-5 space-y-4">
+            {% csrf_token %}
+            <p class="text-xs text-slate-600">
+                Restoring this voucher will reactivate its constituent financial records, re-include them in ledger balance calculations, and queue the entry for re-verification.
+            </p>
+            <div>
+                <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1" for="modal-restore-reason">
+                    Reason for Restoration (Optional)
+                </label>
+                <textarea name="restore_reason" id="modal-restore-reason" rows="2" placeholder="e.g. Inadvertent deletion, verified valid payment, client re-instated invoice..."
+                          class="w-full p-2.5 border border-slate-300 rounded-lg text-xs focus:ring-emerald-500 focus:border-emerald-500"></textarea>
+            </div>
+            <div class="flex items-center justify-end space-x-2 pt-2 border-t border-slate-100">
+                <button type="button" onclick="closeRestoreModal()" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition-colors">
+                    Cancel
+                </button>
+                <button type="submit" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition-colors shadow-sm flex items-center gap-1.5">
+                    <i class="fa-solid fa-rotate-left"></i>
+                    <span>Confirm Restoration</span>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // CSRF token helper
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+    const csrftoken = getCookie('csrftoken');
+
+    // 1-Click Verification
+    function verifySingleVoucher(voucherId) {
+        const btn = document.getElementById(`btn-verify-${voucherId}`);
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin mr-1"></i> Verifying...`;
+        }
+
+        fetch(`/ledger/review/${voucherId}/verify/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrftoken,
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Update status badge
+                const badge = document.getElementById(`badge-status-${voucherId}`);
+                if (badge) {
+                    badge.className = 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200';
+                    badge.innerHTML = `<i class="fa-solid fa-circle-check mr-1 text-emerald-600"></i>Verified`;
+                }
+
+                // Show stamp box
+                const stampBox = document.getElementById(`stamp-box-${voucherId}`);
+                if (stampBox) {
+                    stampBox.classList.remove('hidden');
+                    document.getElementById(`verified-by-${voucherId}`).textContent = data.verified_by;
+                    document.getElementById(`verified-at-${voucherId}`).textContent = data.verified_at;
+                }
+
+                // Remove verify button
+                if (btn) btn.remove();
+
+                // Hide remarks box if previously flagged
+                const remBox = document.getElementById(`remarks-box-${voucherId}`);
+                if (remBox) remBox.classList.add('hidden');
+            } else {
+                alert(data.error || 'Failed to verify entry.');
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = `<i class="fa-solid fa-check mr-1"></i> Verify Entry`;
+                }
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            alert('An error occurred while verifying the entry.');
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = `<i class="fa-solid fa-check mr-1"></i> Verify Entry`;
+            }
+        });
+    }
+
+    // Flag Modal Handling
+    let activeVoucherId = null;
+    function openFlagModal(voucherId, voucherNumber) {
+        activeVoucherId = voucherId;
+        document.getElementById('modal-voucher-num').textContent = `#${voucherNumber}`;
+        document.getElementById('modal-notes').value = '';
+        document.getElementById('flag-form').action = `/ledger/review/${voucherId}/flag/`;
+        document.getElementById('flag-modal').classList.remove('hidden');
+    }
+
+    function closeFlagModal() {
+        document.getElementById('flag-modal').classList.add('hidden');
+        activeVoucherId = null;
+    }
+
+    // Restore Modal Handling
+    let activeRestoreVoucherId = null;
+    function openRestoreModal(voucherId, voucherNumber) {
+        activeRestoreVoucherId = voucherId;
+        document.getElementById('modal-restore-num').textContent = `#${voucherNumber}`;
+        document.getElementById('modal-restore-reason').value = '';
+        document.getElementById('restore-form').action = `/ledger/review/${voucherId}/restore/`;
+        document.getElementById('restore-modal').classList.remove('hidden');
+    }
+
+    function closeRestoreModal() {
+        document.getElementById('restore-modal').classList.add('hidden');
+        activeRestoreVoucherId = null;
+    }
+
+    // Bulk Checkbox Handling
+    const checkboxes = document.querySelectorAll('.voucher-checkbox');
+    const bulkToolbar = document.getElementById('bulk-toolbar');
+    const bulkCountSpan = document.getElementById('bulk-selected-count');
+    const bulkIdsInput = document.getElementById('bulk-voucher-ids');
+
+    function updateBulkToolbar() {
+        const checked = Array.from(checkboxes).filter(cb => cb.checked);
+        if (checked.length > 0) {
+            bulkToolbar.classList.remove('hidden');
+            bulkCountSpan.textContent = checked.length;
+            bulkIdsInput.value = checked.map(cb => cb.value).join(',');
+        } else {
+            bulkToolbar.classList.add('hidden');
+            bulkIdsInput.value = '';
+        }
+    }
+
+    checkboxes.forEach(cb => {
+        cb.addEventListener('change', updateBulkToolbar);
+    });
+</script>
+{% endblock %}

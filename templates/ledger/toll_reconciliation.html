@@ -1,0 +1,302 @@
+{% extends 'base.html' %}
+{% load humanize ledger_extras %}
+
+{% block title %}Toll Recharge Reconciliation - TMS{% endblock %}
+
+{% block content %}
+<header class="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div>
+        <div class="flex items-center space-x-2 text-sm text-slate-500 mb-1">
+            <a href="{% url 'financialrecord-list' %}" class="hover:text-emerald-600 transition-colors">Finance</a>
+            <i class="fa-solid fa-chevron-right text-[10px]"></i>
+            <a href="{% url 'toll-ledger' %}" class="hover:text-emerald-600 transition-colors">Toll & FASTag Ledger</a>
+            <i class="fa-solid fa-chevron-right text-[10px]"></i>
+            <span class="text-slate-800 font-semibold">Reconciliation</span>
+        </div>
+        <div class="flex flex-wrap items-center gap-3">
+            <h1 class="text-3xl font-bold text-slate-900">FASTag Recharge Reconciliation</h1>
+            {% if pending_count > 0 %}
+            <span class="px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200 flex items-center gap-1.5">
+                <i class="fa-solid fa-triangle-exclamation text-amber-600"></i>
+                {{ pending_count }} Pending Unallocated
+            </span>
+            {% else %}
+            <span class="px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1.5">
+                <i class="fa-solid fa-check-circle text-emerald-600"></i>
+                All Recharges Reconciled
+            </span>
+            {% endif %}
+        </div>
+        <p class="text-sm text-slate-600 mt-1">
+            Assign company firm bank accounts to imported top-up credits to keep firm bank ledgers balanced.
+        </p>
+    </div>
+    <div class="flex items-center gap-2">
+        <a href="{% url 'toll-statement-import' %}" class="px-4 py-2 border border-slate-300 rounded-md bg-white text-slate-700 text-sm font-bold hover:bg-slate-50 transition-colors flex items-center gap-1.5 shadow-sm">
+            <i class="fa-solid fa-file-excel text-emerald-600"></i> Import Statement
+        </a>
+        <a href="{% url 'toll-ledger' %}" class="px-4 py-2 bg-slate-800 text-white rounded-md text-sm font-bold hover:bg-slate-900 transition-colors flex items-center gap-1.5 shadow-sm">
+            <i class="fa-solid fa-arrow-left text-xs"></i> Back to Toll Ledger
+        </a>
+    </div>
+</header>
+
+<!-- Metrics & Firm Balances Strip -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+    <div class="bg-amber-50/70 border border-amber-200 rounded-xl p-4 shadow-sm flex items-center gap-4">
+        <div class="w-12 h-12 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center text-xl shrink-0">
+            <i class="fa-solid fa-clock"></i>
+        </div>
+        <div>
+            <div class="text-xs font-bold text-amber-700 uppercase tracking-wider">Unallocated Recharges</div>
+            <div class="text-2xl font-black text-amber-950 mt-0.5">₹{{ pending_total|indian_comma }}</div>
+            <div class="text-xs text-amber-800 mt-0.5">{{ pending_count }} top-ups pending firm assignment</div>
+        </div>
+    </div>
+
+    <div class="bg-emerald-50/70 border border-emerald-200 rounded-xl p-4 shadow-sm flex items-center gap-4">
+        <div class="w-12 h-12 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center text-xl shrink-0">
+            <i class="fa-solid fa-circle-check"></i>
+        </div>
+        <div>
+            <div class="text-xs font-bold text-emerald-700 uppercase tracking-wider">Reconciled Recharges</div>
+            <div class="text-2xl font-black text-emerald-950 mt-0.5">{{ reconciled_count }}</div>
+            <div class="text-xs text-emerald-800 mt-0.5">Firm bank ledgers updated</div>
+        </div>
+    </div>
+
+    <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 shadow-sm">
+        <div class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+            <i class="fa-solid fa-building-columns text-slate-400"></i> Firm Bank Balances
+        </div>
+        <div class="flex flex-wrap gap-1.5 max-h-16 overflow-y-auto">
+            {% for ca in company_accounts %}
+            <span class="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-semibold bg-white border border-slate-200 text-slate-800 shadow-2xs">
+                <span>{{ ca.name }}</span>
+                <span class="font-mono text-emerald-700 font-bold">₹{{ ca.current_balance_cached|indian_comma }}</span>
+            </span>
+            {% empty %}
+            <span class="text-xs text-slate-400">No firm accounts found.</span>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<!-- Tabs Strip -->
+<div class="flex border-b border-slate-200 mb-6 gap-2">
+    <a href="?tab=pending" class="px-5 py-3 border-b-2 text-sm font-bold transition-colors flex items-center gap-2 {% if tab == 'pending' %}border-amber-600 text-amber-700 bg-amber-50/30{% else %}border-transparent text-slate-500 hover:text-slate-800{% endif %}">
+        <i class="fa-solid fa-hourglass-half"></i>
+        <span>Pending Reconciliation</span>
+        <span class="px-2 py-0.5 text-xs rounded-full {% if pending_count > 0 %}bg-amber-100 text-amber-800 font-extrabold{% else %}bg-slate-100 text-slate-600{% endif %}">
+            {{ pending_count }}
+        </span>
+    </a>
+    <a href="?tab=reconciled" class="px-5 py-3 border-b-2 text-sm font-bold transition-colors flex items-center gap-2 {% if tab == 'reconciled' %}border-emerald-600 text-emerald-700 bg-emerald-50/30{% else %}border-transparent text-slate-500 hover:text-slate-800{% endif %}">
+        <i class="fa-solid fa-list-check"></i>
+        <span>Reconciled History</span>
+        <span class="px-2 py-0.5 text-xs rounded-full bg-slate-100 text-slate-700 font-extrabold">
+            {{ reconciled_count }}
+        </span>
+    </a>
+</div>
+
+{% if tab == 'pending' %}
+    {% if pending_recharges %}
+    <!-- Bulk Action Toolbar -->
+    <form method="post" id="bulk-reconcile-form" class="mb-4 bg-slate-900 text-white rounded-xl p-3.5 flex flex-wrap items-center justify-between gap-3 shadow-md">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="reconcile_bulk">
+        
+        <div class="flex items-center gap-3">
+            <label class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider cursor-pointer">
+                <input type="checkbox" id="select-all" class="rounded text-emerald-600 focus:ring-emerald-500 h-4 w-4 bg-slate-800 border-slate-600">
+                <span>Select All</span>
+            </label>
+            <span class="text-xs text-slate-400" id="selected-count-badge">0 selected</span>
+        </div>
+
+        <div class="flex items-center gap-2 flex-wrap">
+            <span class="text-xs text-slate-300 font-medium">Assign selected to:</span>
+            <select name="bulk_company_account" required class="rounded-md bg-slate-800 border-slate-700 text-white text-xs py-1.5 px-3 focus:ring-emerald-500 font-medium">
+                <option value="">-- Choose Firm Account --</option>
+                {% for ca in company_accounts %}
+                <option value="{{ ca.pk }}">{{ ca.name }} (₹{{ ca.current_balance_cached|indian_comma }})</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-md text-xs font-bold transition-colors shadow-sm flex items-center gap-1.5">
+                <i class="fa-solid fa-check-double"></i> Bulk Reconcile
+            </button>
+        </div>
+    </form>
+
+    <!-- Pending Table -->
+    <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden mb-6">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-xs">
+                <thead>
+                    <tr class="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase text-[11px] tracking-wider">
+                        <th class="px-3 py-3 w-10 text-center"></th>
+                        <th class="px-4 py-3">Date</th>
+                        <th class="px-4 py-3 text-right">Amount</th>
+                        <th class="px-4 py-3">Destination Wallet</th>
+                        <th class="px-4 py-3">Mode & Ref ID</th>
+                        <th class="px-4 py-3">Notes / Narration</th>
+                        <th class="px-4 py-3 min-w-[240px]">Assign Firm & Reconcile</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    {% for r in pending_recharges %}
+                    <tr class="hover:bg-amber-50/40 transition-colors">
+                        <td class="px-3 py-3 text-center">
+                            <input type="checkbox" name="recharge_ids" value="{{ r.pk }}" form="bulk-reconcile-form" class="row-checkbox rounded text-emerald-600 focus:ring-emerald-500 h-4 w-4">
+                        </td>
+                        <td class="px-4 py-3 font-semibold text-slate-800 whitespace-nowrap">
+                            {{ r.date|date:"d M Y" }}
+                        </td>
+                        <td class="px-4 py-3 text-right font-black text-emerald-700 text-sm whitespace-nowrap">
+                            +₹{{ r.amount|indian_comma }}
+                        </td>
+                        <td class="px-4 py-3 font-semibold text-slate-700">
+                            {{ r.toll_account.name }}
+                        </td>
+                        <td class="px-4 py-3">
+                            <div class="font-medium text-slate-800">{{ r.payment_mode }}</div>
+                            {% if r.reference_number %}
+                            <div class="font-mono text-[10px] text-slate-500">{{ r.reference_number }}</div>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-slate-600 max-w-xs truncate" title="{{ r.description }}">
+                            {{ r.description|default:"-" }}
+                        </td>
+                        <td class="px-4 py-3">
+                            <!-- Inline single reconcile form -->
+                            <form method="post" class="flex items-center gap-1.5">
+                                {% csrf_token %}
+                                <input type="hidden" name="action" value="reconcile_single">
+                                <input type="hidden" name="recharge_id" value="{{ r.pk }}">
+                                <select name="company_account" required class="w-full text-xs rounded-md border-slate-300 py-1.5 px-2 bg-white focus:ring-emerald-500 focus:border-emerald-500">
+                                    <option value="">-- Select Firm --</option>
+                                    {% for ca in company_accounts %}
+                                    <option value="{{ ca.pk }}">{{ ca.name }}</option>
+                                    {% endfor %}
+                                </select>
+                                <button type="submit" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md text-xs font-bold transition-colors whitespace-nowrap shadow-xs">
+                                    Reconcile
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% else %}
+    <div class="bg-white border border-slate-200 rounded-xl p-12 text-center shadow-sm">
+        <div class="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-3xl mx-auto mb-4">
+            <i class="fa-solid fa-circle-check"></i>
+        </div>
+        <h3 class="text-lg font-bold text-slate-900 mb-1">No Pending Recharges</h3>
+        <p class="text-sm text-slate-500 max-w-md mx-auto mb-6">
+            All FASTag wallet top-ups are allocated to their corresponding company accounts.
+        </p>
+        <a href="{% url 'toll-statement-import' %}" class="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-600 text-white rounded-md font-bold text-sm hover:bg-emerald-700 transition-colors shadow-sm">
+            <i class="fa-solid fa-file-excel"></i> Import Another Statement
+        </a>
+    </div>
+    {% endif %}
+
+{% elif tab == 'reconciled' %}
+    {% if reconciled_recharges %}
+    <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden mb-6">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-xs">
+                <thead>
+                    <tr class="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase text-[11px] tracking-wider">
+                        <th class="px-4 py-3">Date</th>
+                        <th class="px-4 py-3 text-right">Amount</th>
+                        <th class="px-4 py-3">Destination Wallet</th>
+                        <th class="px-4 py-3">Assigned Firm Account</th>
+                        <th class="px-4 py-3">Payment Mode & Ref</th>
+                        <th class="px-4 py-3">Notes</th>
+                        <th class="px-4 py-3 text-center">Action</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    {% for r in reconciled_recharges %}
+                    <tr class="hover:bg-slate-50 transition-colors">
+                        <td class="px-4 py-3 font-semibold text-slate-800 whitespace-nowrap">
+                            {{ r.date|date:"d M Y" }}
+                        </td>
+                        <td class="px-4 py-3 text-right font-black text-emerald-700 text-sm whitespace-nowrap">
+                            +₹{{ r.amount|indian_comma }}
+                        </td>
+                        <td class="px-4 py-3 font-semibold text-slate-700">
+                            {{ r.toll_account.name }}
+                        </td>
+                        <td class="px-4 py-3">
+                            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-blue-50 text-blue-800 border border-blue-200">
+                                <i class="fa-solid fa-building-columns text-[10px]"></i>
+                                {{ r.company_account.name }}
+                            </span>
+                        </td>
+                        <td class="px-4 py-3">
+                            <div class="font-medium text-slate-800">{{ r.payment_mode }}</div>
+                            {% if r.reference_number %}
+                            <div class="font-mono text-[10px] text-slate-500">{{ r.reference_number }}</div>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-slate-600 max-w-xs truncate" title="{{ r.description }}">
+                            {{ r.description|default:"-" }}
+                        </td>
+                        <td class="px-4 py-3 text-center">
+                            <a href="{% url 'toll-recharge-unlink' r.pk %}" onclick="return confirm('Unlink this recharge from {{ r.company_account.name }}? The company bank expense record will be removed and this recharge will return to unallocated status.');" class="text-xs font-bold text-amber-600 hover:text-amber-800 hover:underline inline-flex items-center gap-1">
+                                <i class="fa-solid fa-arrow-rotate-left text-[10px]"></i> Unlink Firm
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% else %}
+    <div class="bg-white border border-slate-200 rounded-xl p-12 text-center shadow-sm">
+        <p class="text-sm text-slate-500">No reconciled recharges recorded yet.</p>
+    </div>
+    {% endif %}
+{% endif %}
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const selectAll = document.getElementById('select-all');
+    const checkboxes = document.querySelectorAll('.row-checkbox');
+    const badge = document.getElementById('selected-count-badge');
+
+    function updateBadge() {
+        const count = Array.from(checkboxes).filter(cb => cb.checked).length;
+        if (badge) {
+            badge.textContent = `${count} selected`;
+        }
+    }
+
+    if (selectAll) {
+        selectAll.addEventListener('change', function() {
+            checkboxes.forEach(cb => {
+                cb.checked = selectAll.checked;
+            });
+            updateBadge();
+        });
+    }
+
+    checkboxes.forEach(cb => {
+        cb.addEventListener('change', function() {
+            if (!cb.checked && selectAll) {
+                selectAll.checked = false;
+            }
+            updateBadge();
+        });
+    });
+});
+</script>
+{% endblock %}

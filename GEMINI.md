@@ -1,55 +1,62 @@
 # Transport Management System (TMS)
 
 ## Project Overview
-This project is a comprehensive Transport Management System built with Django. It is designed to manage fleet operations, trip logistics, driver assignments, and financial accounting. The system provides tools for tracking vehicles, monitoring trip expenses and revenues, managing driver ledgers, and generating invoices and financial reports.
+This project is an enterprise Transport Management System built with Django. It manages end-to-end fleet operations, trip logistics, tyre lifecycle tracking, FASTag/toll accounting, driver pocket ledgers, and double-entry accrual financial accounting with invoicing and GST compliance.
 
-## Directory Structure
-
-*   **`transport_mgmt/`**: The main project configuration directory, containing settings, URL routing, and WSGI/ASGI application entry points.
-*   **`trips/`**: Handles core trip management logic, including trip creation, route details, revenue calculation, and expense tracking.
-*   **`fleet/`**: Manages vehicle profiles, maintenance logs, fuel tracking, and tyre inventory.
-*   **`drivers/`**: Contains driver profiles, license information, and personal financial ledgers (salary, allowances).
-*   **`ledger/`**: The financial engine of the application, handling double-entry accounting, invoicing, payment tracking, and financial reporting.
-*   **`documents/`**: A centralized module for uploading and managing documents (e.g., permits, licenses) with expiry tracking features.
-*   **`accounts/`**: Manages system users, passwords, and permissions via a custom "no-admin" UI panel.
-*   **`templates/`**: Global HTML templates that define the layout and structure of the application's frontend.
-*   **`static/`**: Static assets such as CSS stylesheets, JavaScript files, and images used across the application.
-*   **`manage.py`**: Django's command-line utility for administrative tasks like running the server, making migrations, and creating superusers.
+## Directory Structure & Modular Architecture
+All apps follow a modular package structure (`models/`, `views/`, `forms/`, `services/`, `signals/`):
+*   **`transport_mgmt/`**: Project root configuration, URL routing, settings, and storage bridge.
+*   **`trips/`**: Trip lifecycle, single-leg routing, market/vendor hire rates, and route analytics dashboards.
+*   **`fleet/`**: Vehicle assets, maintenance schedules, and 18+1 tyre layout positioning and tracking.
+*   **`ledger/`**: Double-entry financial engine, party balances, billing handoffs, and FASTag toll management.
+*   **`drivers/`**: Driver profiles and personal financial pocket ledgers (salary, allowances, advances, loans).
+*   **`documents/`**: Centralized compliance document tracking, base documents, renewals, and expiry alerts.
+*   **`accounts/`**: Custom "no-admin" user management, RBAC role permissions, and active user tracking.
+*   **`templates/`**: Responsive Tailwind CSS frontend templates (mobile drawer, bottom bar, desktop nav).
+*   **`static/`**: Fonts and custom assets.
 
 ## High-Level Models Overview
-To assist in understanding the application architecture:
 *   **`trips`**: 
-    *   `Trip`: Uses a single-leg structure to track end-to-end transport operations. Status is derived from payment.
+    *   `Trip`: Single-leg transport operations. Status is derived from payment. Caches revenue, GST, and balances. Supports company-owned vs market/attached vehicles (`revenue_type`, `vendor_hire_amount`).
+    *   `Route`: Predefined routes (`pickup_location`, `delivery_location`, `default_rate`) with analytics dashboards.
 *   **`fleet`**: 
-    *   `Vehicle`: Central entity for fleet assets.
-    *   `MaintenanceRecord`: Unified model for tracking maintenance expirations and historical completions.
-    *   `Tyre` & `TyreLog`: Manages tyre inventory, including statuses (Mounted, Scrap, etc.) and automatic movement tracking.
-*   **`drivers`**:
-    *   `Driver`: Core driver profile extending the default User.
-    *   `DriverTransaction`: Manages a driver's "Pocket/Wallet" balance (e.g., Salary, Allowance, Loan, Repayment).
+    *   `Vehicle`: Central fleet asset entity (`ownership`: Owned, Attached, Market; linked `vendor` and `company_account`).
+    *   `MaintenanceRecord`: Tracks scheduled maintenance (by interval km/days) and completed service logs.
+    *   `Tyre`, `TyreBrand`, `TyreLog`: Manages 18-wheeler + 1 Stepney layout, positioning, status (Mounted, Scrap, Retreaded, Spare), and movement logs.
 *   **`ledger`**:
-    *   `CompanyAccount`: Represents the firm(s) operating the system (issued from).
-    *   `Party`: Represents clients/customers (billed to).
-    *   `FinancialRecord`: The core of the double-entry system mapping Income/Expense transactions.
-    *   `Bill`: Represents an Invoice, either aggregated from multiple `Trip`s or as a standalone Standard item.
+    *   `CompanyAccount`: Operating firm bank/cash accounts with custom invoice/CN/DN sequence formatting.
+    *   `Party`: Clients (Debtors) and Vendors/Suppliers (Creditors) with distinct balance calculation logic.
+    *   `FinancialRecord`: Core double-entry system mapping Income, Expense, and Invoice accruals. Supports explicit foreign keys to trips, bills, tyres, document renewals, and toll recharges.
+    *   `Bill` & `BillTrip`: Invoices, Credit Notes, Debit Notes, and Creditor Bills. Supports trip grouping, discounts, roundoff, and reverse charge.
+    *   `TripAllocation` & `BillAllocation`: Explicit payment-to-trip and payment-to-bill allocation tracking.
+    *   `TollAccount`, `TollRecharge`, `TollEntry`: FASTag wallet management, bank-funded recharges, vehicle toll slips/charges, statement imports, and reconciliation.
+*   **`drivers`**:
+    *   `Driver`: Core driver profile extending the default User with cached pocket balances.
+    *   `DriverTransaction`: Driver wallet ledger (Salary, Advance, Allowance, Loan, Repayment).
 *   **`documents`**:
-    `Document`: A unified model for tracking expirations and storing scanned copies linked to Vehicles or Drivers.
-    *   **`accounts`**:
-    *   `User`: Managed via the custom **User Management** panel for IDs, passwords, and Roles (Groups). Restricted to Superusers.
+    *   `Document`: Vehicle and driver compliance documents. Base vehicle documents (Fitness, Permits, Insurance, Tax, RC, PUCC, VLTD) cannot be deleted.
+    *   `DocumentRenewal` & `DocumentFile`: Historical renewals, receipt files, and cloud-backed file storage.
+*   **`accounts`**:
+    *   `UserProfile`: Extends User with `last_seen` timestamp tracked via `ActiveUserMiddleware`.
+    *   Role & Permission Management: Custom front-end CRUD for Django `Group` and `Permission` management.
 
-    ## Core Financial Logic (Ledger & Billing)
-
-*   **Accrual-Based Revenue**: Revenue is recorded as an "Invoice" type entry in the ledger as soon as a Trip is created or a Bill is generated. This represents earned income before cash is received.
-*   **Ledger Hand-off**: Trip Payment exists in the ledger as either an individual entry (if unbilled) OR as part of a consolidated Bill entry (if billed). When a Bill is created, individual trip ledger entries are deleted, and a single consolidated entry for the Bill is created.
-*   **Consolidated Billing & GST**: "Final" status Bills consolidate revenue and include the GST component in a single "Trip Payment" ledger entry. "Draft" status Bills show only the subtotal without GST in the ledger.
-*   **Snapshot Principle**: Bill/Invoice models snapshot Firm details (Name, GSTIN, Address, Bank) from the `CompanyAccount` at the time of creation. This ensures historical invoices remain accurate even if the Firm's current details change.
-*   **Balance Calculation**: `CompanyAccount` and `Party` balances are calculated as: `Opening Balance + Total Received - Total Expenses`. "Invoice" type records are excluded from balance calculations as they represent accruals, not actual cash flow.
-
-## Performance Optimizations
-
-*   **On-Demand Storage Access**: Document URLs are generated on-demand via proxy views (`document-view`, `renewal-file-view`) when clicked, generating instant presigned URLs for Cloudflare R2 object storage. Avoid calling `.url` on many file fields within a single template loop.
-*   **Database Annotations**: Document list counts (Total, Expired, Expiring) are calculated using SQL-level `Count` and `Q` filters in `get_queryset` to avoid N+1 issues and Python-side loop overhead.
-*   **Query Prefetching**: Always use `select_related` and `prefetch_related` for nested attributes (e.g., `driver__user`, `documents`) especially in global context processors like `document_alerts`.
+## Core Financial Logic (Ledger, Billing & Tolls)
+*   **Accrual-Based Revenue & Expenses**: Trips and Bills generate `RECORD_TYPE_INVOICE` financial records as soon as created. This represents earned revenue or accrued vendor liability before cash is exchanged.
+*   **Ledger Hand-off**: Trip payment exists in the ledger as an individual unbilled trip entry OR as part of a consolidated Bill entry. When a customer Bill is created, individual trip invoice records are deleted and replaced by a single consolidated Bill record.
+*   **Creditor Billing for Attached Vehicles**: Trips using attached vehicles with `vendor_hire_amount > 0` automatically generate linked Creditor Bills (`CR-` prefix) for the vehicle vendor upon customer billing. Customer Credit Notes auto-mirror as vendor Debit Notes for transit shortage deductions.
+*   **Snapshot Principle**: Bills snapshot Firm details (Name, GSTIN, Address, Bank) from `CompanyAccount` at creation time to preserve historical integrity.
+*   **Balance Calculation Invariants**:
+    *   `CompanyAccount` Balance = `Opening Balance + Total Received - Total Paid Out` (actual cash/bank flow; `INVOICE` accruals and non-cash deductions/notes are excluded).
+    *   Debtor `Party` Balance = `Opening Balance + Invoices + Expenses - Receipts - Deductions/TDS/Shortages - Credit Notes`.
+    *   Creditor `Party` Balance = `Opening Balance + Invoices/Lorry Hire - Payments Out - TDS - Deductions - Debit Notes`.
+*   **FASTag & Toll Flow**: Toll recharges funded from a `CompanyAccount` reduce bank balance and increase the `TollAccount` wallet. Toll charges deduct strictly from the `TollAccount` and map dynamically to trips within operational vehicle windows (from trip date to next trip date for company-owned vehicles).
 
 ## UI & Application Philosophy
-*   **IGNORE DJANGO ADMIN**: Normal users (including managers and admins within the business domain) should NEVER need to access the default Django Admin interface to perform daily tasks, manage reference data (like Routes, Categories, Settings), or view reports. All functional models must have dedicated, stylized front-end views (List, Create, Update, Delete) integrated into the main application layout. The Django Admin is strictly for developer debugging and superuser backend maintenance.
+*   **IGNORE DJANGO ADMIN**: Business users, operators, and managers should NEVER use the default Django Admin interface. All operational tasks (Trips, Ledger, Vehicles, Tyres, Tolls, Documents, Roles, Users) have stylized front-end views in the main application. Django Admin is strictly for developer debugging.
+*   **Form UX**: Global double-submit prevention on all POST forms, Select2 searchable dropdowns, and arrow-key grid navigation in tabular interfaces.
+*   **Currency Formatting**: All monetary values use the custom `indian_comma` filter (`1,45,140.00`).
+
+## Performance & Storage Guidelines
+*   **On-Demand Storage Access**: Document and tyre URLs are generated on-demand via proxy views (`document-view`, `renewal-file-view`, `tyre-photo-serve`) with presigned Cloudflare R2 URLs. Never invoke `.url` inside template loops.
+*   **Automated Tests**: During automated tests, Django switches automatically to local `FileSystemStorage` and `MD5PasswordHasher` for fast execution without external network calls.
+*   **Database Aggregations**: Compute counts, balances, and totals at the database level using `Sum`, `Count`, `Case`, `When`, and `Coalesce` rather than Python-side loops. Always use `select_related` and `prefetch_related`.

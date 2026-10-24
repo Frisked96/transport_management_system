@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load ledger_extras %}
 
 {% block title %}Tyre Details: {{ tyre.serial_number }} - TMS{% endblock %}
 
@@ -86,7 +87,7 @@
                             </tr>
                             <tr class="border-b border-slate-50">
                                 <td class="py-2 text-slate-500 font-medium whitespace-nowrap pr-4">Purchase Cost</td>
-                                <td class="py-2 text-emerald-700 font-black">₹{{ tyre.purchase_cost|floatformat:2 }}</td>
+                                <td class="py-2 text-emerald-700 font-black">₹{{ tyre.purchase_cost|indian_comma }}</td>
                             </tr>
                             <tr class="border-b border-slate-50">
                                 <td class="py-2 text-slate-500 font-medium whitespace-nowrap pr-4">Purchase Date</td>
@@ -102,7 +103,7 @@
                                     {% if tyre.added_at %}
                                         <div class="flex flex-col">
                                             <span>{{ tyre.added_at|date:"d M Y, H:i" }}</span>
-                                            <span class="text-[10px] text-slate-400 font-medium mt-0.5">By: {{ tyre.added_by.get_full_name|default:tyre.added_by.username|default:"System" }}</span>
+                                            <span class="text-[10px] text-slate-400 font-medium mt-0.5">By: {% if tyre.added_by %}{{ tyre.added_by.get_full_name|default:tyre.added_by.username }}{% else %}System{% endif %}</span>
                                         </div>
                                     {% else %}
                                         -

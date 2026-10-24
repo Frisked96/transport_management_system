@@ -9,57 +9,7 @@ from django.core.exceptions import ValidationError, ObjectDoesNotExist
 from django.db.models import Case, When, Value, F, DecimalField, OuterRef
 from fleet.models import Vehicle
 from .route import Route
-
-
-class TripQuerySet(models.QuerySet):
-    def with_payment_info(self):
-        """
-        Ultra-lightweight payment info using cached fields.
-        Backward compatible with previous annotation names.
-        """
-        return self.annotate(
-            annotated_revenue=F('revenue_cached'),
-            annotated_gst_amount=F('gst_amount_cached'),
-            annotated_total_revenue=F('total_revenue_cached'),
-            annotated_received=F('amount_received_cached'),
-            annotated_outstanding=F('outstanding_balance_cached'),
-            annotated_status=F('payment_status_cached')
-        )
-
-    def with_billing_info(self):
-        """Annotate queryset with billing status and GST type"""
-        from django.db.models import Exists, OuterRef, Case, When, Value, F, CharField
-        # Import internally to avoid circular dependency
-        from ledger.models import Bill
-
-        return self.annotate(
-            annotated_is_billed=Exists(
-                Bill.objects.filter(trips=OuterRef('pk'), customer_bill__isnull=True).exclude(party__party_type='Creditor')
-            ),
-            annotated_is_creditor_billed=Exists(
-                Bill.objects.filter(trips=OuterRef('pk')).filter(
-                    models.Q(customer_bill__isnull=False) | models.Q(party__party_type='Creditor')
-                )
-            ),
-            annotated_gst_type=Case(
-                When(gst_type_snapshot__gt='', then=F('gst_type_snapshot')),
-                When(route__route_type='intra', then=Value('IGST')),
-                When(route__route_type='none', then=Value('NONE')),
-                default=Value('GST'),
-                output_field=CharField()
-            )
-        )
-
-
-class TripManager(models.Manager):
-    def get_queryset(self):
-        return TripQuerySet(self.model, using=self._db)
-    
-    def with_payment_info(self):
-        return self.get_queryset().with_payment_info()
-
-    def with_billing_info(self):
-        return self.get_queryset().with_billing_info()
+from .managers import TripQuerySet, TripManager
 
 
 class Trip(models.Model):
@@ -348,11 +298,11 @@ class Trip(models.Model):
                 # If the trip was deleted, we shouldn't be saving it
                 return
 
-        # Sync locations from route if provided
+        # Sync locations and GST snapshot from route if provided
         if self.route:
             self.pickup_location = self.route.pickup_location
             self.delivery_location = self.route.delivery_location
-            if not self.gst_type_snapshot:
+            if not self.is_billed:
                 from ledger.models import Bill
                 if self.route.route_type == Route.ROUTE_TYPE_INTRA:
                     self.gst_type_snapshot = Bill.GST_TYPE_IGST
@@ -360,6 +310,16 @@ class Trip(models.Model):
                     self.gst_type_snapshot = Bill.GST_TYPE_NONE
                 else:
                     self.gst_type_snapshot = Bill.GST_TYPE_GST
+            elif not self.gst_type_snapshot:
+                from ledger.models import Bill
+                if self.route.route_type == Route.ROUTE_TYPE_INTRA:
+                    self.gst_type_snapshot = Bill.GST_TYPE_IGST
+                elif self.route.route_type == Route.ROUTE_TYPE_NONE:
+                    self.gst_type_snapshot = Bill.GST_TYPE_NONE
+                else:
+                    self.gst_type_snapshot = Bill.GST_TYPE_GST
+        elif not self.is_billed and old_instance and old_instance.route_id:
+            self.gst_type_snapshot = ""
 
         # Handle Trip Number generation and regeneration
         reg_plate = self.vehicle.registration_plate
@@ -588,6 +548,13 @@ class Trip(models.Model):
         return 0
 
     @property
+    def vendor_rate(self):
+        """Returns the rate per ton for vendor hire, calculated from vendor_hire_amount or rate_per_ton"""
+        if self.weight and self.weight > 0 and self.vendor_hire_amount:
+            return (Decimal(str(self.vendor_hire_amount)) / Decimal(str(self.weight))).quantize(Decimal('0.01'))
+        return self.rate_per_ton or Decimal('0.00')
+
+    @property
     def gst_amount(self):
         """Returns GST amount, prioritizing cached value"""
         if getattr(self, '_bypass_cache', False):
@@ -605,17 +572,13 @@ class Trip(models.Model):
         
         # 1. Use Bill Rate if available
         bill = self.associated_bill
-        if bill and bill.gst_rate:
-            return rev * (Decimal(bill.gst_rate) / Decimal(100))
+        if bill:
+            if bill.gst_rate:
+                return rev * (Decimal(bill.gst_rate) / Decimal(100))
+            return Decimal('0')
         
-        # 2. If unbilled, check if route/snapshot is taxable
-        is_taxable = False
-        if self.gst_type_snapshot in ['GST', 'IGST']:
-            is_taxable = True
-        elif self.route and self.route.route_type in ['local', 'intra']:
-            is_taxable = True
-            
-        if is_taxable:
+        # 2. If unbilled, check GST type
+        if self.gst_type in ['GST', 'IGST']:
             return rev * (Decimal('18') / Decimal('100'))
             
         return Decimal('0')
@@ -625,7 +588,7 @@ class Trip(models.Model):
         """Returns total revenue, prioritizing cached value"""
         if getattr(self, '_bypass_cache', False):
             return self.revenue + self.gst_amount
-        if self.total_revenue_cached:
+        if self.total_revenue_cached is not None:
             return self.total_revenue_cached
         if hasattr(self, 'annotated_total_revenue'):
             return self.annotated_total_revenue
@@ -636,7 +599,7 @@ class Trip(models.Model):
         """Returns amount received, prioritizing cached value"""
         if getattr(self, '_bypass_cache', False):
             return self.calculate_amount_received()
-        if self.amount_received_cached:
+        if self.amount_received_cached is not None:
             return self.amount_received_cached
         if hasattr(self, 'annotated_received'):
             return self.annotated_received
@@ -667,8 +630,62 @@ class Trip(models.Model):
         """Returns outstanding balance, prioritizing cached value"""
         if getattr(self, '_bypass_cache', False):
             return self.total_revenue - self.amount_received
-        if self.outstanding_balance_cached:
+        if self.outstanding_balance_cached is not None:
             return self.outstanding_balance_cached
         if hasattr(self, 'annotated_outstanding'):
             return self.annotated_outstanding
         return self.total_revenue - self.amount_received
+
+    def get_next_trip(self):
+        """
+        Returns the subsequent trip for the same vehicle (if any),
+        ordered chronologically by trip date and ID.
+        """
+        if not self.vehicle_id:
+            return None
+        return Trip.objects.filter(
+            vehicle_id=self.vehicle_id
+        ).filter(
+            models.Q(date__gt=self.date) | models.Q(date=self.date, id__gt=self.id)
+        ).order_by('date', 'id').first()
+
+    def get_toll_entries(self):
+        """
+        Returns TollEntry records incurred during this trip's operational window.
+        A trip begins on trip.date and runs until the next trip for this vehicle starts.
+        Also includes any toll entries explicitly associated with this trip.
+        """
+        from ledger.models import TollEntry
+
+        if not self.vehicle_id:
+            return self.toll_entries.all().select_related('toll_account')
+
+        next_trip = self.get_next_trip()
+        if next_trip:
+            if next_trip.date > self.date:
+                window_q = models.Q(vehicle_id=self.vehicle_id, date__gte=self.date, date__lt=next_trip.date)
+            else:
+                window_q = models.Q(vehicle_id=self.vehicle_id, date=self.date)
+        else:
+            window_q = models.Q(vehicle_id=self.vehicle_id, date__gte=self.date)
+
+        return TollEntry.objects.filter(
+            window_q | models.Q(associated_trip=self)
+        ).distinct().select_related('toll_account').order_by('date', 'time', 'created_at')
+
+    @property
+    def total_toll_expense(self):
+        """
+        Returns the total toll expense incurred during this trip's operational window.
+        """
+        from django.db.models import Sum
+        val = self.get_toll_entries().aggregate(total=Sum('amount'))['total']
+        return val or Decimal('0.00')
+
+    @property
+    def net_trip_profit(self):
+        """
+        Net trip profit = Total Revenue - Toll Expense - (Vendor Hire Amount if attached)
+        """
+        hire = self.vendor_hire_amount or Decimal('0.00')
+        return self.total_revenue - self.total_toll_expense - hire

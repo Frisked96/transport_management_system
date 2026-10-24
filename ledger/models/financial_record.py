@@ -6,6 +6,7 @@ from decimal import Decimal
 from django.db import models
 from django.utils import timezone
 from django.core.exceptions import ObjectDoesNotExist
+from transport_mgmt.utils import get_local_time_str
 from django.contrib.auth.models import User
 from trips.models import Trip
 from .sequence import Sequence
@@ -32,6 +33,9 @@ def financial_record_upload_path(instance, filename):
     elif instance.driver:
         folder = 'drivers'
         identifier = instance.driver.employee_id or instance.driver.name
+    elif instance.associated_toll_recharge:
+        folder = 'toll'
+        identifier = f"recharge_{instance.associated_toll_recharge_id}"
     else:
         folder = 'miscellaneous'
         identifier = 'general'
@@ -41,10 +45,34 @@ def financial_record_upload_path(instance, filename):
     ext = os.path.splitext(filename)[1]
     name_root = os.path.splitext(filename)[0]
     safe_root = "".join([c for c in name_root if c.isalnum() or c in (' ', '_', '-')]).strip().replace(' ', '_')
-    timestamp = timezone.now().strftime('%Y%m%d_%H%M%S')
+    timestamp = get_local_time_str('%Y%m%d_%H%M%S')
     new_filename = f"{safe_root}_{timestamp}{ext}" if safe_root else f"doc_{timestamp}{ext}"
     
     return os.path.join('financial_records', folder, safe_identifier, new_filename)
+
+
+class ActiveFinancialRecordQuerySet(models.QuerySet):
+    def delete(self, user=None, reason=''):
+        """Soft delete all records in this queryset without releasing entry numbers"""
+        count = 0
+        for record in self:
+            record.soft_delete(user=user, reason=reason)
+            count += 1
+        return count, {'ledger.FinancialRecord': count}
+
+    def hard_delete(self):
+        """Permanent database deletion when explicitly required"""
+        return super().delete()
+
+
+class ActiveFinancialRecordManager(models.Manager):
+    def get_queryset(self):
+        return ActiveFinancialRecordQuerySet(self.model, using=self._db).filter(is_deleted=False)
+
+
+class DeletedFinancialRecordManager(models.Manager):
+    def get_queryset(self):
+        return models.QuerySet(self.model, using=self._db).filter(is_deleted=True)
 
 
 class FinancialRecord(models.Model):
@@ -97,7 +125,7 @@ class FinancialRecord(models.Model):
     )
     associated_bill = models.ForeignKey(
         'Bill',
-        on_delete=models.CASCADE,
+        on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name='financial_records',
@@ -118,6 +146,14 @@ class FinancialRecord(models.Model):
         blank=True,
         related_name='financial_records',
         verbose_name='Associated Document Renewal'
+    )
+    associated_toll_recharge = models.ForeignKey(
+        'ledger.TollRecharge',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='financial_records',
+        verbose_name='Associated Toll Recharge'
     )
 
     record_type = models.CharField(
@@ -167,13 +203,81 @@ class FinancialRecord(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='Created At')
 
-    @classmethod
-    def resequence_entry_numbers(cls):
-        """
-        Resequence all entry numbers to remove gaps.
-        """
-        from ledger.services import LedgerService
-        return LedgerService.resequence_financial_records()
+    voucher = models.ForeignKey(
+        'FinancialVoucher',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='financial_records',
+        verbose_name='Voucher / Reference'
+    )
+    verification_status = models.CharField(
+        max_length=20,
+        choices=[
+            ('pending', 'Pending Verification'),
+            ('verified', 'Verified'),
+            ('flagged', 'Flagged / Discrepancy'),
+        ],
+        default='verified',
+        db_index=True,
+        verbose_name='Verification Status'
+    )
+    verified_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='verified_financial_records',
+        verbose_name='Verified By'
+    )
+    verified_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name='Verified At'
+    )
+    verification_notes = models.TextField(
+        blank=True,
+        verbose_name='Verification Remarks'
+    )
+
+    # Soft delete and audit fields
+    is_deleted = models.BooleanField(
+        default=False,
+        db_index=True,
+        verbose_name='Is Deleted'
+    )
+    deleted_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='deleted_financial_records',
+        verbose_name='Deleted By'
+    )
+    deleted_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name='Deleted At'
+    )
+    deletion_reason = models.TextField(
+        blank=True,
+        default='',
+        verbose_name='Deletion Reason'
+    )
+
+    objects = ActiveFinancialRecordManager()
+    all_objects = models.Manager()
+    deleted_objects = DeletedFinancialRecordManager()
+
+    def soft_delete(self, user=None, reason=''):
+        """Soft-deletes record, retains entry_number, updates parent voucher & balances."""
+        from ledger.services import VoucherService
+        return VoucherService.soft_delete_record(self, user=user, reason=reason)
+
+    def restore(self, user=None, reason=''):
+        """Restores soft-deleted record without resequencing."""
+        from ledger.services import VoucherService
+        return VoucherService.restore_record(self, user=user, reason=reason)
 
     def save(self, *args, **kwargs):
         if not self.entry_number:
@@ -187,31 +291,40 @@ class FinancialRecord(models.Model):
         if self.is_deduction:
             self.account = None
 
+        # Guarantee system-generated immutable voucher attachment
+        if not self.voucher_id:
+            from ledger.services import VoucherService
+            VoucherService.get_or_create_voucher_for_record(self)
+
         super().save(*args, **kwargs)
 
     def delete(self, *args, **kwargs):
         """
-        If a ledger entry representing an Invoice is deleted, the Bill itself should be deleted.
+        Soft delete override. Per user instruction, entry numbers are retained and
+        ledgers are not resequenced on deletion.
         """
+        user = kwargs.pop('user', None)
+        reason = kwargs.pop('reason', '')
+
         if self.record_type == self.RECORD_TYPE_INVOICE and self.associated_bill:
-            # We must be careful not to recurse. super().delete() should be called 
-            # after deleting the bill if Bill doesn't CASCADE back here.
-            # But Bill DOES CASCADE back here. So deleting the bill will delete this record.
             bill = self.associated_bill
-            # Set to None to prevent CASCADE from trying to delete an already-deleting instance
-            self.associated_bill = None 
+            self.associated_bill = None
+            self.soft_delete(user=user, reason=reason or 'Associated Bill deleted')
             bill.delete()
         else:
-            super().delete(*args, **kwargs)
-        
-        # Resequence after deletion
-        FinancialRecord.resequence_entry_numbers()
+            self.soft_delete(user=user, reason=reason)
+
+    def hard_delete(self, *args, **kwargs):
+        """Permanent physical deletion for internal database cleanup or test teardowns"""
+        super().delete(*args, **kwargs)
 
     class Meta:
         verbose_name = 'Financial Record'
         verbose_name_plural = 'Financial Records'
         ordering = ['-date']
+        base_manager_name = 'all_objects'
         indexes = [
+            models.Index(fields=['is_deleted', 'date']),
             models.Index(fields=['date', 'created_at']),
             models.Index(fields=['account', 'date']),
             models.Index(fields=['party', 'date']),
@@ -221,6 +334,7 @@ class FinancialRecord(models.Model):
         permissions = [
             ('can_view_financial_records', 'Can view financial records'),
             ('can_manage_financial_records', 'Can manage financial records'),
+            ('can_verify_financial_records', 'Can verify financial records'),
         ]
 
     def __str__(self):
@@ -246,7 +360,25 @@ class FinancialRecord(models.Model):
             except ObjectDoesNotExist:
                 return f"{category_name} - Bill: #{self.associated_bill_id} - {self.amount}"
 
+        if self.associated_toll_recharge_id:
+            try:
+                recharge = self.associated_toll_recharge
+                if recharge:
+                    return f"{category_name} - Toll Top-up: {recharge.toll_account.name} - {self.amount}"
+            except ObjectDoesNotExist:
+                return f"{category_name} - Toll Top-up #{self.associated_toll_recharge_id} - {self.amount}"
+
         return f"{category_name} - {self.amount}"
+
+    @property
+    def reference_number(self):
+        """Returns voucher reference number if attached, otherwise formatted entry number"""
+        try:
+            if self.voucher:
+                return self.voucher.voucher_number
+        except ObjectDoesNotExist:
+            pass
+        return f"REC-{self.entry_number}" if self.entry_number else f"REC-{self.pk}"
 
     @property
     def linked_bill(self):
@@ -256,20 +388,25 @@ class FinancialRecord(models.Model):
                 return self.associated_bill
         except ObjectDoesNotExist:
             pass
-        
-        # If no direct bill, check if it's a trip payment with allocations
-        try:
-            first_alloc = self.allocations.select_related('trip').first()
-            if first_alloc and first_alloc.trip and first_alloc.trip.associated_bill:
-                return first_alloc.trip.associated_bill
-        except ObjectDoesNotExist:
-            pass
-        
-        # Finally check if direct associated trip has a bill
+
+        # Check direct associated trip first
         try:
             if self.associated_trip and self.associated_trip.associated_bill:
                 return self.associated_trip.associated_bill
         except ObjectDoesNotExist:
+            pass
+
+        # If no direct bill, check if it's a trip payment with allocations
+        try:
+            if hasattr(self, '_prefetched_objects_cache') and 'allocations' in self._prefetched_objects_cache:
+                allocs = list(self.allocations.all())
+                first_alloc = allocs[0] if allocs else None
+            else:
+                first_alloc = self.allocations.select_related('trip').first()
+
+            if first_alloc and first_alloc.trip and first_alloc.trip.associated_bill:
+                return first_alloc.trip.associated_bill
+        except (ObjectDoesNotExist, IndexError):
             pass
             
         return None
@@ -284,10 +421,15 @@ class FinancialRecord(models.Model):
             pass
         
         try:
-            first_alloc = self.allocations.select_related('trip').first()
+            if hasattr(self, '_prefetched_objects_cache') and 'allocations' in self._prefetched_objects_cache:
+                allocs = list(self.allocations.all())
+                first_alloc = allocs[0] if allocs else None
+            else:
+                first_alloc = self.allocations.select_related('trip').first()
+
             if first_alloc:
                 return first_alloc.trip
-        except ObjectDoesNotExist:
+        except (ObjectDoesNotExist, IndexError):
             pass
             
         return None
@@ -298,6 +440,16 @@ class FinancialRecord(models.Model):
         try:
             if self.associated_document_renewal:
                 return self.associated_document_renewal
+        except ObjectDoesNotExist:
+            pass
+        return None
+
+    @property
+    def linked_toll_recharge(self):
+        """Returns associated toll recharge if present"""
+        try:
+            if self.associated_toll_recharge:
+                return self.associated_toll_recharge
         except ObjectDoesNotExist:
             pass
         return None

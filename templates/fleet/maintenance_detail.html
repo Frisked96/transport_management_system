@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load ledger_extras %}
 
 {% block title %}Maintenance Detail - Transport Management System{% endblock %}
 
@@ -86,7 +87,7 @@
                     </div>
                     <div>
                         <span class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Cost</span>
-                        <p class="text-sm font-bold text-emerald-600 text-lg">₹{{ record.cost|floatformat:2 }}</p>
+                        <p class="text-sm font-bold text-emerald-600 text-lg">₹{{ record.cost|indian_comma }}</p>
                     </div>
                     <div>
                         <span class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Service Provider</span>

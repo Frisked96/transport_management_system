@@ -1,0 +1,140 @@
+{% extends 'base.html' %}
+
+{% block title %}Import FASTag Statement - TMS{% endblock %}
+
+{% block content %}
+<header class="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div>
+        <div class="flex items-center space-x-2 text-sm text-slate-500 mb-1">
+            <a href="{% url 'financialrecord-list' %}" class="hover:text-emerald-600 transition-colors">Finance</a>
+            <i class="fa-solid fa-chevron-right text-[10px]"></i>
+            <a href="{% url 'toll-ledger' %}" class="hover:text-emerald-600 transition-colors">Toll & FASTag Ledger</a>
+            <i class="fa-solid fa-chevron-right text-[10px]"></i>
+            <span class="text-slate-800 font-semibold">Import Statement</span>
+        </div>
+        <h1 class="text-3xl font-bold text-slate-900">Import FASTag Statement (.xlsx)</h1>
+        <p class="text-sm text-slate-600 mt-1">
+            Automatically ingest toll debits from bank statements or top-up credits from the Boss summary.
+        </p>
+    </div>
+    <div class="flex items-center gap-2">
+        <a href="{% url 'toll-ledger' %}" class="px-4 py-2 border border-slate-300 rounded-md bg-white text-slate-700 text-sm font-medium hover:bg-slate-50 transition-colors">
+            Cancel
+        </a>
+    </div>
+</header>
+
+<div class="max-w-4xl mx-auto">
+    <!-- Instructions Banner -->
+    <div class="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-5 mb-6 text-sm text-blue-900 shadow-sm">
+        <div class="flex items-start gap-3">
+            <div class="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center shrink-0 text-blue-700 mt-0.5">
+                <i class="fa-solid fa-file-excel text-base"></i>
+            </div>
+            <div>
+                <h3 class="font-bold text-base text-blue-950 mb-1">Smart Statement Detection</h3>
+                <p class="text-blue-800 leading-relaxed">
+                    You can upload any of the following exported spreadsheets directly:
+                </p>
+                <ul class="mt-2 space-y-1 list-disc list-inside text-xs text-blue-900">
+                    <li><strong>Bank FASTag Statements</strong> (<code class="bg-blue-100/70 px-1.5 py-0.5 rounded font-mono text-blue-800">AXIS</code>, <code class="bg-blue-100/70 px-1.5 py-0.5 rounded font-mono text-blue-800">IDFC</code>, <code class="bg-blue-100/70 px-1.5 py-0.5 rounded font-mono text-blue-800">LIVQUIK</code>): Automatically extracts toll plaza debits, matches truck plates to your fleet, and logs toll expenses.</li>
+                    <li><strong>Boss Account Summary</strong>: Automatically imports Net Banking / UPI top-ups as wallet recharges. These are marked as <span class="font-semibold text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded">Unallocated</span> so you can reconcile which firm paid via the Reconciliation window.</li>
+                    <li><strong>De-duplication</strong>: Transactions are tracked by FASTag Transaction ID. Duplicate rows and overlapping date ranges are safely skipped.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Upload Form Card -->
+    <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 sm:p-8">
+        <form method="post" enctype="multipart/form-data" id="import-form">
+            {% csrf_token %}
+
+            {% if form.non_field_errors %}
+            <div class="p-3 mb-6 bg-rose-50 border border-rose-200 text-rose-700 text-sm rounded-lg">
+                {% for err in form.non_field_errors %}
+                    <p><i class="fa-solid fa-circle-exclamation mr-1"></i> {{ err }}</p>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <div class="space-y-6">
+                <!-- File Drop Zone -->
+                <div>
+                    <label class="block text-sm font-bold text-slate-700 mb-2">
+                        Select FASTag Statement File (.xlsx) <span class="text-rose-500">*</span>
+                    </label>
+                    <div class="relative border-2 border-dashed border-slate-300 hover:border-emerald-500 rounded-xl p-8 text-center transition-colors bg-slate-50/50 hover:bg-emerald-50/20" id="drop-zone">
+                        <div class="flex flex-col items-center pointer-events-none">
+                            <div class="w-14 h-14 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-2xl mb-3 shadow-inner">
+                                <i class="fa-solid fa-cloud-arrow-up"></i>
+                            </div>
+                            <p class="text-sm font-bold text-slate-800 mb-1" id="file-name-display">
+                                Drag and drop your Excel file here, or browse
+                            </p>
+                            <p class="text-xs text-slate-500">
+                                Supports Microsoft Excel (.xlsx) up to 10 MB
+                            </p>
+                        </div>
+                        <input type="file" name="file" id="id_file" accept=".xlsx" required
+                               class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+                    </div>
+                    {% if form.file.errors %}
+                    <p class="mt-1 text-xs text-rose-600 font-bold">{{ form.file.errors.0 }}</p>
+                    {% endif %}
+                </div>
+
+                <!-- Account Selector (Optional Fallback) -->
+                <div>
+                    <label for="id_toll_account" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                        Destination Toll Account (Optional)
+                    </label>
+                    {{ form.toll_account }}
+                    <p class="mt-1 text-xs text-slate-500">
+                        Leave as <em>-- Auto-detect from file --</em> to let TMS determine the account from the statement's Vendor column (AXIS, IDFC, LIVQ).
+                    </p>
+                    {% if form.toll_account.errors %}
+                    <p class="mt-1 text-xs text-rose-600 font-bold">{{ form.toll_account.errors.0 }}</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Submit Buttons -->
+            <div class="mt-8 pt-6 border-t border-slate-200 flex flex-wrap items-center justify-between gap-4">
+                <a href="{% url 'toll-ledger' %}" class="px-5 py-2.5 border border-slate-300 rounded-md text-slate-700 bg-white hover:bg-slate-50 font-medium text-sm transition-colors">
+                    Cancel
+                </a>
+                <button type="submit" id="submit-btn" class="px-6 py-2.5 bg-emerald-600 text-white rounded-md font-bold text-sm hover:bg-emerald-700 shadow-sm transition-colors flex items-center gap-2">
+                    <i class="fa-solid fa-upload"></i>
+                    <span>Upload & Process Statement</span>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const fileInput = document.getElementById('id_file');
+    const nameDisplay = document.getElementById('file-name-display');
+    const dropZone = document.getElementById('drop-zone');
+    const form = document.getElementById('import-form');
+    const submitBtn = document.getElementById('submit-btn');
+
+    if (fileInput) {
+        fileInput.addEventListener('change', function() {
+            if (fileInput.files.length > 0) {
+                const f = fileInput.files[0];
+                nameDisplay.innerHTML = `<span class="text-emerald-700 font-bold"><i class="fa-solid fa-file-excel mr-1"></i> ${f.name}</span> (${(f.size / 1024).toFixed(1)} KB)`;
+                dropZone.classList.add('border-emerald-500', 'bg-emerald-50/40');
+            }
+        });
+    }
+
+    form.addEventListener('submit', function() {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin mr-2"></i>Processing Statement...`;
+    });
+});
+</script>
+{% endblock %}

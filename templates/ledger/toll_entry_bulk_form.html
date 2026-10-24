@@ -1,0 +1,185 @@
+{% extends 'base.html' %}
+{% load ledger_extras %}
+
+{% block title %}Bulk Add Toll Charges - TMS{% endblock %}
+
+{% block content %}
+<header class="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div>
+        <div class="flex items-center space-x-2 text-sm text-slate-500 mb-1">
+            <a href="{% url 'toll-ledger' %}" class="hover:text-emerald-600 transition-colors">Toll Ledger</a>
+            <i class="fa-solid fa-chevron-right text-[10px]"></i>
+            <span>Bulk Add</span>
+        </div>
+        <h1 class="text-3xl font-bold text-slate-900">Bulk Add Toll Charges</h1>
+        <p class="text-sm text-slate-600 mt-1">Quickly enter multiple vehicle toll slips or FASTag deduction items at once</p>
+    </div>
+    <div class="flex items-center gap-2">
+        <a href="{% url 'toll-ledger' %}" class="px-4 py-2 border border-slate-300 rounded-md bg-white text-slate-700 text-sm font-medium hover:bg-slate-50 transition-colors">
+            Cancel
+        </a>
+    </div>
+</header>
+
+<form method="post" id="bulk-toll-form">
+    {% csrf_token %}
+
+    <!-- Top Account Selection Banner -->
+    <div class="bg-white border border-slate-200 rounded-xl p-4 sm:p-5 shadow-sm mb-6 flex flex-wrap items-center justify-between gap-4">
+        <div class="flex items-center gap-4 flex-wrap">
+            <div>
+                <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Toll Wallet Account *</label>
+                <select name="toll_account" id="id_toll_account" class="rounded-md border-slate-300 text-sm py-2 px-3 bg-white focus:ring-emerald-500 focus:border-emerald-500 font-bold text-slate-800">
+                    {% for acc in accounts %}
+                    <option value="{{ acc.pk }}" {% if acc.pk == default_account.pk %}selected{% endif %}>
+                        {{ acc.name }} (Bal: ₹{{ acc.current_balance_cached|indian_comma }})
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Default Date for Rows</label>
+                <input type="date" id="bulk_default_date" value="{{ today }}" class="rounded-md border-slate-300 text-sm py-2 px-3 bg-white focus:ring-emerald-500 focus:border-emerald-500">
+            </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+            <button type="button" id="add-row-btn" class="px-4 py-2 bg-slate-800 text-white rounded-md text-xs font-bold hover:bg-slate-900 transition-colors flex items-center">
+                <i class="fa-solid fa-plus mr-1.5"></i>Add Row
+            </button>
+        </div>
+    </div>
+
+    <!-- Multi-Row Table -->
+    <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden mb-6">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-xs">
+                <thead>
+                    <tr class="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase text-[11px] tracking-wider">
+                        <th class="px-3 py-3 w-10 text-center">#</th>
+                        <th class="px-3 py-3 w-36">Date *</th>
+                        <th class="px-3 py-3 w-28">Time</th>
+                        <th class="px-3 py-3 w-48">Vehicle *</th>
+                        <th class="px-3 py-3 w-32">Amount (₹) *</th>
+                        <th class="px-3 py-3">Toll Plaza / Location</th>
+                        <th class="px-3 py-3 w-40">Slip / Txn Ref</th>
+                        <th class="px-3 py-3">Remarks</th>
+                        <th class="px-2 py-3 w-10 text-center"></th>
+                    </tr>
+                </thead>
+                <tbody id="rows-container" class="divide-y divide-slate-100">
+                    <!-- Initial rows rendered via JavaScript -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Form Footer -->
+    <div class="flex items-center justify-between bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+        <div class="text-xs text-slate-500 flex items-center">
+            <i class="fa-solid fa-calculator mr-2 text-slate-400"></i>
+            Total Batch Amount: <span id="batch-total" class="font-extrabold text-slate-900 text-sm ml-1.5">₹0.00</span>
+        </div>
+
+        <div class="flex items-center space-x-3">
+            <button type="submit" class="px-6 py-2.5 bg-emerald-600 text-white rounded-md font-bold text-sm hover:bg-emerald-700 shadow-sm transition-colors flex items-center">
+                <i class="fa-solid fa-check mr-2"></i>Submit All Toll Entries
+            </button>
+            <a href="{% url 'toll-ledger' %}" class="px-5 py-2.5 border border-slate-300 rounded-md text-slate-700 bg-white hover:bg-slate-50 font-medium text-sm transition-colors">
+                Cancel
+            </a>
+        </div>
+    </div>
+</form>
+
+<template id="vehicle-options-template">
+    <option value="">-- Select Vehicle --</option>
+    {% for v in vehicles %}
+    <option value="{{ v.pk }}">{{ v.registration_plate }}</option>
+    {% endfor %}
+</template>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const container = document.getElementById('rows-container');
+    const addBtn = document.getElementById('add-row-btn');
+    const defaultDateInput = document.getElementById('bulk_default_date');
+    const batchTotalEl = document.getElementById('batch-total');
+    const vehicleOptionsHtml = document.getElementById('vehicle-options-template').innerHTML;
+
+    function recalculateTotal() {
+        const amounts = document.querySelectorAll('input[name="amount[]"]');
+        let sum = 0;
+        amounts.forEach(inp => {
+            const v = parseFloat(inp.value);
+            if (!isNaN(v) && v > 0) sum += v;
+        });
+        batchTotalEl.textContent = '₹' + sum.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    }
+
+    function createRow(index) {
+        const dateVal = defaultDateInput.value;
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-50 transition-colors row-item';
+        tr.innerHTML = `
+            <td class="px-3 py-2 text-center text-slate-400 font-bold row-num">${index}</td>
+            <td class="px-2 py-2">
+                <input type="date" name="date[]" value="${dateVal}" required class="w-full px-2 py-1.5 border border-slate-300 rounded text-xs focus:ring-emerald-500 focus:border-emerald-500 bg-white">
+            </td>
+            <td class="px-2 py-2">
+                <input type="time" name="time[]" class="w-full px-2 py-1.5 border border-slate-300 rounded text-xs focus:ring-emerald-500 focus:border-emerald-500 bg-white">
+            </td>
+            <td class="px-2 py-2">
+                <select name="vehicle[]" required class="w-full px-2 py-1.5 border border-slate-300 rounded text-xs focus:ring-emerald-500 focus:border-emerald-500 bg-white">
+                    ${vehicleOptionsHtml}
+                </select>
+            </td>
+            <td class="px-2 py-2">
+                <input type="number" step="0.01" min="0.01" name="amount[]" placeholder="₹ Amount" required class="w-full px-2 py-1.5 border border-slate-300 rounded text-xs focus:ring-emerald-500 focus:border-emerald-500 bg-white amount-input">
+            </td>
+            <td class="px-2 py-2">
+                <input type="text" name="toll_plaza[]" placeholder="Plaza / Location" class="w-full px-2 py-1.5 border border-slate-300 rounded text-xs focus:ring-emerald-500 focus:border-emerald-500 bg-white">
+            </td>
+            <td class="px-2 py-2">
+                <input type="text" name="reference[]" placeholder="Slip / Txn Ref" class="w-full px-2 py-1.5 border border-slate-300 rounded text-xs focus:ring-emerald-500 focus:border-emerald-500 bg-white">
+            </td>
+            <td class="px-2 py-2">
+                <input type="text" name="description[]" placeholder="Notes (optional)" class="w-full px-2 py-1.5 border border-slate-300 rounded text-xs focus:ring-emerald-500 focus:border-emerald-500 bg-white">
+            </td>
+            <td class="px-2 py-2 text-center">
+                <button type="button" class="text-slate-400 hover:text-rose-600 remove-btn p-1" title="Remove row">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </td>
+        `;
+
+        tr.querySelector('.amount-input').addEventListener('input', recalculateTotal);
+        tr.querySelector('.remove-btn').addEventListener('click', function() {
+            if (document.querySelectorAll('.row-item').length > 1) {
+                tr.remove();
+                updateRowNumbers();
+                recalculateTotal();
+            }
+        });
+
+        return tr;
+    }
+
+    function updateRowNumbers() {
+        document.querySelectorAll('.row-item').forEach((row, i) => {
+            row.querySelector('.row-num').textContent = (i + 1);
+        });
+    }
+
+    // Add initial 5 rows
+    for (let i = 1; i <= 5; i++) {
+        container.appendChild(createRow(i));
+    }
+
+    addBtn.addEventListener('click', function() {
+        const nextIdx = document.querySelectorAll('.row-item').length + 1;
+        container.appendChild(createRow(nextIdx));
+    });
+});
+</script>
+{% endblock %}

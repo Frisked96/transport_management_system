@@ -2,6 +2,55 @@
 
 {% block title %}Bulk Add Trips - TMS{% endblock %}
 
+{% block extra_css %}
+<style>
+    .select2-dropdown {
+        max-height: none !important;
+        overflow-y: visible !important;
+        border-radius: 0.375rem !important;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.1) !important;
+        z-index: 9999;
+    }
+    .select2-search__field {
+        height: 40px !important;
+        font-size: 16px !important;
+    }
+    .select2-container--bootstrap-5 .select2-selection {
+        min-height: 38px;
+        display: flex;
+        align-items: center;
+    }
+    @media (max-width: 640px) {
+        .select2-container {
+            width: 100% !important;
+        }
+    }
+    
+    /* Compact Notes */
+    textarea[name$="-notes"] {
+        height: 38px !important;
+        min-height: 38px !important;
+        transition: all 0.2s ease-in-out;
+        resize: vertical;
+        border-color: #cbd5e1;
+    }
+    
+    textarea[name$="-notes"]:focus {
+        border-color: #10b981;
+        min-height: 80px !important;
+    }
+
+    .notes-container.xl\:col-span-12 textarea {
+        min-height: 80px !important;
+    }
+
+    /* Actions Toolbar Transition */
+    #bulk-actions-bar {
+        transition: box-shadow 0.2s ease, background-color 0.2s ease;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <header class="mb-6 flex items-center justify-between">
     <div>
@@ -253,7 +302,7 @@
                     <i class="fa-solid fa-arrow-down text-xs"></i>
                     <span>Minimize</span>
                 </button>
-                <button type="submit" class="w-full sm:w-auto flex items-center justify-center space-x-2 px-8 py-3 bg-emerald-600 text-white rounded-lg text-sm font-black hover:bg-emerald-700 shadow-lg shadow-emerald-100 transition-all active:scale-95 uppercase tracking-widest">
+                <button type="submit" id="save-trips-btn" class="w-full sm:w-auto flex items-center justify-center space-x-2 px-8 py-3 bg-emerald-600 text-white rounded-lg text-sm font-black hover:bg-emerald-700 shadow-lg shadow-emerald-100 transition-all active:scale-95 uppercase tracking-widest">
                     <i class="fa-solid fa-circle-check"></i>
                     <span>Save All Trips</span>
                 </button>
@@ -264,53 +313,6 @@
 {% endblock %}
 
 {% block extra_js %}
-<style>
-    .select2-dropdown {
-        max-height: none !important;
-        overflow-y: visible !important;
-        border-radius: 0.375rem !important;
-        box-shadow: 0 10px 25px rgba(0,0,0,0.1) !important;
-        z-index: 9999;
-    }
-    .select2-search__field {
-        height: 40px !important;
-        font-size: 16px !important;
-    }
-    .select2-container--bootstrap-5 .select2-selection {
-        min-height: 38px;
-        display: flex;
-        align-items: center;
-    }
-    @media (max-width: 640px) {
-        .select2-container {
-            width: 100% !important;
-        }
-    }
-    
-    /* Compact Notes */
-    textarea[name$="-notes"] {
-        height: 38px !important;
-        min-height: 38px !important;
-        transition: all 0.2s ease-in-out;
-        resize: vertical;
-        border-color: #cbd5e1;
-    }
-    
-    textarea[name$="-notes"]:focus {
-        border-color: #10b981;
-        min-height: 80px !important;
-    }
-
-    .notes-container.xl\:col-span-12 textarea {
-        min-height: 80px !important;
-    }
-
-    /* Actions Toolbar Transition */
-    #bulk-actions-bar {
-        transition: box-shadow 0.2s ease, background-color 0.2s ease;
-    }
-</style>
-
 <script>
 $(document).ready(function() {
     let routeRates = {{ route_rates|safe }};
@@ -388,12 +390,7 @@ $(document).ready(function() {
         saveDraft();
     });
 
-    // Clear draft on submit? 
-    // We NO LONGER clear on submit to prevent data loss if the network fails during POST.
-    // Instead, we clear it on the success page (trip-list).
-    $('#bulk-trip-form').on('submit', function() {
-        // localStorage.removeItem(DRAFT_KEY); // Removed for robustness
-    });
+
 
     // Minimize / Float Actions Bar
     const $actionsBar = $('#bulk-actions-bar');

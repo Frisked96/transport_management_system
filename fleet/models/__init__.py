@@ -1,6 +1,8 @@
 from .vehicle import Vehicle
 from .maintenance import MaintenanceRecord
-from .tyre import TyreBrand, Tyre, TyreLog
+from .tyre_brand import TyreBrand
+from .tyre import Tyre
+from .tyre_log import TyreLog
 
 __all__ = [
     'Vehicle',

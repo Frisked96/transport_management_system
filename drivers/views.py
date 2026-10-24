@@ -52,12 +52,12 @@ class DriverDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
         context['trips'] = Trip.objects.filter(driver=driver).order_by('-created_at')
 
         # Profit Calculation
-        # 1. Total Revenue: Sum of (Weight * Rate per Ton) for all trips by this driver
+        # 1. Total Revenue: Sum of revenue_cached for all trips by this driver (handles fixed & per-ton)
         total_revenue = Trip.objects.filter(
             driver=driver
         ).aggregate(
-            total=Sum(F('weight') * F('rate_per_ton'), output_field=DecimalField())
-        )['total'] or 0
+            total=Sum('revenue_cached')
+        )['total'] or Decimal('0')
 
         # 2. Total Expenses
         # FinancialRecords associated with trips by this driver, that are expenses

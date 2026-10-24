@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load ledger_extras %}
 
 {% block title %}Renew {{ document.document_name }} - TMS{% endblock %}
 
@@ -44,7 +45,7 @@
                 {% if document.expiry_date %}{{ document.expiry_date|date:"d M Y" }}{% else %}No expiry set{% endif %}
             </p>
             <p class="text-xs text-slate-500 mt-0.5">
-                Current Doc #: {{ document.document_number|default:"-" }} &bull; Last Cost: ₹{{ document.cost|floatformat:2 }}
+                Current Doc #: {{ document.document_number|default:"-" }} &bull; Last Cost: ₹{{ document.cost|indian_comma }}
             </p>
         </div>
         <div>

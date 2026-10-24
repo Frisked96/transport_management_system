@@ -79,7 +79,7 @@ class CompanyAccount(models.Model):
         Numeric balance: Opening (Dr) + Debits (Income) - Credits (Expenses)
         """
         from ledger.services import BalanceService
-        return BalanceService.refresh_account_balance(self)
+        return BalanceService.calculate_account_balance(self)
 
     @property
     def current_balance(self):

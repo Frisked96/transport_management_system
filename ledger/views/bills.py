@@ -20,10 +20,10 @@ import logging
 logger = logging.getLogger(__name__)
 
 from ledger.models import FinancialRecord, Party, CompanyAccount, TripAllocation, TransactionCategory, Bill, BillTrip
-from ledger.forms import BillForm
+from ledger.forms import BillForm, VendorBillUpdateForm
 from trips.models import Trip
 from ledger.views.base import BaseLedgerPermissionMixin
-from ledger.utils import format_indian_comma, format_balance
+from ledger.utils import format_indian_comma, format_balance, sort_bill_trips
 
 class BillListView(LoginRequiredMixin, PermissionRequiredMixin, BaseLedgerPermissionMixin, ListView):
     model = Bill
@@ -155,18 +155,56 @@ class BillUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
     template_name = 'ledger/bill_form.html'
     permission_required = 'ledger.change_bill'
 
+    def dispatch(self, request, *args, **kwargs):
+        obj = self.get_object()
+        if obj.is_creditor_bill:
+            return redirect('vendor-bill-update', pk=obj.pk)
+        return super().dispatch(request, *args, **kwargs)
+
     def get_success_url(self):
         return reverse_lazy('bill-detail', kwargs={'pk': self.object.pk})
+
     def form_valid(self, form):
         response = super().form_valid(form)
-        # sync_to_ledger is already called in BillForm.save()
-        self.object.sync_to_ledger()
         messages.success(self.request, 'Bill updated successfully!')
         
         if 'save_print' in self.request.POST:
             return redirect('bill-detail', pk=self.object.pk)
             
         return response
+
+
+class VendorBillUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+    """
+    Focused view to update Vendor Bill Number and Date on Creditor Bills directly.
+    """
+    model = Bill
+    form_class = VendorBillUpdateForm
+    template_name = 'ledger/vendor_bill_form.html'
+    permission_required = 'ledger.change_bill'
+
+    def get_queryset(self):
+        return Bill.objects.filter(
+            Q(customer_bill__isnull=False) | Q(party__party_type=Party.TYPE_CREDITOR)
+        ).select_related('party', 'customer_bill', 'issuer')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        bill = self.object
+        bill_trips = sort_bill_trips(bill.bill_trips.select_related('trip', 'trip__vehicle', 'trip__route'))
+        context['bill_trips'] = bill_trips
+        context['bill_trips_count'] = len(bill_trips)
+        context['total_hire'] = sum((bt.trip.vendor_hire_amount or Decimal('0')) for bt in bill_trips if bt.trip)
+        return context
+
+    def get_success_url(self):
+        return reverse_lazy('bill-detail', kwargs={'pk': self.object.pk})
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        messages.success(self.request, f"Vendor bill {self.object.display_invoice_number} updated successfully!")
+        return response
+
 
 class BillDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
     model = Bill
@@ -185,7 +223,7 @@ class BillDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
         if payments > 0:
             impact.append(f"₹{payments:,.2f} in payments made against these trips will REMAIN in the system as Payments In/Deductions, protecting your cash balance.")
             
-        impact.append("Ledger entry numbers will be automatically re-sequenced to prevent gaps.")
+        impact.append("The consolidated entry will be soft-deleted and archived under its voucher.")
         context['impact_statements'] = impact
         return context
 
@@ -205,7 +243,7 @@ class BillDetailView(LoginRequiredMixin, PermissionRequiredMixin, BaseLedgerPerm
             context['creditor_bills'] = list(bill.creditor_bills.select_related('party').all())
         else:
             context['creditor_bills'] = []
-        bill_trips = list(bill.bill_trips.select_related('trip', 'trip__vehicle', 'trip__vehicle__vendor').order_by('trip__date'))
+        bill_trips = sort_bill_trips(bill.bill_trips.select_related('trip', 'trip__vehicle', 'trip__vehicle__vendor'))
         context['bill_trips'] = bill_trips
         context['bill_trips_count'] = len(bill_trips)
 
@@ -340,10 +378,11 @@ def group_trips_for_bill(bill, bill_trips=None):
     # Pre-calculate sort key values
     def get_sort_key(bt):
         trip = bt.trip
+        rate = (trip.vendor_rate if bill.is_creditor_bill else trip.rate_per_ton) or 0
         return (
             trip.pickup_location or '',
             trip.delivery_location or '',
-            trip.rate_per_ton or 0
+            rate
         )
 
     # Sort bill_trips
@@ -389,7 +428,7 @@ def group_trips_for_bill(bill, bill_trips=None):
             'discount': total_discount,
             'amount': total_amount,
             'count': len(items),
-            'bill_trips': items, # Keep track of actual bill_trips in this group
+            'bill_trips': sort_bill_trips(items), # Keep track of actual bill_trips in this group
         })
 
     return grouped_items
@@ -397,12 +436,13 @@ def group_trips_for_bill(bill, bill_trips=None):
 def _get_combined_bill_context(bill):
     """Helper to construct context for invoice & annexure print view."""
     # For annexure
-    bill_trips = list(bill.bill_trips.select_related('trip', 'trip__vehicle').order_by('trip__date'))
+    bill_trips = sort_bill_trips(bill.bill_trips.select_related('trip', 'trip__vehicle'))
 
     # For invoice section
     invoice_items = group_trips_for_bill(bill, bill_trips=bill_trips)
     date_groups = []
-    for date, group in groupby(bill_trips, key=lambda bt: bt.trip.date if bt.trip else None):
+    sorted_by_date = sorted(bill_trips, key=lambda bt: bt.trip.date if (bt.trip and bt.trip.date) else datetime.min.date())
+    for date, group in groupby(sorted_by_date, key=lambda bt: bt.trip.date if bt.trip else None):
         bt_list = list(group)
         date_groups.append({
             'date': date,
@@ -602,8 +642,8 @@ def get_bulk_invoices_context(request):
 
     all_bill_contexts = []
     for bill in bills:
-        invoice_items = group_trips_for_bill(bill)
-        bill_trips = bill.bill_trips.select_related('trip', 'trip__vehicle').order_by('trip__date')
+        bill_trips = sort_bill_trips(bill.bill_trips.select_related('trip', 'trip__vehicle'))
+        invoice_items = group_trips_for_bill(bill, bill_trips=bill_trips)
         
         has_discount = False
         if bill.bill_type == 'Standard':

@@ -5,18 +5,27 @@
 
 {% block content %}
 <!-- BEGIN: Page Header -->
-<header class="flex flex-col md:flex-row md:items-center justify-between mb-6">
+<header class="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
     <div>
-        <h1 class="text-3xl font-bold text-slate-900">Financial Records</h1>
-        <p class="text-sm text-slate-600 mt-1">Manage and track all financial transactions</p>
+        <div class="flex items-center space-x-2 text-xs text-slate-500 mb-1">
+            <a href="{% url 'financialrecord-list' %}" class="hover:text-emerald-600 transition-colors">Finance</a>
+            <i class="fa-solid fa-chevron-right text-[9px] text-slate-400"></i>
+            <span class="text-slate-800 font-bold">General Ledger</span>
+        </div>
+        <h1 class="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">Financial Records</h1>
+        <p class="text-xs sm:text-sm text-slate-600 mt-0.5">Comprehensive audit ledger of all financial transactions ordered from newest to oldest.</p>
     </div>
-    <div class="mt-4 md:mt-0 flex space-x-3">
-        <a href="{% url 'unified-ledger-pdf' %}?start_date={{ request.GET.start_date }}&end_date={{ request.GET.end_date }}" target="_blank" class="flex items-center space-x-2 px-4 py-2 border border-red-200 rounded-md bg-red-50 text-red-700 text-sm font-medium hover:bg-red-100 transition-colors shadow-sm">
+    <div class="flex items-center gap-2 flex-wrap">
+        <a href="{% url 'financial-entry-review' %}" class="px-3.5 py-2 border border-amber-300 rounded-lg bg-amber-50 text-amber-800 text-xs font-semibold hover:bg-amber-100 transition-colors shadow-sm inline-flex items-center gap-1.5">
+            <i class="fa-solid fa-clipboard-check text-amber-600"></i>
+            <span>Entry Verification</span>
+        </a>
+        <a href="{% url 'unified-ledger-pdf' %}?start_date={{ request.GET.start_date }}&end_date={{ request.GET.end_date }}" target="_blank" class="px-3.5 py-2 border border-red-200 rounded-lg bg-red-50 text-red-700 text-xs font-semibold hover:bg-red-100 transition-colors shadow-sm inline-flex items-center gap-1.5">
             <i class="fa-solid fa-file-pdf"></i>
-            <span>Unified Ledger</span>
+            <span>Unified Ledger (PDF)</span>
         </a>
         {% if perms.ledger.add_financialrecord %}
-        <a href="{% url 'financialrecord-create' %}" class="flex items-center space-x-2 px-4 py-2 bg-emerald-600 text-white rounded-md text-sm font-medium hover:bg-emerald-700 shadow-sm transition-colors">
+        <a href="{% url 'financialrecord-create' %}" class="px-3.5 py-2 bg-emerald-600 text-white rounded-lg text-xs font-semibold hover:bg-emerald-700 transition-colors shadow-sm inline-flex items-center gap-1.5">
             <i class="fa-solid fa-plus"></i>
             <span>Add Record</span>
         </a>
@@ -26,333 +35,441 @@
 <!-- END: Page Header -->
 
 <!-- BEGIN: Dashboard Stats -->
-<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
-    <div class="bg-white border border-slate-200 rounded-lg p-5 border-l-4 border-l-emerald-500 shadow-sm">
+<div class="grid grid-cols-2 sm:grid-cols-5 gap-3 sm:gap-4 mb-6">
+    <div class="bg-white border border-slate-200 rounded-xl p-4 border-l-4 border-l-emerald-500 shadow-sm">
         <h5 class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Total Debit (In)</h5>
-        <h2 class="text-xl font-bold text-emerald-600">₹{{ total_income|indian_comma }}</h2>
+        <h2 class="text-xl sm:text-2xl font-black text-emerald-600">₹{{ total_income|indian_comma }}</h2>
         <p class="text-[10px] text-slate-400 mt-1 italic uppercase tracking-tighter">Net of TDS</p>
     </div>
-    <div class="bg-white border border-slate-200 rounded-lg p-5 border-l-4 border-l-amber-500 shadow-sm">
+    <div class="bg-white border border-slate-200 rounded-xl p-4 border-l-4 border-l-amber-500 shadow-sm">
         <h5 class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Total TDS</h5>
-        <h2 class="text-xl font-bold text-amber-600">₹{{ total_tds|indian_comma }}</h2>
+        <h2 class="text-xl sm:text-2xl font-black text-amber-600">₹{{ total_tds|indian_comma }}</h2>
         <p class="text-[10px] text-slate-400 mt-1 italic">Filtered range</p>
     </div>
-    <div class="bg-white border border-slate-200 rounded-lg p-5 border-l-4 border-l-red-500 shadow-sm">
+    <div class="bg-white border border-slate-200 rounded-xl p-4 border-l-4 border-l-rose-500 shadow-sm">
         <h5 class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Total Credit (Out)</h5>
-        <h2 class="text-xl font-bold text-red-600">₹{{ total_expenses|indian_comma }}</h2>
+        <h2 class="text-xl sm:text-2xl font-black text-rose-600">₹{{ total_expenses|indian_comma }}</h2>
         <p class="text-[10px] text-slate-400 mt-1 italic">Filtered range</p>
     </div>
-    <div class="bg-white border border-slate-200 rounded-lg p-5 border-l-4 {% if net_total >= 0 %}border-l-blue-500{% else %}border-l-orange-500{% endif %} shadow-sm">
+    <div class="bg-white border border-slate-200 rounded-xl p-4 border-l-4 {% if net_total >= 0 %}border-l-blue-500{% else %}border-l-orange-500{% endif %} shadow-sm">
         <h5 class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Net Balance</h5>
-        <h2 class="text-xl font-bold {% if net_total >= 0 %}text-blue-600{% else %}text-orange-600{% endif %}">
+        <h2 class="text-xl sm:text-2xl font-black {% if net_total >= 0 %}text-blue-600{% else %}text-orange-600{% endif %}">
             ₹{{ net_total|abs_val|indian_comma }} {% if net_total >= 0 %}Dr{% else %}Cr{% endif %}
         </h2>
         <p class="text-[10px] text-slate-400 mt-1 italic">Filtered range</p>
     </div>
-    <div class="bg-slate-900 rounded-lg p-5 border-l-4 border-l-emerald-400 shadow-lg">
+    <div class="bg-slate-900 rounded-xl p-4 border-l-4 border-l-emerald-400 shadow-md col-span-2 sm:col-span-1">
         <h5 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Total Outstanding</h5>
-        <h2 class="text-xl font-bold text-white">₹{{ total_outstanding|indian_comma }}</h2>
+        <h2 class="text-xl sm:text-2xl font-black text-white">₹{{ total_outstanding|indian_comma }}</h2>
         <p class="text-[10px] text-emerald-400 mt-1 italic font-medium">Receivable from Debtors</p>
     </div>
 </div>
 <!-- END: Dashboard Stats -->
 
-<div class="grid grid-cols-1 lg:grid-cols-12 gap-8 mb-8">
-    <!-- Party Outstanding List -->
-    <div class="lg:col-span-4 flex flex-col h-full">
-        <div class="flex items-center justify-between mb-4">
+<!-- BEGIN: Search & Filter Controls -->
+<section class="bg-white p-4 sm:p-5 rounded-xl border border-slate-200 mb-6 shadow-sm overflow-hidden">
+    <form method="get" class="space-y-3">
+        <!-- Row 1: Search, Account, Party, Category -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <!-- Search -->
+            <div class="min-w-0">
+                <label for="search" class="text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-widest block">Search</label>
+                <div class="relative">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                    <input type="text" id="search" name="search" value="{{ current_search }}" placeholder="Entry #, Ref #, Narration..." 
+                           class="block w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-xs focus:ring-emerald-500 focus:border-emerald-500 bg-white">
+                </div>
+            </div>
+
+            <!-- Account -->
+            <div class="min-w-0">
+                <label for="account" class="text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-widest block">Company Account</label>
+                <select id="account" name="account" class="block w-full py-2 px-3 border border-slate-300 rounded-lg text-xs bg-white focus:ring-emerald-500 focus:border-emerald-500 truncate">
+                    <option value="">All Accounts</option>
+                    {% for acc in account_choices %}
+                        <option value="{{ acc.id }}" {% if current_account == acc.id|stringformat:"s" %}selected{% endif %}>{{ acc.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Party -->
+            <div class="min-w-0">
+                <label for="party" class="text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-widest block">Party / Entity</label>
+                <select id="party" name="party" class="block w-full py-2 px-3 border border-slate-300 rounded-lg text-xs bg-white focus:ring-emerald-500 focus:border-emerald-500 truncate">
+                    <option value="">All Parties</option>
+                    {% for p in party_choices %}
+                        <option value="{{ p.id }}" {% if current_party == p.id|stringformat:"s" %}selected{% endif %}>{{ p.name }} ({{ p.party_type }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Category -->
+            <div class="min-w-0">
+                <label for="category" class="text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-widest block">Category</label>
+                <select id="category" name="category" class="block w-full py-2 px-3 border border-slate-300 rounded-lg text-xs bg-white focus:ring-emerald-500 focus:border-emerald-500 truncate">
+                    <option value="">All Categories</option>
+                    {% for cat in category_choices %}
+                        <option value="{{ cat.id }}" {% if current_category == cat.id|stringformat:"s" %}selected{% endif %}>{{ cat.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <!-- Row 2: Date Filters & Action Buttons -->
+        <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-3 pt-2 border-t border-slate-100">
+            <div class="grid grid-cols-2 gap-3 w-full sm:w-auto sm:max-w-md">
+                <div class="min-w-0">
+                    <label class="text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-widest block">From Date</label>
+                    <input type="date" name="start_date" value="{{ request.GET.start_date }}" class="block w-full py-1.5 px-3 border border-slate-300 rounded-lg text-xs bg-white">
+                </div>
+                <div class="min-w-0">
+                    <label class="text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-widest block">To Date</label>
+                    <input type="date" name="end_date" value="{{ request.GET.end_date }}" class="block w-full py-1.5 px-3 border border-slate-300 rounded-lg text-xs bg-white">
+                </div>
+            </div>
+
+            <div class="flex items-center gap-2 w-full sm:w-auto">
+                <button type="submit" class="flex-1 sm:flex-none px-4 py-2 bg-slate-800 text-white rounded-lg text-xs font-bold hover:bg-slate-900 transition-colors shadow-sm inline-flex items-center justify-center gap-1.5">
+                    <i class="fa-solid fa-filter text-[10px]"></i>
+                    <span>Apply Filter</span>
+                </button>
+                <a href="{% url 'financialrecord-list' %}" class="px-3 py-2 bg-slate-100 text-slate-600 rounded-lg text-xs font-semibold hover:bg-slate-200 transition-colors inline-flex items-center justify-center gap-1.5 border border-slate-200" title="Reset Filters">
+                    <i class="fa-solid fa-rotate-left text-[10px]"></i>
+                    <span>Reset</span>
+                </a>
+            </div>
+        </div>
+    </form>
+</section>
+<!-- END: Search & Filter Controls -->
+
+<!-- BEGIN: Dual Main Layout (Top Outstanding Party List + Financial Ledger Entries) -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-8 items-start">
+    <!-- Top Outstanding Party List (Debtors & Creditors) -->
+    <div class="lg:col-span-4 flex flex-col w-full">
+        <div class="flex items-center justify-between mb-3">
             <h3 class="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center">
                 <i class="fa-solid fa-users-viewfinder mr-2 text-emerald-600"></i>Top Outstanding
             </h3>
-            <a href="{% url 'party-list' %}" class="text-[10px] font-bold text-emerald-600 hover:text-emerald-700 uppercase tracking-widest">View All</a>
+            <a href="{% url 'party-list' %}" class="text-[10px] font-bold text-emerald-600 hover:text-emerald-700 uppercase tracking-widest inline-flex items-center gap-1">
+                <span>View All</span>
+                <i class="fa-solid fa-arrow-up-right-from-square text-[9px]"></i>
+            </a>
         </div>
-        <div class="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm flex-1">
-            <div class="divide-y divide-slate-100 max-h-[500px] overflow-y-auto">
+        <div class="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+            <div class="divide-y divide-slate-100 max-h-[560px] overflow-y-auto">
                 {% for p in party_dashboard %}
-                <a href="{% url 'party-detail' p.id %}" class="flex flex-col p-4 hover:bg-slate-50 transition-colors group">
-                    <div class="flex items-center justify-between mb-2">
-                        <div class="min-w-0 flex-1">
-                            <p class="text-sm font-bold text-slate-800 truncate group-hover:text-emerald-600 transition-colors">{{ p.name }}</p>
-                            <p class="text-[9px] text-slate-400 uppercase tracking-tighter">{{ p.party_type }}</p>
+                <a href="{% url 'party-detail' p.id %}" class="flex flex-col p-3.5 hover:bg-slate-50 transition-colors group">
+                    <div class="flex items-center justify-between mb-1.5">
+                        <div class="min-w-0 flex-1 pr-2">
+                            <p class="text-xs font-bold text-slate-800 truncate group-hover:text-emerald-600 transition-colors" title="{{ p.name }}">{{ p.name }}</p>
+                            <span class="text-[9px] font-bold px-1.5 py-0.2 rounded uppercase tracking-wider
+                                {% if p.party_type == 'Debtor' %}bg-blue-50 text-blue-700
+                                {% else %}bg-amber-50 text-amber-700{% endif %}">
+                                {{ p.party_type }}
+                            </span>
                         </div>
-                        <div class="text-right ml-4">
-                            <p class="text-sm font-black {% if p.balance > 0 %}text-emerald-600{% elif p.balance < 0 %}text-red-600{% else %}text-slate-400{% endif %}">
+                        <div class="text-right flex-shrink-0">
+                            <p class="text-xs font-black {% if p.balance > 0 %}text-emerald-600{% elif p.balance < 0 %}text-red-600{% else %}text-slate-400{% endif %}">
                                 ₹{{ p.balance|abs_val|indian_comma }}
-                                <span class="text-[10px] font-bold">{% if p.balance > 0 %}Dr{% elif p.balance < 0 %}Cr{% endif %}</span>
+                                <span class="text-[9px] font-bold">{% if p.balance > 0 %}Dr{% elif p.balance < 0 %}Cr{% endif %}</span>
                             </p>
                         </div>
                     </div>
                     
-                    <!-- Enhanced Last Payment Notice -->
-                    <div class="flex items-center">
-                        <span class="text-[9px] font-bold uppercase tracking-wider text-slate-400 mr-2">Last Payment:</span>
+                    <div class="flex items-center text-[10px]">
+                        <span class="text-slate-400 mr-1.5">Last Payment:</span>
                         {% if p.last_payment_date %}
-                            <span class="inline-flex items-center px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-100">
+                            <span class="inline-flex items-center px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700 font-bold border border-emerald-100 text-[10px]">
                                 <i class="fa-solid fa-calendar-check mr-1 text-[8px]"></i>
                                 {{ p.last_payment_date|date:"d M Y" }}
                             </span>
                         {% else %}
-                            <span class="inline-flex items-center px-2 py-0.5 rounded bg-slate-50 text-slate-400 text-[10px] font-medium border border-slate-100 italic">
-                                No payments recorded
-                            </span>
+                            <span class="text-slate-400 italic text-[10px]">No payments recorded</span>
                         {% endif %}
                     </div>
                 </a>
+                {% empty %}
+                <div class="p-6 text-center text-slate-400 text-xs italic">
+                    No outstanding party balances.
+                </div>
                 {% endfor %}
             </div>
         </div>
     </div>
 
-    <!-- Recent Activity / Filters -->
-    <div class="lg:col-span-8">
-        <div class="flex items-center justify-between mb-4">
-            <h3 class="text-sm font-bold text-slate-800 uppercase tracking-wider">
-                <i class="fa-solid fa-clock-rotate-left mr-2 text-slate-400"></i>Recent Activity
-            </h3>
-            <div class="flex space-x-2">
-                <button type="button" onclick="document.getElementById('filter-section').classList.toggle('hidden')" class="text-[10px] font-bold text-slate-500 hover:text-slate-700 uppercase tracking-widest bg-slate-100 px-3 py-1 rounded">
-                    <i class="fa-solid fa-sliders mr-1"></i>Filter
-                </button>
+    <!-- Financial Ledger Entries (Newest to Oldest • NO Horizontal Scrollbar) -->
+    <div class="lg:col-span-8 w-full min-w-0">
+        <div class="flex items-center justify-between mb-3">
+            <div>
+                <h3 class="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                    <i class="fa-solid fa-receipt text-emerald-600"></i>
+                    <span>Financial Ledger Entries</span>
+                </h3>
             </div>
+            <span class="text-[11px] font-semibold text-slate-500">
+                Newest to Oldest {% if page_obj %}({{ page_obj.paginator.count }}){% endif %}
+            </span>
         </div>
 
-        <!-- Hidden Filter Section -->
-        <section id="filter-section" class="{% if not request.GET.category and not request.GET.start_date and not request.GET.account and not request.GET.party %}hidden{% endif %} bg-slate-50 p-4 rounded-lg border border-slate-200 mb-6 transition-all">
-            <form method="get">
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
-                    <div class="flex flex-col">
-                        <label for="account" class="text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-widest">Company Account</label>
-                        <select id="account" name="account" class="block w-full border-slate-300 rounded text-xs focus:ring-emerald-500 focus:border-emerald-500 bg-white">
-                            <option value="">All Accounts</option>
-                            {% for acc in account_choices %}
-                                <option value="{{ acc.id }}" {% if current_account == acc.id|stringformat:"s" %}selected{% endif %}>{{ acc.name }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="flex flex-col">
-                        <label for="party" class="text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-widest">Party / Entity</label>
-                        <select id="party" name="party" class="block w-full border-slate-300 rounded text-xs focus:ring-emerald-500 focus:border-emerald-500 bg-white">
-                            <option value="">All Parties</option>
-                            {% for p in party_choices %}
-                                <option value="{{ p.id }}" {% if current_party == p.id|stringformat:"s" %}selected{% endif %}>{{ p.name }} ({{ p.party_type }})</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="flex flex-col">
-                        <label for="category" class="text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-widest">Category</label>
-                        <select id="category" name="category" class="block w-full border-slate-300 rounded text-xs focus:ring-emerald-500 focus:border-emerald-500 bg-white">
-                            <option value="">All Categories</option>
-                            {% for cat in category_choices %}
-                                <option value="{{ cat.id }}" {% if current_category == cat.id|stringformat:"s" %}selected{% endif %}>{{ cat.name }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="flex flex-col">
-                        <label class="text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-widest">From Date</label>
-                        <input type="date" name="start_date" value="{{ request.GET.start_date }}" class="block w-full border-slate-300 rounded text-xs bg-white">
-                    </div>
-                    <div class="flex flex-col">
-                        <label class="text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-widest">To Date</label>
-                        <div class="flex space-x-2">
-                            <input type="date" name="end_date" value="{{ request.GET.end_date }}" class="block w-full border-slate-300 rounded text-xs flex-1 bg-white">
-                            <button type="submit" class="bg-emerald-600 text-white px-3 py-2 rounded text-xs font-bold hover:bg-emerald-700">Go</button>
-                            <a href="{% url 'financialrecord-list' %}" class="bg-slate-200 text-slate-700 px-3 py-2 rounded text-xs font-bold hover:bg-slate-300 text-center">Reset</a>
-                        </div>
-                    </div>
-                </div>
-            </form>
-        </section>
-        
-        <!-- BEGIN: Financial Records List -->
         {% if financial_records %}
-        <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-            <!-- Mobile Card List -->
-            <div class="md:hidden divide-y divide-slate-50">
-                {% for record in financial_records %}
-                <a href="{% url 'financialrecord-detail' record.pk %}" class="block px-4 py-3 active:bg-slate-50 transition-colors">
-                    <div class="flex items-start justify-between">
-                        <div class="min-w-0 flex-1">
-                            <div class="flex items-center space-x-2">
-                                <p class="text-sm font-bold text-slate-900">#{{ record.entry_number|default:record.pk }}</p>
-                                <span class="text-[10px] text-slate-400 uppercase">{{ record.date|date:"d M Y" }}</span>
-                                {% if record.account %}
-                                <span class="text-[9px] font-bold px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded uppercase truncate max-w-[120px]">
-                                    <i class="fa-solid fa-building-columns mr-1 text-[8px]"></i>{{ record.account.name }}
-                                </span>
-                                {% endif %}
+        <!-- DESKTOP TABLE VIEW (Visible on screens >= 768px • Perfectly fitted with ZERO horizontal bar) -->
+        <div class="hidden md:block bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+            <table class="w-full text-left text-xs table-auto">
+                <thead class="bg-slate-50 text-slate-500 uppercase text-[10px] font-bold tracking-wider border-b border-slate-200">
+                    <tr>
+                        <th class="px-3 py-2.5 whitespace-nowrap">Ref / Date</th>
+                        <th class="px-3 py-2.5">Account</th>
+                        <th class="px-3 py-2.5">Party / Entity</th>
+                        <th class="px-3 py-2.5 whitespace-nowrap">Category</th>
+                        <th class="px-3 py-2.5">Reference / Narration</th>
+                        <th class="px-3 py-2.5 text-right whitespace-nowrap">Amount</th>
+                        <th class="px-2 py-2.5 text-right w-7"></th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    {% for record in financial_records %}
+                    <tr class="hover:bg-slate-50/70 transition-colors group">
+                        <!-- Ref / Date -->
+                        <td class="px-3 py-2.5 whitespace-nowrap">
+                            <a href="{% url 'financialrecord-detail' record.pk %}" class="font-bold text-slate-900 group-hover:text-emerald-600 hover:underline block">
+                                #{{ record.entry_number|default:record.pk }}
+                            </a>
+                            <p class="text-[10px] text-slate-400 uppercase">{{ record.date|date:"d M Y" }}</p>
+                            {% if record.voucher %}
+                            <a href="{% url 'financial-entry-review' %}?search={{ record.voucher.voucher_number }}" class="text-[9px] font-mono font-bold text-emerald-700 hover:underline block truncate max-w-[100px]" title="{{ record.voucher.voucher_number }}">
+                                {{ record.voucher.voucher_number }}
+                            </a>
+                            {% endif %}
+                        </td>
+
+                        <!-- Account -->
+                        <td class="px-3 py-2.5">
+                            {% if record.account %}
+                            <a href="{% url 'account-detail' record.account.pk %}" class="font-bold text-slate-800 hover:text-emerald-600 block truncate max-w-[110px]" title="{{ record.account.name }}">
+                                <i class="fa-solid fa-building-columns mr-1 text-slate-400 text-[10px]"></i>{{ record.account.name }}
+                            </a>
+                            {% elif record.associated_toll_recharge %}
+                            <a href="{% url 'toll-reconcile' %}" class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100" title="Pending firm allocation">
+                                <i class="fa-solid fa-circle-exclamation mr-1 text-amber-500"></i>Unallocated
+                            </a>
+                            {% else %}
+                            <span class="text-slate-300 italic text-[11px]">—</span>
+                            {% endif %}
+                        </td>
+
+                        <!-- Party / Entity -->
+                        <td class="px-3 py-2.5">
+                            {% if record.party %}
+                            <div class="flex flex-col min-w-0">
+                                <a href="{% url 'party-detail' record.party.pk %}" class="font-bold text-slate-800 hover:text-emerald-600 truncate max-w-[130px] block" title="{{ record.party.name }}">
+                                    {{ record.party.name }}
+                                </a>
+                                <span class="text-[9px] font-bold uppercase text-slate-400">{{ record.party.party_type }}</span>
                             </div>
-                            <p class="text-xs font-bold text-slate-700 truncate mt-1">
-                                {% if record.party %}
-                                    {{ record.party.name }} <span class="text-[9px] text-slate-400 font-bold uppercase">({{ record.party.party_type }})</span>
-                                {% elif record.driver %}
-                                    <i class="fa-solid fa-id-card mr-1 text-slate-400"></i>{{ record.driver.get_full_name|default:record.driver.username }} <span class="text-[9px] text-purple-600 font-bold uppercase">(Driver)</span>
-                                {% else %}
-                                    <span class="text-slate-400 italic">No Entity</span>
-                                {% endif %}
-                            </p>
-                            <div class="flex flex-wrap items-center gap-1.5 mt-1">
-                                <span class="text-[9px] font-bold px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded uppercase">{{ record.category.name|truncatechars:15 }}</span>
-                                {% if record.is_invoice %}<span class="text-[9px] font-bold px-1.5 py-0.5 bg-blue-100 text-blue-600 rounded uppercase">Inv</span>{% endif %}
-                                {% if record.linked_bill %}
-                                <span class="text-[9px] font-bold px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded uppercase flex items-center">
-                                    <i class="fa-solid fa-file-invoice mr-1 text-[8px]"></i>{{ record.linked_bill.bill_number|default:"Draft" }}
+                            {% elif record.driver %}
+                            <div class="flex flex-col min-w-0">
+                                <span class="font-bold text-purple-700 truncate max-w-[130px] block" title="{{ record.driver }}">
+                                    <i class="fa-solid fa-id-card mr-1 text-purple-400"></i>{{ record.driver.get_full_name|default:record.driver.username }}
                                 </span>
+                                <span class="text-[9px] font-bold uppercase text-purple-600">Driver</span>
+                            </div>
+                            {% else %}
+                            <span class="text-slate-300 italic text-[11px]">—</span>
+                            {% endif %}
+                        </td>
+
+                        <!-- Category & Status -->
+                        <td class="px-3 py-2.5 whitespace-nowrap">
+                            <span class="text-[9px] font-bold px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded uppercase">
+                                {{ record.category.name|truncatechars:14 }}
+                            </span>
+                            {% if record.is_invoice %}
+                            <span class="text-[9px] font-bold px-1 py-0.5 bg-blue-100 text-blue-600 rounded uppercase ml-0.5">Inv</span>
+                            {% endif %}
+                            {% if record.verification_status == 'pending' %}
+                            <span class="text-[8px] font-bold px-1 py-0.5 bg-amber-100 text-amber-800 rounded uppercase ml-0.5">Pending</span>
+                            {% elif record.verification_status == 'flagged' %}
+                            <span class="text-[8px] font-bold px-1 py-0.5 bg-rose-100 text-rose-800 rounded uppercase ml-0.5">Flagged</span>
+                            {% endif %}
+                        </td>
+
+                        <!-- Reference / Associated Records -->
+                        <td class="px-3 py-2.5">
+                            <div class="flex flex-col space-y-0.5 min-w-0">
+                                {% if record.linked_bill %}
+                                <a href="{% url 'bill-detail' record.linked_bill.pk %}" class="inline-flex items-center text-xs font-bold text-blue-600 hover:underline uppercase truncate max-w-[120px]" title="Bill: {{ record.linked_bill.bill_number }}">
+                                    <i class="fa-solid fa-file-invoice mr-1 text-[10px]"></i>{{ record.linked_bill.bill_number|default:"Draft Bill" }}
+                                </a>
                                 {% endif %}
                                 {% if record.linked_trip %}
-                                <span class="text-[9px] font-bold px-1.5 py-0.5 bg-emerald-50 text-emerald-700 rounded uppercase flex items-center">
-                                    <i class="fa-solid fa-truck mr-1 text-[8px]"></i>{{ record.linked_trip.trip_number }}
-                                </span>
+                                <a href="{% url 'trip-detail' record.linked_trip.pk %}" class="inline-flex items-center text-xs font-bold text-emerald-600 hover:underline uppercase truncate max-w-[120px]" title="Trip: {{ record.linked_trip.trip_number }}">
+                                    <i class="fa-solid fa-truck mr-1 text-[10px]"></i>{{ record.linked_trip.trip_number }}
+                                </a>
+                                {% endif %}
+                                {% if not record.linked_bill and not record.linked_trip %}
+                                    {% if record.description %}
+                                    <p class="text-xs text-slate-600 truncate max-w-[130px]" title="{{ record.description }}">{{ record.description }}</p>
+                                    {% elif record.allocations.all %}
+                                    <span class="text-[10px] font-bold text-slate-500">{{ record.allocations.all|length }} Trips</span>
+                                    {% elif record.bill_allocations.all %}
+                                    <span class="text-[10px] font-bold text-slate-500">{{ record.bill_allocations.all|length }} Bills</span>
+                                    {% else %}
+                                    <span class="text-slate-300 italic text-[11px]">—</span>
+                                    {% endif %}
                                 {% endif %}
                             </div>
-                        </div>
-                        <div class="text-right ml-4 flex-shrink-0">
-                            <p class="text-sm font-black {% if record.debit_amount %}text-emerald-600{% else %}text-red-600{% endif %}">
+                        </td>
+
+                        <!-- Amount -->
+                        <td class="px-3 py-2.5 text-right whitespace-nowrap">
+                            <a href="{% url 'financialrecord-detail' record.pk %}" class="font-black hover:underline block {% if record.debit_amount or record.is_income %}text-emerald-600 hover:text-emerald-800{% else %}text-red-600 hover:text-red-800{% endif %}">
                                 ₹{{ record.amount|indian_comma }}
+                            </a>
+                            <p class="text-[9px] font-bold uppercase tracking-tighter text-slate-400">
+                                {% if record.debit_amount or record.is_income %}Debit (In){% else %}Credit (Out){% endif %}
                             </p>
-                            <p class="text-[9px] font-bold uppercase tracking-tighter text-slate-400">{% if record.debit_amount %}Dr{% else %}Cr{% endif %}</p>
-                        </div>
-                    </div>
-                </a>
-                {% endfor %}
-            </div>
-            <!-- Desktop Table -->
-            <div class="hidden md:block overflow-x-auto">
-                <table class="w-full text-left text-xs">
-                    <thead class="bg-slate-50 border-b border-slate-100">
-                        <tr>
-                            <th class="px-4 py-3 font-bold text-slate-500 uppercase tracking-widest">Ref / Date</th>
-                            <th class="px-4 py-3 font-bold text-slate-500 uppercase tracking-widest">Company Account</th>
-                            <th class="px-4 py-3 font-bold text-slate-500 uppercase tracking-widest">Party / Entity</th>
-                            <th class="px-4 py-3 font-bold text-slate-500 uppercase tracking-widest">Category</th>
-                            <th class="px-4 py-3 font-bold text-slate-500 uppercase tracking-widest">Associated Bill / Trip</th>
-                            <th class="px-4 py-3 font-bold text-slate-500 uppercase tracking-widest text-right">Amount</th>
-                            <th class="px-4 py-3"></th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-50">
-                        {% for record in financial_records %}
-                        <tr class="hover:bg-slate-50 transition-colors">
-                            <td class="px-4 py-3 whitespace-nowrap">
-                                <p class="font-bold text-slate-900">#{{ record.entry_number|default:record.pk }}</p>
-                                <p class="text-[10px] text-slate-400 uppercase">{{ record.date|date:"d M Y" }}</p>
-                            </td>
-                            <td class="px-4 py-3">
-                                {% if record.account %}
-                                <a href="{% url 'account-detail' record.account.pk %}" class="font-bold text-slate-800 hover:text-emerald-600 block truncate max-w-[130px]" title="{{ record.account.name }}">
-                                    <i class="fa-solid fa-building-columns mr-1 text-slate-400"></i>{{ record.account.name }}
-                                </a>
-                                {% else %}
-                                <span class="text-slate-300 text-[11px] italic">-</span>
-                                {% endif %}
-                            </td>
-                            <td class="px-4 py-3">
-                                {% if record.party %}
-                                <div class="flex flex-col">
-                                    <a href="{% url 'party-detail' record.party.pk %}" class="font-bold text-slate-800 hover:text-emerald-600 truncate max-w-[150px]" title="{{ record.party.name }}">{{ record.party.name }}</a>
-                                    <span class="text-[9px] font-bold text-slate-400 uppercase">{{ record.party.party_type }}</span>
-                                </div>
-                                {% elif record.driver %}
-                                <div class="flex flex-col">
-                                    <span class="font-bold text-slate-800 truncate max-w-[150px]" title="{{ record.driver }}"><i class="fa-solid fa-id-card mr-1 text-slate-400"></i>{{ record.driver.get_full_name|default:record.driver.username }}</span>
-                                    <span class="text-[9px] font-bold text-purple-600 uppercase">Driver</span>
-                                </div>
-                                {% else %}
-                                <span class="text-slate-300 italic text-[11px]">-</span>
-                                {% endif %}
-                            </td>
-                            <td class="px-4 py-3 whitespace-nowrap">
-                                <span class="text-[9px] font-bold px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded uppercase">{{ record.category.name|truncatechars:18 }}</span>
-                                {% if record.is_invoice %}<span class="text-[9px] font-bold px-1.5 py-0.5 bg-blue-100 text-blue-600 rounded uppercase ml-1">Inv</span>{% endif %}
-                            </td>
-                            <td class="px-4 py-3">
-                                {% if record.linked_bill or record.linked_trip %}
-                                <div class="flex flex-col space-y-1">
-                                    {% if record.linked_bill %}
-                                    <div class="flex flex-col">
-                                        <a href="{% url 'bill-detail' record.linked_bill.pk %}" class="inline-flex items-center text-xs font-bold text-blue-600 hover:underline uppercase" title="Bill: {{ record.linked_bill.bill_number }}">
-                                            <i class="fa-solid fa-file-invoice mr-1 text-[10px]"></i>{{ record.linked_bill.bill_number|default:"Draft Bill"|truncatechars:18 }}
-                                        </a>
-                                        {% if record.linked_bill.is_adjustment %}
-                                        <span class="text-[8px] font-bold text-purple-600 uppercase">Adjustment</span>
-                                        {% endif %}
-                                    </div>
-                                    {% endif %}
-                                    {% if record.linked_trip %}
-                                    <div class="flex flex-col">
-                                        <a href="{% url 'trip-detail' record.linked_trip.pk %}" class="inline-flex items-center text-xs font-bold text-emerald-600 hover:underline uppercase" title="Trip: {{ record.linked_trip.trip_number }}">
-                                            <i class="fa-solid fa-truck mr-1 text-[10px]"></i>{{ record.linked_trip.trip_number }}
-                                        </a>
-                                        {% if record.linked_trip.vehicle %}
-                                        <span class="text-[9px] text-slate-400 font-semibold">{{ record.linked_trip.vehicle.registration_plate }}</span>
-                                        {% endif %}
-                                    </div>
-                                    {% endif %}
-                                </div>
-                                {% elif record.associated_tyre %}
-                                <a href="{% url 'tyre-detail' record.associated_tyre.pk %}" class="inline-flex items-center text-xs font-bold text-indigo-600 hover:underline uppercase">
-                                    <i class="fa-solid fa-dharmachakra mr-1 text-[10px]"></i>{{ record.associated_tyre.brand }}
-                                </a>
-                                {% elif record.allocations.all %}
-                                <span class="text-[10px] font-bold text-slate-500"><i class="fa-solid fa-diagram-project mr-1 text-[9px]"></i>{{ record.allocations.count }} Trips</span>
-                                {% elif record.bill_allocations.all %}
-                                <span class="text-[10px] font-bold text-slate-500"><i class="fa-solid fa-receipt mr-1 text-[9px]"></i>{{ record.bill_allocations.count }} Invoices</span>
-                                {% else %}
-                                <span class="text-slate-300">-</span>
-                                {% endif %}
-                            </td>
-                            <td class="px-4 py-3 text-right whitespace-nowrap">
-                                <p class="font-black {% if record.debit_amount %}text-emerald-600{% else %}text-red-600{% endif %}">
-                                    ₹{{ record.amount|indian_comma }}
-                                </p>
-                                <p class="text-[9px] font-bold uppercase tracking-tighter text-slate-400">{% if record.debit_amount %}Debit (In){% else %}Credit (Out){% endif %}</p>
-                            </td>
-                            <td class="px-4 py-3 text-right">
-                                <a href="{% url 'financialrecord-detail' record.pk %}" class="w-7 h-7 inline-flex items-center justify-center rounded-full bg-slate-50 text-slate-400 hover:bg-emerald-50 hover:text-emerald-600 transition-colors" title="View Details">
-                                    <i class="fa-solid fa-arrow-right text-[10px]"></i>
-                                </a>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
+                        </td>
+
+                        <!-- Action -->
+                        <td class="px-2 py-2.5 text-right whitespace-nowrap">
+                            <a href="{% url 'financialrecord-detail' record.pk %}" class="w-6 h-6 inline-flex items-center justify-center rounded-md bg-slate-100 text-slate-400 hover:bg-emerald-600 hover:text-white transition-colors" title="View Details">
+                                <i class="fa-solid fa-arrow-right text-[9px]"></i>
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
-        
-        <!-- BEGIN: Pagination -->
-        {% if is_paginated %}
-        <nav class="mt-6 flex justify-center">
-            <div class="flex space-x-1">
-                {% if page_obj.has_previous %}
-                <a href="?page={{ page_obj.previous_page_number }}{% if current_category %}&category={{ current_category }}{% endif %}{% if current_account %}&account={{ current_account }}{% endif %}{% if current_party %}&party={{ current_party }}{% endif %}{% if request.GET.start_date %}&start_date={{ request.GET.start_date }}{% endif %}{% if request.GET.end_date %}&end_date={{ request.GET.end_date }}{% endif %}" class="px-3 py-1 bg-white border border-slate-200 rounded text-xs text-slate-600 hover:bg-slate-50">
-                    <i class="fa-solid fa-angle-left"></i>
-                </a>
+
+        <!-- MOBILE TOUCH CARDS (Visible on screens < 768px • ZERO Horizontal Scrolling) -->
+        <div class="md:hidden space-y-3 w-full max-w-full overflow-hidden">
+            {% for record in financial_records %}
+            <div class="bg-white border border-slate-200 rounded-xl p-3.5 shadow-sm space-y-2.5 active:border-emerald-300 transition-colors w-full overflow-hidden">
+                <!-- Card Header -->
+                <div class="flex flex-wrap items-center justify-between gap-1.5 pb-2 border-b border-slate-100">
+                    <div class="flex items-center space-x-2 min-w-0">
+                        <a href="{% url 'financialrecord-detail' record.pk %}" class="text-xs font-black text-slate-900 hover:text-emerald-600">
+                            #{{ record.entry_number|default:record.pk }}
+                        </a>
+                        <span class="text-[10px] font-bold text-slate-400 uppercase">{{ record.date|date:"d M Y" }}</span>
+                    </div>
+                    
+                    <div class="flex items-center space-x-1.5">
+                        {% if record.voucher %}
+                        <a href="{% url 'financial-entry-review' %}?search={{ record.voucher.voucher_number }}" class="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-slate-100 text-slate-800 border border-slate-200">
+                            {{ record.voucher.voucher_number }}
+                        </a>
+                        {% endif %}
+                        
+                        {% if record.verification_status == 'verified' %}
+                        <span class="w-2 h-2 rounded-full bg-emerald-500" title="Verified"></span>
+                        {% elif record.verification_status == 'flagged' %}
+                        <span class="w-2 h-2 rounded-full bg-rose-500" title="Flagged"></span>
+                        {% else %}
+                        <span class="w-2 h-2 rounded-full bg-amber-500" title="Pending Verification"></span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Entity & Account Row -->
+                <div class="flex items-start justify-between gap-2 text-xs">
+                    <div class="min-w-0 flex-1">
+                        {% if record.party %}
+                        <a href="{% url 'party-detail' record.party.pk %}" class="font-bold text-slate-800 hover:text-emerald-600 truncate block text-xs" title="{{ record.party.name }}">
+                            {{ record.party.name }}
+                        </a>
+                        <span class="text-[9px] font-bold uppercase text-slate-400">{{ record.party.party_type }}</span>
+                        {% elif record.driver %}
+                        <span class="font-bold text-purple-700 truncate block text-xs">
+                            <i class="fa-solid fa-id-card mr-1 text-[9px]"></i>{{ record.driver.get_full_name|default:record.driver.username }}
+                        </span>
+                        <span class="text-[9px] font-bold uppercase text-purple-600">Driver</span>
+                        {% else %}
+                        <span class="text-slate-400 italic text-xs">Direct Transaction</span>
+                        {% endif %}
+                    </div>
+
+                    <div class="text-right flex-shrink-0">
+                        {% if record.account %}
+                        <span class="font-bold text-slate-700 block text-xs truncate max-w-[130px]">
+                            <i class="fa-solid fa-building-columns text-slate-400 text-[9px] mr-1"></i>{{ record.account.name }}
+                        </span>
+                        {% else %}
+                        <span class="text-slate-400 italic text-xs">Non-Bank</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Description / Narration -->
+                {% if record.description %}
+                <p class="text-[11px] text-slate-600 bg-slate-50 p-2 rounded-lg border border-slate-100 break-words">
+                    {{ record.description }}
+                </p>
                 {% endif %}
 
-                <span class="px-3 py-1 bg-emerald-600 text-white border border-emerald-600 rounded text-xs font-bold">
-                    {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}
-                </span>
+                <!-- Tags / Linked Pills -->
+                <div class="flex flex-wrap items-center gap-1.5 pt-0.5">
+                    <span class="text-[9px] font-bold px-1.5 py-0.5 bg-slate-100 text-slate-700 rounded uppercase">
+                        {{ record.category.name|default:"Uncategorized" }}
+                    </span>
+                    {% if record.is_invoice %}
+                    <span class="text-[9px] font-bold px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded uppercase">Inv</span>
+                    {% endif %}
+                    {% if record.linked_bill %}
+                    <a href="{% url 'bill-detail' record.linked_bill.pk %}" class="text-[9px] font-bold px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded uppercase inline-flex items-center">
+                        <i class="fa-solid fa-file-invoice mr-1 text-[8px]"></i>{{ record.linked_bill.bill_number|default:"Draft" }}
+                    </a>
+                    {% endif %}
+                    {% if record.linked_trip %}
+                    <a href="{% url 'trip-detail' record.linked_trip.pk %}" class="text-[9px] font-bold px-1.5 py-0.5 bg-emerald-50 text-emerald-700 rounded uppercase inline-flex items-center">
+                        <i class="fa-solid fa-truck mr-1 text-[8px]"></i>{{ record.linked_trip.trip_number }}
+                    </a>
+                    {% endif %}
+                </div>
 
-                {% if page_obj.has_next %}
-                <a href="?page={{ page_obj.next_page_number }}{% if current_category %}&category={{ current_category }}{% endif %}{% if current_account %}&account={{ current_account }}{% endif %}{% if current_party %}&party={{ current_party }}{% endif %}{% if request.GET.start_date %}&start_date={{ request.GET.start_date }}{% endif %}{% if request.GET.end_date %}&end_date={{ request.GET.end_date }}{% endif %}" class="px-3 py-1 bg-white border border-slate-200 rounded text-xs text-slate-600 hover:bg-slate-50">
-                    <i class="fa-solid fa-angle-right"></i>
-                </a>
-                {% endif %}
+                <!-- Amount & Detail Button -->
+                <div class="pt-2 border-t border-slate-100 flex items-center justify-between">
+                    <div>
+                        <span class="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">
+                            {% if record.debit_amount or record.is_income %}Debit (In){% else %}Credit (Out){% endif %}
+                        </span>
+                        <p class="text-sm font-black {% if record.debit_amount or record.is_income %}text-emerald-600{% else %}text-red-600{% endif %}">
+                            ₹{{ record.amount|indian_comma }}
+                        </p>
+                    </div>
+                    <a href="{% url 'financialrecord-detail' record.pk %}" class="px-3 py-1.5 bg-slate-100 hover:bg-emerald-600 hover:text-white text-slate-700 text-xs font-bold rounded-lg transition-colors inline-flex items-center gap-1.5 shadow-sm">
+                        <span>Details</span>
+                        <i class="fa-solid fa-arrow-right text-[9px]"></i>
+                    </a>
+                </div>
             </div>
-        </nav>
-        {% endif %}
-        <!-- END: Pagination -->
-        
+            {% endfor %}
+        </div>
+
+        <!-- Pagination -->
+        {% include "includes/pagination.html" %}
+
         {% else %}
+        <!-- Empty State -->
         <div class="text-center py-12 bg-white rounded-xl border border-dashed border-slate-300">
             <i class="fa-solid fa-wallet text-3xl text-slate-200 mb-3 block"></i>
-            <p class="text-sm text-slate-400 font-medium">No activity for the selected range</p>
+            <h4 class="text-sm font-bold text-slate-700">No Financial Records Found</h4>
+            <p class="text-xs text-slate-400 mt-1">No transactions match your current search or date filters.</p>
+            <a href="{% url 'financialrecord-list' %}" class="mt-3 inline-flex items-center px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition-colors">
+                Reset Filters
+            </a>
         </div>
         {% endif %}
     </div>
 </div>
+<!-- END: Dual Main Layout -->
+
 {% if perms.ledger.add_financialrecord %}
-<a href="{% url 'financialrecord-create' %}" class="fixed bottom-24 right-6 z-40 lg:hidden w-14 h-14 bg-emerald-600 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-emerald-700 active:scale-95 transition-all" title="Add Record">
-    <i class="fa-solid fa-plus text-xl"></i>
+<!-- Mobile Floating Action Button -->
+<a href="{% url 'financialrecord-create' %}" class="fixed bottom-24 right-5 z-40 lg:hidden w-12 h-12 bg-emerald-600 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-emerald-700 active:scale-95 transition-all" title="Add Record">
+    <i class="fa-solid fa-plus text-lg"></i>
 </a>
 {% endif %}
 {% endblock %}

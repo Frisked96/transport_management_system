@@ -2,6 +2,7 @@ from django.db.models.signals import pre_save, post_save, post_delete
 from django.dispatch import receiver
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.admin.models import LogEntry, ADDITION, CHANGE, DELETION
+from transport_mgmt.utils import format_local_datetime
 from .middleware import get_current_user
 
 # List of apps to track for activity
@@ -52,6 +53,11 @@ def snapshot_instance_before_save(sender, instance, **kwargs):
     if not user or not user.is_authenticated:
         return
 
+    update_fields = kwargs.get('update_fields')
+    if update_fields is not None and set(update_fields).issubset(IGNORED_FIELDS):
+        instance._activity_old_snapshot = {}
+        return
+
     try:
         existing = sender.objects.filter(pk=instance.pk).first()
         if existing:
@@ -90,7 +96,7 @@ def compute_field_diff(sender, instance):
                 if isinstance(val, bool):
                     return 'Yes' if val else 'No'
                 if hasattr(val, 'strftime'):
-                    return val.strftime('%d %b %Y')
+                    return format_local_datetime(val, '%d %b %Y')
                 # If relation, attempt to show readable representation
                 if fld.is_relation and fld.many_to_one:
                     try:
@@ -122,6 +128,10 @@ def log_action(sender, instance, action_flag, **kwargs):
 
         user = get_current_user()
         if not user or not user.is_authenticated:
+            return
+
+        update_fields = kwargs.get('update_fields')
+        if update_fields is not None and set(update_fields).issubset(IGNORED_FIELDS):
             return
 
         change_message = ''

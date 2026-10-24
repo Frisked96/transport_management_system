@@ -3,10 +3,13 @@ Custom template tags and filters for the Ledger app.
 """
 from django import template
 from decimal import Decimal
+from django.utils.dateformat import format as django_date_format
+from transport_mgmt.utils import to_local_datetime, format_local_datetime
 
 register = template.Library()
 
 import os
+from datetime import datetime
 
 @register.filter
 def filename(value):
@@ -134,26 +137,7 @@ def sum_attribute(queryset, attr):
             pass
     return total
 
-@register.filter
-def get_route_description(bill):
-    """
-    Returns a string describing the unique routes in the bill's trips.
-    Format: "Pickup - Delivery"
-    Usage: {{ bill|get_route_description }}
-    """
-    routes = set()
-    for trip in bill.trips.all():
-        if trip.pickup_location and trip.delivery_location:
-            routes.add(f"{trip.pickup_location} - {trip.delivery_location}")
-        elif trip.pickup_location:
-             routes.add(f"From {trip.pickup_location}")
-        elif trip.delivery_location:
-             routes.add(f"To {trip.delivery_location}")
-    
-    if not routes:
-        return bill.description or "Transportation Service"
-        
-    return ", ".join(sorted(list(routes)))
+
 
 @register.filter
 def sum_list(data_list, key):
@@ -280,4 +264,41 @@ def indian_comma(value):
         res = "-" + res
 
     return res + "." + decimal
+
+
+@register.simple_tag(takes_context=True)
+def url_replace(context, **kwargs):
+    """
+    Preserves all existing GET query parameters while updating or removing specific ones.
+    Usage: {% url_replace page=page_obj.next_page_number %}
+    """
+    request = context.get('request')
+    if not request:
+        return ''
+    query = request.GET.copy()
+    for key, value in kwargs.items():
+        if value is None or value == '':
+            query.pop(key, None)
+        else:
+            query[key] = value
+    return query.urlencode()
+
+
+@register.filter
+def audit_timestamp(val, fmt="d M Y, H:i"):
+    """
+    Template filter: parses any ISO timestamp string or datetime,
+    converts it to Kolkata local time, and formats it.
+    Usage: {{ item.timestamp|audit_timestamp }}
+    """
+    local_dt = to_local_datetime(val)
+    if local_dt:
+        return django_date_format(local_dt, fmt)
+    return str(val) if val else ""
+
+
+@register.filter
+def kolkata_time(val, fmt="d M Y, H:i"):
+    """Alias for audit_timestamp"""
+    return audit_timestamp(val, fmt)
 

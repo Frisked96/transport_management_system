@@ -1,0 +1,483 @@
+{% extends 'base.html' %}
+{% load humanize ledger_extras %}
+
+{% block title %}Toll & FASTag Ledger{% if not is_combined and current_account %} - {{ current_account.name }}{% else %} - All Accounts{% endif %} - TMS{% endblock %}
+
+{% block content %}
+<!-- BEGIN: Page Header -->
+<header class="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+    <div>
+        <div class="flex items-center space-x-2 text-sm text-slate-500 mb-1">
+            <a href="{% url 'financialrecord-list' %}" class="hover:text-emerald-600 transition-colors">Finance</a>
+            <i class="fa-solid fa-chevron-right text-[10px]"></i>
+            <a href="{% url 'toll-ledger' %}" class="hover:text-emerald-600 transition-colors">Toll & FASTag Ledger</a>
+            {% if not is_combined and current_account %}
+            <i class="fa-solid fa-chevron-right text-[10px]"></i>
+            <span class="text-slate-800 font-semibold">{{ current_account.name }}</span>
+            {% else %}
+            <i class="fa-solid fa-chevron-right text-[10px]"></i>
+            <span class="text-slate-800 font-semibold">Combined View</span>
+            {% endif %}
+        </div>
+        <div class="flex flex-wrap items-center gap-3">
+            {% if is_combined %}
+            <h1 class="text-3xl font-bold text-slate-900">All Toll & FASTag Accounts</h1>
+            <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-800 border border-indigo-200">
+                Combined General View ({{ toll_accounts.count }} Wallets)
+            </span>
+            {% else %}
+            <h1 class="text-3xl font-bold text-slate-900">{{ current_account.name }}</h1>
+            {% if current_account.provider %}
+            <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-200">
+                {{ current_account.provider }}
+            </span>
+            {% endif %}
+            {% if current_account.account_number %}
+            <span class="text-xs text-slate-500 font-mono">
+                ID: {{ current_account.account_number }}
+            </span>
+            {% endif %}
+            <a href="{% url 'toll-ledger' %}" class="text-xs font-semibold text-emerald-600 hover:text-emerald-700 inline-flex items-center gap-1.5 ml-2 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200 transition-colors">
+                <i class="fa-solid fa-arrow-left text-[10px]"></i> View All Accounts
+            </a>
+            {% endif %}
+        </div>
+    </div>
+    
+    <div class="flex flex-wrap items-center gap-2">
+        {% if perms.ledger.add_tollentry %}
+        <a href="{% url 'toll-statement-import' %}" class="px-4 py-2 bg-emerald-600 text-white rounded-md text-sm font-bold hover:bg-emerald-700 shadow-sm transition-colors flex items-center">
+            <i class="fa-solid fa-file-excel mr-2"></i>Import Statement (.xlsx)
+        </a>
+        {% endif %}
+
+        {% if perms.ledger.change_tollrecharge %}
+        <a href="{% url 'toll-reconcile' %}" class="px-4 py-2 border border-slate-300 rounded-md bg-white text-slate-700 text-sm font-bold hover:bg-slate-50 transition-colors flex items-center shadow-sm">
+            <i class="fa-solid fa-scale-balanced mr-2 text-amber-500"></i>Reconcile
+            {% if unallocated_recharge_count > 0 %}
+            <span class="ml-1.5 px-1.5 py-0.5 text-[10px] font-extrabold rounded-full bg-amber-100 text-amber-800 border border-amber-200">{{ unallocated_recharge_count }}</span>
+            {% endif %}
+        </a>
+        {% endif %}
+
+        {% if perms.ledger.add_tollrecharge %}
+        <a href="{% url 'toll-recharge-create' %}{% if not is_combined and current_account %}?account={{ current_account.pk }}{% endif %}" class="px-4 py-2 bg-slate-800 text-white rounded-md text-sm font-bold hover:bg-slate-900 shadow-sm transition-colors flex items-center">
+            <i class="fa-solid fa-money-bill-transfer mr-2"></i>+ Top-up
+        </a>
+        {% endif %}
+        
+        {% if perms.ledger.add_tollentry %}
+        <a href="{% url 'toll-entry-create' %}{% if not is_combined and current_account %}?account={{ current_account.pk }}{% if selected_vehicle %}&vehicle={{ selected_vehicle.pk }}{% endif %}{% elif selected_vehicle %}?vehicle={{ selected_vehicle.pk }}{% endif %}" class="px-4 py-2 bg-slate-800 text-white rounded-md text-sm font-bold hover:bg-slate-900 shadow-sm transition-colors flex items-center">
+            <i class="fa-solid fa-ticket mr-2"></i>+ Toll Entry
+        </a>
+        <a href="{% url 'toll-entry-bulk-create' %}{% if not is_combined and current_account %}?account={{ current_account.pk }}{% endif %}" class="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-bold hover:bg-blue-700 shadow-sm transition-colors flex items-center">
+            <i class="fa-solid fa-table-list mr-2"></i>+ Bulk Add
+        </a>
+        {% endif %}
+        
+        <a href="{% url 'toll-statement-print' %}?account={{ current_account.pk|default:'' }}&start_date={{ start_date }}&end_date={{ end_date }}&vehicle={{ selected_vehicle.pk|default:'' }}" target="_blank" class="px-4 py-2 border border-slate-300 rounded-md bg-white text-slate-700 text-sm font-bold hover:bg-slate-50 transition-colors flex items-center shadow-sm">
+            <i class="fa-solid fa-print mr-2 text-slate-500"></i>Statement
+        </a>
+
+        {% if perms.ledger.view_tollaccount %}
+        <a href="{% url 'toll-account-list' %}" class="px-3 py-2 border border-slate-300 rounded-md bg-white text-slate-700 text-sm font-medium hover:bg-slate-50 transition-colors" title="Manage Toll Accounts">
+            <i class="fa-solid fa-gear"></i>
+        </a>
+        {% endif %}
+    </div>
+</header>
+<!-- END: Page Header -->
+
+<!-- BEGIN: Wallet Quick Selector Strip -->
+{% if toll_accounts.count > 1 %}
+<div class="mb-6 flex flex-wrap items-center gap-2 bg-slate-100/70 p-2.5 rounded-xl border border-slate-200">
+    <span class="text-[11px] font-bold text-slate-500 uppercase tracking-wider mr-1 ml-1 flex items-center gap-1.5">
+        <i class="fa-solid fa-wallet text-slate-400"></i> Wallets:
+    </span>
+    <a href="{% url 'toll-ledger' %}{% if selected_vehicle %}?vehicle={{ selected_vehicle.pk }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}"
+       class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm {% if is_combined %}bg-slate-900 text-white shadow-slate-300{% else %}bg-white text-slate-700 border border-slate-200 hover:bg-slate-50{% endif %}">
+        <i class="fa-solid fa-layer-group"></i> All Accounts (Combined)
+    </a>
+    {% for acc in toll_accounts %}
+    <a href="{% url 'toll-ledger' %}?account={{ acc.pk }}{% if selected_vehicle %}&vehicle={{ selected_vehicle.pk }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}"
+       class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm {% if not is_combined and current_account and current_account.pk == acc.pk %}bg-emerald-700 text-white shadow-emerald-200{% else %}bg-white text-slate-700 border border-slate-200 hover:bg-slate-50{% endif %}">
+        <span>{{ acc.name }}</span>
+        <span class="px-1.5 py-0.5 rounded text-[10px] {% if not is_combined and current_account and current_account.pk == acc.pk %}bg-emerald-800 text-emerald-100{% elif acc.current_balance_cached < 0 %}bg-rose-100 text-rose-700 font-extrabold{% elif acc.current_balance_cached < 5000 %}bg-amber-100 text-amber-700 font-extrabold{% else %}bg-emerald-50 text-emerald-700 font-extrabold{% endif %}">
+            ₹{{ acc.current_balance_cached|indian_comma }}
+        </span>
+    </a>
+    {% endfor %}
+</div>
+{% endif %}
+<!-- END: Wallet Quick Selector Strip -->
+
+{% if unallocated_recharge_count > 0 and perms.ledger.change_tollrecharge %}
+<div class="mb-6 p-4 rounded-xl bg-amber-50 border border-amber-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+    <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+        </div>
+        <div>
+            <h4 class="text-sm font-bold text-amber-900">{{ unallocated_recharge_count }} Unallocated FASTag Recharge{{ unallocated_recharge_count|pluralize }}</h4>
+            <p class="text-xs text-amber-700">Top-up credits imported without firm bank account assignments. Assign firms to sync company ledgers.</p>
+        </div>
+    </div>
+    <a href="{% url 'toll-reconcile' %}" class="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-md text-xs font-bold transition-colors whitespace-nowrap shadow-xs flex items-center gap-1.5 shrink-0">
+        <i class="fa-solid fa-scale-balanced"></i> Reconcile Now &rarr;
+    </a>
+</div>
+{% endif %}
+
+<!-- BEGIN: Metrics Cards -->
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+    <!-- Current Toll Balance -->
+    <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden">
+        <div class="flex justify-between items-start">
+            <div>
+                <p class="text-xs font-bold uppercase tracking-wider text-slate-500">
+                    {% if is_combined %}Combined Available Balance{% else %}Available Toll Balance{% endif %}
+                </p>
+                <h3 class="text-2xl lg:text-3xl font-extrabold mt-1 {% if current_balance < 0 %}text-rose-600{% elif current_balance < 5000 %}text-amber-600{% else %}text-emerald-600{% endif %}">
+                    ₹{{ current_balance|indian_comma }}
+                </h3>
+            </div>
+            <div class="w-10 h-10 rounded-full {% if current_balance < 0 %}bg-rose-100 text-rose-600{% else %}bg-emerald-100 text-emerald-600{% endif %} flex items-center justify-center text-lg">
+                <i class="fa-solid fa-wallet"></i>
+            </div>
+        </div>
+        <div class="mt-3 flex items-center text-xs">
+            {% if is_combined %}
+            <span class="text-slate-600 font-medium flex items-center">
+                <i class="fa-solid fa-layer-group mr-1.5 text-indigo-500"></i>Across all {{ toll_accounts.count }} toll accounts
+            </span>
+            {% elif current_balance < 0 %}
+            <span class="text-rose-600 font-bold flex items-center">
+                <i class="fa-solid fa-triangle-exclamation mr-1"></i>Overdrawn / Needs Top-up
+            </span>
+            {% elif current_balance < 5000 %}
+            <span class="text-amber-600 font-bold flex items-center">
+                <i class="fa-solid fa-triangle-exclamation mr-1"></i>Low Balance Alert
+            </span>
+            {% else %}
+            <span class="text-emerald-700 font-medium flex items-center">
+                <i class="fa-solid fa-circle-check mr-1 text-emerald-500"></i>Active & Pre-funded
+            </span>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Initial Starting Balance -->
+    <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+        <div class="flex justify-between items-start">
+            <div>
+                <p class="text-xs font-bold uppercase tracking-wider text-slate-500">
+                    {% if is_combined %}Combined Starting Balance{% else %}Initial Starting Balance{% endif %}
+                </p>
+                <h3 class="text-2xl font-bold text-slate-900 mt-1">
+                    ₹{{ initial_starting_balance|indian_comma }}
+                </h3>
+            </div>
+            <div class="w-10 h-10 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center text-lg">
+                <i class="fa-solid fa-flag-checkered"></i>
+            </div>
+        </div>
+        <p class="mt-3 text-xs text-slate-500">
+            {% if is_combined %}
+            Total baseline across all wallets
+            {% else %}
+            Baseline as of {{ current_account.opening_balance_date|date:"d M Y" }}
+            {% endif %}
+        </p>
+    </div>
+
+    <!-- Total Recharges -->
+    <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+        <div class="flex justify-between items-start">
+            <div>
+                <p class="text-xs font-bold uppercase tracking-wider text-slate-500">Period Top-ups (+)</p>
+                <h3 class="text-2xl font-bold text-emerald-600 mt-1">
+                    ₹{{ total_period_recharges|indian_comma }}
+                </h3>
+            </div>
+            <div class="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center text-lg">
+                <i class="fa-solid fa-arrow-down-left"></i>
+            </div>
+        </div>
+        <p class="mt-3 text-xs text-slate-500">
+            Transferred from Company Accounts
+        </p>
+    </div>
+
+    <!-- Total Toll Deducted -->
+    <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+        <div class="flex justify-between items-start">
+            <div>
+                <p class="text-xs font-bold uppercase tracking-wider text-slate-500">Period Tolls Consumed (-)</p>
+                <h3 class="text-2xl font-bold text-rose-600 mt-1">
+                    ₹{{ total_period_spent|indian_comma }}
+                </h3>
+            </div>
+            <div class="w-10 h-10 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center text-lg">
+                <i class="fa-solid fa-road"></i>
+            </div>
+        </div>
+        <p class="mt-3 text-xs text-slate-500">
+            {{ total_transactions_count }} total entries in period
+        </p>
+    </div>
+</div>
+<!-- END: Metrics Cards -->
+
+<!-- BEGIN: Filters Section -->
+<section class="bg-slate-50 p-4 rounded-xl border border-slate-200 mb-6 shadow-sm">
+    <form method="get" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 items-end">
+        <!-- Toll Account -->
+        <div>
+            <label class="block text-[11px] font-bold text-slate-600 uppercase mb-1">Toll Wallet</label>
+            <select name="account" class="w-full rounded-md border-slate-300 text-xs py-2 bg-white focus:ring-emerald-500 focus:border-emerald-500">
+                <option value="" {% if is_combined %}selected{% endif %}>All Accounts (Combined View)</option>
+                {% for acc in toll_accounts %}
+                <option value="{{ acc.pk }}" {% if not is_combined and current_account and current_account.pk == acc.pk %}selected{% endif %}>
+                    {{ acc.name }} (₹{{ acc.current_balance_cached|indian_comma }})
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <!-- Vehicle -->
+        <div>
+            <label class="block text-[11px] font-bold text-slate-600 uppercase mb-1">Filter Vehicle</label>
+            <select name="vehicle" class="w-full rounded-md border-slate-300 text-xs py-2 bg-white focus:ring-emerald-500 focus:border-emerald-500">
+                <option value="">All Fleet Vehicles</option>
+                {% for v in vehicles %}
+                <option value="{{ v.pk }}" {% if selected_vehicle and selected_vehicle.pk == v.pk %}selected{% endif %}>{{ v.registration_plate }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <!-- Start Date -->
+        <div>
+            <label class="block text-[11px] font-bold text-slate-600 uppercase mb-1">From Date</label>
+            <input type="date" name="start_date" value="{{ start_date }}" class="w-full rounded-md border-slate-300 text-xs py-2 bg-white focus:ring-emerald-500 focus:border-emerald-500">
+        </div>
+
+        <!-- End Date -->
+        <div>
+            <label class="block text-[11px] font-bold text-slate-600 uppercase mb-1">To Date</label>
+            <input type="date" name="end_date" value="{{ end_date }}" class="w-full rounded-md border-slate-300 text-xs py-2 bg-white focus:ring-emerald-500 focus:border-emerald-500">
+        </div>
+
+        <!-- Type -->
+        <div>
+            <label class="block text-[11px] font-bold text-slate-600 uppercase mb-1">Type</label>
+            <select name="type" class="w-full rounded-md border-slate-300 text-xs py-2 bg-white focus:ring-emerald-500 focus:border-emerald-500">
+                <option value="all" {% if current_type == 'all' %}selected{% endif %}>All Entries</option>
+                <option value="recharges" {% if current_type == 'recharges' %}selected{% endif %}>Top-ups Only</option>
+                <option value="entries" {% if current_type == 'entries' %}selected{% endif %}>Tolls Only</option>
+            </select>
+        </div>
+
+        <!-- Filter & Clear -->
+        <div class="flex gap-2">
+            <button type="submit" class="flex-1 px-4 py-2 bg-slate-800 text-white rounded-md text-xs font-bold hover:bg-slate-900 transition-colors shadow-sm">
+                Filter
+            </button>
+            <a href="{% url 'toll-ledger' %}" class="px-3 py-2 bg-white border border-slate-300 text-slate-700 rounded-md text-xs font-bold hover:bg-slate-50 transition-colors">
+                Clear
+            </a>
+        </div>
+    </form>
+</section>
+<!-- END: Filters Section -->
+
+<!-- BEGIN: Ledger Statement Table -->
+<div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden mb-8">
+    <div class="p-4 sm:p-5 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+            <h3 class="font-bold text-slate-900 text-base">Transaction Statement & Running Balance</h3>
+            <p class="text-xs text-slate-500 mt-0.5">
+                {% if selected_vehicle %}
+                Showing toll deductions incurred by <strong>{{ selected_vehicle.registration_plate }}</strong>{% if is_combined %} across all toll accounts{% else %} on <strong>{{ current_account.name }}</strong>{% endif %}
+                {% elif is_combined %}
+                Showing combined ledger transactions across <strong>all {{ toll_accounts.count }} toll accounts</strong>
+                {% else %}
+                Showing complete ledger history for <strong>{{ current_account.name }}</strong>
+                {% endif %}
+            </p>
+        </div>
+        <div class="flex items-center gap-3 text-xs text-slate-500">
+            {% if total_transactions_count > 0 %}
+            <span class="bg-slate-100 text-slate-700 px-2.5 py-1 rounded-md font-semibold border border-slate-200">
+                Showing {{ page_obj.start_index }}-{{ page_obj.end_index }} of {{ total_transactions_count }}
+            </span>
+            {% endif %}
+            <div class="border-l border-slate-200 pl-3">
+                Closing Balance: <span class="font-extrabold text-slate-900 text-sm">₹{{ closing_balance|indian_comma }}</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse text-xs sm:text-sm">
+            <thead>
+                <tr class="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase text-[11px] tracking-wider">
+                    <th class="px-4 py-3 whitespace-nowrap">Date</th>
+                    <th class="px-4 py-3 whitespace-nowrap">Type</th>
+                    <th class="px-4 py-3 whitespace-nowrap">Toll Wallet</th>
+                    <th class="px-4 py-3 whitespace-nowrap">Vehicle</th>
+                    <th class="px-4 py-3">Plaza / Source Account</th>
+                    <th class="px-4 py-3">Ref / UTR</th>
+                    <th class="px-4 py-3 text-right text-emerald-700 whitespace-nowrap">Credit (+)</th>
+                    <th class="px-4 py-3 text-right text-rose-700 whitespace-nowrap">Debit (-)</th>
+                    <th class="px-4 py-3 text-right font-black whitespace-nowrap">Toll Balance</th>
+                    <th class="px-3 py-3 text-center">Slip</th>
+                    <th class="px-4 py-3 text-right">Actions</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+                <!-- Row: Opening Balance (Page 1 only) -->
+                {% if not page_obj or page_obj.number == 1 %}
+                <tr class="bg-slate-50/70 font-semibold text-slate-700">
+                    <td class="px-4 py-3 whitespace-nowrap text-slate-500">
+                        {% if start_date %}{{ start_date|date:"d M Y" }}{% elif is_combined %}{{ earliest_opening_date|date:"d M Y" }}{% else %}{{ current_account.opening_balance_date|date:"d M Y" }}{% endif %}
+                    </td>
+                    <td class="px-4 py-3">
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-slate-200 text-slate-700">
+                            Opening Balance
+                        </span>
+                    </td>
+                    <td class="px-4 py-3 text-slate-600 font-medium">
+                        {% if is_combined %}
+                        <span class="inline-flex items-center text-xs font-semibold text-slate-600">
+                            <i class="fa-solid fa-layer-group text-[10px] mr-1 text-slate-400"></i>All Accounts
+                        </span>
+                        {% else %}
+                        <span class="text-xs font-semibold text-slate-700">{{ current_account.name }}</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-3 text-slate-400">-</td>
+                    <td class="px-4 py-3 font-medium text-slate-600">
+                        {% if start_date %}Balance Carried Forward{% else %}Initial Starting Balance{% endif %}
+                    </td>
+                    <td class="px-4 py-3 text-slate-400 font-mono text-xs">-</td>
+                    <td class="px-4 py-3 text-right text-emerald-700 font-bold">
+                        {% if period_opening_balance > 0 %}₹{{ period_opening_balance|indian_comma }}{% else %}-{% endif %}
+                    </td>
+                    <td class="px-4 py-3 text-right text-rose-700 font-bold">
+                        {% if period_opening_balance < 0 %}₹{{ period_opening_balance|abs_val|indian_comma }}{% else %}-{% endif %}
+                    </td>
+                    <td class="px-4 py-3 text-right font-black text-slate-900">
+                        ₹{{ period_opening_balance|indian_comma }}
+                    </td>
+                    <td class="px-3 py-3 text-center text-slate-400">-</td>
+                    <td class="px-4 py-3 text-right text-slate-400 text-xs">Baseline</td>
+                </tr>
+                {% endif %}
+
+                <!-- Dynamic Transaction Rows -->
+                {% for item in transactions %}
+                <tr class="hover:bg-slate-50 transition-colors">
+                    <td class="px-4 py-3 text-slate-600 whitespace-nowrap font-medium">
+                        <div>{{ item.date|date:"d M Y" }}</div>
+                        {% if item.time %}
+                        <div class="text-[11px] text-slate-400 font-mono">{{ item.time|time:"h:i A" }}</div>
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-3 whitespace-nowrap">
+                        {% if item.type == 'Recharge' %}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-200">
+                            <i class="fa-solid fa-arrow-down-left mr-1"></i>Top-up
+                        </span>
+                        {% else %}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-rose-100 text-rose-800 border border-rose-200">
+                            <i class="fa-solid fa-road mr-1"></i>Toll
+                        </span>
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-3 whitespace-nowrap">
+                        {% if item.toll_account %}
+                        <a href="{% url 'toll-ledger' %}?account={{ item.toll_account.pk }}" class="font-semibold text-slate-800 hover:text-emerald-600 transition-colors flex items-center gap-1.5" title="Filter to this wallet">
+                            <i class="fa-solid fa-wallet text-[10px] text-slate-400"></i>{{ item.toll_account.name }}
+                        </a>
+                        {% else %}
+                        <span class="text-slate-400">-</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-3 whitespace-nowrap">
+                        {% if item.vehicle %}
+                        <a href="{% url 'vehicle-detail' item.vehicle.pk %}" class="font-bold text-slate-800 hover:text-emerald-600 transition-colors flex items-center">
+                            <i class="fa-solid fa-truck text-[10px] mr-1.5 text-slate-400"></i>{{ item.vehicle.registration_plate }}
+                        </a>
+                        {% else %}
+                        <span class="text-slate-400">-</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-3 text-slate-800">
+                        {% if item.is_unallocated %}
+                        <div class="flex items-center gap-2">
+                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                                <i class="fa-solid fa-clock text-amber-600"></i> Unallocated
+                            </span>
+                            {% if perms.ledger.change_tollrecharge %}
+                            <a href="{% url 'toll-reconcile' %}" class="text-[11px] font-bold text-amber-700 hover:text-amber-900 underline">
+                                Reconcile &rarr;
+                            </a>
+                            {% endif %}
+                        </div>
+                        {% else %}
+                        <span class="font-semibold">{{ item.party_or_plaza }}</span>
+                        {% endif %}
+                        {% if item.notes %}
+                        <p class="text-[11px] text-slate-500 truncate max-w-xs">{{ item.notes }}</p>
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-3 text-slate-600 font-mono text-xs">
+                        {{ item.reference }}
+                    </td>
+                    <td class="px-4 py-3 text-right font-bold text-emerald-600 whitespace-nowrap">
+                        {% if item.credit %}+₹{{ item.credit|indian_comma }}{% else %}-{% endif %}
+                    </td>
+                    <td class="px-4 py-3 text-right font-bold text-rose-600 whitespace-nowrap">
+                        {% if item.debit %}-₹{{ item.debit|indian_comma }}{% else %}-{% endif %}
+                    </td>
+                    <td class="px-4 py-3 text-right font-black whitespace-nowrap {% if item.running_balance < 0 %}text-rose-600{% else %}text-slate-900{% endif %}">
+                        {% if item.running_balance < 0 %}-₹{{ item.running_balance|abs_val|indian_comma }}{% else %}₹{{ item.running_balance|indian_comma }}{% endif %}
+                    </td>
+                    <td class="px-3 py-3 text-center">
+                        {% if item.document %}
+                        <a href="{{ item.document.url }}" target="_blank" class="text-emerald-600 hover:text-emerald-800" title="View Document">
+                            <i class="fa-solid fa-file-invoice"></i>
+                        </a>
+                        {% else %}
+                        <span class="text-slate-300">-</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-3 text-right whitespace-nowrap">
+                        <div class="flex items-center justify-end space-x-2">
+                            <a href="{{ item.edit_url }}" class="text-slate-400 hover:text-slate-700" title="Edit">
+                                <i class="fa-regular fa-pen-to-square"></i>
+                            </a>
+                            <a href="{{ item.delete_url }}" class="text-slate-400 hover:text-rose-600" title="Delete">
+                                <i class="fa-regular fa-trash-can"></i>
+                            </a>
+                        </div>
+                    </td>
+                </tr>
+                {% empty %}
+                {% if not transactions %}
+                <tr>
+                    <td colspan="11" class="px-4 py-8 text-center text-slate-500">
+                        <i class="fa-solid fa-road text-3xl text-slate-200 mb-2 block"></i>
+                        No transactions recorded for the selected period.
+                    </td>
+                </tr>
+                {% endif %}
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+<!-- END: Ledger Statement Table -->
+
+{% include 'includes/pagination.html' %}
+{% endblock %}

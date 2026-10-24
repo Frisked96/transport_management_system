@@ -35,19 +35,29 @@
     <form method="get">
         <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
             <!-- Search -->
-            <div class="md:col-span-5 flex flex-col">
+            <div class="md:col-span-4 flex flex-col">
                 <label for="search" class="text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">Search</label>
                 <div class="relative">
                     <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                         <i class="fa-solid fa-magnifying-glass text-slate-400"></i>
                     </div>
                     <input type="text" id="search" name="search" class="block w-full pl-10 pr-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white" 
-                           value="{{ search_term }}" placeholder="Search registration plate, make/model, chassis or engine no...">
+                           value="{{ search_term }}" placeholder="Search plate, model, chassis, engine...">
                 </div>
             </div>
             
+            <!-- Ownership Filter (Company Owned by Default) -->
+            <div class="md:col-span-3 flex flex-col">
+                <label for="ownership" class="text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">Ownership:</label>
+                <select id="ownership" name="ownership" class="block w-full pl-3 pr-10 py-2 border border-slate-300 rounded-md text-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white font-medium">
+                    <option value="owned" {% if current_ownership == 'owned' %}selected{% endif %}>🏢 Company Owned (Default)</option>
+                    <option value="attached" {% if current_ownership == 'attached' %}selected{% endif %}>🤝 Attached / Market</option>
+                    <option value="all" {% if current_ownership == 'all' %}selected{% endif %}>🌐 All Vehicles ({{ total_count }})</option>
+                </select>
+            </div>
+
             <!-- Status -->
-            <div class="md:col-span-4 flex flex-col">
+            <div class="md:col-span-3 flex flex-col">
                 <label for="status" class="text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">Status:</label>
                 <select id="status" name="status" class="block w-full pl-3 pr-10 py-2 border border-slate-300 rounded-md text-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white">
                     <option value="">All Statuses</option>
@@ -58,14 +68,33 @@
             </div>
             
             <!-- Actions -->
-            <div class="md:col-span-3 flex items-end space-x-2 mt-2 md:mt-0">
-                <button type="submit" class="flex-grow bg-emerald-600 text-white px-4 py-2 rounded-md hover:bg-emerald-700 transition-colors text-sm font-medium">
-                    Apply Filter
+            <div class="md:col-span-2 flex items-end space-x-2 mt-2 md:mt-0">
+                <button type="submit" class="flex-grow bg-emerald-600 text-white px-3 py-2 rounded-md hover:bg-emerald-700 transition-colors text-sm font-medium">
+                    Filter
                 </button>
-                <a href="{% url 'vehicle-list' %}" class="px-4 py-2 border border-slate-300 rounded-md text-slate-700 bg-white hover:bg-slate-50 text-sm font-medium transition-colors text-center">
-                    Clear
+                <a href="{% url 'vehicle-list' %}" class="px-3 py-2 border border-slate-300 rounded-md text-slate-700 bg-white hover:bg-slate-50 text-sm font-medium transition-colors text-center" title="Reset to Company Owned">
+                    Reset
                 </a>
             </div>
+        </div>
+
+        <!-- Quick Ownership Pills -->
+        <div class="flex flex-wrap items-center gap-2 mt-4 pt-3 border-t border-slate-200 text-xs">
+            <span class="font-bold text-slate-500 uppercase tracking-wider mr-1">Fleet:</span>
+            <a href="?ownership=owned{% if search_term %}&search={{ search_term }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}" 
+               class="inline-flex items-center px-3 py-1 rounded-full font-semibold transition-colors {% if current_ownership == 'owned' %}bg-emerald-700 text-white shadow-sm{% else %}bg-white text-slate-700 hover:bg-slate-200 border border-slate-300{% endif %}">
+                <i class="fa-solid fa-building mr-1.5 text-xs"></i>
+                Company Owned ({{ owned_count|default:0 }})
+            </a>
+            <a href="?ownership=attached{% if search_term %}&search={{ search_term }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}" 
+               class="inline-flex items-center px-3 py-1 rounded-full font-semibold transition-colors {% if current_ownership == 'attached' %}bg-emerald-700 text-white shadow-sm{% else %}bg-white text-slate-700 hover:bg-slate-200 border border-slate-300{% endif %}">
+                <i class="fa-solid fa-handshake mr-1.5 text-xs"></i>
+                Attached ({{ attached_count|default:0 }})
+            </a>
+            <a href="?ownership=all{% if search_term %}&search={{ search_term }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}" 
+               class="inline-flex items-center px-3 py-1 rounded-full font-semibold transition-colors {% if current_ownership == 'all' %}bg-slate-800 text-white shadow-sm{% else %}bg-white text-slate-700 hover:bg-slate-200 border border-slate-300{% endif %}">
+                All Fleet ({{ total_count|default:0 }})
+            </a>
         </div>
     </form>
 </section>
@@ -202,35 +231,7 @@
     </div>
 </div>
 
-<!-- BEGIN: Pagination -->
-{% if is_paginated %}
-<nav class="mt-8 flex justify-center">
-    <div class="flex space-x-1">
-        {% if page_obj.has_previous %}
-        <a href="?page=1{% if search_term %}&search={{ search_term }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
-            <i class="fa-solid fa-angles-left"></i>
-        </a>
-        <a href="?page={{ page_obj.previous_page_number }}{% if search_term %}&search={{ search_term }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
-            <i class="fa-solid fa-angle-left"></i>
-        </a>
-        {% endif %}
-
-        <span class="px-4 py-2 bg-emerald-600 text-white border border-emerald-600 rounded-md text-sm font-medium">
-            Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
-        </span>
-
-        {% if page_obj.has_next %}
-        <a href="?page={{ page_obj.next_page_number }}{% if search_term %}&search={{ search_term }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
-            <i class="fa-solid fa-angle-right"></i>
-        </a>
-        <a href="?page={{ page_obj.paginator.num_pages }}{% if search_term %}&search={{ search_term }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-600 hover:bg-slate-50">
-            <i class="fa-solid fa-angles-right"></i>
-        </a>
-        {% endif %}
-    </div>
-</nav>
-{% endif %}
-<!-- END: Pagination -->
+{% include "includes/pagination.html" %}
 
 <!-- BEGIN: Bulk Actions Toolbar -->
 <div id="bulkActionsToolbar" class="fixed bottom-16 lg:bottom-0 left-0 right-0 bg-white border-t border-slate-200 shadow-[0_-4px_6px_-1px_rgb(0,0,0,0.1)] transform translate-y-full transition-transform duration-300 z-50">

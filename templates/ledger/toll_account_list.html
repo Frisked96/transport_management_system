@@ -1,0 +1,102 @@
+{% extends 'base.html' %}
+{% load humanize ledger_extras %}
+
+{% block title %}Toll & FASTag Accounts - TMS{% endblock %}
+
+{% block content %}
+<header class="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+    <div>
+        <div class="flex items-center space-x-2 text-sm text-slate-500 mb-1">
+            <a href="{% url 'toll-ledger' %}" class="hover:text-emerald-600 transition-colors">Toll Ledger</a>
+            <i class="fa-solid fa-chevron-right text-[10px]"></i>
+            <span>Toll Accounts</span>
+        </div>
+        <h1 class="text-3xl font-bold text-slate-900">Toll & FASTag Accounts</h1>
+        <p class="text-sm text-slate-600 mt-1">Manage wallet accounts, providers, and starting balances</p>
+    </div>
+    
+    <div class="flex items-center space-x-3">
+        {% if perms.ledger.add_tollaccount %}
+        <a href="{% url 'toll-account-create' %}" class="px-4 py-2 bg-emerald-600 text-white rounded-md text-sm font-bold hover:bg-emerald-700 shadow-sm transition-colors flex items-center">
+            <i class="fa-solid fa-plus mr-2"></i>+ New Toll Account
+        </a>
+        {% endif %}
+        <a href="{% url 'toll-ledger' %}" class="px-4 py-2 border border-slate-300 rounded-md bg-white text-slate-700 text-sm font-medium hover:bg-slate-50 transition-colors">
+            Back to Ledger
+        </a>
+    </div>
+</header>
+
+<div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+    <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse text-sm">
+            <thead>
+                <tr class="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase text-[11px] tracking-wider">
+                    <th class="px-5 py-3">Account Name</th>
+                    <th class="px-5 py-3">Provider</th>
+                    <th class="px-5 py-3">Wallet / Tag ID</th>
+                    <th class="px-5 py-3 text-right">Starting Balance</th>
+                    <th class="px-5 py-3 text-right">Current Balance</th>
+                    <th class="px-4 py-3 text-center">Status</th>
+                    <th class="px-5 py-3 text-right">Actions</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+                {% for acc in accounts %}
+                <tr class="hover:bg-slate-50 transition-colors">
+                    <td class="px-5 py-4 font-bold text-slate-900">
+                        <a href="{% url 'toll-ledger' %}?account={{ acc.pk }}" class="hover:text-emerald-600 transition-colors">
+                            {{ acc.name }}
+                        </a>
+                        {% if acc.is_default %}
+                        <span class="ml-2 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-200">
+                            Default
+                        </span>
+                        {% endif %}
+                    </td>
+                    <td class="px-5 py-4 text-slate-600">{{ acc.provider|default:"-" }}</td>
+                    <td class="px-5 py-4 text-slate-600 font-mono text-xs">{{ acc.account_number|default:"-" }}</td>
+                    <td class="px-5 py-4 text-right font-medium text-slate-700">
+                        ₹{{ acc.opening_balance|indian_comma }}
+                        <span class="block text-[10px] text-slate-400">{{ acc.opening_balance_date|date:"d M Y" }}</span>
+                    </td>
+                    <td class="px-5 py-4 text-right font-black {% if acc.current_balance_cached < 0 %}text-rose-600{% elif acc.current_balance_cached < 5000 %}text-amber-600{% else %}text-emerald-600{% endif %}">
+                        {% if acc.current_balance_cached < 0 %}-₹{{ acc.current_balance_cached|abs_val|indian_comma }}{% else %}₹{{ acc.current_balance_cached|indian_comma }}{% endif %}
+                    </td>
+                    <td class="px-4 py-4 text-center">
+                        {% if acc.current_balance_cached < 0 %}
+                        <span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-rose-100 text-rose-700">Overdrawn</span>
+                        {% else %}
+                        <span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700">Active</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-5 py-4 text-right whitespace-nowrap">
+                        <div class="flex items-center justify-end space-x-3">
+                            <a href="{% url 'toll-ledger' %}?account={{ acc.pk }}" class="text-xs font-bold text-emerald-600 hover:text-emerald-800" title="View Ledger">
+                                View Ledger
+                            </a>
+                            {% if perms.ledger.change_tollaccount %}
+                            <a href="{% url 'toll-account-update' acc.pk %}" class="text-slate-400 hover:text-slate-700" title="Edit">
+                                <i class="fa-regular fa-pen-to-square"></i>
+                            </a>
+                            {% endif %}
+                            {% if perms.ledger.delete_tollaccount and not acc.is_default %}
+                            <a href="{% url 'toll-account-delete' acc.pk %}" class="text-slate-400 hover:text-rose-600" title="Delete">
+                                <i class="fa-regular fa-trash-can"></i>
+                            </a>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="7" class="px-5 py-8 text-center text-slate-500">
+                        No toll accounts found.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

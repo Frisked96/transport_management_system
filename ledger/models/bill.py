@@ -31,28 +31,7 @@ def unmark_bill_deleting(bill_id):
         _bill_thread_local.deleting_pks.discard(bill_id)
 
 
-class BillQuerySet(models.QuerySet):
-    def with_payment_info(self):
-        """
-        Ultra-lightweight payment info using cached fields.
-        Backward compatible with previous annotation names.
-        """
-        return self.annotate(
-            annotated_subtotal=F('subtotal_cached'),
-            annotated_gst_amount=F('gst_amount_cached'),
-            annotated_total_amount=F('total_amount_cached'),
-            annotated_received=F('amount_received_cached'),
-            annotated_outstanding=F('outstanding_balance_cached'),
-            annotated_status=F('payment_status_cached')
-        )
-
-
-class BillManager(models.Manager):
-    def get_queryset(self):
-        return BillQuerySet(self.model, using=self._db)
-    
-    def with_payment_info(self):
-        return self.get_queryset().with_payment_info()
+from .managers import BillQuerySet, BillManager
 
 
 class Bill(models.Model):
@@ -287,11 +266,15 @@ class Bill(models.Model):
 
                 affected_trips = list(self.trips.all())
 
-                # Delete only the consolidated invoice record associated with this bill
-                FinancialRecord.objects.filter(
+                # Soft-delete the consolidated invoice record associated with this bill
+                # Detach associated_bill reference so foreign key constraint is satisfied on bill deletion
+                for r in list(FinancialRecord.all_objects.filter(
                     associated_bill=self,
                     record_type=FinancialRecord.RECORD_TYPE_INVOICE
-                ).delete()
+                )):
+                    r.associated_bill = None
+                    r.save(update_fields=['associated_bill'])
+                    r.soft_delete(reason=f"Associated Bill #{self.bill_number or self.pk} deleted")
 
                 super().delete(*args, **kwargs)
 
@@ -369,6 +352,15 @@ class Bill(models.Model):
         return max(Decimal('0'), trip_subtotal - (Decimal(str(self.discount or 0))))
 
     @property
+    def sorted_bill_trips(self):
+        """
+        Returns bill_trips sequenced by older LR no. on top and newer at bottom.
+        Falls back to trip date if LR is not numeric.
+        """
+        from ledger.utils import sort_bill_trips
+        return sort_bill_trips(self.bill_trips.select_related('trip', 'trip__vehicle'))
+
+    @property
     def gst_amount(self):
         """Returns GST amount, prioritizing cached value"""
         if getattr(self, '_bypass_cache', False):
@@ -384,7 +376,7 @@ class Bill(models.Model):
         """Returns total amount, prioritizing cached value"""
         if getattr(self, '_bypass_cache', False):
             return self.subtotal + self.gst_amount
-        if self.total_amount_cached:
+        if self.total_amount_cached is not None:
             return self.total_amount_cached
         if hasattr(self, 'annotated_total_amount'):
             return self.annotated_total_amount
@@ -397,7 +389,7 @@ class Bill(models.Model):
             if not self.use_roundoff:
                 return self.total_amount
             return self.total_amount.quantize(Decimal('1'), rounding='ROUND_HALF_UP')
-        if self.total_amount_cached:
+        if self.total_amount_cached is not None:
             return self.total_amount_cached # rounded_total is stored in total_amount_cached
             
         if not self.use_roundoff:
@@ -407,7 +399,7 @@ class Bill(models.Model):
     @property
     def amount_received(self):
         """Returns amount received, prioritizing cached value"""
-        if self.amount_received_cached:
+        if self.amount_received_cached is not None:
             return self.amount_received_cached
         if hasattr(self, 'annotated_received'):
             return self.annotated_received
@@ -416,7 +408,7 @@ class Bill(models.Model):
     @property
     def outstanding_balance(self):
         """Returns outstanding balance, prioritizing cached value"""
-        if self.outstanding_balance_cached:
+        if self.outstanding_balance_cached is not None:
             return self.outstanding_balance_cached
         if hasattr(self, 'annotated_outstanding'):
             return self.annotated_outstanding or Decimal('0.00')
@@ -434,6 +426,11 @@ class Bill(models.Model):
         if received >= total: return self.PAYMENT_STATUS_PAID
         elif received > 0: return self.PAYMENT_STATUS_PARTIAL
         return self.PAYMENT_STATUS_UNPAID
+
+    @property
+    def is_paid(self):
+        """Helper returning True if payment status is paid."""
+        return self.payment_status == self.PAYMENT_STATUS_PAID
 
     @property
     def cgst_amount(self):
@@ -504,27 +501,4 @@ class Bill(models.Model):
         return self.rounded_total - self.total_amount
 
 
-class BillTrip(models.Model):
-    """
-    Through model for Bill and Trip to store LR No and Discount for each trip in a bill context.
-    """
-    bill = models.ForeignKey(Bill, on_delete=models.CASCADE, related_name='bill_trips')
-    trip = models.ForeignKey(Trip, on_delete=models.CASCADE, related_name='bill_trips')
-    lr_no = models.CharField(max_length=100, blank=True, null=True, verbose_name="LR No")
-    discount = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name="Discount")
-    
-    class Meta:
-        verbose_name = 'Bill Trip'
-        verbose_name_plural = 'Bill Trips'
-        unique_together = ('bill', 'trip')
-
-    def __str__(self):
-        try:
-            bill_str = self.bill.bill_number if self.bill else 'No Bill'
-        except ObjectDoesNotExist:
-            bill_str = f"Bill #{self.bill_id}"
-        try:
-            trip_str = self.trip.trip_number if self.trip else 'No Trip'
-        except ObjectDoesNotExist:
-            trip_str = f"Trip #{self.trip_id}"
-        return f"{bill_str} - {trip_str} (LR: {self.lr_no or 'N/A'})"
+from .bill_trip import BillTrip

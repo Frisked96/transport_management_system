@@ -15,6 +15,13 @@ urlpatterns = [
     # Financial Summary URL
     path('summary/', views.financial_summary, name='financial-summary'),
 
+    # Entry Review & Verification URLs
+    path('review/', views.FinancialEntryReviewView.as_view(), name='financial-entry-review'),
+    path('review/<int:pk>/verify/', views.verify_financial_entry, name='verify-financial-entry'),
+    path('review/<int:pk>/flag/', views.flag_financial_entry, name='flag-financial-entry'),
+    path('review/<int:pk>/restore/', views.restore_financial_entry, name='restore-financial-entry'),
+    path('review/bulk-verify/', views.bulk_verify_financial_entries, name='bulk-verify-financial-entries'),
+
     # Party URLs
     path('parties/', views.PartyListView.as_view(), name='party-list'),
     path('parties/create/', views.PartyCreateView.as_view(), name='party-create'),
@@ -45,6 +52,7 @@ urlpatterns = [
     path('bills/create/', views.BillCreateView.as_view(), name='bill-create'),
     path('bills/<int:pk>/', views.BillDetailView.as_view(), name='bill-detail'),
     path('bills/<int:pk>/update/', views.BillUpdateView.as_view(), name='bill-update'),
+    path('bills/<int:pk>/vendor-update/', views.VendorBillUpdateView.as_view(), name='vendor-bill-update'),
     path('bills/<int:pk>/delete/', views.BillDeleteView.as_view(), name='bill-delete'),
     
     # New print views
@@ -53,4 +61,22 @@ urlpatterns = [
     path('bills/<int:pk>/print-combined/', views.print_combined_bill, name='print-combined-bill'),
     path('bills/shared/<str:token>/', views.shared_bill_view, name='shared-bill'),
     path('bills/bulk-print/', views.bulk_print_invoices, name='bulk-print-invoices'),
+
+    # Toll Ledger URLs
+    path('toll/', views.TollLedgerView.as_view(), name='toll-ledger'),
+    path('toll/accounts/', views.TollAccountListView.as_view(), name='toll-account-list'),
+    path('toll/accounts/create/', views.TollAccountCreateView.as_view(), name='toll-account-create'),
+    path('toll/accounts/<int:pk>/update/', views.TollAccountUpdateView.as_view(), name='toll-account-update'),
+    path('toll/accounts/<int:pk>/delete/', views.TollAccountDeleteView.as_view(), name='toll-account-delete'),
+    path('toll/recharge/create/', views.TollRechargeCreateView.as_view(), name='toll-recharge-create'),
+    path('toll/recharge/<int:pk>/update/', views.TollRechargeUpdateView.as_view(), name='toll-recharge-update'),
+    path('toll/recharge/<int:pk>/delete/', views.TollRechargeDeleteView.as_view(), name='toll-recharge-delete'),
+    path('toll/entry/create/', views.TollEntryCreateView.as_view(), name='toll-entry-create'),
+    path('toll/entry/bulk/', views.TollEntryBulkCreateView.as_view(), name='toll-entry-bulk-create'),
+    path('toll/entry/<int:pk>/update/', views.TollEntryUpdateView.as_view(), name='toll-entry-update'),
+    path('toll/entry/<int:pk>/delete/', views.TollEntryDeleteView.as_view(), name='toll-entry-delete'),
+    path('toll/statement/', views.toll_statement_print, name='toll-statement-print'),
+    path('toll/import/', views.TollStatementImportView.as_view(), name='toll-statement-import'),
+    path('toll/reconcile/', views.TollReconciliationView.as_view(), name='toll-reconcile'),
+    path('toll/reconcile/<int:pk>/unlink/', views.toll_recharge_unlink_firm, name='toll-recharge-unlink'),
 ]

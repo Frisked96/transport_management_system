@@ -50,6 +50,14 @@
                 {% if trip.annotated_is_billed %}
                 <span class="px-2 py-0.5 rounded text-[9px] sm:text-[10px] font-black uppercase tracking-widest bg-blue-500 text-white">Billed</span>
                 {% endif %}
+                <span class="px-2 py-0.5 rounded text-[9px] sm:text-[10px] font-black uppercase tracking-widest
+                    {% if trip.gst_type == 'IGST' or trip.annotated_gst_type == 'IGST' %}bg-purple-600 text-white
+                    {% elif trip.gst_type == 'NONE' or trip.annotated_gst_type == 'NONE' %}bg-slate-600 text-white
+                    {% else %}bg-blue-600 text-white{% endif %}">
+                    {% if trip.gst_type == 'IGST' or trip.annotated_gst_type == 'IGST' %}IGST
+                    {% elif trip.gst_type == 'NONE' or trip.annotated_gst_type == 'NONE' %}Non-GST
+                    {% else %}GST{% endif %}
+                </span>
             </div>
         </div>
 
@@ -120,26 +128,42 @@
                         <table class="w-full text-sm">
                             <tr class="border-b border-slate-50">
                                 <td class="py-2 text-slate-500 font-medium whitespace-nowrap pr-4">Weight / Rate</td>
-                                <td class="py-2 text-slate-900 font-bold">{{ trip.weight }} MT @ ₹{{ trip.rate_per_ton }}</td>
+                                <td class="py-2 text-slate-900 font-bold">{{ trip.weight }} MT @ ₹{{ trip.rate_per_ton|indian_comma }}</td>
                             </tr>
                             <tr class="border-b border-slate-50">
                                 <td class="py-2 text-slate-500 font-medium whitespace-nowrap pr-4">Revenue (Sub)</td>
                                 <td class="py-2 text-slate-900 font-bold">₹{{ trip.revenue|indian_comma }}</td>
                             </tr>
                             <tr class="border-b border-slate-50">
+                                <td class="py-2 text-slate-500 font-medium whitespace-nowrap pr-4">GST Type</td>
+                                <td class="py-2 font-bold {% if trip.gst_type == 'NONE' %}text-slate-500{% elif trip.gst_type == 'IGST' %}text-purple-600{% else %}text-blue-600{% endif %}">
+                                    {% if trip.gst_type == 'NONE' %}Non-GST (0%){% elif trip.gst_type == 'IGST' %}IGST (18%){% else %}GST (18%){% endif %}
+                                </td>
+                            </tr>
+                            <tr class="border-b border-slate-50">
                                 <td class="py-2 text-slate-500 font-medium whitespace-nowrap pr-4">GST Amount</td>
                                 <td class="py-2 text-emerald-600 font-bold">₹{{ trip.gst_amount|indian_comma }}</td>
                             </tr>
-                            <tr>
+                            <tr class="border-b border-slate-100">
                                 <td class="py-2 text-slate-700 font-black uppercase text-[10px]">Total Revenue</td>
                                 <td class="py-2 text-emerald-700 font-black text-lg">₹{{ trip.total_revenue|indian_comma }}</td>
                             </tr>
                             {% if trip.vendor_hire_amount > 0 %}
-                            <tr class="border-t border-orange-100">
+                            <tr class="border-b border-orange-100">
                                 <td class="py-2 text-orange-500 font-black uppercase text-[10px]">Vendor Hire</td>
                                 <td class="py-2 text-orange-600 font-black">₹{{ trip.vendor_hire_amount|indian_comma }}</td>
                             </tr>
                             {% endif %}
+                            <tr class="border-b border-slate-50">
+                                <td class="py-2 text-slate-500 font-medium whitespace-nowrap pr-4">Toll Expense</td>
+                                <td class="py-2 text-rose-600 font-bold">₹{{ total_tolls|indian_comma }}</td>
+                            </tr>
+                            <tr class="border-t-2 border-slate-200">
+                                <td class="py-2 text-slate-800 font-black uppercase text-[10px]">Est. Net Profit</td>
+                                <td class="py-2 font-black text-lg {% if net_trip_profit >= 0 %}text-emerald-700{% else %}text-rose-700{% endif %}">
+                                    {% if net_trip_profit < 0 %}-₹{{ net_trip_profit|abs_val|indian_comma }}{% else %}₹{{ net_trip_profit|indian_comma }}{% endif %}
+                                </td>
+                            </tr>
                         </table>
 
                     </div>
@@ -152,6 +176,67 @@
                 <p class="text-sm text-slate-600 bg-slate-50 p-4 rounded-lg italic border border-slate-100">"{{ trip.notes }}"</p>
             </div>
             {% endif %}
+        </div>
+    </div>
+
+    <!-- Expenses Block -->
+    <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+        <div class="bg-slate-50 px-4 sm:px-6 py-3 border-b border-slate-200 flex flex-wrap justify-between items-center gap-2">
+            <h3 class="text-[10px] sm:text-xs font-bold text-slate-600 uppercase tracking-widest">
+                <i class="fa-solid fa-receipt mr-1.5 text-slate-400"></i>Expenses
+            </h3>
+            <div class="flex items-center gap-3 sm:gap-4 text-xs font-bold">
+                <span class="text-slate-500">Expenses: <strong class="text-rose-600">₹{{ total_expenses|indian_comma }}</strong></span>
+                <span class="text-slate-300">|</span>
+                <span class="text-slate-500">Est. Profit: <strong class="{% if net_trip_profit >= 0 %}text-emerald-600{% else %}text-rose-600{% endif %}">{% if net_trip_profit < 0 %}-₹{{ net_trip_profit|abs_val|indian_comma }}{% else %}₹{{ net_trip_profit|indian_comma }}{% endif %}</strong></span>
+            </div>
+        </div>
+        <div class="p-4 sm:p-6">
+            <!-- Toll Expense (Collapsed by default) -->
+            <details class="group border border-slate-200 rounded-lg overflow-hidden">
+                <summary class="flex items-center justify-between p-3.5 bg-slate-50 hover:bg-slate-100 cursor-pointer list-none select-none transition-colors">
+                    <div class="flex items-center space-x-2.5">
+                        <i class="fa-solid fa-road text-slate-500 text-sm"></i>
+                        <span class="text-xs sm:text-sm font-bold text-slate-800">Toll Expense</span>
+                        <span class="text-[10px] px-2 py-0.5 rounded font-bold bg-slate-200 text-slate-700">
+                            {{ toll_count }} crossing{{ toll_count|pluralize }}
+                        </span>
+                    </div>
+                    <div class="flex items-center space-x-3">
+                        <span class="text-xs sm:text-sm font-bold text-rose-600">₹{{ total_tolls|indian_comma }}</span>
+                        <i class="fa-solid fa-chevron-down text-slate-400 text-xs group-open:rotate-180 transition-transform"></i>
+                    </div>
+                </summary>
+
+                <div class="p-4 border-t border-slate-200 bg-white">
+                    {% if toll_entries %}
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-slate-50 text-slate-500 uppercase text-[10px] font-bold tracking-widest border-b border-slate-200">
+                                <tr>
+                                    <th class="px-3 py-2">Date</th>
+                                    <th class="px-3 py-2">Toll Plaza</th>
+                                    <th class="px-3 py-2">Account</th>
+                                    <th class="px-3 py-2 text-right">Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                {% for toll in toll_entries %}
+                                <tr class="hover:bg-slate-50">
+                                    <td class="px-3 py-2 text-slate-600 whitespace-nowrap">{{ toll.date|date:"d M Y" }}{% if toll.time %} <span class="text-slate-400 font-mono text-[11px]">{{ toll.time|time:"h:i A" }}</span>{% endif %}</td>
+                                    <td class="px-3 py-2 font-medium text-slate-800">{{ toll.toll_plaza|default:"Toll Crossing" }}</td>
+                                    <td class="px-3 py-2 text-slate-500 whitespace-nowrap">{{ toll.toll_account.name }}</td>
+                                    <td class="px-3 py-2 text-right font-bold text-rose-600 whitespace-nowrap">₹{{ toll.amount|indian_comma }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <p class="text-center py-3 text-xs text-slate-400 italic">No toll expenses recorded for this trip period.</p>
+                    {% endif %}
+                </div>
+            </details>
         </div>
     </div>
 

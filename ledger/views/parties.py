@@ -7,7 +7,7 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse_lazy
 from django.contrib import messages
-from django.db.models import Q, Sum, F, DecimalField, Value, Case, When, OuterRef, Count
+from django.db.models import Q, Sum, F, DecimalField, Value, Case, When, OuterRef, Count, prefetch_related_objects
 from django.utils import timezone
 from decimal import Decimal, InvalidOperation, DecimalException
 from datetime import datetime
@@ -18,7 +18,7 @@ from ledger.models import FinancialRecord, Party, CompanyAccount, TripAllocation
 from ledger.forms import PartyForm
 from trips.models import Trip
 from ledger.views.base import BaseLedgerPermissionMixin
-from ledger.utils import format_indian_comma, format_balance
+from ledger.utils import format_indian_comma, format_balance, sort_trips_for_bill_generation
 
 class PartyListView(LoginRequiredMixin, PermissionRequiredMixin, BaseLedgerPermissionMixin, ListView):
     """
@@ -88,15 +88,7 @@ class PartyDetailView(LoginRequiredMixin, PermissionRequiredMixin, BaseLedgerPer
             'vehicle', 'route', 'party'
         ).prefetch_related(
             'bills',
-            'bills__party',
-            'bills__category',
-            'bills__adjustment_bills',
-            'bills__adjustment_bills__category',
-            'bills__financial_records',
-            'bills__financial_records__category',
-            'payment_allocations',
-            'financial_records',
-            'financial_records__category'
+            'bills__party'
         ).with_payment_info().with_billing_info().order_by('-date', '-created_at')
 
         billed_filter = self.request.GET.get('billed')
@@ -123,7 +115,13 @@ class PartyDetailView(LoginRequiredMixin, PermissionRequiredMixin, BaseLedgerPer
 
         # Get all records in CHRONOLOGICAL order to calculate running balance accurately
         records_qs = self.object.financial_records.select_related(
-            'category', 'associated_trip', 'associated_bill', 'associated_bill__category'
+            'category',
+            'account',
+            'associated_tyre',
+            'associated_trip',
+            'associated_bill',
+            'associated_bill__category',
+            'associated_bill__original_bill'
         ).order_by('date', 'created_at')
 
         # We still need to calculate the running balance for ALL records up to the current page.
@@ -143,19 +141,19 @@ class PartyDetailView(LoginRequiredMixin, PermissionRequiredMixin, BaseLedgerPer
         ledger_paginator = Paginator(all_records, ledger_page_size)
         ledger_page = ledger_paginator.get_page(ledger_page_num)
 
+        # Efficiently prefetch allocations & trips only for the current page slice
+        prefetch_related_objects(
+            ledger_page.object_list,
+            'allocations__trip__bills__party',
+            'associated_trip__bills__party'
+        )
+
         context['financial_records'] = ledger_page
         context['ledger_page_obj'] = ledger_page
 
         # Get Bills with prefetching
         bills_qs = self.object.bills.select_related('issuer', 'category', 'customer_bill').prefetch_related(
-            'trips',
-            'trips__payment_allocations',
-            'financial_records',
-            'financial_records__category',
-            'bill_trips',
-            'bill_trips__trip',
-            'adjustment_bills',
-            'adjustment_bills__category'
+            'trips'
         ).with_payment_info().order_by('-date', '-category__name', '-bill_no')
         
         bills_page_num = self.request.GET.get('bills_page', 1)
@@ -222,31 +220,86 @@ class PartyDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
 
 def get_party_unpaid_trips(request):
     """
-    AJAX endpoint to get unpaid trips for a party (used in payment distribution)
+    AJAX endpoint to get unpaid trips for a party (used in payment distribution).
+    Can include trips associated with a specific FinancialRecord being edited,
+    or explicitly included trip IDs, with balances adjusted to reflect their pending
+    amount before this record was applied.
     """
     party_id = request.GET.get('party_id')
     if not party_id:
         return JsonResponse({'trips': []})
     
+    record_id = request.GET.get('record_id')
+    include_trip_id = request.GET.get('include_trip_id')
+    
+    include_ids = set()
+    record_contributions = {}
+    
+    if include_trip_id:
+        for part in str(include_trip_id).split(','):
+            part = part.strip()
+            if part.isdigit():
+                include_ids.add(int(part))
+                
+    if record_id:
+        try:
+            from ledger.models import FinancialRecord
+            record = FinancialRecord.objects.filter(pk=record_id).select_related(
+                'associated_trip'
+            ).prefetch_related('allocations').first()
+            if record:
+                rec_amount = record.amount or Decimal('0')
+                if record.associated_trip_id:
+                    include_ids.add(record.associated_trip_id)
+                    record_contributions[record.associated_trip_id] = (
+                        record_contributions.get(record.associated_trip_id, Decimal('0')) + rec_amount
+                    )
+                for alloc in record.allocations.all():
+                    include_ids.add(alloc.trip_id)
+                    record_contributions[alloc.trip_id] = (
+                        record_contributions.get(alloc.trip_id, Decimal('0')) + (alloc.amount or Decimal('0'))
+                    )
+        except Exception:
+            pass
+    
     try:
-        trips = Trip.objects.with_payment_info().filter(
-            party_id=party_id
-        ).exclude(
-            annotated_status=Trip.PAYMENT_STATUS_PAID
-        ).select_related('vehicle', 'route').order_by('date')
+        from django.db import models
+        base_qs = Trip.objects.with_payment_info().filter(party_id=party_id)
+        if include_ids:
+            trips = base_qs.filter(
+                models.Q(id__in=include_ids) | ~models.Q(annotated_status=Trip.PAYMENT_STATUS_PAID)
+            ).select_related('vehicle', 'route').order_by('date')
+        else:
+            trips = base_qs.exclude(
+                annotated_status=Trip.PAYMENT_STATUS_PAID
+            ).select_related('vehicle', 'route').order_by('date')
         
-        data = [{
-            'id': trip.id,
-            'trip_number': trip.trip_number,
-            'lr_no': trip.lr_no or '',
-            'vehicle': trip.vehicle.registration_plate if trip.vehicle else 'No Vehicle',
-            'date': trip.date.strftime('%d/%m/%Y') if trip.date else '',
-            'route': str(trip.route) if trip.route else (f"{trip.pickup_location} → {trip.delivery_location}" if trip.pickup_location else ''),
-            'total': float(trip.total_revenue),
-            'received': float(trip.amount_received),
-            'balance': float(trip.outstanding_balance),
-            'label': f"{(trip.date.strftime('%d/%m/%Y') if trip.date else '')} - {trip.vehicle.registration_plate if trip.vehicle else ''} (Pending: ₹{trip.outstanding_balance:,.2f})",
-        } for trip in trips]
+        data = []
+        for trip in trips:
+            contributed = record_contributions.get(trip.id, Decimal('0'))
+            
+            orig_received = Decimal(str(trip.amount_received))
+            orig_balance = Decimal(str(trip.outstanding_balance))
+            
+            adj_received = max(Decimal('0'), orig_received - contributed)
+            adj_balance = max(Decimal('0'), orig_balance + contributed)
+            
+            # If not in include_ids and adjusted balance is 0 or less, skip it
+            if trip.id not in include_ids and adj_balance <= Decimal('0'):
+                continue
+                
+            data.append({
+                'id': trip.id,
+                'trip_number': trip.trip_number,
+                'lr_no': trip.lr_no or '',
+                'vehicle': trip.vehicle.registration_plate if trip.vehicle else 'No Vehicle',
+                'date': trip.date.strftime('%d/%m/%Y') if trip.date else '',
+                'route': str(trip.route) if trip.route else (f"{trip.pickup_location} → {trip.delivery_location}" if trip.pickup_location else ''),
+                'total': float(trip.total_revenue),
+                'received': float(adj_received),
+                'balance': float(adj_balance),
+                'label': f"{(trip.date.strftime('%d/%m/%Y') if trip.date else '')} - {trip.vehicle.registration_plate if trip.vehicle else ''} (Pending: ₹{adj_balance:,.2f})",
+            })
         
         return JsonResponse({'trips': data})
     except Exception as e:
@@ -337,6 +390,8 @@ def get_party_unbilled_trips(request):
             for bt in BillTrip.objects.filter(bill_id=bill_id, trip__in=trips):
                 bill_trips_map[bt.trip_id] = bt
 
+        trips = sort_trips_for_bill_generation(trips, bill_trips_map=bill_trips_map)
+
         data = []
         for trip in trips:
             lr_no = trip.lr_no or ''
@@ -411,7 +466,7 @@ def get_party_bills(request):
             'adjustment_bills__category'
         ).filter(
             models.Q(category__isnull=True) | ~models.Q(category__name__in=['Credit Note', 'Debit Note'])
-        ).order_by('-date', '-category__name', '-bill_no')
+        ).order_by('-date', '-id')
 
         data = []
         for bill in bills_qs:

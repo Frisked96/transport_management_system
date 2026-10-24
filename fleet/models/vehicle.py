@@ -197,8 +197,8 @@ class Vehicle(models.Model):
     
     @property
     def last_maintenance(self):
-        """Get the last maintenance log"""
-        return self.maintenance_logs.order_by('-date').first()
+        """Get the last completed maintenance record"""
+        return self.maintenance_records.filter(is_completed=True).order_by('-completion_date', '-id').first()
     
     @property
     def next_due_maintenance(self):
@@ -239,6 +239,12 @@ class Vehicle(models.Model):
             total=models.Sum('cost')
         )['total']
         return total or 0
+
+    @property
+    def tyre_layout(self):
+        """Constructs and returns the 18+1 tyre layout mapping for this vehicle"""
+        from fleet.services import get_vehicle_tyre_layout
+        return get_vehicle_tyre_layout(self)
 
 
 @receiver(post_save, sender=Vehicle)

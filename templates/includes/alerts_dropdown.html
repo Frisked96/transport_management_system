@@ -1,0 +1,90 @@
+{% if user.is_authenticated %}
+<div class="hidden lg:block relative dropdown-container mr-2">
+    <button class="flex items-center justify-center w-8 h-8 rounded-full text-slate-300 hover:text-white hover:bg-slate-700 focus:outline-none dropdown-toggle relative" aria-label="Notifications">
+        <i class="fa-solid fa-bell"></i>
+        {% if total_alerts > 0 %}
+        <span class="absolute top-0 right-0 inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-bold leading-none text-white bg-red-600 rounded-full" style="transform: translate(30%, -30%);">
+            {{ total_alerts }}
+        </span>
+        {% endif %}
+    </button>
+    <div class="absolute right-0 mt-2 w-80 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5 hidden dropdown-menu z-50">
+        <div class="px-4 py-2 font-semibold text-slate-700 border-b border-slate-100 flex justify-between items-center">
+            <span>Alerts</span>
+            {% if total_alerts > 0 %}
+            <span class="bg-red-100 text-red-800 text-xs font-medium px-2 py-0.5 rounded-full">{{ total_alerts }} new</span>
+            {% endif %}
+        </div>
+        <div class="max-h-64 overflow-y-auto">
+            {% if total_alerts == 0 %}
+            <div class="px-4 py-4 text-sm text-slate-500 text-center">No alerts at this time.</div>
+            {% else %}
+                {% for task in due_maintenance %}
+                <a href="{% url 'maintenance-list' %}" class="block px-4 py-3 hover:bg-slate-50 border-b border-slate-50 last:border-0">
+                    <div class="flex items-start">
+                        <div class="flex-shrink-0 pt-0.5"><i class="fa-solid fa-wrench text-blue-500"></i></div>
+                        <div class="ml-3 w-0 flex-1">
+                            <p class="text-sm font-medium text-slate-900">{{ task.vehicle }} - {{ task.name }}</p>
+                            <p class="mt-1 text-xs text-blue-600 font-medium italic">Service Due</p>
+                        </div>
+                    </div>
+                </a>
+                {% endfor %}
+                {% for doc in expired_docs %}
+                <a href="{% url 'document-list' %}?type={% if doc.driver %}drivers{% else %}vehicles{% endif %}&alert=expired" class="block px-4 py-3 hover:bg-slate-50 border-b border-slate-50 last:border-0">
+                    <div class="flex items-start">
+                        <div class="flex-shrink-0 pt-0.5"><i class="fa-solid fa-circle-exclamation text-red-500"></i></div>
+                        <div class="ml-3 w-0 flex-1">
+                            <p class="text-sm font-medium text-slate-900">
+                                {% if doc.vehicle %}
+                                <span class="font-bold text-slate-900">{{ doc.vehicle.registration_plate }}</span>
+                                <span class="text-slate-400 font-normal">&bull;</span>
+                                {{ doc.document_name }}
+                                {% elif doc.driver %}
+                                <span class="font-bold text-slate-900">{{ doc.driver.name }}</span>
+                                <span class="text-slate-400 font-normal">&bull;</span>
+                                {{ doc.document_name }}
+                                {% else %}
+                                {{ doc.document_name }}
+                                {% endif %}
+                            </p>
+                            <p class="mt-1 text-xs text-red-600 font-medium">
+                                Expired on {{ doc.expiry_date|date:"d M Y" }}{% if doc.document_number %} &bull; #{{ doc.document_number }}{% endif %}
+                            </p>
+                        </div>
+                    </div>
+                </a>
+                {% endfor %}
+                {% for doc in expiring_docs %}
+                <a href="{% url 'document-list' %}?type={% if doc.driver %}drivers{% else %}vehicles{% endif %}&alert=expiring" class="block px-4 py-3 hover:bg-slate-50 border-b border-slate-50 last:border-0">
+                    <div class="flex items-start">
+                        <div class="flex-shrink-0 pt-0.5"><i class="fa-solid fa-triangle-exclamation text-amber-500"></i></div>
+                        <div class="ml-3 w-0 flex-1">
+                            <p class="text-sm font-medium text-slate-900">
+                                {% if doc.vehicle %}
+                                <span class="font-bold text-slate-900">{{ doc.vehicle.registration_plate }}</span>
+                                <span class="text-slate-400 font-normal">&bull;</span>
+                                {{ doc.document_name }}
+                                {% elif doc.driver %}
+                                <span class="font-bold text-slate-900">{{ doc.driver.name }}</span>
+                                <span class="text-slate-400 font-normal">&bull;</span>
+                                {{ doc.document_name }}
+                                {% else %}
+                                {{ doc.document_name }}
+                                {% endif %}
+                            </p>
+                            <p class="mt-1 text-xs text-amber-600 font-medium">
+                                Expires on {{ doc.expiry_date|date:"d M Y" }}{% if doc.document_number %} &bull; #{{ doc.document_number }}{% endif %}
+                            </p>
+                        </div>
+                    </div>
+                </a>
+                {% endfor %}
+            {% endif %}
+        </div>
+        <a href="{% url 'document-list' %}?alert=alerts" class="block px-4 py-2 text-xs text-center font-medium text-emerald-600 hover:text-emerald-500 hover:bg-slate-50 border-t border-slate-100">
+            View all document alerts
+        </a>
+    </div>
+</div>
+{% endif %}

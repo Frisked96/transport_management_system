@@ -1,0 +1,25 @@
+{% comment %}
+  One axle row. Expects: label, wheels, vehicle, and optionally single=True.
+  single=True -> wheels.left / wheels.right (steer axle)
+  otherwise   -> wheels.left_outer, left_inner, right_inner, right_outer (dual axle)
+{% endcomment %}
+<div>
+    <p class="mb-1 text-center text-[9px] font-bold uppercase tracking-widest text-slate-400">{{ label }}</p>
+    <div class="flex items-center justify-between">
+        {% if single %}
+            {% include "fleet/includes/tyre_slot.html" with slot=wheels.left vehicle=vehicle %}
+            <div class="mx-2 h-1 flex-1 rounded-full bg-slate-300"></div>
+            {% include "fleet/includes/tyre_slot.html" with slot=wheels.right vehicle=vehicle %}
+        {% else %}
+            <div class="flex gap-1">
+                {% include "fleet/includes/tyre_slot.html" with slot=wheels.left_outer vehicle=vehicle %}
+                {% include "fleet/includes/tyre_slot.html" with slot=wheels.left_inner vehicle=vehicle %}
+            </div>
+            <div class="mx-2 h-1 flex-1 rounded-full bg-slate-300"></div>
+            <div class="flex gap-1">
+                {% include "fleet/includes/tyre_slot.html" with slot=wheels.right_inner vehicle=vehicle %}
+                {% include "fleet/includes/tyre_slot.html" with slot=wheels.right_outer vehicle=vehicle %}
+            </div>
+        {% endif %}
+    </div>
+</div>

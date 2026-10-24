@@ -1,4 +1,5 @@
 import os
+import datetime
 from decimal import Decimal
 from django.test import TestCase
 from django.contrib.auth.models import User
@@ -173,6 +174,57 @@ class FinancialRecordModelTests(TestCase):
         self.assertIsNotNone(rec1.entry_number)
         self.assertIsNotNone(rec2.entry_number)
         self.assertEqual(rec2.entry_number, rec1.entry_number + 1)
+
+    def test_permanent_entry_numbers_preserved_on_delete_without_resequencing(self):
+        """
+        Verify deleting a FinancialRecord soft-deletes the record and preserves its entry_number
+        permanently without resequencing overhead.
+        """
+        FinancialRecord.objects.all().delete()
+        today = timezone.now().date()
+        yesterday = today - datetime.timedelta(days=1)
+        two_days_ago = today - datetime.timedelta(days=2)
+
+        # Create records out of date order
+        rec1 = FinancialRecord.objects.create(
+            date=today,
+            account=self.account,
+            party=self.party_debtor,
+            category=self.category_income,
+            amount=Decimal('1000.00')
+        )
+        rec2 = FinancialRecord.objects.create(
+            date=yesterday,
+            account=self.account,
+            party=self.party_debtor,
+            category=self.category_income,
+            amount=Decimal('2000.00')
+        )
+        rec3 = FinancialRecord.objects.create(
+            date=two_days_ago,
+            account=self.account,
+            party=self.party_debtor,
+            category=self.category_income,
+            amount=Decimal('3000.00')
+        )
+
+        rec2_entry_num = rec2.entry_number
+
+        # Delete the middle record
+        rec2.delete()
+
+        # Invariant per user directive: rec2 is soft-deleted, excluded from active objects, but retains permanent entry_number
+        self.assertFalse(FinancialRecord.objects.filter(pk=rec2.pk).exists())
+        self.assertTrue(FinancialRecord.all_objects.filter(pk=rec2.pk, is_deleted=True).exists())
+        rec2_reloaded = FinancialRecord.all_objects.get(pk=rec2.pk)
+        self.assertEqual(rec2_reloaded.entry_number, rec2_entry_num)
+
+        # Active records count is now 2
+        self.assertEqual(FinancialRecord.objects.count(), 2)
+
+        # The remaining active records retain their permanent entry numbers untouched without resequencing
+        self.assertEqual(FinancialRecord.objects.get(pk=rec1.pk).entry_number, rec1.entry_number)
+        self.assertEqual(FinancialRecord.objects.get(pk=rec3.pk).entry_number, rec3.entry_number)
 
     def test_financial_record_auto_populate_party_from_trip(self):
         """Verify FinancialRecord auto-fills party from associated_trip if omitted."""

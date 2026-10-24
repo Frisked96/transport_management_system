@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load ledger_extras %}
 
 {% block title %}Documents - Transport Management System{% endblock %}
 
@@ -12,10 +13,12 @@
 </header>
 <!-- END: Page Header -->
 
-<!-- BEGIN: Search Bar -->
+<!-- BEGIN: Filter Bar -->
 <section class="bg-slate-100 p-5 rounded-lg border border-slate-200 mb-8">
     <form method="get" class="flex flex-col md:flex-row gap-4">
         <input type="hidden" name="type" value="{{ doc_type }}">
+        
+        <!-- Search Input -->
         <div class="flex-grow relative">
             <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <i class="fa-solid fa-magnifying-glass text-slate-400"></i>
@@ -24,27 +27,97 @@
                    class="block w-full pl-10 pr-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white" 
                    placeholder="Search vehicles (plate, model) or drivers (name, ID, license)...">
         </div>
+
+        {% if doc_type == 'vehicles' %}
+        <!-- Ownership Filter (Company Owned by Default) -->
+        <div class="w-full md:w-56">
+            <select name="ownership" onchange="this.form.submit()" class="block w-full py-2 px-3 border border-slate-300 bg-white rounded-md text-sm focus:ring-emerald-500 focus:border-emerald-500 text-slate-700 font-medium">
+                <option value="owned" {% if ownership_filter == 'owned' %}selected{% endif %}>🏢 Company Owned (Default)</option>
+                <option value="attached" {% if ownership_filter == 'attached' %}selected{% endif %}>🤝 Attached Vehicles</option>
+                <option value="all" {% if ownership_filter == 'all' %}selected{% endif %}>🌐 All Vehicles ({{ total_vehicles_count|default:summary_counts.total }})</option>
+            </select>
+        </div>
+        {% endif %}
+
+        <!-- Alert Filter Dropdown -->
+        <div class="w-full md:w-60">
+            <select name="alert" onchange="this.form.submit()" class="block w-full py-2 px-3 border border-slate-300 bg-white rounded-md text-sm focus:ring-emerald-500 focus:border-emerald-500 text-slate-700">
+                <option value="">All Document Statuses</option>
+                <option value="alerts" {% if alert_filter == 'alerts' %}selected{% endif %}>⚠️ Active Alerts (Expired/Expiring)</option>
+                <option value="expired" {% if alert_filter == 'expired' %}selected{% endif %}>⛔ Expired Only</option>
+                <option value="expiring" {% if alert_filter == 'expiring' %}selected{% endif %}>⏳ Expiring Soon Only</option>
+            </select>
+        </div>
+
         <button type="submit" class="bg-emerald-600 text-white px-6 py-2 rounded-md hover:bg-emerald-700 transition-colors flex items-center justify-center space-x-2">
             <i class="fa-solid fa-filter"></i>
-            <span>Search</span>
+            <span>Filter</span>
         </button>
-        {% if search_term %}
+        {% if search_term or alert_filter or doc_type == 'vehicles' and ownership_filter != 'owned' %}
         <a href="{% url 'document-list' %}?type={{ doc_type }}" class="bg-slate-200 text-slate-700 px-6 py-2 rounded-md hover:bg-slate-300 transition-colors flex items-center justify-center">
-            Clear
+            Reset
         </a>
         {% endif %}
     </form>
+
+    <!-- Quick Filter Pills -->
+    <div class="flex flex-col gap-2.5 mt-4 pt-3 border-t border-slate-200 text-xs">
+        {% if doc_type == 'vehicles' %}
+        <!-- Ownership Quick Pills -->
+        <div class="flex flex-wrap items-center gap-2">
+            <span class="font-bold text-slate-500 uppercase tracking-wider mr-1">Fleet:</span>
+            <a href="?type=vehicles&ownership=owned{% if search_term %}&search={{ search_term }}{% endif %}{% if alert_filter %}&alert={{ alert_filter }}{% endif %}" 
+               class="inline-flex items-center px-3 py-1 rounded-full font-semibold transition-colors {% if ownership_filter == 'owned' %}bg-emerald-700 text-white shadow-sm{% else %}bg-white text-slate-700 hover:bg-slate-200 border border-slate-300{% endif %}">
+                <i class="fa-solid fa-building mr-1.5 text-xs"></i>
+                Company Owned ({{ owned_vehicles_count|default:0 }})
+            </a>
+            <a href="?type=vehicles&ownership=attached{% if search_term %}&search={{ search_term }}{% endif %}{% if alert_filter %}&alert={{ alert_filter }}{% endif %}" 
+               class="inline-flex items-center px-3 py-1 rounded-full font-semibold transition-colors {% if ownership_filter == 'attached' %}bg-emerald-700 text-white shadow-sm{% else %}bg-white text-slate-700 hover:bg-slate-200 border border-slate-300{% endif %}">
+                <i class="fa-solid fa-handshake mr-1.5 text-xs"></i>
+                Attached ({{ attached_vehicles_count|default:0 }})
+            </a>
+            <a href="?type=vehicles&ownership=all{% if search_term %}&search={{ search_term }}{% endif %}{% if alert_filter %}&alert={{ alert_filter }}{% endif %}" 
+               class="inline-flex items-center px-3 py-1 rounded-full font-semibold transition-colors {% if ownership_filter == 'all' %}bg-slate-800 text-white shadow-sm{% else %}bg-white text-slate-700 hover:bg-slate-200 border border-slate-300{% endif %}">
+                All Fleet ({{ total_vehicles_count|default:0 }})
+            </a>
+        </div>
+        {% endif %}
+
+        <!-- Alert Quick Pills -->
+        <div class="flex flex-wrap items-center gap-2">
+            <span class="font-bold text-slate-500 uppercase tracking-wider mr-1">Alerts:</span>
+            <a href="?type={{ doc_type }}{% if doc_type == 'vehicles' %}&ownership={{ ownership_filter }}{% endif %}{% if search_term %}&search={{ search_term }}{% endif %}" 
+               class="inline-flex items-center px-3 py-1 rounded-full font-semibold transition-colors {% if not alert_filter %}bg-slate-800 text-white shadow-sm{% else %}bg-white text-slate-600 hover:bg-slate-200 border border-slate-300{% endif %}">
+                All {% if doc_type == 'vehicles' %}Vehicles{% else %}Drivers{% endif %} ({{ summary_counts.total|default:0 }})
+            </a>
+            <a href="?type={{ doc_type }}{% if doc_type == 'vehicles' %}&ownership={{ ownership_filter }}{% endif %}&alert=alerts{% if search_term %}&search={{ search_term }}{% endif %}" 
+               class="inline-flex items-center px-3 py-1 rounded-full font-semibold transition-colors {% if alert_filter == 'alerts' %}bg-amber-600 text-white shadow-sm{% else %}bg-white text-amber-800 hover:bg-amber-50 border border-amber-300{% endif %}">
+                <i class="fa-solid fa-triangle-exclamation mr-1.5 text-xs"></i>
+                Active Alerts ({{ alert_doc_counts.alerts|default:summary_counts.alerts|default:0 }})
+            </a>
+            <a href="?type={{ doc_type }}{% if doc_type == 'vehicles' %}&ownership={{ ownership_filter }}{% endif %}&alert=expired{% if search_term %}&search={{ search_term }}{% endif %}" 
+               class="inline-flex items-center px-3 py-1 rounded-full font-semibold transition-colors {% if alert_filter == 'expired' %}bg-red-600 text-white shadow-sm{% else %}bg-white text-red-700 hover:bg-red-50 border border-red-300{% endif %}">
+                <i class="fa-solid fa-circle-exclamation mr-1.5 text-xs"></i>
+                Expired ({{ alert_doc_counts.expired|default:summary_counts.expired|default:0 }})
+            </a>
+            <a href="?type={{ doc_type }}{% if doc_type == 'vehicles' %}&ownership={{ ownership_filter }}{% endif %}&alert=expiring{% if search_term %}&search={{ search_term }}{% endif %}" 
+               class="inline-flex items-center px-3 py-1 rounded-full font-semibold transition-colors {% if alert_filter == 'expiring' %}bg-amber-500 text-white shadow-sm{% else %}bg-white text-amber-800 hover:bg-amber-50 border border-amber-300{% endif %}">
+                <i class="fa-solid fa-clock mr-1.5 text-xs"></i>
+                Expiring Soon ({{ alert_doc_counts.expiring|default:summary_counts.expiring|default:0 }})
+            </a>
+        </div>
+    </div>
 </section>
-<!-- END: Search Bar -->
+<!-- END: Filter Bar -->
 
 <!-- BEGIN: Type Tabs -->
-<div class="border-b border-slate-200 mb-8">
+<div class="border-b border-slate-200 mb-6">
     <nav class="-mb-px flex space-x-8 overflow-x-auto" aria-label="Tabs">
-        <a href="?type=vehicles{% if search_term %}&search={{ search_term }}{% endif %}" 
+        <a href="?type=vehicles{% if search_term %}&search={{ search_term }}{% endif %}{% if alert_filter %}&alert={{ alert_filter }}{% endif %}{% if ownership_filter %}&ownership={{ ownership_filter }}{% endif %}" 
            class="flex-shrink-0 {% if doc_type == 'vehicles' %}border-emerald-500 text-emerald-600{% else %}border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300{% endif %} whitespace-nowrap py-4 px-1 border-b-2 font-bold text-sm">
             <i class="fa-solid fa-truck mr-2"></i>Vehicle Documents
         </a>
-        <a href="?type=drivers{% if search_term %}&search={{ search_term }}{% endif %}" 
+        <a href="?type=drivers{% if search_term %}&search={{ search_term }}{% endif %}{% if alert_filter %}&alert={{ alert_filter }}{% endif %}" 
            class="flex-shrink-0 {% if doc_type == 'drivers' %}border-emerald-500 text-emerald-600{% else %}border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300{% endif %} whitespace-nowrap py-4 px-1 border-b-2 font-bold text-sm">
             <i class="fa-solid fa-users mr-2"></i>Driver Documents
         </a>
@@ -52,9 +125,383 @@
 </div>
 <!-- END: Type Tabs -->
 
-{% if doc_type == 'vehicles' %}
+{% if alert_filter or doc_type == 'vehicles' and ownership_filter != 'all' %}
+<!-- Active Filter Indicator Banner -->
+<div class="mb-6 p-3 rounded-lg flex items-center justify-between {% if alert_filter == 'expired' %}bg-red-50 border border-red-200 text-red-800{% elif alert_filter %}bg-amber-50 border border-amber-200 text-amber-800{% else %}bg-slate-100 border border-slate-200 text-slate-800{% endif %}">
+    <div class="flex items-center space-x-2 text-sm font-medium">
+        <i class="fa-solid fa-filter"></i>
+        <span>
+            Filtered by: <strong>{% if doc_type == 'vehicles' %}{% if ownership_filter == 'owned' %}Company Owned Vehicles{% elif ownership_filter == 'attached' %}Attached Vehicles{% else %}All Vehicles{% endif %}{% else %}Drivers{% endif %}</strong>
+            {% if alert_filter %}
+            with <strong>{% if alert_filter == 'expired' %}Expired Documents{% elif alert_filter == 'expiring' %}Expiring Soon (within 30 days){% else %}Active Alerts{% endif %}</strong>
+            {% endif %}
+            &bull; {{ page_obj.paginator.count }} {% if is_alert_mode %}alert{{ page_obj.paginator.count|pluralize }}{% else %}found{% endif %}
+        </span>
+    </div>
+    {% if alert_filter or ownership_filter != 'owned' %}
+    <a href="?type={{ doc_type }}" class="text-xs font-bold underline hover:no-underline">
+        Reset to Default (Company Owned)
+    </a>
+    {% endif %}
+</div>
+{% endif %}
+
+{% if is_alert_mode %}
+<!-- BEGIN: Direct Active Alerts Document View (No Expanding Needed) -->
+<section class="mb-12">
+    <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center space-x-2.5">
+            <span class="inline-flex items-center justify-center w-8 h-8 rounded-full {% if alert_filter == 'expired' %}bg-red-100 text-red-600{% else %}bg-amber-100 text-amber-600{% endif %}">
+                <i class="fa-solid {% if alert_filter == 'expired' %}fa-circle-exclamation{% else %}fa-triangle-exclamation{% endif %} text-base"></i>
+            </span>
+            <div>
+                <h2 class="text-lg font-bold text-slate-900 leading-tight">
+                    {% if alert_filter == 'expired' %}Expired Documents{% elif alert_filter == 'expiring' %}Expiring Soon Documents (within 30 days){% else %}Active Document Alerts{% endif %}
+                </h2>
+                <p class="text-xs text-slate-500">
+                    Listing all active compliance alerts directly &bull; Sorted by urgency
+                </p>
+            </div>
+        </div>
+        <div class="hidden sm:flex items-center">
+            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold {% if alert_filter == 'expired' %}bg-red-100 text-red-800 border border-red-200{% else %}bg-amber-100 text-amber-800 border border-amber-200{% endif %}">
+                {{ page_obj.paginator.count }} Alert{{ page_obj.paginator.count|pluralize }}
+            </span>
+        </div>
+    </div>
+
+    <!-- Alert List Container -->
+    <div class="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-sm">
+        <!-- Mobile Card View for Alerts -->
+        <div class="md:hidden divide-y divide-slate-100">
+            {% for doc in alerts %}
+            <div class="p-4 hover:bg-slate-50 transition-colors {% if doc.is_expired %}bg-red-50/20{% else %}bg-amber-50/20{% endif %}">
+                <div class="flex items-start justify-between gap-3">
+                    <div class="min-w-0 flex-1">
+                        <!-- Vehicle / Driver Info -->
+                        {% if doc.vehicle %}
+                        <div class="flex items-center gap-1.5 mb-1 flex-wrap">
+                            <i class="fa-solid fa-truck text-xs text-slate-400"></i>
+                            <a href="{% url 'vehicle-detail' doc.vehicle.pk %}" class="font-bold text-slate-900 text-sm hover:text-emerald-600 underline-offset-2 hover:underline">
+                                {{ doc.vehicle.registration_plate }}
+                            </a>
+                            {% if doc.vehicle.ownership == 'Owned' %}
+                            <span class="px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-100 text-emerald-800">Owned</span>
+                            {% else %}
+                            <span class="px-1.5 py-0.2 rounded text-[9px] font-bold bg-blue-100 text-blue-800">Attached</span>
+                            {% endif %}
+                            {% if doc.vehicle.make_model %}
+                            <span class="text-xs text-slate-400">&bull; {{ doc.vehicle.make_model }}</span>
+                            {% endif %}
+                        </div>
+                        {% elif doc.driver %}
+                        <div class="flex items-center gap-1.5 mb-1 flex-wrap">
+                            <i class="fa-solid fa-user text-xs text-slate-400"></i>
+                            <a href="{% url 'driver-detail' doc.driver.pk %}" class="font-bold text-slate-900 text-sm hover:text-emerald-600 underline-offset-2 hover:underline">
+                                {{ doc.driver.name }}
+                            </a>
+                            {% if doc.driver.employee_id %}
+                            <span class="text-xs text-slate-500">({{ doc.driver.employee_id }})</span>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+
+                        <!-- Document Name & Number -->
+                        <div class="flex items-center gap-1.5">
+                            <span class="font-semibold text-slate-800 text-sm">{{ doc.document_name }}</span>
+                            {% if doc.is_base_document %}
+                            <span class="px-1.5 py-0.2 rounded text-[8px] font-black uppercase bg-slate-100 text-slate-600">Base</span>
+                            {% endif %}
+                        </div>
+                        <p class="text-xs text-slate-500 mt-0.5">
+                            Doc #: {{ doc.document_number|default:"-" }}
+                            {% if doc.cost > 0 %}&bull; ₹{{ doc.cost|indian_comma }}{% endif %}
+                        </p>
+                    </div>
+
+                    <!-- Status Badge -->
+                    <div class="flex-shrink-0 text-right">
+                        {% if doc.is_expired %}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-red-100 text-red-800">
+                            <i class="fa-solid fa-circle-exclamation mr-1 text-[10px]"></i>Expired
+                        </span>
+                        {% elif doc.days_until_expiry <= 30 %}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-amber-100 text-amber-800">
+                            <i class="fa-solid fa-clock mr-1 text-[10px]"></i>Expiring Soon
+                        </span>
+                        {% else %}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800">Valid</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Expiry Date & Urgency -->
+                <div class="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
+                    <div>
+                        <div class="font-medium text-slate-700">
+                            Expiry: <strong>{{ doc.expiry_date|date:"d M Y" }}</strong>
+                        </div>
+                        {% if doc.is_expired %}
+                        <div class="text-red-600 font-semibold text-[11px] mt-0.5">
+                            <i class="fa-solid fa-triangle-exclamation mr-1"></i>Expired {{ doc.days_overdue }} day{{ doc.days_overdue|pluralize }} ago
+                        </div>
+                        {% elif doc.days_until_expiry == 0 %}
+                        <div class="text-amber-600 font-semibold text-[11px] mt-0.5">
+                            <i class="fa-solid fa-clock mr-1"></i>Expires today!
+                        </div>
+                        {% elif doc.days_until_expiry is not None %}
+                        <div class="text-amber-600 font-semibold text-[11px] mt-0.5">
+                            <i class="fa-solid fa-clock mr-1"></i>Expires in {{ doc.days_until_expiry }} day{{ doc.days_until_expiry|pluralize }}
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="flex items-center space-x-1.5">
+                        {% if doc.latest_renewal and doc.latest_renewal.receipt_file %}
+                        <button type="button" onclick="openDocumentPreview('{{ doc.document_name|escapejs }}', '{% url 'renewal-file-view' doc.latest_renewal.pk %}', '{% url 'renewal-file-view' doc.latest_renewal.pk %}?download=1', '{{ doc.latest_renewal.file_extension|escapejs }}')" class="p-2 text-slate-400 hover:text-emerald-600" title="Preview / Download Scanned Copy">
+                            <i class="fa-solid fa-file-lines text-sm"></i>
+                        </button>
+                        {% else %}
+                        {% for doc_file in doc.files.all %}
+                        <button type="button" onclick="openDocumentPreview('{{ doc.document_name|escapejs }}', '{% url 'document-view' doc_file.pk %}', '{% url 'document-view' doc_file.pk %}?download=1', '{{ doc_file.file_extension|escapejs }}')" class="p-2 text-slate-400 hover:text-emerald-600" title="Preview / Download Scanned Copy">
+                            <i class="fa-solid fa-file-lines text-sm"></i>
+                        </button>
+                        {% endfor %}
+                        {% endif %}
+
+                        {% if perms.documents.change_document %}
+                        <a href="{% url 'document-renew' doc.pk %}" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-bold shadow-sm inline-flex items-center" title="Renew">
+                            <i class="fa-solid fa-arrows-rotate mr-1"></i>Renew
+                        </a>
+                        {% endif %}
+
+                        <a href="{% url 'document-history' doc.pk %}" class="p-2 text-slate-400 hover:text-blue-600" title="History">
+                            <i class="fa-solid fa-clock-rotate-left text-sm"></i>
+                        </a>
+
+                        {% if perms.documents.change_document %}
+                        <a href="{% url 'document-update' doc.pk %}" class="p-2 text-slate-400 hover:text-amber-600" title="Edit">
+                            <i class="fa-solid fa-pen-to-square text-sm"></i>
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% empty %}
+            <div class="p-8 text-center text-slate-500 italic">
+                <i class="fa-solid fa-circle-check text-emerald-500 text-3xl mb-2 block"></i>
+                No active alerts found matching current filters.
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Desktop Table View for Alerts -->
+        <div class="overflow-x-auto hidden md:block">
+            <table class="w-full text-left border-collapse">
+                <thead class="bg-slate-50 border-b border-slate-200">
+                    <tr>
+                        <th class="px-4 py-3 text-xs font-bold text-slate-600 uppercase tracking-wider">
+                            {% if doc_type == 'drivers' %}Driver{% else %}Vehicle{% endif %}
+                        </th>
+                        <th class="px-4 py-3 text-xs font-bold text-slate-600 uppercase tracking-wider">Document</th>
+                        <th class="px-4 py-3 text-xs font-bold text-slate-600 uppercase tracking-wider">Doc Number</th>
+                        <th class="px-4 py-3 text-xs font-bold text-slate-600 uppercase tracking-wider">Expiry / Urgency</th>
+                        <th class="px-4 py-3 text-xs font-bold text-slate-600 uppercase tracking-wider">Validity Period</th>
+                        <th class="px-4 py-3 text-xs font-bold text-slate-600 uppercase tracking-wider text-right">Cost</th>
+                        <th class="px-4 py-3 text-xs font-bold text-slate-600 uppercase tracking-wider">Status</th>
+                        <th class="px-4 py-3 text-xs font-bold text-slate-600 uppercase tracking-wider text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    {% for doc in alerts %}
+                    <tr class="hover:bg-slate-50 transition-colors {% if doc.is_expired %}bg-red-50/20{% else %}bg-amber-50/20{% endif %}">
+                        <!-- Vehicle / Driver Column -->
+                        <td class="px-4 py-3 align-middle">
+                            {% if doc.vehicle %}
+                            <div>
+                                <div class="flex items-center gap-1.5">
+                                    <a href="{% url 'vehicle-detail' doc.vehicle.pk %}" class="font-bold text-slate-900 hover:text-emerald-600 underline-offset-2 hover:underline">
+                                        {{ doc.vehicle.registration_plate }}
+                                    </a>
+                                    {% if doc.vehicle.ownership == 'Owned' %}
+                                    <span class="inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-100 text-emerald-800">Owned</span>
+                                    {% else %}
+                                    <span class="inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-bold bg-blue-100 text-blue-800">Attached</span>
+                                    {% endif %}
+                                </div>
+                                <div class="text-xs text-slate-500">{{ doc.vehicle.make_model|default:"" }}</div>
+                            </div>
+                            {% elif doc.driver %}
+                            <div>
+                                <a href="{% url 'driver-detail' doc.driver.pk %}" class="font-bold text-slate-900 hover:text-emerald-600 underline-offset-2 hover:underline">
+                                    {{ doc.driver.name }}
+                                </a>
+                                <div class="text-xs text-slate-500">ID: {{ doc.driver.employee_id|default:"-" }}</div>
+                            </div>
+                            {% else %}
+                            <span class="text-slate-400 italic">Unassigned</span>
+                            {% endif %}
+                        </td>
+
+                        <!-- Document Name -->
+                        <td class="px-4 py-3 align-middle">
+                            <div class="flex items-center gap-1.5">
+                                <span class="font-semibold text-slate-900 text-sm">{{ doc.document_name }}</span>
+                                {% if doc.is_base_document %}
+                                <span class="px-1.5 py-0.2 rounded text-[8px] font-black uppercase bg-slate-100 text-slate-600">Base</span>
+                                {% endif %}
+                            </div>
+                            <div class="text-[9px] text-slate-400 font-black uppercase tracking-tighter">
+                                Added By: {{ doc.added_by.username|default:"System" }} | {{ doc.created_at|date:"M d, H:i" }}
+                            </div>
+                        </td>
+
+                        <!-- Document Number -->
+                        <td class="px-4 py-3 text-sm text-slate-600 align-middle">
+                            {{ doc.document_number|default:"-" }}
+                        </td>
+
+                        <!-- Expiry Date & Urgency -->
+                        <td class="px-4 py-3 align-middle whitespace-nowrap">
+                            <div class="text-sm font-bold {% if doc.is_expired %}text-red-700{% else %}text-amber-700{% endif %}">
+                                {{ doc.expiry_date|date:"d M Y" }}
+                            </div>
+                            {% if doc.is_expired %}
+                            <div class="text-xs text-red-600 font-semibold flex items-center gap-1 mt-0.5">
+                                <i class="fa-solid fa-triangle-exclamation text-[10px]"></i>
+                                Expired {{ doc.days_overdue }} day{{ doc.days_overdue|pluralize }} ago
+                            </div>
+                            {% elif doc.days_until_expiry == 0 %}
+                            <div class="text-xs text-amber-600 font-semibold flex items-center gap-1 mt-0.5">
+                                <i class="fa-solid fa-clock text-[10px]"></i>
+                                Expires today!
+                            </div>
+                            {% elif doc.days_until_expiry is not None %}
+                            <div class="text-xs text-amber-600 font-semibold flex items-center gap-1 mt-0.5">
+                                <i class="fa-solid fa-clock text-[10px]"></i>
+                                In {{ doc.days_until_expiry }} day{{ doc.days_until_expiry|pluralize }}
+                            </div>
+                            {% endif %}
+                        </td>
+
+                        <!-- Validity Period -->
+                        <td class="px-4 py-3 text-sm text-slate-600 whitespace-nowrap align-middle">
+                            {% if doc.valid_from %}{{ doc.valid_from|date:"d/m/y" }} - {% endif %}<strong>{{ doc.expiry_date|date:"d/m/y" }}</strong>
+                        </td>
+
+                        <!-- Cost -->
+                        <td class="px-4 py-3 text-sm text-right font-bold text-slate-800 whitespace-nowrap align-middle">
+                            {% if doc.cost > 0 %}₹{{ doc.cost|indian_comma }}{% else %}-{% endif %}
+                        </td>
+
+                        <!-- Status Badge -->
+                        <td class="px-4 py-3 align-middle whitespace-nowrap">
+                            {% if doc.is_expired %}
+                            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-800 border border-red-200">
+                                <i class="fa-solid fa-circle-exclamation mr-1 text-[11px]"></i>Expired
+                            </span>
+                            {% elif doc.days_until_expiry <= 30 %}
+                            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                                <i class="fa-solid fa-clock mr-1 text-[11px]"></i>Expiring Soon
+                            </span>
+                            {% else %}
+                            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
+                                Valid
+                            </span>
+                            {% endif %}
+                        </td>
+
+                        <!-- Actions -->
+                        <td class="px-4 py-3 text-right text-sm whitespace-nowrap align-middle">
+                            <div class="flex justify-end items-center space-x-1.5">
+                                {% if doc.latest_renewal and doc.latest_renewal.receipt_file %}
+                                <button type="button" onclick="openDocumentPreview('{{ doc.document_name|escapejs }}', '{% url 'renewal-file-view' doc.latest_renewal.pk %}', '{% url 'renewal-file-view' doc.latest_renewal.pk %}?download=1', '{{ doc.latest_renewal.file_extension|escapejs }}')" class="p-1.5 text-slate-400 hover:text-emerald-600 rounded hover:bg-slate-100" title="Preview / Download Scanned Copy">
+                                    <i class="fa-solid fa-file-lines text-base"></i>
+                                </button>
+                                {% else %}
+                                {% for doc_file in doc.files.all %}
+                                <button type="button" onclick="openDocumentPreview('{{ doc.document_name|escapejs }}', '{% url 'document-view' doc_file.pk %}', '{% url 'document-view' doc_file.pk %}?download=1', '{{ doc_file.file_extension|escapejs }}')" class="p-1.5 text-slate-400 hover:text-emerald-600 rounded hover:bg-slate-100" title="Preview / Download Scanned Copy">
+                                    <i class="fa-solid fa-file-lines text-base"></i>
+                                </button>
+                                {% endfor %}
+                                {% endif %}
+
+                                {% if perms.documents.change_document %}
+                                <a href="{% url 'document-renew' doc.pk %}" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-bold shadow-sm inline-flex items-center transition-colors" title="Renew Document">
+                                    <i class="fa-solid fa-arrows-rotate mr-1"></i>Renew
+                                </a>
+                                {% endif %}
+
+                                <a href="{% url 'document-history' doc.pk %}" class="p-1.5 text-slate-400 hover:text-blue-600 rounded hover:bg-slate-100" title="History">
+                                    <i class="fa-solid fa-clock-rotate-left text-base"></i>
+                                </a>
+
+                                {% if perms.documents.change_document %}
+                                <a href="{% url 'document-update' doc.pk %}" class="p-1.5 text-slate-400 hover:text-amber-600 rounded hover:bg-slate-100" title="Edit">
+                                    <i class="fa-solid fa-pen-to-square text-base"></i>
+                                </a>
+                                {% endif %}
+
+                                {% if not doc.is_base_document and perms.documents.delete_document %}
+                                <a href="{% url 'document-delete' doc.pk %}" class="p-1.5 text-slate-400 hover:text-rose-600 rounded hover:bg-slate-100" title="Delete">
+                                    <i class="fa-solid fa-trash-can text-base"></i>
+                                </a>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" class="px-4 py-8 text-center text-slate-500 italic">
+                            <i class="fa-solid fa-circle-check text-emerald-500 text-3xl mb-2 block"></i>
+                            No active alerts found matching current filters. All documents are in good standing!
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Pagination for Alerts -->
+    {% if is_paginated %}
+    <div class="mt-6 flex justify-center">
+        <nav class="inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+            {% if page_obj.has_previous %}
+            <a href="?page={{ page_obj.previous_page_number }}{% if search_term %}&search={{ search_term }}{% endif %}&type={{ doc_type }}{% if alert_filter %}&alert={{ alert_filter }}{% endif %}{% if ownership_filter %}&ownership={{ ownership_filter }}{% endif %}" class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-slate-300 bg-white text-sm font-medium text-slate-500 hover:bg-slate-50">
+                <span class="sr-only">Previous</span>
+                <i class="fa-solid fa-chevron-left"></i>
+            </a>
+            {% endif %}
+            
+            <span class="relative inline-flex items-center px-4 py-2 border border-slate-300 bg-white text-sm font-medium text-slate-700">
+                Page {{ page_obj.number }} of {{ paginator.num_pages }}
+            </span>
+
+            {% if page_obj.has_next %}
+            <a href="?page={{ page_obj.next_page_number }}{% if search_term %}&search={{ search_term }}{% endif %}&type={{ doc_type }}{% if alert_filter %}&alert={{ alert_filter }}{% endif %}{% if ownership_filter %}&ownership={{ ownership_filter }}{% endif %}" class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-slate-300 bg-white text-sm font-medium text-slate-500 hover:bg-slate-50">
+                <span class="sr-only">Next</span>
+                <i class="fa-solid fa-chevron-right"></i>
+            </a>
+            {% endif %}
+        </nav>
+    </div>
+    {% endif %}
+</section>
+<!-- END: Direct Active Alerts Document View -->
+
+{% elif doc_type == 'vehicles' %}
 <!-- BEGIN: Vehicle Wise Documents -->
 <section class="mb-12">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+        <p class="text-xs text-slate-500">
+            Click any vehicle to expand its documents.
+        </p>
+        <button type="button" id="expand-all-btn" data-state="collapsed" class="self-start sm:self-auto text-xs font-semibold text-slate-700 hover:text-emerald-700 bg-white border border-slate-300 px-3 py-1 rounded shadow-sm hover:bg-slate-50 transition-colors inline-flex items-center">
+            <i class="fa-solid fa-expand mr-1.5 text-slate-400"></i>Expand All
+        </button>
+    </div>
     <div class="space-y-4">
         {% for vehicle in vehicles %}
         <div class="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-sm">
@@ -65,7 +512,14 @@
                         <i class="fa-solid fa-chevron-right transition-transform duration-200" id="icon-vehicle-docs-{{ vehicle.pk }}"></i>
                     </div>
                     <div>
-                        <h3 class="font-bold text-slate-900">{{ vehicle.registration_plate }}</h3>
+                        <div class="flex items-center gap-2">
+                            <h3 class="font-bold text-slate-900">{{ vehicle.registration_plate }}</h3>
+                            {% if vehicle.ownership == 'Owned' %}
+                            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 text-emerald-800">Owned</span>
+                            {% else %}
+                            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-100 text-blue-800">Attached</span>
+                            {% endif %}
+                        </div>
                         <p class="text-xs text-slate-500">{{ vehicle.make_model }}</p>
                     </div>
                 </div>
@@ -112,7 +566,7 @@
                                 </div>
                                 <p class="text-xs text-slate-500 mt-0.5">
                                     Doc #: {{ doc.document_number|default:"-" }}
-                                    {% if doc.cost > 0 %}&bull; ₹{{ doc.cost|floatformat:0 }}{% endif %}
+                                    {% if doc.cost > 0 %}&bull; ₹{{ doc.cost|indian_comma }}{% endif %}
                                 </p>
                             </div>
                             <div class="flex-shrink-0">
@@ -219,7 +673,7 @@
                                     {% endif %}
                                 </td>
                                 <td class="px-4 py-3 text-sm text-right font-bold text-slate-800 whitespace-nowrap">
-                                    {% if doc.cost > 0 %}₹{{ doc.cost|floatformat:0 }}{% else %}-{% endif %}
+                                    {% if doc.cost > 0 %}₹{{ doc.cost|indian_comma }}{% else %}-{% endif %}
                                 </td>
                                 <td class="px-4 py-3">
                                     {% if doc.never_expires %}
@@ -280,7 +734,16 @@
         </div>
         {% empty %}
         <div class="text-center py-12 bg-white rounded-lg border border-slate-200">
+            {% if alert_filter %}
+            <i class="fa-solid fa-circle-check text-emerald-500 text-4xl mb-3"></i>
+            <p class="text-slate-800 font-bold text-base">No vehicles found matching the "{{ alert_filter }}" alert filter.</p>
+            <p class="text-slate-500 text-xs mt-1">All compliance documents for vehicles in this criteria are in good standing!</p>
+            <a href="{% url 'document-list' %}?type=vehicles" class="inline-block mt-3 px-4 py-1.5 bg-emerald-50 text-emerald-700 rounded-md text-xs font-bold hover:bg-emerald-100">
+                View All Vehicles
+            </a>
+            {% else %}
             <p class="text-slate-500">No vehicles found.</p>
+            {% endif %}
         </div>
         {% endfor %}
     </div>
@@ -290,7 +753,7 @@
     <div class="mt-6 flex justify-center">
         <nav class="inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
             {% if page_obj.has_previous %}
-            <a href="?page={{ page_obj.previous_page_number }}{% if search_term %}&search={{ search_term }}{% endif %}&type={{ doc_type }}" class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-slate-300 bg-white text-sm font-medium text-slate-500 hover:bg-slate-50">
+            <a href="?page={{ page_obj.previous_page_number }}{% if search_term %}&search={{ search_term }}{% endif %}&type={{ doc_type }}{% if alert_filter %}&alert={{ alert_filter }}{% endif %}{% if ownership_filter %}&ownership={{ ownership_filter }}{% endif %}" class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-slate-300 bg-white text-sm font-medium text-slate-500 hover:bg-slate-50">
                 <span class="sr-only">Previous</span>
                 <i class="fa-solid fa-chevron-left"></i>
             </a>
@@ -301,7 +764,7 @@
             </span>
 
             {% if page_obj.has_next %}
-            <a href="?page={{ page_obj.next_page_number }}{% if search_term %}&search={{ search_term }}{% endif %}&type={{ doc_type }}" class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-slate-300 bg-white text-sm font-medium text-slate-500 hover:bg-slate-50">
+            <a href="?page={{ page_obj.next_page_number }}{% if search_term %}&search={{ search_term }}{% endif %}&type={{ doc_type }}{% if alert_filter %}&alert={{ alert_filter }}{% endif %}{% if ownership_filter %}&ownership={{ ownership_filter }}{% endif %}" class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-slate-300 bg-white text-sm font-medium text-slate-500 hover:bg-slate-50">
                 <span class="sr-only">Next</span>
                 <i class="fa-solid fa-chevron-right"></i>
             </a>
@@ -311,11 +774,18 @@
     {% endif %}
 </section>
 <!-- END: Vehicle Wise Documents -->
-{% endif %}
 
-{% if doc_type == 'drivers' %}
+{% elif doc_type == 'drivers' %}
 <!-- BEGIN: Driver Wise Documents -->
 <section>
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+        <p class="text-xs text-slate-500">
+            Click any driver to expand their documents.
+        </p>
+        <button type="button" id="expand-all-drivers-btn" data-state="collapsed" class="self-start sm:self-auto text-xs font-semibold text-slate-700 hover:text-emerald-700 bg-white border border-slate-300 px-3 py-1 rounded shadow-sm hover:bg-slate-50 transition-colors inline-flex items-center">
+            <i class="fa-solid fa-expand mr-1.5 text-slate-400"></i>Expand All
+        </button>
+    </div>
     <div class="space-y-4">
         {% for driver in drivers %}
         <div class="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-sm">
@@ -488,7 +958,16 @@
         </div>
         {% empty %}
         <div class="text-center py-12 bg-white rounded-lg border border-slate-200">
+            {% if alert_filter %}
+            <i class="fa-solid fa-circle-check text-emerald-500 text-4xl mb-3"></i>
+            <p class="text-slate-800 font-bold text-base">No drivers found matching the "{{ alert_filter }}" alert filter.</p>
+            <p class="text-slate-500 text-xs mt-1">All compliance documents for drivers in this criteria are in good standing!</p>
+            <a href="{% url 'document-list' %}?type=drivers" class="inline-block mt-3 px-4 py-1.5 bg-emerald-50 text-emerald-700 rounded-md text-xs font-bold hover:bg-emerald-100">
+                View All Drivers
+            </a>
+            {% else %}
             <p class="text-slate-500">No drivers found.</p>
+            {% endif %}
         </div>
         {% endfor %}
     </div>
@@ -498,7 +977,7 @@
     <div class="mt-6 flex justify-center">
         <nav class="inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
             {% if page_obj.has_previous %}
-            <a href="?page={{ page_obj.previous_page_number }}{% if search_term %}&search={{ search_term }}{% endif %}&type={{ doc_type }}" class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-slate-300 bg-white text-sm font-medium text-slate-500 hover:bg-slate-50">
+            <a href="?page={{ page_obj.previous_page_number }}{% if search_term %}&search={{ search_term }}{% endif %}&type={{ doc_type }}{% if alert_filter %}&alert={{ alert_filter }}{% endif %}" class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-slate-300 bg-white text-sm font-medium text-slate-500 hover:bg-slate-50">
                 <span class="sr-only">Previous</span>
                 <i class="fa-solid fa-chevron-left"></i>
             </a>
@@ -509,7 +988,7 @@
             </span>
 
             {% if page_obj.has_next %}
-            <a href="?page={{ page_obj.next_page_number }}{% if search_term %}&search={{ search_term }}{% endif %}&type={{ doc_type }}" class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-slate-300 bg-white text-sm font-medium text-slate-500 hover:bg-slate-50">
+            <a href="?page={{ page_obj.next_page_number }}{% if search_term %}&search={{ search_term }}{% endif %}&type={{ doc_type }}{% if alert_filter %}&alert={{ alert_filter }}{% endif %}" class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-slate-300 bg-white text-sm font-medium text-slate-500 hover:bg-slate-50">
                 <span class="sr-only">Next</span>
                 <i class="fa-solid fa-chevron-right"></i>
             </a>
@@ -541,6 +1020,34 @@
         // Prevent toggle when clicking action buttons (like "Add")
         $('.stop-propagation').on('click', function(e) {
             e.stopPropagation();
+        });
+
+        // Expand/Collapse All for Vehicles
+        $('#expand-all-btn').on('click', function() {
+            const isExpanding = $(this).data('state') !== 'expanded';
+            if (isExpanding) {
+                $('[id^="vehicle-docs-"]').removeClass('hidden');
+                $('[id^="icon-vehicle-docs-"]').css('transform', 'rotate(90deg)');
+                $(this).data('state', 'expanded').html('<i class="fa-solid fa-compress mr-1.5 text-slate-400"></i>Collapse All');
+            } else {
+                $('[id^="vehicle-docs-"]').addClass('hidden');
+                $('[id^="icon-vehicle-docs-"]').css('transform', 'rotate(0deg)');
+                $(this).data('state', 'collapsed').html('<i class="fa-solid fa-expand mr-1.5 text-slate-400"></i>Expand All');
+            }
+        });
+
+        // Expand/Collapse All for Drivers
+        $('#expand-all-drivers-btn').on('click', function() {
+            const isExpanding = $(this).data('state') !== 'expanded';
+            if (isExpanding) {
+                $('[id^="driver-docs-"]').removeClass('hidden');
+                $('[id^="icon-driver-docs-"]').css('transform', 'rotate(90deg)');
+                $(this).data('state', 'expanded').html('<i class="fa-solid fa-compress mr-1.5 text-slate-400"></i>Collapse All');
+            } else {
+                $('[id^="driver-docs-"]').addClass('hidden');
+                $('[id^="icon-driver-docs-"]').css('transform', 'rotate(0deg)');
+                $(this).data('state', 'collapsed').html('<i class="fa-solid fa-expand mr-1.5 text-slate-400"></i>Expand All');
+            }
         });
     });
 </script>

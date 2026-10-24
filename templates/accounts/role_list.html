@@ -73,13 +73,9 @@
         </div>
     </div>
     {% empty %}
-    <div class="col-span-full text-center py-16 bg-white rounded-xl border border-slate-200 p-8 shadow-sm">
-        <i class="fa-solid fa-shield-halved text-5xl text-slate-300 mb-3"></i>
-        <h3 class="text-lg font-bold text-slate-800 mb-1">No Roles Defined</h3>
-        <p class="text-sm text-slate-500 mb-4">Create roles (e.g. Office, Dispatcher, Accountant) to organize access rights.</p>
-        <a href="{% url 'role-create' %}" class="inline-flex items-center px-4 py-2 bg-emerald-600 text-white rounded-md text-sm font-medium hover:bg-emerald-700 shadow-sm transition-colors">
-            <i class="fa-solid fa-plus mr-2"></i>Create First Role
-        </a>
+    <div class="col-span-full">
+        {% url 'role-create' as role_create_url %}
+        {% include "includes/empty_state.html" with icon="fa-solid fa-shield-halved" title="No Roles Defined" description="Create roles (e.g. Office, Dispatcher, Accountant) to organize access rights." action_url=role_create_url action_text="Create First Role" %}
     </div>
     {% endfor %}
 </div>

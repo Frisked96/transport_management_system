@@ -9,42 +9,14 @@ from django.utils import timezone
 from django.db.models.signals import post_delete, pre_save
 from django.dispatch import receiver
 from .vehicle import Vehicle
+from fleet.services import (
+    FLAT_TYRE_POSITION_CHOICES,
+    normalize_tyre_position,
+    TYRE_POSITION_NAME_MAP,
+)
 
 
-class TyreBrand(models.Model):
-    """
-    Pre-defined tyre brands/makes with suggestive pricing.
-    Used as reference data for tyre inventory management.
-    """
-    name = models.CharField(
-        max_length=100,
-        unique=True,
-        verbose_name='Brand / Make'
-    )
-    suggestive_price = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        default=0,
-        verbose_name='Suggestive Price',
-        help_text='Suggested purchase price for tyres of this brand'
-    )
-    vendor = models.ForeignKey(
-        'ledger.Party',
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        limit_choices_to={'party_type': 'Creditor'},
-        verbose_name='Default Vendor',
-        help_text='Vendor to automatically bill when a tyre of this brand is created'
-    )
-
-    class Meta:
-        verbose_name = 'Tyre Brand'
-        verbose_name_plural = 'Tyre Brands'
-        ordering = ['name']
-
-    def __str__(self):
-        return self.name
+from .tyre_brand import TyreBrand
 
 
 def tyre_photo_upload_path(instance, filename):
@@ -100,7 +72,11 @@ class Tyre(models.Model):
         related_name='tyres',
         verbose_name='Current Vehicle'
     )
-    current_position = models.CharField(max_length=50, blank=True, verbose_name='Position')
+    current_position = models.CharField(
+        max_length=50,
+        blank=True,
+        verbose_name='Position'
+    )
     
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_IN_STOCK)
     photo = models.ImageField(upload_to=tyre_photo_upload_path, null=True, blank=True, verbose_name='Tyre Photo')
@@ -108,6 +84,11 @@ class Tyre(models.Model):
 
     def __str__(self):
         return f"{self.brand} {self.size} ({self.serial_number})"
+
+    @property
+    def position_display(self):
+        """Returns clean human-readable position name"""
+        return TYRE_POSITION_NAME_MAP.get(self.current_position, self.current_position)
 
     @property
     def added_by(self):
@@ -140,6 +121,9 @@ class Tyre(models.Model):
             self.current_position = ''
 
         super().save(*args, **kwargs)
+
+        # Sync financial record for tyre purchase unconditionally
+        self.sync_financial_record()
 
         # Automatic Logging (skip if explicitly told to)
         if getattr(self, '_skip_auto_log', False):
@@ -230,14 +214,12 @@ class Tyre(models.Model):
                         logged_by=current_user
                     )
 
-        # Sync financial record for tyre purchase unconditionally
-        self.sync_financial_record()
-
     def sync_financial_record(self):
         """
         Creates, updates, or deletes the ledger entry linked to this tyre purchase.
         """
-        from ledger.models import FinancialRecord, TransactionCategory
+        from ledger.models import FinancialRecord, FinancialVoucher, TransactionCategory
+        from ledger.services import VoucherService
         from django.utils import timezone
         
         final_vendor = self.vendor
@@ -249,7 +231,7 @@ class Tyre(models.Model):
                 pass
                 
         # Find existing record
-        record = FinancialRecord.objects.filter(associated_tyre=self).first()
+        record = FinancialRecord.all_objects.filter(associated_tyre=self).first()
         
         if self.purchase_cost > 0 and final_vendor:
             category, _ = TransactionCategory.objects.get_or_create(
@@ -260,6 +242,7 @@ class Tyre(models.Model):
                 }
             )
             
+            p_date = self.purchase_date or getattr(self, '_created_date', None) or timezone.now().date()
             if record:
                 # Update existing record
                 updated = False
@@ -276,76 +259,48 @@ class Tyre(models.Model):
                 if record.record_type != FinancialRecord.RECORD_TYPE_INVOICE:
                     record.record_type = FinancialRecord.RECORD_TYPE_INVOICE
                     updated = True
+
+                if not record.voucher_id:
+                    voucher = VoucherService.create_voucher(
+                        date=p_date,
+                        voucher_type=FinancialVoucher.VOUCHER_TYPE_TYRE_PURCHASE,
+                        party=final_vendor,
+                        description=f"Tyre Purchase: {self.serial_number} ({self.brand})"
+                    )
+                    record.voucher = voucher
+                    updated = True
                     
                 if updated:
                     record.save()
+                    if record.voucher:
+                        record.voucher.update_totals()
             else:
-                # Create new record
+                # Create new record with dedicated voucher
+                voucher = VoucherService.create_voucher(
+                    date=p_date,
+                    voucher_type=FinancialVoucher.VOUCHER_TYPE_TYRE_PURCHASE,
+                    party=final_vendor,
+                    description=f"Tyre Purchase: {self.serial_number} ({self.brand})"
+                )
                 FinancialRecord.objects.create(
-                    date=self.purchase_date or getattr(self, '_created_date', None) or timezone.now().date(),
+                    date=p_date,
                     party=final_vendor,
                     record_type=FinancialRecord.RECORD_TYPE_INVOICE,
                     category=category,
                     amount=self.purchase_cost,
                     associated_tyre=self,
+                    voucher=voucher,
+                    verification_status=FinancialVoucher.STATUS_PENDING,
                     description=f"Auto-generated entry for tyre purchase: {self.serial_number} ({self.brand})"
                 )
+                voucher.update_totals()
         else:
             # Delete record if it exists but condition is no longer met
             if record:
                 record.delete()
 
 
-class TyreLog(models.Model):
-    """
-    History of tyre movements and repairs.
-    Simplified: No odometer tracking for tyres.
-    """
-    ACTION_MOUNT = 'Mount'
-    ACTION_DISMOUNT = 'Dismount'
-    ACTION_ROTATION = 'Rotation'
-    ACTION_REPAIR = 'Repair'
-    ACTION_REMOLD = 'Remold'
-    ACTION_SCRAP = 'Scrap'
-    ACTION_STOCK = 'Stock'
-
-    ACTION_CHOICES = [
-        (ACTION_MOUNT, 'Mount'),
-        (ACTION_DISMOUNT, 'Dismount'),
-        (ACTION_ROTATION, 'Rotation'),
-        (ACTION_REPAIR, 'Repair'),
-        (ACTION_REMOLD, 'Remold'),
-        (ACTION_SCRAP, 'Scrap'),
-        (ACTION_STOCK, 'Stock'),
-    ]
-
-    tyre = models.ForeignKey(Tyre, on_delete=models.CASCADE, related_name='logs')
-    date = models.DateField(default=timezone.now)
-    action = models.CharField(max_length=20, choices=ACTION_CHOICES)
-    
-    vehicle = models.ForeignKey(Vehicle, on_delete=models.SET_NULL, null=True, blank=True)
-    position = models.CharField(max_length=50, blank=True)
-    notes = models.TextField(blank=True)
-
-    logged_by = models.ForeignKey(
-        User,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='logged_tyre_actions',
-        verbose_name='Logged By'
-    )
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ['-date', '-created_at', '-id']
-
-    def __str__(self):
-        try:
-            tyre_str = str(self.tyre) if self.tyre else "No Tyre"
-        except ObjectDoesNotExist:
-            tyre_str = f"Tyre #{self.tyre_id}"
-        return f"{tyre_str} - {self.action} on {self.date}"
+from .tyre_log import TyreLog
 
 
 # --- Signals ---

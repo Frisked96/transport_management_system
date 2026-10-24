@@ -1,0 +1,9 @@
+{% extends 'confirm_delete_base.html' %}
+
+{% block title %}Confirm Delete - Toll Ledger - TMS{% endblock %}
+{% block delete_header_title %}Delete Toll Entry{% endblock %}
+{% block delete_icon %}fa-solid fa-road{% endblock %}
+{% block delete_warning %}Deleting this entry will automatically recalculate the associated Toll balance and restore any linked Company Account bank transactions.{% endblock %}
+{% block delete_object %}{{ object }}{% endblock %}
+{% block cancel_url %}{% url 'toll-ledger' %}{% endblock %}
+{% block delete_button_text %}Yes, Delete Toll Entry{% endblock %}

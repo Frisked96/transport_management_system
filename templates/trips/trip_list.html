@@ -177,6 +177,14 @@
                         {% else %}bg-slate-100 text-slate-500{% endif %}">
                         {{ trip.annotated_status }}
                     </span>
+                    <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-tighter
+                        {% if trip.annotated_gst_type == 'IGST' or trip.gst_type == 'IGST' %}bg-purple-50 text-purple-700 border border-purple-100
+                        {% elif trip.annotated_gst_type == 'NONE' or trip.gst_type == 'NONE' %}bg-slate-50 text-slate-500 border border-slate-200
+                        {% else %}bg-blue-50 text-blue-700 border border-blue-100{% endif %}">
+                        {% if trip.annotated_gst_type == 'IGST' or trip.gst_type == 'IGST' %}IGST
+                        {% elif trip.annotated_gst_type == 'NONE' or trip.gst_type == 'NONE' %}Non-GST
+                        {% else %}GST{% endif %}
+                    </span>
                 </div>
             </div>
 
@@ -264,6 +272,14 @@
                             {% else %}bg-slate-100 text-slate-500{% endif %}">
                             {{ trip.annotated_status }}
                         </span>
+                        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-tighter
+                            {% if trip.annotated_gst_type == 'IGST' or trip.gst_type == 'IGST' %}bg-purple-50 text-purple-700 border border-purple-100
+                            {% elif trip.annotated_gst_type == 'NONE' or trip.gst_type == 'NONE' %}bg-slate-50 text-slate-500 border border-slate-200
+                            {% else %}bg-blue-50 text-blue-700 border border-blue-100{% endif %}">
+                            {% if trip.annotated_gst_type == 'IGST' or trip.gst_type == 'IGST' %}IGST
+                            {% elif trip.annotated_gst_type == 'NONE' or trip.gst_type == 'NONE' %}Non-GST
+                            {% else %}GST{% endif %}
+                        </span>
                     </div>
                     <p class="text-[9px] font-bold text-slate-500 uppercase">{{ trip.weight|default:"-" }} MT @ ₹{{ trip.rate_per_ton|indian_comma }}</p>
                 </div>
@@ -317,11 +333,21 @@
                                     {% else %}bg-slate-100 text-slate-600{% endif %}">
                                     {{ trip.annotated_status }}
                                 </span>
-                                {% if trip.annotated_is_billed %}
-                                <span class="text-[8px] font-black text-blue-600 bg-blue-50 px-1 py-0.5 rounded border border-blue-100 uppercase tracking-widest">Billed</span>
-                                {% else %}
-                                <span class="text-[8px] font-black text-slate-400 bg-slate-50 px-1 py-0.5 rounded border border-slate-200 uppercase tracking-widest">Unbilled</span>
-                                {% endif %}
+                                <div class="flex items-center gap-1">
+                                    {% if trip.annotated_is_billed %}
+                                    <span class="text-[8px] font-black text-blue-600 bg-blue-50 px-1 py-0.5 rounded border border-blue-100 uppercase tracking-widest">Billed</span>
+                                    {% else %}
+                                    <span class="text-[8px] font-black text-slate-400 bg-slate-50 px-1 py-0.5 rounded border border-slate-200 uppercase tracking-widest">Unbilled</span>
+                                    {% endif %}
+                                    <span class="text-[8px] font-black px-1 py-0.5 rounded border uppercase tracking-widest
+                                        {% if trip.annotated_gst_type == 'IGST' or trip.gst_type == 'IGST' %}text-purple-700 bg-purple-50 border-purple-100
+                                        {% elif trip.annotated_gst_type == 'NONE' or trip.gst_type == 'NONE' %}text-slate-500 bg-slate-50 border-slate-200
+                                        {% else %}text-blue-700 bg-blue-50 border-blue-100{% endif %}">
+                                        {% if trip.annotated_gst_type == 'IGST' or trip.gst_type == 'IGST' %}IGST
+                                        {% elif trip.annotated_gst_type == 'NONE' or trip.gst_type == 'NONE' %}Non-GST
+                                        {% else %}GST{% endif %}
+                                    </span>
+                                </div>
                             </div>
                         </td>
                         <td class="px-6 py-3 text-right">
@@ -350,39 +376,7 @@
 </div>
 <!-- END: Summary Footer -->
 
-<!-- BEGIN: Pagination -->
-{% if is_paginated %}
-<nav class="mt-8 flex justify-center overflow-x-auto pb-4">
-    <div class="flex space-x-1">
-        {% if page_obj.has_previous %}
-        <a href="?page=1{% if search_term %}&search={{ search_term }}{% endif %}{% if current_lr_search %}&lr_search={{ current_lr_search }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}{% if current_billing_status %}&billing_status={{ current_billing_status }}{% endif %}{% if current_gst_filter %}&gst_filter={{ current_gst_filter }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if current_sort %}&sort={{ current_sort }}{% endif %}{% if current_party %}&party={{ current_party }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-xs text-slate-600 hover:bg-slate-50">
-            <i class="fa-solid fa-angles-left"></i>
-        </a>
-        <a href="?page={{ page_obj.previous_page_number }}{% if search_term %}&search={{ search_term }}{% endif %}{% if current_lr_search %}&lr_search={{ current_lr_search }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}{% if current_billing_status %}&billing_status={{ current_billing_status }}{% endif %}{% if current_gst_filter %}&gst_filter={{ current_gst_filter }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if current_sort %}&sort={{ current_sort }}{% endif %}{% if current_party %}&party={{ current_party }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-xs text-slate-600 hover:bg-slate-50">
-            <i class="fa-solid fa-angle-left"></i>
-        </a>
-        {% endif %}
-
-        {% for num in page_obj.paginator.page_range %}
-            {% if page_obj.number == num %}
-            <span class="px-4 py-2 bg-emerald-600 text-white border border-emerald-600 rounded-md text-xs font-bold">{{ num }}</span>
-            {% elif num > page_obj.number|add:'-2' and num < page_obj.number|add:'2' %}
-            <a href="?page={{ num }}{% if search_term %}&search={{ search_term }}{% endif %}{% if current_lr_search %}&lr_search={{ current_lr_search }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}{% if current_billing_status %}&billing_status={{ current_billing_status }}{% endif %}{% if current_gst_filter %}&gst_filter={{ current_gst_filter }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if current_sort %}&sort={{ current_sort }}{% endif %}{% if current_party %}&party={{ current_party }}{% endif %}" class="px-4 py-2 bg-white border border-slate-200 rounded-md text-xs text-slate-600 hover:bg-slate-50">{{ num }}</a>
-            {% endif %}
-        {% endfor %}
-
-        {% if page_obj.has_next %}
-        <a href="?page={{ page_obj.next_page_number }}{% if search_term %}&search={{ search_term }}{% endif %}{% if current_lr_search %}&lr_search={{ current_lr_search }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}{% if current_billing_status %}&billing_status={{ current_billing_status }}{% endif %}{% if current_gst_filter %}&gst_filter={{ current_gst_filter }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if current_sort %}&sort={{ current_sort }}{% endif %}{% if current_party %}&party={{ current_party }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-xs text-slate-600 hover:bg-slate-50">
-            <i class="fa-solid fa-angle-right"></i>
-        </a>
-        <a href="?page={{ page_obj.paginator.num_pages }}{% if search_term %}&search={{ search_term }}{% endif %}{% if current_lr_search %}&lr_search={{ current_lr_search }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}{% if current_billing_status %}&billing_status={{ current_billing_status }}{% endif %}{% if current_gst_filter %}&gst_filter={{ current_gst_filter }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if current_sort %}&sort={{ current_sort }}{% endif %}{% if current_party %}&party={{ current_party }}{% endif %}" class="px-3 py-2 bg-white border border-slate-200 rounded-md text-xs text-slate-600 hover:bg-slate-50">
-            <i class="fa-solid fa-angles-right"></i>
-        </a>
-        {% endif %}
-    </div>
-</nav>
-{% endif %}
-<!-- END: Pagination -->
+{% include "includes/pagination.html" %}
 
 {% else %}
 <div class="text-center py-16 bg-white rounded-xl border border-slate-200 shadow-sm">

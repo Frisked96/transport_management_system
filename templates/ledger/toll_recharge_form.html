@@ -1,0 +1,125 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if object %}Edit{% else %}Record{% endif %} Toll Top-up - TMS{% endblock %}
+
+{% block content %}
+<header class="mb-6">
+    <div class="flex items-center space-x-2 text-sm text-slate-500 mb-1">
+        <a href="{% url 'toll-ledger' %}" class="hover:text-emerald-600 transition-colors">Toll Ledger</a>
+        <i class="fa-solid fa-chevron-right text-[10px]"></i>
+        <span>{% if object %}Edit{% else %}Record{% endif %} Top-up</span>
+    </div>
+    <h1 class="text-3xl font-bold text-slate-900">{% if object %}Edit Toll Top-up{% else %}Add Money to Toll Balance{% endif %}</h1>
+    <p class="text-sm text-slate-600 mt-1">Transfer lumpsum funds from a Company Account into your Toll/FASTag wallet</p>
+</header>
+
+<div class="max-w-3xl">
+    <!-- Informational alert -->
+    <div class="bg-emerald-50 border border-emerald-200 rounded-lg p-4 mb-6 text-xs text-emerald-800 flex items-start space-x-3">
+        <i class="fa-solid fa-circle-info text-base text-emerald-600 mt-0.5"></i>
+        <div>
+            <span class="font-bold">Ledger Balance Impact:</span>
+            This transaction debits the selected Company Bank Account (records an expense in the company ledger) and credits your Toll Wallet balance. Vehicle toll deductions will subsequently be consumed from this pre-funded Toll balance without debiting company bank accounts again.
+        </div>
+    </div>
+
+    <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+        <form method="post" enctype="multipart/form-data" class="p-6">
+            {% csrf_token %}
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <!-- Toll Account -->
+                <div class="flex flex-col">
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                        {{ form.toll_account.label }} *
+                    </label>
+                    {{ form.toll_account }}
+                    {% if form.toll_account.errors %}<p class="mt-1 text-xs text-rose-600 font-bold">{{ form.toll_account.errors.0 }}</p>{% endif %}
+                </div>
+
+                <!-- Company Account (Source) -->
+                <div class="flex flex-col">
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                        {{ form.company_account.label }} <span class="text-slate-400 font-normal">(Optional)</span>
+                    </label>
+                    {{ form.company_account }}
+                    {% if form.company_account.errors %}<p class="mt-1 text-xs text-rose-600 font-bold">{{ form.company_account.errors.0 }}</p>{% endif %}
+                    <p class="mt-1 text-[11px] text-slate-500">Source firm/bank account paying for this top-up. Leave blank to reconcile later.</p>
+                </div>
+
+                <!-- Amount -->
+                <div class="flex flex-col">
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                        {{ form.amount.label }} (₹) *
+                    </label>
+                    {{ form.amount }}
+                    {% if form.amount.errors %}<p class="mt-1 text-xs text-rose-600 font-bold">{{ form.amount.errors.0 }}</p>{% endif %}
+                </div>
+
+                <!-- Date -->
+                <div class="flex flex-col">
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                        {{ form.date.label }} *
+                    </label>
+                    {{ form.date }}
+                    {% if form.date.errors %}<p class="mt-1 text-xs text-rose-600 font-bold">{{ form.date.errors.0 }}</p>{% endif %}
+                </div>
+
+                <!-- Time -->
+                <div class="flex flex-col">
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                        {{ form.time.label }}
+                    </label>
+                    {{ form.time }}
+                    {% if form.time.errors %}<p class="mt-1 text-xs text-rose-600 font-bold">{{ form.time.errors.0 }}</p>{% endif %}
+                </div>
+
+                <!-- Payment Mode -->
+                <div class="flex flex-col">
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                        {{ form.payment_mode.label }}
+                    </label>
+                    {{ form.payment_mode }}
+                    {% if form.payment_mode.errors %}<p class="mt-1 text-xs text-rose-600 font-bold">{{ form.payment_mode.errors.0 }}</p>{% endif %}
+                </div>
+
+                <!-- Reference Number -->
+                <div class="flex flex-col">
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                        {{ form.reference_number.label }}
+                    </label>
+                    {{ form.reference_number }}
+                    {% if form.reference_number.errors %}<p class="mt-1 text-xs text-rose-600 font-bold">{{ form.reference_number.errors.0 }}</p>{% endif %}
+                </div>
+
+                <!-- Receipt Document -->
+                <div class="md:col-span-2 flex flex-col">
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                        {{ form.receipt_document.label }}
+                    </label>
+                    {{ form.receipt_document }}
+                    {% if form.receipt_document.errors %}<p class="mt-1 text-xs text-rose-600 font-bold">{{ form.receipt_document.errors.0 }}</p>{% endif %}
+                </div>
+
+                <!-- Description / Narration -->
+                <div class="md:col-span-2 flex flex-col">
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                        {{ form.description.label }}
+                    </label>
+                    {{ form.description }}
+                    {% if form.description.errors %}<p class="mt-1 text-xs text-rose-600 font-bold">{{ form.description.errors.0 }}</p>{% endif %}
+                </div>
+            </div>
+
+            <div class="mt-6 pt-5 border-t border-slate-100 flex items-center space-x-3">
+                <button type="submit" class="px-6 py-2.5 bg-emerald-600 text-white rounded-md font-bold text-sm hover:bg-emerald-700 shadow-sm transition-colors flex items-center">
+                    <i class="fa-solid fa-check mr-2"></i>{% if object %}Update Top-up{% else %}Save Top-up{% endif %}
+                </button>
+                <a href="{% url 'toll-ledger' %}" class="px-6 py-2.5 border border-slate-300 rounded-md text-slate-700 bg-white hover:bg-slate-50 font-medium text-sm transition-colors">
+                    Cancel
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

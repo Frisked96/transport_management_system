@@ -1,0 +1,59 @@
+<!-- BEGIN: Bottom Navigation Bar (Mobile) -->
+{% if user.is_authenticated %}
+<nav id="bottom-nav" class="fixed bottom-0 left-0 right-0 z-[70] bg-white border-t border-slate-200 shadow-[0_-2px_10px_rgba(0,0,0,0.06)] lg:hidden">
+    <div class="flex items-stretch justify-around h-16 max-w-lg mx-auto">
+        <!-- Trips -->
+        <a href="{% url 'trip-list' %}" class="btm-nav-item flex flex-col items-center justify-center flex-1 relative text-slate-400 hover:text-emerald-600 transition-colors" data-nav="trips">
+            <i class="fa-solid fa-truck text-lg"></i>
+            <span class="text-[9px] font-bold mt-1 uppercase tracking-wider">Trips</span>
+        </a>
+        {% if user.is_superuser or perms.fleet.view_vehicle %}
+        <!-- Fleet -->
+        <a href="{% url 'vehicle-list' %}" class="btm-nav-item flex flex-col items-center justify-center flex-1 relative text-slate-400 hover:text-emerald-600 transition-colors" data-nav="fleet">
+            <i class="fa-solid fa-truck-fast text-lg"></i>
+            <span class="text-[9px] font-bold mt-1 uppercase tracking-wider">Fleet</span>
+        </a>
+        {% elif perms.trips.view_route %}
+        <a href="{% url 'route-list' %}" class="btm-nav-item flex flex-col items-center justify-center flex-1 relative text-slate-400 hover:text-emerald-600 transition-colors" data-nav="fleet">
+            <i class="fa-solid fa-route text-lg"></i>
+            <span class="text-[9px] font-bold mt-1 uppercase tracking-wider">Routes</span>
+        </a>
+        {% endif %}
+
+        {% if user.is_superuser or perms.trips.can_view_manager_dashboard %}
+        <!-- Dashboard -->
+        <a href="{% url 'manager-dashboard' %}" class="btm-nav-item flex flex-col items-center justify-center flex-1 relative text-slate-400 hover:text-emerald-600 transition-colors" data-nav="dashboard">
+            <i class="fa-solid fa-gauge text-lg"></i>
+            <span class="text-[9px] font-bold mt-1 uppercase tracking-wider">Home</span>
+        </a>
+        {% endif %}
+
+        {% if user.is_superuser or perms.ledger.can_view_financial_records %}
+        <!-- Finance -->
+        <a href="{% url 'financialrecord-list' %}" class="btm-nav-item flex flex-col items-center justify-center flex-1 relative text-slate-400 hover:text-emerald-600 transition-colors" data-nav="finance">
+            <i class="fa-solid fa-wallet text-lg"></i>
+            <span class="text-[9px] font-bold mt-1 uppercase tracking-wider">Finance</span>
+        </a>
+        {% elif perms.ledger.view_bill %}
+        <a href="{% url 'bill-list' %}" class="btm-nav-item flex flex-col items-center justify-center flex-1 relative text-slate-400 hover:text-emerald-600 transition-colors" data-nav="finance">
+            <i class="fa-solid fa-file-invoice text-lg"></i>
+            <span class="text-[9px] font-bold mt-1 uppercase tracking-wider">Invoices</span>
+        </a>
+        {% elif perms.ledger.view_party %}
+        <a href="{% url 'party-list' %}" class="btm-nav-item flex flex-col items-center justify-center flex-1 relative text-slate-400 hover:text-emerald-600 transition-colors" data-nav="finance">
+            <i class="fa-solid fa-handshake text-lg"></i>
+            <span class="text-[9px] font-bold mt-1 uppercase tracking-wider">Parties</span>
+        </a>
+        {% endif %}
+        <!-- More (opens drawer) -->
+        <button type="button" id="btm-nav-more" class="btm-nav-item flex flex-col items-center justify-center flex-1 relative text-slate-400 hover:text-emerald-600 transition-colors" data-nav="more">
+            <i class="fa-solid fa-ellipsis text-lg"></i>
+            <span class="text-[9px] font-bold mt-1 uppercase tracking-wider">More</span>
+            {% if total_alerts > 0 %}
+            <span class="absolute top-2 right-1/4 block h-2 w-2 rounded-full bg-red-500"></span>
+            {% endif %}
+        </button>
+    </div>
+</nav>
+{% endif %}
+<!-- END: Bottom Navigation Bar (Mobile) -->

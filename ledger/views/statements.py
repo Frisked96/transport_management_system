@@ -8,7 +8,7 @@ from django.contrib.auth.decorators import login_required, permission_required
 from django.db.models import Q, Sum
 from django.utils import timezone
 
-from ledger.models import FinancialRecord, Party, CompanyAccount
+from ledger.models import FinancialRecord, Party, CompanyAccount, TransactionCategory
 from ledger.utils import format_balance, parse_date_range
 
 
@@ -26,7 +26,7 @@ def party_statement_pdf(request, pk):
     pre_totals = FinancialRecord.objects.filter(
         party=party,
         date__lt=start_date
-    ).select_related('category')
+    ).select_related('category', 'associated_bill__category')
 
     for rec in pre_totals:
         debit = rec.debit_amount or Decimal('0')
@@ -37,7 +37,7 @@ def party_statement_pdf(request, pk):
     records = FinancialRecord.objects.filter(
         party=party,
         date__range=[start_date, end_date]
-    ).select_related('category', 'associated_trip', 'associated_bill', 'party').order_by('date', 'created_at')
+    ).select_related('category', 'associated_trip', 'associated_bill__category', 'party').order_by('date', 'created_at')
 
     # 3. Build statement rows with running balance
     statement_rows = []
@@ -131,20 +131,17 @@ def account_statement_pdf(request, pk):
     start_date, end_date = parse_date_range(request)
 
     # 1. Calculate Opening Balance before start_date
-    opening_bal = account.opening_balance
-    pre_records = FinancialRecord.objects.filter(
+    pre_aggs = FinancialRecord.objects.filter(
         account=account,
         date__lt=start_date
     ).exclude(
         Q(record_type=FinancialRecord.RECORD_TYPE_INVOICE) |
         Q(category__name__in=['Deductions', 'TDS', 'Shortage', 'Credit Note', 'Debit Note'])
-    ).select_related('category')
-
-    for rec in pre_records:
-        if rec.is_income:
-            opening_bal += rec.amount
-        elif rec.is_expense:
-            opening_bal -= rec.amount
+    ).aggregate(
+        income=Sum('amount', filter=Q(category__type=TransactionCategory.TYPE_INCOME)),
+        expense=Sum('amount', filter=Q(category__type=TransactionCategory.TYPE_EXPENSE))
+    )
+    opening_bal = account.opening_balance + (pre_aggs['income'] or Decimal('0')) - (pre_aggs['expense'] or Decimal('0'))
 
     # 2. Get records in range
     records = FinancialRecord.objects.filter(
@@ -227,25 +224,21 @@ def unified_ledger_pdf(request):
     start_date, end_date = parse_date_range(request)
 
     # 1. Combined Opening Balance
-    opening_bal = CompanyAccount.objects.aggregate(total=Sum('opening_balance'))['total'] or Decimal('0')
+    opening_bal_base = CompanyAccount.objects.aggregate(total=Sum('opening_balance'))['total'] or Decimal('0')
 
-    pre_records = FinancialRecord.objects.filter(
-        account__isnull=False,
+    pre_aggs = FinancialRecord.objects.filter(
         date__lt=start_date
     ).exclude(
         Q(record_type=FinancialRecord.RECORD_TYPE_INVOICE) |
         Q(category__name__in=['Deductions', 'TDS', 'Shortage', 'Credit Note', 'Debit Note'])
-    ).select_related('category')
-
-    for rec in pre_records:
-        if rec.is_income:
-            opening_bal += rec.amount
-        elif rec.is_expense:
-            opening_bal -= rec.amount
+    ).aggregate(
+        income=Sum('amount', filter=Q(category__type=TransactionCategory.TYPE_INCOME)),
+        expense=Sum('amount', filter=Q(category__type=TransactionCategory.TYPE_EXPENSE))
+    )
+    opening_bal = opening_bal_base + (pre_aggs['income'] or Decimal('0')) - (pre_aggs['expense'] or Decimal('0'))
 
     # 2. Records in range
     records = FinancialRecord.objects.filter(
-        account__isnull=False,
         date__range=[start_date, end_date]
     ).exclude(
         Q(record_type=FinancialRecord.RECORD_TYPE_INVOICE) |
@@ -276,6 +269,8 @@ def unified_ledger_pdf(request):
         extra_info = []
         if rec.account:
             extra_info.append(f"ACC: {rec.account.name}")
+        else:
+            extra_info.append("ACC: Unallocated")
         if rec.party:
             extra_info.append(f"PRT: {rec.party.name}")
         if extra_info:

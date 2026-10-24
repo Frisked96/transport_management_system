@@ -1,0 +1,118 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if object %}Edit{% else %}Create{% endif %} Toll Account - TMS{% endblock %}
+
+{% block content %}
+<header class="mb-6">
+    <div class="flex items-center space-x-2 text-sm text-slate-500 mb-1">
+        <a href="{% url 'toll-ledger' %}" class="hover:text-emerald-600 transition-colors">Toll Ledger</a>
+        <i class="fa-solid fa-chevron-right text-[10px]"></i>
+        <span>{% if object %}Edit{% else %}New{% endif %} Account</span>
+    </div>
+    <h1 class="text-3xl font-bold text-slate-900">{% if object %}Edit Toll Account{% else %}Create New Toll / FASTag Account{% endif %}</h1>
+    <p class="text-sm text-slate-600 mt-1">Configure dedicated wallet profiles and initial starting balances</p>
+</header>
+
+<div class="max-w-3xl">
+    <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+        <form method="post" class="p-6">
+            {% csrf_token %}
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <!-- Account Name -->
+                <div class="flex flex-col">
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                        {{ form.name.label }} *
+                    </label>
+                    {{ form.name }}
+                    {% if form.name.errors %}<p class="mt-1 text-xs text-rose-600 font-bold">{{ form.name.errors.0 }}</p>{% endif %}
+                </div>
+
+                <!-- Provider -->
+                <div class="flex flex-col">
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                        {{ form.provider.label }}
+                    </label>
+                    {{ form.provider }}
+                    {% if form.provider.errors %}<p class="mt-1 text-xs text-rose-600 font-bold">{{ form.provider.errors.0 }}</p>{% endif %}
+                </div>
+
+                <!-- Wallet ID / Customer ID -->
+                <div class="flex flex-col">
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                        {{ form.account_number.label }}
+                    </label>
+                    {{ form.account_number }}
+                    {% if form.account_number.errors %}<p class="mt-1 text-xs text-rose-600 font-bold">{{ form.account_number.errors.0 }}</p>{% endif %}
+                </div>
+
+                <!-- Is Default -->
+                <div class="flex items-center space-x-2 pt-6">
+                    {{ form.is_default }}
+                    <label for="{{ form.is_default.id_for_label }}" class="text-sm font-semibold text-slate-800">
+                        {{ form.is_default.label }}
+                    </label>
+                </div>
+
+                <!-- Initial Starting Balance Section -->
+                <div class="md:col-span-2 bg-slate-50 border border-slate-200 rounded-lg p-4 space-y-3">
+                    <div class="flex items-center space-x-2">
+                        <i class="fa-solid fa-flag-checkered text-emerald-600 text-sm"></i>
+                        <h4 class="text-xs font-bold text-slate-800 uppercase tracking-wider">Initial Starting Balance (Baseline)</h4>
+                    </div>
+                    <p class="text-[11px] text-slate-500">
+                        Enter your starting balance when onboarding. If this balance already exists in your FASTag portal, it establishes the starting ledger balance directly.
+                    </p>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">
+                                Starting Balance (₹)
+                            </label>
+                            {{ form.opening_balance }}
+                            {% if form.opening_balance.errors %}<p class="mt-1 text-xs text-rose-600 font-bold">{{ form.opening_balance.errors.0 }}</p>{% endif %}
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">
+                                Starting Balance Date
+                            </label>
+                            {{ form.opening_balance_date }}
+                            {% if form.opening_balance_date.errors %}<p class="mt-1 text-xs text-rose-600 font-bold">{{ form.opening_balance_date.errors.0 }}</p>{% endif %}
+                        </div>
+                    </div>
+
+                    {% if not object %}
+                    <div class="pt-2 border-t border-slate-200">
+                        <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">
+                            {{ form.deduct_from_company_account.label }}
+                        </label>
+                        {{ form.deduct_from_company_account }}
+                        <p class="text-[10px] text-slate-500 mt-1">
+                            Optional: Only select a company account if you want this initial starting balance to be recorded as a bank debit from that company account today.
+                        </p>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <!-- Notes -->
+                <div class="md:col-span-2 flex flex-col">
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                        {{ form.notes.label }}
+                    </label>
+                    {{ form.notes }}
+                    {% if form.notes.errors %}<p class="mt-1 text-xs text-rose-600 font-bold">{{ form.notes.errors.0 }}</p>{% endif %}
+                </div>
+            </div>
+
+            <div class="mt-6 pt-5 border-t border-slate-100 flex items-center space-x-3">
+                <button type="submit" class="px-6 py-2.5 bg-emerald-600 text-white rounded-md font-bold text-sm hover:bg-emerald-700 shadow-sm transition-colors flex items-center">
+                    <i class="fa-solid fa-check mr-2"></i>{% if object %}Save Changes{% else %}Create Account{% endif %}
+                </button>
+                <a href="{% url 'toll-ledger' %}" class="px-6 py-2.5 border border-slate-300 rounded-md text-slate-700 bg-white hover:bg-slate-50 font-medium text-sm transition-colors">
+                    Cancel
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

@@ -65,23 +65,23 @@
             <!-- Period Quick Pills -->
             <div class="flex flex-wrap items-center gap-1.5">
                 <span class="text-xs font-bold text-slate-500 uppercase tracking-wider mr-1">Period:</span>
-                <a href="?period=all{% if selected_route_type %}&route_type={{ selected_route_type }}{% endif %}{% if selected_party %}&party={{ selected_party }}{% endif %}" 
+                <a href="?period=all{% if selected_route_type %}&route_type={{ selected_route_type }}{% endif %}{% if selected_party %}&party={{ selected_party }}{% endif %}{% if selected_ownership %}&ownership={{ selected_ownership }}{% endif %}" 
                    class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all {% if period == 'all' %}bg-emerald-600 text-white shadow-sm{% else %}bg-slate-100 text-slate-600 hover:bg-slate-200{% endif %}">
                     All Time
                 </a>
-                <a href="?period=1y{% if selected_route_type %}&route_type={{ selected_route_type }}{% endif %}{% if selected_party %}&party={{ selected_party }}{% endif %}" 
+                <a href="?period=1y{% if selected_route_type %}&route_type={{ selected_route_type }}{% endif %}{% if selected_party %}&party={{ selected_party }}{% endif %}{% if selected_ownership %}&ownership={{ selected_ownership }}{% endif %}" 
                    class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all {% if period == '1y' %}bg-emerald-600 text-white shadow-sm{% else %}bg-slate-100 text-slate-600 hover:bg-slate-200{% endif %}">
                     Last 12M
                 </a>
-                <a href="?period=6m{% if selected_route_type %}&route_type={{ selected_route_type }}{% endif %}{% if selected_party %}&party={{ selected_party }}{% endif %}" 
+                <a href="?period=6m{% if selected_route_type %}&route_type={{ selected_route_type }}{% endif %}{% if selected_party %}&party={{ selected_party }}{% endif %}{% if selected_ownership %}&ownership={{ selected_ownership }}{% endif %}" 
                    class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all {% if period == '6m' %}bg-emerald-600 text-white shadow-sm{% else %}bg-slate-100 text-slate-600 hover:bg-slate-200{% endif %}">
                     Last 6M
                 </a>
-                <a href="?period=90d{% if selected_route_type %}&route_type={{ selected_route_type }}{% endif %}{% if selected_party %}&party={{ selected_party }}{% endif %}" 
+                <a href="?period=90d{% if selected_route_type %}&route_type={{ selected_route_type }}{% endif %}{% if selected_party %}&party={{ selected_party }}{% endif %}{% if selected_ownership %}&ownership={{ selected_ownership }}{% endif %}" 
                    class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all {% if period == '90d' %}bg-emerald-600 text-white shadow-sm{% else %}bg-slate-100 text-slate-600 hover:bg-slate-200{% endif %}">
                     Last 90D
                 </a>
-                <a href="?period=30d{% if selected_route_type %}&route_type={{ selected_route_type }}{% endif %}{% if selected_party %}&party={{ selected_party }}{% endif %}" 
+                <a href="?period=30d{% if selected_route_type %}&route_type={{ selected_route_type }}{% endif %}{% if selected_party %}&party={{ selected_party }}{% endif %}{% if selected_ownership %}&ownership={{ selected_ownership }}{% endif %}" 
                    class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all {% if period == '30d' %}bg-emerald-600 text-white shadow-sm{% else %}bg-slate-100 text-slate-600 hover:bg-slate-200{% endif %}">
                     Last 30D
                 </a>
@@ -89,6 +89,15 @@
 
             <!-- Granular Selectors & Custom Date Range -->
             <div class="flex flex-wrap items-center gap-3">
+                <!-- Vehicle Ownership Filter -->
+                <div class="w-40">
+                    <select name="ownership" onchange="this.form.submit()" class="block w-full py-1.5 px-3 border border-slate-300 rounded-lg text-xs font-medium focus:ring-emerald-500 focus:border-emerald-500 bg-white">
+                        <option value="">All Vehicles</option>
+                        <option value="owned" {% if selected_ownership == 'owned' %}selected{% endif %}>Company Fleet</option>
+                        <option value="attached" {% if selected_ownership == 'attached' %}selected{% endif %}>Market / Attached</option>
+                    </select>
+                </div>
+
                 <!-- Route Type Filter -->
                 <div class="w-40">
                     <select name="route_type" onchange="this.form.submit()" class="block w-full py-1.5 px-3 border border-slate-300 rounded-lg text-xs font-medium focus:ring-emerald-500 focus:border-emerald-500 bg-white">
@@ -122,7 +131,7 @@
                     <button type="submit" class="px-2.5 py-1 bg-slate-800 text-white rounded-md text-xs font-bold hover:bg-slate-700 transition-colors">
                         Filter
                     </button>
-                    {% if period != 'all' or selected_route_type or selected_party %}
+                    {% if period != 'all' or selected_route_type or selected_party or selected_ownership %}
                     <a href="{% url 'routes-dashboard' %}" class="text-xs text-rose-600 hover:underline ml-1">Reset</a>
                     {% endif %}
                 </div>
@@ -153,7 +162,7 @@
                 <i class="fa-solid fa-indian-rupee-sign text-amber-500 opacity-60"></i>
             </div>
             <div class="text-xl md:text-2xl font-black text-slate-900 truncate">
-                ₹{{ total_revenue|floatformat:0|intcomma }}
+                ₹{{ total_revenue|indian_comma }}
             </div>
             <p class="text-[10px] text-slate-500 mt-1">
                 Total Freight Billed/Earned
@@ -167,7 +176,7 @@
                 <i class="fa-solid fa-weight-hanging text-indigo-600 opacity-60"></i>
             </div>
             <div class="text-xl md:text-2xl font-black text-slate-900 truncate">
-                {{ total_weight|floatformat:1|intcomma }}<span class="text-xs text-slate-400 font-semibold"> MT</span>
+                {{ total_weight|indian_comma }}<span class="text-xs text-slate-400 font-semibold"> MT</span>
             </div>
             <p class="text-[10px] text-slate-500 mt-1">
                 Avg Load: <strong class="text-slate-700">{{ avg_load_per_trip|floatformat:1 }} MT/Trip</strong>
@@ -195,7 +204,7 @@
                 <i class="fa-solid fa-scale-balanced text-blue-600 opacity-60"></i>
             </div>
             <div class="text-xl md:text-2xl font-black text-slate-900">
-                ₹{{ weighted_avg_rate|floatformat:2|intcomma }}<span class="text-xs text-slate-400 font-semibold">/Ton</span>
+                ₹{{ weighted_avg_rate|indian_comma }}<span class="text-xs text-slate-400 font-semibold">/Ton</span>
             </div>
             <p class="text-[10px] text-slate-500 mt-1">
                 Across All Per-Ton Trips
@@ -323,13 +332,13 @@
                                     <span>•</span>
                                     <span>{{ item.trips }} Trips</span>
                                     <span>•</span>
-                                    <span>{{ item.total_weight|floatformat:1 }} MT</span>
+                                    <span>{{ item.total_weight|indian_comma }} MT</span>
                                 </div>
                             </div>
                         </div>
                         <div class="text-right flex-shrink-0">
                             <div class="text-sm font-black text-slate-900">
-                                ₹{{ item.total_revenue|floatformat:0|intcomma }}
+                                ₹{{ item.total_revenue|indian_comma }}
                             </div>
                             <div class="text-[10px] text-emerald-700 font-bold">
                                 {{ item.revenue_share }}% of network
@@ -370,16 +379,16 @@
                                 <div class="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
                                     <span>{{ item.trips }} Trips</span>
                                     <span>•</span>
-                                    <span class="font-bold text-slate-700">₹{{ item.weighted_avg_rate|floatformat:2 }}/Ton avg</span>
+                                    <span class="font-bold text-slate-700">₹{{ item.weighted_avg_rate|indian_comma }}/Ton avg</span>
                                 </div>
                             </div>
                         </div>
                         <div class="text-right flex-shrink-0">
                             <div class="text-sm font-black text-slate-900">
-                                {{ item.total_weight|floatformat:1|intcomma }} MT
+                                {{ item.total_weight|indian_comma }} MT
                             </div>
                             <div class="text-[10px] text-slate-500">
-                                ₹{{ item.total_revenue|floatformat:0|intcomma }} Freight
+                                ₹{{ item.total_revenue|indian_comma }} Freight
                             </div>
                         </div>
                     </div>
@@ -441,29 +450,29 @@
                         </td>
                         <td class="px-5 py-3.5 text-right font-semibold text-slate-700">{{ item.trips }}</td>
                         <td class="px-5 py-3.5 text-right font-mono font-medium text-slate-700 whitespace-nowrap">
-                            {{ item.total_weight|floatformat:1|intcomma }} MT
+                            {{ item.total_weight|indian_comma }} MT
                         </td>
                         <td class="px-5 py-3.5 text-right font-mono font-black text-emerald-700 whitespace-nowrap">
-                            ₹{{ item.weighted_avg_rate|floatformat:2|intcomma }}
+                            ₹{{ item.weighted_avg_rate|indian_comma }}
                         </td>
                         <td class="px-5 py-3.5 text-right font-mono text-slate-500 whitespace-nowrap">
-                            ₹{{ item.default_rate|floatformat:2|intcomma }}
+                            ₹{{ item.default_rate|indian_comma }}
                         </td>
                         <td class="px-5 py-3.5 text-right font-mono text-xs whitespace-nowrap">
                             {% if item.rate_variance > 0 %}
                                 <span class="text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded inline-flex items-center gap-1">
-                                    <i class="fa-solid fa-arrow-trend-up text-[9px]"></i> +₹{{ item.rate_variance|floatformat:2 }}
+                                    <i class="fa-solid fa-arrow-trend-up text-[9px]"></i> +₹{{ item.rate_variance|indian_comma }}
                                 </span>
                             {% elif item.rate_variance < 0 %}
                                 <span class="text-rose-700 font-bold bg-rose-50 px-1.5 py-0.5 rounded inline-flex items-center gap-1">
-                                    <i class="fa-solid fa-arrow-trend-down text-[9px]"></i> -₹{{ item.rate_variance_abs|floatformat:2 }}
+                                    <i class="fa-solid fa-arrow-trend-down text-[9px]"></i> -₹{{ item.rate_variance_abs|indian_comma }}
                                 </span>
                             {% else %}
                                 <span class="text-slate-400 font-medium">0.00</span>
                             {% endif %}
                         </td>
                         <td class="px-5 py-3.5 text-right font-mono font-bold text-slate-900 whitespace-nowrap">
-                            ₹{{ item.total_revenue|floatformat:0|intcomma }}
+                            ₹{{ item.total_revenue|indian_comma }}
                         </td>
                         <td class="px-5 py-3.5 text-right font-mono text-slate-600">
                             {{ item.revenue_share }}%
@@ -516,7 +525,7 @@
                 <div>
                     <div class="flex items-center justify-between text-[10px] text-slate-400 font-bold uppercase mb-1">
                         <span>{{ item.route.get_route_type_display }}</span>
-                        <span>₹{{ item.default_rate|floatformat:0 }}/Ton</span>
+                        <span>₹{{ item.default_rate|indian_comma }}/Ton</span>
                     </div>
                     <div class="text-xs font-bold text-slate-900 flex items-center gap-1.5">
                         <span class="truncate">{{ item.route.pickup_location }}</span>
