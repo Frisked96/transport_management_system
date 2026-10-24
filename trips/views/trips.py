@@ -32,15 +32,7 @@ class TripListView(LoginRequiredMixin, BaseTripPermissionMixin, ListView):
     def get_queryset(self):
         """Filter and sort trips based on user input and permissions"""
         queryset = self.get_queryset_for_user().with_payment_info().with_billing_info().select_related(
-            'vehicle', 'party', 'driver__user', 'route'
-        ).prefetch_related(
-            'bills',
-            'bills__category',
-            'bills__financial_records',
-            'bills__financial_records__category',
-            'bills__trips',
-            'bills__adjustment_bills',
-            'bills__adjustment_bills__category'
+            'vehicle', 'party', 'route'
         )
         
         # Search functionality
@@ -55,7 +47,7 @@ class TripListView(LoginRequiredMixin, BaseTripPermissionMixin, ListView):
                 Q(route__delivery_location__icontains=search) |
                 Q(vehicle__registration_plate__icontains=search) |
                 Q(lr_no__icontains=search)
-            ).distinct()
+            )
 
         # LR Number Specific Search
         lr_search = self.request.GET.get('lr_search')
@@ -154,9 +146,9 @@ class TripListView(LoginRequiredMixin, BaseTripPermissionMixin, ListView):
         context['date_filter'] = self.request.GET.get('date_filter', '')
         
         # Summary for the filtered queryset
-        queryset = self.get_queryset()
-        context['total_weight'] = queryset.aggregate(total_weight=Sum('weight'))['total_weight'] or 0
-        context['total_count'] = context['paginator'].count if 'paginator' in context else queryset.count()
+        base_qs = self.object_list
+        context['total_weight'] = base_qs.aggregate(total_weight=Sum('weight'))['total_weight'] or 0
+        context['total_count'] = context['paginator'].count if 'paginator' in context else base_qs.count()
         
         return context
 
