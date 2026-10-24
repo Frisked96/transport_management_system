@@ -40,8 +40,13 @@ class FinancialRecordListView(LoginRequiredMixin, PermissionRequiredMixin, BaseL
             return FinancialRecord.objects.none()
         
         queryset = FinancialRecord.objects.all().select_related(
-            'category', 'party', 'account', 'driver__user', 'associated_trip', 'associated_bill', 'associated_tyre', 'associated_document_renewal__document__vehicle'
-        ).prefetch_related('allocations__trip', 'bill_allocations__bill')
+            'category', 'party', 'account', 'driver__user', 'voucher',
+            'associated_trip__vehicle', 'associated_trip__route',
+            'associated_bill__party', 'associated_bill__category',
+            'associated_tyre', 'associated_document_renewal__document__vehicle'
+        ).prefetch_related(
+            'allocations__trip__vehicle', 'bill_allocations__bill'
+        )
         
         # Category filter
         category_id = self.request.GET.get('category')
@@ -71,7 +76,28 @@ class FinancialRecordListView(LoginRequiredMixin, PermissionRequiredMixin, BaseL
         if end_date:
             queryset = queryset.filter(date__lte=end_date)
         
-        return queryset.order_by('-date', '-created_at')
+        # General text search filter
+        search = self.request.GET.get('search', '').strip()
+        if search:
+            search_q = (
+                Q(description__icontains=search) |
+                Q(party__name__icontains=search) |
+                Q(account__name__icontains=search) |
+                Q(category__name__icontains=search) |
+                Q(voucher__voucher_number__icontains=search) |
+                Q(associated_trip__trip_number__icontains=search) |
+                Q(associated_trip__lr_no__icontains=search) |
+                Q(associated_trip__vehicle__registration_plate__icontains=search) |
+                Q(associated_bill__bill_number__icontains=search) |
+                Q(allocations__trip__trip_number__icontains=search) |
+                Q(bill_allocations__bill__bill_number__icontains=search)
+            )
+            if search.isdigit():
+                search_q |= Q(entry_number=search) | Q(id=search)
+            queryset = queryset.filter(search_q).distinct()
+
+        # Strict newest to oldest ordering
+        return queryset.order_by('-date', '-id')
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -81,6 +107,7 @@ class FinancialRecordListView(LoginRequiredMixin, PermissionRequiredMixin, BaseL
         context['current_account'] = self.request.GET.get('account', '')
         context['party_choices'] = Party.objects.all().order_by('name')
         context['current_party'] = self.request.GET.get('party', '')
+        context['current_search'] = self.request.GET.get('search', '').strip()
 
         # 1. Financial Records Totals (Filtered)
         filtered_non_invoices = self.get_queryset().exclude(record_type='Invoice')
@@ -100,51 +127,44 @@ class FinancialRecordListView(LoginRequiredMixin, PermissionRequiredMixin, BaseL
         context['total_expenses'] = total_expenses
         context['net_total'] = total_income_all - total_expenses
 
-        # 2. Party Outstanding Dashboard (Unfiltered by date/category)
-        # We want to see who owes money overall
-        parties = Party.objects.all()
-        party_dashboard = []
-        total_outstanding = Decimal('0')
+        # 2. Party Outstanding Dashboard (Optimized db-level aggregation)
+        total_outstanding = Party.objects.filter(
+            party_type=Party.TYPE_DEBTOR,
+            current_balance_cached__gt=0
+        ).aggregate(total=Sum('current_balance_cached'))['total'] or Decimal('0')
 
-        # Define payment categories to include for "Last Payment"
-        # We exclude TDS and Adjustment Notes (Credit/Debit Notes)
-        # We only care about actual money coming in (Income)
-        payment_categories = TransactionCategory.objects.filter(
-            type=TransactionCategory.TYPE_INCOME
-        ).exclude(
-            name__in=['Credit Note', 'Debit Note', 'TDS', 'TDS Receivable', 'Opening Balance']
+        # Top 10 parties with highest balances (both Debtors and Creditors by magnitude of outstanding)
+        from django.db.models.functions import Abs
+        top_parties = list(
+            Party.objects.exclude(current_balance_cached=0).order_by(Abs('current_balance_cached').desc())[:10]
         )
+        top_party_ids = [p.id for p in top_parties]
 
-        # Batch fetch last payment date for all parties in a single query
         last_payments = dict(
             FinancialRecord.objects.filter(
-                category__in=payment_categories
+                party_id__in=top_party_ids
             ).exclude(
                 record_type=FinancialRecord.RECORD_TYPE_INVOICE
+            ).exclude(
+                category__name__in=['Credit Note', 'Debit Note', 'Opening Balance']
             ).values('party_id').annotate(
                 last_date=Max('date')
             ).values_list('party_id', 'last_date')
         )
 
-        for p in parties:
-            bal = p.current_balance_cached
-            if p.party_type == Party.TYPE_DEBTOR:
-                total_outstanding += max(Decimal('0'), bal)
-            
+        party_dashboard = []
+        for p in top_parties:
             party_dashboard.append({
                 'id': p.id,
                 'name': p.name,
-                'balance': bal,
+                'balance': p.current_balance_cached,
                 'party_type': p.party_type,
                 'last_payment_date': last_payments.get(p.id)
             })
 
-        # Sort by absolute balance descending (most critical accounts first)
-        party_dashboard.sort(key=lambda x: abs(x['balance']), reverse=True)
-
         context['total_outstanding'] = total_outstanding
-        context['party_dashboard'] = party_dashboard[:10] # Top 10 for dashboard
-        context['all_parties_dashboard'] = party_dashboard # Full list if needed
+        context['party_dashboard'] = party_dashboard
+        context['all_parties_dashboard'] = party_dashboard
         
         return context
 
