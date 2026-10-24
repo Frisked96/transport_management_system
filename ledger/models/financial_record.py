@@ -388,19 +388,24 @@ class FinancialRecord(models.Model):
         except ObjectDoesNotExist:
             pass
 
-        # If no direct bill, check if it's a trip payment with allocations
-        try:
-            first_alloc = self.allocations.select_related('trip').first()
-            if first_alloc and first_alloc.trip and first_alloc.trip.associated_bill:
-                return first_alloc.trip.associated_bill
-        except ObjectDoesNotExist:
-            pass
-        
-        # Finally check if direct associated trip has a bill
+        # Check direct associated trip first
         try:
             if self.associated_trip and self.associated_trip.associated_bill:
                 return self.associated_trip.associated_bill
         except ObjectDoesNotExist:
+            pass
+
+        # If no direct bill, check if it's a trip payment with allocations
+        try:
+            if hasattr(self, '_prefetched_objects_cache') and 'allocations' in self._prefetched_objects_cache:
+                allocs = list(self.allocations.all())
+                first_alloc = allocs[0] if allocs else None
+            else:
+                first_alloc = self.allocations.select_related('trip').first()
+
+            if first_alloc and first_alloc.trip and first_alloc.trip.associated_bill:
+                return first_alloc.trip.associated_bill
+        except (ObjectDoesNotExist, IndexError):
             pass
             
         return None
@@ -415,10 +420,15 @@ class FinancialRecord(models.Model):
             pass
         
         try:
-            first_alloc = self.allocations.select_related('trip').first()
+            if hasattr(self, '_prefetched_objects_cache') and 'allocations' in self._prefetched_objects_cache:
+                allocs = list(self.allocations.all())
+                first_alloc = allocs[0] if allocs else None
+            else:
+                first_alloc = self.allocations.select_related('trip').first()
+
             if first_alloc:
                 return first_alloc.trip
-        except ObjectDoesNotExist:
+        except (ObjectDoesNotExist, IndexError):
             pass
             
         return None

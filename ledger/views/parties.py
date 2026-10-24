@@ -7,7 +7,7 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse_lazy
 from django.contrib import messages
-from django.db.models import Q, Sum, F, DecimalField, Value, Case, When, OuterRef, Count
+from django.db.models import Q, Sum, F, DecimalField, Value, Case, When, OuterRef, Count, prefetch_related_objects
 from django.utils import timezone
 from decimal import Decimal, InvalidOperation, DecimalException
 from datetime import datetime
@@ -88,15 +88,7 @@ class PartyDetailView(LoginRequiredMixin, PermissionRequiredMixin, BaseLedgerPer
             'vehicle', 'route', 'party'
         ).prefetch_related(
             'bills',
-            'bills__party',
-            'bills__category',
-            'bills__adjustment_bills',
-            'bills__adjustment_bills__category',
-            'bills__financial_records',
-            'bills__financial_records__category',
-            'payment_allocations',
-            'financial_records',
-            'financial_records__category'
+            'bills__party'
         ).with_payment_info().with_billing_info().order_by('-date', '-created_at')
 
         billed_filter = self.request.GET.get('billed')
@@ -123,7 +115,13 @@ class PartyDetailView(LoginRequiredMixin, PermissionRequiredMixin, BaseLedgerPer
 
         # Get all records in CHRONOLOGICAL order to calculate running balance accurately
         records_qs = self.object.financial_records.select_related(
-            'category', 'associated_trip', 'associated_bill', 'associated_bill__category'
+            'category',
+            'account',
+            'associated_tyre',
+            'associated_trip',
+            'associated_bill',
+            'associated_bill__category',
+            'associated_bill__original_bill'
         ).order_by('date', 'created_at')
 
         # We still need to calculate the running balance for ALL records up to the current page.
@@ -143,19 +141,19 @@ class PartyDetailView(LoginRequiredMixin, PermissionRequiredMixin, BaseLedgerPer
         ledger_paginator = Paginator(all_records, ledger_page_size)
         ledger_page = ledger_paginator.get_page(ledger_page_num)
 
+        # Efficiently prefetch allocations & trips only for the current page slice
+        prefetch_related_objects(
+            ledger_page.object_list,
+            'allocations__trip__bills__party',
+            'associated_trip__bills__party'
+        )
+
         context['financial_records'] = ledger_page
         context['ledger_page_obj'] = ledger_page
 
         # Get Bills with prefetching
         bills_qs = self.object.bills.select_related('issuer', 'category', 'customer_bill').prefetch_related(
-            'trips',
-            'trips__payment_allocations',
-            'financial_records',
-            'financial_records__category',
-            'bill_trips',
-            'bill_trips__trip',
-            'adjustment_bills',
-            'adjustment_bills__category'
+            'trips'
         ).with_payment_info().order_by('-date', '-category__name', '-bill_no')
         
         bills_page_num = self.request.GET.get('bills_page', 1)
