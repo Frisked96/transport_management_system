@@ -3,10 +3,13 @@ Custom template tags and filters for the Ledger app.
 """
 from django import template
 from decimal import Decimal
+from django.utils.dateformat import format as django_date_format
+from transport_mgmt.utils import to_local_datetime, format_local_datetime
 
 register = template.Library()
 
 import os
+from datetime import datetime
 
 @register.filter
 def filename(value):
@@ -279,4 +282,23 @@ def url_replace(context, **kwargs):
         else:
             query[key] = value
     return query.urlencode()
+
+
+@register.filter
+def audit_timestamp(val, fmt="d M Y, H:i"):
+    """
+    Template filter: parses any ISO timestamp string or datetime,
+    converts it to Kolkata local time, and formats it.
+    Usage: {{ item.timestamp|audit_timestamp }}
+    """
+    local_dt = to_local_datetime(val)
+    if local_dt:
+        return django_date_format(local_dt, fmt)
+    return str(val) if val else ""
+
+
+@register.filter
+def kolkata_time(val, fmt="d M Y, H:i"):
+    """Alias for audit_timestamp"""
+    return audit_timestamp(val, fmt)
 

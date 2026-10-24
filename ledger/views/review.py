@@ -17,6 +17,7 @@ from django.contrib.auth.models import User
 
 from ledger.models import FinancialVoucher, FinancialRecord, Party, CompanyAccount
 from ledger.views.base import BaseLedgerPermissionMixin
+from transport_mgmt.utils import format_local_datetime
 
 
 class FinancialEntryReviewView(LoginRequiredMixin, PermissionRequiredMixin, BaseLedgerPermissionMixin, ListView):
@@ -192,7 +193,7 @@ def verify_financial_entry(request, pk):
             'status': 'verified',
             'status_display': 'Verified',
             'verified_by': request.user.get_full_name() or request.user.username,
-            'verified_at': voucher.verified_at.strftime('%d %b %Y, %H:%M')
+            'verified_at': format_local_datetime(voucher.verified_at)
         })
 
     messages.success(request, f"Voucher #{voucher.voucher_number} verified successfully.")
@@ -240,7 +241,7 @@ def flag_financial_entry(request, pk):
             'status_display': 'Flagged',
             'notes': remarks,
             'verified_by': request.user.get_full_name() or request.user.username,
-            'verified_at': voucher.verified_at.strftime('%d %b %Y, %H:%M')
+            'verified_at': format_local_datetime(voucher.verified_at)
         })
 
     messages.warning(request, f"Voucher #{voucher.voucher_number} flagged: {remarks}")

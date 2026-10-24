@@ -8,6 +8,7 @@ from django.contrib.auth.decorators import login_required, permission_required
 from django.contrib import messages
 from django.http import JsonResponse, HttpResponse
 from django.utils import timezone
+from transport_mgmt.utils import get_local_time_str
 
 try:
     import openpyxl
@@ -198,7 +199,7 @@ def trip_export_excel(request):
         response = HttpResponse(
             content_type='application/vnd.openpyxl.sheet',
         )
-        filename = f"Billed_Trips_{timezone.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        filename = f"Billed_Trips_{get_local_time_str('%Y%m%d_%H%M%S')}.xlsx"
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
         wb.save(response)
         return response

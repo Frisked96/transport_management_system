@@ -2,6 +2,7 @@ from django.db.models.signals import pre_save, post_save, post_delete
 from django.dispatch import receiver
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.admin.models import LogEntry, ADDITION, CHANGE, DELETION
+from transport_mgmt.utils import format_local_datetime
 from .middleware import get_current_user
 
 # List of apps to track for activity
@@ -95,7 +96,7 @@ def compute_field_diff(sender, instance):
                 if isinstance(val, bool):
                     return 'Yes' if val else 'No'
                 if hasattr(val, 'strftime'):
-                    return val.strftime('%d %b %Y')
+                    return format_local_datetime(val, '%d %b %Y')
                 # If relation, attempt to show readable representation
                 if fld.is_relation and fld.many_to_one:
                     try:

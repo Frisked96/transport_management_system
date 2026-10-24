@@ -6,6 +6,7 @@ from decimal import Decimal
 from django.db import models
 from django.utils import timezone
 from django.contrib.auth.models import User
+from transport_mgmt.utils import get_local_time_str, get_local_iso_timestamp
 from django.core.exceptions import ValidationError
 from .toll_account import TollAccount
 
@@ -18,7 +19,7 @@ def toll_recharge_upload_path(instance, filename):
     ext = os.path.splitext(filename)[1]
     name_root = os.path.splitext(filename)[0]
     safe_root = "".join([c for c in name_root if c.isalnum() or c in (' ', '_', '-')]).strip().replace(' ', '_')
-    timestamp = timezone.now().strftime('%Y%m%d_%H%M%S')
+    timestamp = get_local_time_str('%Y%m%d_%H%M%S')
     new_filename = f"{safe_root}_{timestamp}{ext}" if safe_root else f"recharge_{timestamp}{ext}"
     account_id = instance.toll_account_id or 'general'
     return os.path.join('toll_records', 'recharges', str(account_id), new_filename)
@@ -174,7 +175,16 @@ class TollRecharge(models.Model):
                 total_payment_amount=self.amount,
                 total_settled_amount=self.amount,
                 description=desc,
-                document_ref=self.receipt_document if self.receipt_document else None
+                document_ref=self.receipt_document if self.receipt_document else None,
+                audit_log=[{
+                    'timestamp': get_local_iso_timestamp(),
+                    'action': 'created',
+                    'user': self.created_by.username if self.created_by else 'System',
+                    'details': {
+                        'voucher_type': FinancialVoucher.VOUCHER_TYPE_TOLL_RECHARGE,
+                        'reference': v_num,
+                    }
+                }]
             )
             FinancialRecord.objects.create(
                 account=self.company_account,

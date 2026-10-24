@@ -8,6 +8,7 @@ from django.utils import timezone
 from django.utils.functional import cached_property
 from django.contrib.auth.models import User
 from django.core.exceptions import PermissionDenied
+from transport_mgmt.utils import get_local_time_str, get_local_date
 from .party import Party
 from .company import CompanyAccount
 from .sequence import Sequence
@@ -17,7 +18,7 @@ def voucher_upload_path(instance, filename):
     """Upload path for voucher supporting documents"""
     safe_ref = str(instance.voucher_number or 'voucher').replace('/', '-').replace('\\', '-')
     ext = os.path.splitext(filename)[1]
-    timestamp = timezone.now().strftime('%Y%m%d_%H%M%S')
+    timestamp = get_local_time_str('%Y%m%d_%H%M%S')
     return os.path.join('vouchers', safe_ref, f"doc_{timestamp}{ext}")
 
 
@@ -280,7 +281,7 @@ class FinancialVoucher(models.Model):
         E.g. REF-2610-00001
         """
         if date is None:
-            date = timezone.now().date()
+            date = get_local_date()
         yymm = date.strftime('%y%m')
         seq_key = f"voucher_ref_{yymm}"
         seq_val = Sequence.next_value(seq_key)

@@ -21,6 +21,7 @@ from trips.models import Trip
 from ledger.services import BillingService, TripFinancialService
 from ledger.views.base import BaseLedgerPermissionMixin
 from ledger.utils import format_indian_comma, format_balance
+from transport_mgmt.utils import get_local_iso_timestamp
 
 class FinancialRecordListView(LoginRequiredMixin, PermissionRequiredMixin, BaseLedgerPermissionMixin, ListView):
     """
@@ -319,7 +320,16 @@ class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, Cre
             created_by=self.request.user,
             verification_status=FinancialVoucher.STATUS_PENDING,
             description=form.cleaned_data.get('description') or '',
-            document_ref=form.cleaned_data.get('document_ref')
+            document_ref=form.cleaned_data.get('document_ref'),
+            audit_log=[{
+                'timestamp': get_local_iso_timestamp(),
+                'action': 'created',
+                'user': self.request.user.username,
+                'details': {
+                    'voucher_type': v_type,
+                    'reference': voucher_ref,
+                }
+            }]
         )
 
         # 1. Multi-Trip Distribution Flow

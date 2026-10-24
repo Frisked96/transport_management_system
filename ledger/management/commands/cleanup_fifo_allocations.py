@@ -2,6 +2,7 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.utils.dateparse import parse_date
 from ledger.models import BillAllocation, Bill, FinancialRecord, Party
+from transport_mgmt.utils import format_local_datetime
 from ledger.services import BillingService
 
 
@@ -77,7 +78,7 @@ class Command(BaseCommand):
             party_name = alloc.financial_record.party.name if (alloc.financial_record and alloc.financial_record.party) else "Unknown"
             bill_num = alloc.bill.bill_number or f"Draft-{alloc.bill.pk}"
             rec_id = alloc.financial_record.pk if alloc.financial_record else "None"
-            created = alloc.created_at.strftime('%Y-%m-%d %H:%M') if alloc.created_at else "Unknown"
+            created = format_local_datetime(alloc.created_at, '%Y-%m-%d %H:%M', default="Unknown")
             self.stdout.write(
                 f"  - Alloc #{alloc.pk} | Party: {party_name} | Amount: ₹{alloc.amount} | "
                 f"Payment Record: #{rec_id} -> Bill: {bill_num} | Created: {created}"

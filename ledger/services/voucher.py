@@ -6,6 +6,7 @@ from decimal import Decimal
 from django.db import transaction
 from django.utils import timezone
 from django.core.exceptions import PermissionDenied
+from transport_mgmt.utils import get_local_iso_timestamp, get_local_time_str
 
 
 class VoucherService:
@@ -39,7 +40,7 @@ class VoucherService:
             description=description or '',
             document_ref=document_ref,
             audit_log=[{
-                'timestamp': timezone.now().isoformat(),
+                'timestamp': get_local_iso_timestamp(),
                 'action': 'created',
                 'user': created_by.username if created_by else 'System',
                 'details': {
@@ -111,7 +112,7 @@ class VoucherService:
             return
 
         user_name = user.username if user else 'System'
-        timestamp_str = timezone.now().strftime('%d %b %Y %H:%M')
+        timestamp_str = get_local_time_str()
 
         # Human-readable diff summary
         diff_texts = []
@@ -126,7 +127,7 @@ class VoucherService:
             summary += f" | Note: {notes}"
 
         audit_entry = {
-            'timestamp': timezone.now().isoformat(),
+            'timestamp': get_local_iso_timestamp(),
             'action': 'altered',
             'user': user_name,
             'details': {field: {'old': str(old_val), 'new': str(new_val)} for field, (old_val, new_val) in field_diffs.items()},
@@ -185,14 +186,14 @@ class VoucherService:
             voucher = record.voucher
             if voucher:
                 user_name = user.username if user else 'System'
-                timestamp_str = timezone.now().strftime('%d %b %Y %H:%M')
+                timestamp_str = get_local_time_str()
                 entry_num = record.entry_number or record.pk
                 desc = f"Record #{entry_num} (₹{record.amount:,.2f}) soft-deleted by {user_name} on {timestamp_str}"
                 if reason:
                     desc += f" (Reason: {reason})"
 
                 voucher.audit_log.append({
-                    'timestamp': timezone.now().isoformat(),
+                    'timestamp': get_local_iso_timestamp(),
                     'action': 'record_deleted',
                     'user': user_name,
                     'record_id': record.pk,
@@ -272,14 +273,14 @@ class VoucherService:
             voucher = record.voucher
             if voucher:
                 user_name = user.username if user else 'System'
-                timestamp_str = timezone.now().strftime('%d %b %Y %H:%M')
+                timestamp_str = get_local_time_str()
                 entry_num = record.entry_number or record.pk
                 desc = f"Record #{entry_num} restored by {user_name} on {timestamp_str}"
                 if reason:
                     desc += f" (Reason: {reason})"
 
                 voucher.audit_log.append({
-                    'timestamp': timezone.now().isoformat(),
+                    'timestamp': get_local_iso_timestamp(),
                     'action': 'record_restored',
                     'user': user_name,
                     'record_id': record.pk,
@@ -310,14 +311,14 @@ class VoucherService:
                     cls.soft_delete_record(r, user=user, reason=reason)
 
             user_name = user.username if user else 'System'
-            timestamp_str = timezone.now().strftime('%d %b %Y %H:%M')
+            timestamp_str = get_local_time_str()
             voucher.verification_status = FinancialVoucher.STATUS_DELETED
             voucher.deleted_by = user
             voucher.deleted_at = timezone.now()
             voucher.deletion_reason = reason or ''
             voucher.verification_notes = f"Voucher soft-deleted by {user_name} on {timestamp_str}" + (f": {reason}" if reason else "")
             voucher.audit_log.append({
-                'timestamp': timezone.now().isoformat(),
+                'timestamp': get_local_iso_timestamp(),
                 'action': 'voucher_deleted',
                 'user': user_name,
                 'reason': reason or '',
@@ -340,14 +341,14 @@ class VoucherService:
                     cls.restore_record(r, user=user, reason=reason)
 
             user_name = user.username if user else 'System'
-            timestamp_str = timezone.now().strftime('%d %b %Y %H:%M')
+            timestamp_str = get_local_time_str()
             voucher.verification_status = FinancialVoucher.STATUS_PENDING
             voucher.deleted_by = None
             voucher.deleted_at = None
             voucher.deletion_reason = ''
             voucher.verification_notes = f"Voucher restored by {user_name} on {timestamp_str}" + (f": {reason}" if reason else "")
             voucher.audit_log.append({
-                'timestamp': timezone.now().isoformat(),
+                'timestamp': get_local_iso_timestamp(),
                 'action': 'voucher_restored',
                 'user': user_name,
                 'reason': reason or '',

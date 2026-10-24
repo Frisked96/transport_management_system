@@ -6,6 +6,7 @@ from decimal import Decimal
 from django.db import models
 from django.utils import timezone
 from django.contrib.auth.models import User
+from transport_mgmt.utils import get_local_time_str
 from django.core.exceptions import ValidationError
 from .toll_account import TollAccount
 
@@ -18,7 +19,7 @@ def toll_entry_upload_path(instance, filename):
     ext = os.path.splitext(filename)[1]
     name_root = os.path.splitext(filename)[0]
     safe_root = "".join([c for c in name_root if c.isalnum() or c in (' ', '_', '-')]).strip().replace(' ', '_')
-    timestamp = timezone.now().strftime('%Y%m%d_%H%M%S')
+    timestamp = get_local_time_str('%Y%m%d_%H%M%S')
     new_filename = f"{safe_root}_{timestamp}{ext}" if safe_root else f"toll_{timestamp}{ext}"
     plate = instance.vehicle.registration_plate.replace(' ', '_') if instance.vehicle_id and instance.vehicle else 'general'
     return os.path.join('toll_records', 'entries', plate, new_filename)

@@ -671,7 +671,7 @@
                             <span class="font-bold text-slate-800">{{ item.summary|default:item.action|title }}</span>
                             <span class="text-slate-500 ml-1">• by <strong>{{ item.user }}</strong></span>
                         </div>
-                        <span class="text-slate-400 font-mono text-[10px] whitespace-nowrap ml-2">{{ item.timestamp|slice:":16" }}</span>
+                        <span class="text-slate-400 font-mono text-[10px] whitespace-nowrap ml-2">{{ item.timestamp|audit_timestamp }}</span>
                     </div>
                     {% endfor %}
                 </div>
