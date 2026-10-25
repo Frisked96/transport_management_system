@@ -192,7 +192,98 @@ class FinancialRecordDetailView(LoginRequiredMixin, PermissionRequiredMixin, Bas
         )
 
 
-class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+
+class FinancialFormContextMixin:
+    """
+    Mixin providing enriched JSON context for accounts, parties, and transaction modes.
+    Enables client-side instant balance calculations without extra network requests.
+    """
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        accounts = CompanyAccount.objects.all().order_by('name')
+        context['accounts_json'] = json.dumps({
+            str(a.id): {
+                'id': a.id,
+                'name': a.name
+            } for a in accounts
+        })
+
+        parties = Party.objects.all().order_by('name')
+        context['parties_json'] = json.dumps({
+            str(p.id): {
+                'id': p.id,
+                'name': p.name,
+                'type': p.party_type
+            } for p in parties
+        })
+
+        categories = TransactionCategory.objects.all().order_by('name')
+        context['categories_json'] = json.dumps([
+            {'id': c.id, 'name': c.name, 'type': c.type}
+            for c in categories
+        ])
+
+        initial_mode = 'customer'
+        req = self.request
+        curr_obj = getattr(self, 'object', None)
+        party_obj = getattr(curr_obj, 'party', None)
+        driver_obj = getattr(curr_obj, 'driver', None)
+        is_contra = getattr(curr_obj, 'is_inter_party_adjustment', False)
+        cat_obj = getattr(curr_obj, 'category', None)
+
+        p_id = req.GET.get('party')
+        d_id = req.GET.get('driver')
+        c_id = req.GET.get('category')
+        t_id = req.GET.get('associated_trip')
+        b_id = req.GET.get('associated_bill')
+        mode_param = req.GET.get('mode')
+
+        if mode_param in ['customer', 'vendor', 'expense', 'driver', 'contra']:
+            initial_mode = mode_param
+        elif is_contra or req.GET.get('is_inter_party_adjustment') == '1':
+            initial_mode = 'contra'
+        elif driver_obj or d_id:
+            initial_mode = 'driver'
+        elif (cat_obj and cat_obj.type == TransactionCategory.TYPE_EXPENSE and not party_obj and not p_id and not b_id and not t_id):
+            initial_mode = 'expense'
+        elif party_obj:
+            if party_obj.party_type == Party.TYPE_CREDITOR or (cat_obj and cat_obj.name == 'Payment Out'):
+                initial_mode = 'vendor'
+            else:
+                initial_mode = 'customer'
+        elif p_id:
+            try:
+                p = Party.objects.get(pk=p_id)
+                if p.party_type == Party.TYPE_CREDITOR:
+                    initial_mode = 'vendor'
+                else:
+                    initial_mode = 'customer'
+            except Party.DoesNotExist:
+                initial_mode = 'customer'
+        elif b_id:
+            try:
+                b = Bill.objects.select_related('party').get(pk=b_id)
+                if b.party and b.party.party_type == Party.TYPE_CREDITOR:
+                    initial_mode = 'vendor'
+                else:
+                    initial_mode = 'customer'
+            except Bill.DoesNotExist:
+                initial_mode = 'customer'
+        elif c_id:
+            try:
+                c = TransactionCategory.objects.get(pk=c_id)
+                if c.name == 'Payment Out':
+                    initial_mode = 'vendor'
+                elif c.type == TransactionCategory.TYPE_EXPENSE:
+                    initial_mode = 'expense'
+            except TransactionCategory.DoesNotExist:
+                pass
+
+        context['initial_mode'] = initial_mode
+        return context
+
+
+class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, FinancialFormContextMixin, CreateView):
     """
     Create view for new financial records
     Permission: Only admin and manager can create financial records
@@ -216,10 +307,12 @@ class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, Cre
         driver_id = self.request.GET.get('driver')
         if driver_id:
             try:
-                from django.contrib.auth.models import User
-                driver_user = User.objects.get(pk=driver_id)
-                initial['driver'] = driver_user
-            except User.DoesNotExist:
+                from drivers.models import Driver
+                from django.db.models import Q
+                driver = Driver.objects.filter(Q(pk=driver_id) | Q(user_id=driver_id)).first()
+                if driver:
+                    initial['driver'] = driver
+            except Exception:
                 pass
                 
         account_id = self.request.GET.get('account')
@@ -834,7 +927,7 @@ class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, Cre
         return reverse_lazy('financialrecord-detail', kwargs={'pk': self.object.pk})
 
 
-class FinancialRecordUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+class FinancialRecordUpdateView(LoginRequiredMixin, PermissionRequiredMixin, FinancialFormContextMixin, UpdateView):
     """
     Update view for existing financial records
     Permission: Only admin and manager can update financial records

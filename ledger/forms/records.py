@@ -144,8 +144,11 @@ class FinancialRecordForm(forms.ModelForm):
                     pass
             if self.data.get('driver'):
                 try:
-                    driver_user = User.objects.get(pk=self.data.get('driver'))
-                except (ValueError, User.DoesNotExist):
+                    from drivers.models import Driver
+                    from django.db.models import Q
+                    d_pk = self.data.get('driver')
+                    driver_user = Driver.objects.filter(Q(pk=d_pk) | Q(user_id=d_pk)).first()
+                except Exception:
                     pass
 
         # 1. If Party context: Remove Driver field
@@ -306,9 +309,8 @@ class FinancialRecordForm(forms.ModelForm):
 
         # Filter drivers if field still exists
         if 'driver' in self.fields:
-            self.fields['driver'].queryset = User.objects.filter(
-                groups__name='driver'
-            ).order_by('username')
+            from drivers.models import Driver
+            self.fields['driver'].queryset = Driver.objects.select_related('user').all().order_by('user__username')
             self.fields['driver'].required = False
         
         # Make amount not strictly required at field level to allow multi-trip or deduction-only settlements
@@ -333,6 +335,10 @@ class FinancialRecordForm(forms.ModelForm):
 
     def clean(self):
         cleaned_data = super().clean()
+        driver = cleaned_data.get('driver')
+        if driver and isinstance(driver, User):
+            from drivers.models import Driver
+            cleaned_data['driver'] = getattr(driver, 'driver_profile', None)
         category = cleaned_data.get('category')
         party = cleaned_data.get('party')
         if category and category.name in ['Deductions', 'TDS', 'Shortage']:

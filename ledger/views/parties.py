@@ -481,6 +481,11 @@ def get_party_bills(request):
                 
             data.append({
                 'id': bill.id,
+                'bill_number': bill.bill_number or 'Draft',
+                'date': bill.date.strftime('%d/%m/%Y'),
+                'outstanding': float(outstanding),
+                'total': float(bill.rounded_total),
+                'subtotal': float(bill.subtotal),
                 'label': f"{bill.bill_number or 'Draft'} - {bill.date.strftime('%d/%m/%Y')} (Pending: ₹{outstanding:,.2f})"
             })
 
