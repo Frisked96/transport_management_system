@@ -426,5 +426,8 @@ class BaseComplianceDocumentTests(TestCase):
             self.assertIn('attachment', resp_dl.headers.get('Content-Disposition', ''))
 
         # Clean up file
+        if hasattr(resp_dl, 'close'):
+            resp_dl.close()
         if renewal.receipt_file:
+            renewal.receipt_file.close()
             renewal.receipt_file.delete(save=False)

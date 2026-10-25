@@ -238,7 +238,7 @@ class AllTemplatesTest(TestCase):
             for f in files:
                 if f.endswith('.html'):
                     rel_path = os.path.relpath(os.path.join(root, f), templates_dir)
-                    template_files.add(rel_path)
+                    template_files.add(rel_path.replace(os.sep, '/'))
         return template_files
 
     def test_all_templates_compile_and_load(self):
@@ -650,7 +650,7 @@ class AllTemplatesTest(TestCase):
             resp = self.client.get(url)
             for t in getattr(resp, 'templates', []):
                 if t.name:
-                    rendered_templates.add(t.name)
+                    rendered_templates.add(t.name.replace(os.sep, '/'))
 
         # Also add directly tested includes
         request = self.factory.get('/')
