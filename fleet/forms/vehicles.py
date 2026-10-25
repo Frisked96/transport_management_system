@@ -16,9 +16,9 @@ class VehicleForm(forms.ModelForm):
         for field_name, field in self.fields.items():
             field.widget.attrs.update({'class': 'block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white'})
         
-        # Filter vendor to only show Creditor-type parties
+        # Filter vendor to only show Creditor or Both type parties
         self.fields['vendor'].queryset = Party.objects.filter(
-            party_type=Party.TYPE_CREDITOR
+            party_type__in=[Party.TYPE_CREDITOR, Party.TYPE_BOTH]
         ).order_by('name')
         self.fields['company_account'].queryset = CompanyAccount.objects.all().order_by('name')
         self.fields['company_account'].empty_label = "Select Company Account..."

@@ -480,10 +480,20 @@ class Trip(models.Model):
             return self.annotated_is_billed
         
         if hasattr(self, '_prefetched_objects_cache') and 'bills' in self._prefetched_objects_cache:
-            return any(b.customer_bill_id is None and getattr(getattr(b, 'party', None), 'party_type', None) != 'Creditor' for b in self.bills.all())
+            return any(
+                b.customer_bill_id is None and 
+                getattr(getattr(b, 'category', None), 'name', None) != 'Lorry Hire' and
+                (b.party_id == self.party_id or getattr(getattr(b, 'party', None), 'party_type', None) != 'Creditor')
+                for b in self.bills.all()
+            )
             
         if not hasattr(self, '_is_billed_cache'):
-            self._is_billed_cache = self.bills.filter(customer_bill__isnull=True).exclude(party__party_type='Creditor').exists()
+            from django.db.models import Q
+            self._is_billed_cache = self.bills.filter(
+                customer_bill__isnull=True
+            ).exclude(category__name='Lorry Hire').filter(
+                Q(party=self.party) | ~Q(party__party_type='Creditor')
+            ).exists()
         return self._is_billed_cache
 
     @property
@@ -501,12 +511,19 @@ class Trip(models.Model):
             
         if hasattr(self, '_prefetched_objects_cache') and 'bills' in self._prefetched_objects_cache:
             for b in self.bills.all():
-                if b.customer_bill_id is None and getattr(getattr(b, 'party', None), 'party_type', None) != 'Creditor':
+                if (b.customer_bill_id is None and 
+                    getattr(getattr(b, 'category', None), 'name', None) != 'Lorry Hire' and
+                    (b.party_id == self.party_id or getattr(getattr(b, 'party', None), 'party_type', None) != 'Creditor')):
                     return b
             return self.bills.all()[0] if self.bills.all() else None
 
         if not hasattr(self, '_associated_bill_cache'):
-            self._associated_bill_cache = self.bills.filter(customer_bill__isnull=True).exclude(party__party_type='Creditor').first() or self.bills.first()
+            from django.db.models import Q
+            self._associated_bill_cache = self.bills.filter(
+                customer_bill__isnull=True
+            ).exclude(category__name='Lorry Hire').filter(
+                Q(party=self.party) | ~Q(party__party_type='Creditor')
+            ).first() or self.bills.first()
         return self._associated_bill_cache
 
     @property
@@ -517,14 +534,16 @@ class Trip(models.Model):
             
         if hasattr(self, '_prefetched_objects_cache') and 'bills' in self._prefetched_objects_cache:
             for b in self.bills.all():
-                if b.customer_bill_id is not None or getattr(getattr(b, 'party', None), 'party_type', None) == 'Creditor':
+                if (b.customer_bill_id is not None or 
+                    getattr(getattr(b, 'category', None), 'name', None) == 'Lorry Hire' or
+                    getattr(getattr(b, 'party', None), 'party_type', None) == 'Creditor'):
                     return b
             return None
 
         if not hasattr(self, '_creditor_bill_cache'):
             from django.db.models import Q
             self._creditor_bill_cache = self.bills.filter(
-                Q(customer_bill__isnull=False) | Q(party__party_type='Creditor')
+                Q(customer_bill__isnull=False) | Q(category__name='Lorry Hire') | Q(party__party_type='Creditor')
             ).first()
         return self._creditor_bill_cache
 

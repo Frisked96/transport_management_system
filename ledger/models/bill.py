@@ -303,7 +303,13 @@ class Bill(models.Model):
     @property
     def is_creditor_bill(self):
         """Returns True if the bill is for a creditor/vendor or linked to a customer bill."""
-        return bool(self.customer_bill_id or (self.party and self.party.party_type == Party.TYPE_CREDITOR))
+        if self.customer_bill_id:
+            return True
+        if self.category and self.category.name in ['Lorry Hire', 'Expense', 'Payment Out', 'Tyre Purchase']:
+            return True
+        if self.party and self.party.party_type == Party.TYPE_CREDITOR:
+            return True
+        return False
 
     @property
     def display_invoice_number(self):

@@ -11,9 +11,11 @@ class Party(models.Model):
     """
     TYPE_DEBTOR = 'Debtor'
     TYPE_CREDITOR = 'Creditor'
+    TYPE_BOTH = 'Both'
     TYPE_CHOICES = [
         (TYPE_DEBTOR, 'Customer (Debtor)'),
         (TYPE_CREDITOR, 'Vendor/Supplier (Creditor)'),
+        (TYPE_BOTH, 'Both (Customer & Vendor)'),
     ]
 
     name = models.CharField(max_length=200, unique=True, verbose_name='Party Name')
@@ -79,6 +81,23 @@ class Party(models.Model):
 
     def __str__(self):
         return self.name
+
+    @property
+    def is_debtor(self):
+        return self.party_type in [self.TYPE_DEBTOR, self.TYPE_BOTH]
+
+    @property
+    def is_creditor(self):
+        return self.party_type in [self.TYPE_CREDITOR, self.TYPE_BOTH]
+
+    @property
+    def is_both(self):
+        return self.party_type == self.TYPE_BOTH
+
+    def calculate_subledger_balances(self):
+        """Returns dict with receivable, payable, and net balances"""
+        from ledger.services import BalanceService
+        return BalanceService.calculate_party_subledgers(self)
 
     def refresh_balance(self):
         """

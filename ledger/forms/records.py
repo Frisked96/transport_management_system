@@ -87,6 +87,26 @@ class FinancialRecordForm(forms.ModelForm):
         })
     )
 
+    paid_by_party = forms.ModelChoiceField(
+        queryset=Party.objects.all().order_by('name'),
+        required=False,
+        label="Paid By / Remitter (Optional)",
+        help_text="Specify if payment was made by a third party (e.g. Party B paying for Party A)."
+    )
+
+    is_inter_party_adjustment = forms.BooleanField(
+        required=False,
+        label="Inter-Party Contra Set-off",
+        help_text="Check if this is a mutual adjustment/set-off between two parties without bank movement."
+    )
+
+    adjustment_target_party = forms.ModelChoiceField(
+        queryset=Party.objects.all().order_by('name'),
+        required=False,
+        label="Offset Against Party",
+        help_text="Select the party whose balance or bill is being offset."
+    )
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         
@@ -105,10 +125,21 @@ class FinancialRecordForm(forms.ModelForm):
             driver_user = self.instance.driver
 
         # Check POST data (if bound)
+        target_party = None
+        if 'initial' in kwargs:
+            target_party = kwargs['initial'].get('adjustment_target_party')
+        if self.instance and self.instance.pk and self.instance.adjustment_target_party:
+            target_party = self.instance.adjustment_target_party
+
         if self.data:
             if self.data.get('party'):
                 try:
                     party = Party.objects.get(pk=self.data.get('party'))
+                except (ValueError, Party.DoesNotExist):
+                    pass
+            if self.data.get('adjustment_target_party'):
+                try:
+                    target_party = Party.objects.get(pk=self.data.get('adjustment_target_party'))
                 except (ValueError, Party.DoesNotExist):
                     pass
             if self.data.get('driver'):
@@ -121,14 +152,18 @@ class FinancialRecordForm(forms.ModelForm):
         if party:
             if 'driver' in self.fields:
                 del self.fields['driver']
+
+            parties_for_bills = [party]
+            if target_party:
+                parties_for_bills.append(target_party)
             
-            if party.party_type == Party.TYPE_CREDITOR:
+            if party.party_type == Party.TYPE_CREDITOR and not target_party:
                 # Creditors: No per-trip allocations, but support bill settlements
                 if 'associated_trip' in self.fields: del self.fields['associated_trip']
                 if 'payment_distribution' in self.fields: del self.fields['payment_distribution']
                 
                 # Filter bills for this creditor: Exclude CN/DN and already Paid bills
-                bills_qs = Bill.objects.with_payment_info().filter(party=party).filter(
+                bills_qs = Bill.objects.with_payment_info().filter(party__in=parties_for_bills).filter(
                     models.Q(category__isnull=True) | ~models.Q(category__name__in=['Credit Note', 'Debit Note'])
                 )
                 unpaid_bill_ids = [b.id for b in bills_qs if b.payment_status != Bill.PAYMENT_STATUS_PAID]
@@ -151,6 +186,51 @@ class FinancialRecordForm(forms.ModelForm):
                     p_out = TransactionCategory.objects.filter(name='Payment Out').first()
                     if p_out:
                         self.fields['category'].initial = p_out.id
+            elif party.party_type == Party.TYPE_BOTH or target_party:
+                # Dual-role or Contra Adjustment: Can settle trips (client), vendor bills (creditor), or customer invoices
+                record_trip_ids = set()
+                record_contributions = {}
+                if self.instance and self.instance.pk:
+                    if self.instance.associated_trip_id:
+                        record_trip_ids.add(self.instance.associated_trip_id)
+                        record_contributions[self.instance.associated_trip_id] = self.instance.amount or Decimal('0')
+                    if hasattr(self.instance, 'allocations'):
+                        for alloc in self.instance.allocations.all():
+                            record_trip_ids.add(alloc.trip_id)
+                            record_contributions[alloc.trip_id] = record_contributions.get(alloc.trip_id, Decimal('0')) + (alloc.amount or Decimal('0'))
+                
+                initial_trip = kwargs.get('initial', {}).get('associated_trip')
+                if initial_trip:
+                    initial_trip_pk = initial_trip.pk if hasattr(initial_trip, 'pk') else initial_trip
+                    try:
+                        record_trip_ids.add(int(initial_trip_pk))
+                    except (ValueError, TypeError):
+                        pass
+
+                trips_qs = Trip.objects.with_payment_info().with_billing_info().filter(party__in=parties_for_bills)
+                if record_trip_ids:
+                    trips_qs = trips_qs.filter(models.Q(id__in=record_trip_ids) | ~models.Q(annotated_status=Trip.PAYMENT_STATUS_PAID))
+                else:
+                    trips_qs = trips_qs.exclude(annotated_status=Trip.PAYMENT_STATUS_PAID)
+
+                self.fields['associated_trip'].record_contributions = record_contributions
+                self.fields['associated_trip'].queryset = trips_qs.distinct().order_by('-date')
+
+                bills_qs = Bill.objects.with_payment_info().filter(party__in=parties_for_bills).filter(
+                    models.Q(category__isnull=True) | ~models.Q(category__name__in=['Credit Note', 'Debit Note'])
+                )
+                unpaid_bill_ids = [b.id for b in bills_qs if b.payment_status != Bill.PAYMENT_STATUS_PAID]
+                if self.instance and self.instance.associated_bill:
+                    if self.instance.associated_bill.pk not in unpaid_bill_ids:
+                        unpaid_bill_ids.append(self.instance.associated_bill.pk)
+                initial_bill = kwargs.get('initial', {}).get('associated_bill')
+                if initial_bill and initial_bill.pk not in unpaid_bill_ids:
+                    unpaid_bill_ids.append(initial_bill.pk)
+
+                self.fields['associated_bill'].queryset = Bill.objects.with_payment_info().filter(id__in=unpaid_bill_ids).order_by('-date')
+                self.fields['category'].queryset = TransactionCategory.objects.filter(
+                    models.Q(name__in=['Trip Payment', 'Invoice Payment', 'Payment In', 'Payment Out', 'Standard', 'TDS', 'Deductions', 'Expense'])
+                ).order_by('name')
             else:
                 # Setup trips for debtor party using dynamic payment info
                 record_trip_ids = set()
@@ -235,16 +315,36 @@ class FinancialRecordForm(forms.ModelForm):
         if 'amount' in self.fields:
             self.fields['amount'].required = False
 
+        if 'paid_by_party' in self.fields:
+            self.fields['paid_by_party'].empty_label = "Same as Party (Direct Payment)"
+            self.fields['paid_by_party'].queryset = Party.objects.all().order_by('name')
+
+        if 'adjustment_target_party' in self.fields:
+            self.fields['adjustment_target_party'].empty_label = "Select Offset Party..."
+            if party:
+                self.fields['adjustment_target_party'].queryset = Party.objects.exclude(pk=party.pk).order_by('name')
+            else:
+                self.fields['adjustment_target_party'].queryset = Party.objects.all().order_by('name')
+
         # Add basic styling for clarity
         for field_name, field in self.fields.items():
-            if field_name not in ['payment_distribution', 'bill_distribution']:
+            if field_name not in ['payment_distribution', 'bill_distribution', 'is_inter_party_adjustment']:
                 field.widget.attrs.update({'class': 'block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white'})
 
     def clean(self):
         cleaned_data = super().clean()
         category = cleaned_data.get('category')
+        party = cleaned_data.get('party')
         if category and category.name in ['Deductions', 'TDS', 'Shortage']:
             cleaned_data['account'] = None
+
+        is_inter_party = cleaned_data.get('is_inter_party_adjustment')
+        if is_inter_party:
+            cleaned_data['account'] = None
+            if not cleaned_data.get('adjustment_target_party'):
+                self.add_error('adjustment_target_party', 'Please select the target party to offset against.')
+            elif party and cleaned_data.get('adjustment_target_party') and party.pk == cleaned_data.get('adjustment_target_party').pk:
+                self.add_error('adjustment_target_party', 'Offset party cannot be the same as the primary party.')
 
         # Auto-populate amount from multi-trip distribution if amount was not provided
         distribution_json = cleaned_data.get('payment_distribution')
@@ -296,6 +396,9 @@ class FinancialRecordForm(forms.ModelForm):
             'record_type',
             'account',
             'party',
+            'paid_by_party',
+            'is_inter_party_adjustment',
+            'adjustment_target_party',
             'driver',
             'associated_trip',
             'associated_bill',

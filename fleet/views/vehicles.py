@@ -77,7 +77,7 @@ class VehicleListView(LoginRequiredMixin, PermissionRequiredMixin, BaseFleetPerm
         context['owned_count'] = Vehicle.objects.filter(ownership=Vehicle.OWNERSHIP_OWNED).count()
         context['attached_count'] = Vehicle.objects.filter(ownership=Vehicle.OWNERSHIP_ATTACHED).count()
         context['total_count'] = Vehicle.objects.count()
-        context['vendors'] = Party.objects.filter(party_type=Party.TYPE_CREDITOR).order_by('name')
+        context['vendors'] = Party.objects.filter(party_type__in=[Party.TYPE_CREDITOR, Party.TYPE_BOTH]).order_by('name')
         context['company_accounts'] = CompanyAccount.objects.all().order_by('name')
         return context
 

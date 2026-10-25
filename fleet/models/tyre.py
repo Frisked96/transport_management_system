@@ -60,7 +60,7 @@ class Tyre(models.Model):
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        limit_choices_to={'party_type': 'Creditor'},
+        limit_choices_to={'party_type__in': ['Creditor', 'Both']},
         verbose_name='Vendor'
     )
     

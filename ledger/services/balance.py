@@ -38,6 +38,35 @@ class BalanceService:
                 default=Value(Decimal('0')),
                 output_field=DecimalField()
             )
+        elif party.party_type == Party.TYPE_BOTH:
+            # Dual-role: Evaluate debits and credits based on transaction nature
+            is_creditor_inv = (
+                Q(associated_bill__customer_bill__isnull=False) | 
+                Q(associated_bill__category__name='Lorry Hire') |
+                Q(category__name='Lorry Hire')
+            )
+            debit_cond = Case(
+                # Customer freight invoices
+                When(Q(record_type=FinancialRecord.RECORD_TYPE_INVOICE) & ~is_creditor_inv & ~Q(associated_bill__category__name='Credit Note'), then=F('amount')),
+                # Vendor payments out and debit notes
+                When(category__name='Payment Out', then=F('amount')),
+                When(record_type=FinancialRecord.RECORD_TYPE_INVOICE, associated_bill__category__name='Debit Note', then=F('amount')),
+                # General customer-charged expenses
+                When(Q(category__type=TransactionCategory.TYPE_EXPENSE) & ~Q(category__name__in=['Deductions', 'TDS', 'Shortage', 'Payment Out', 'Lorry Hire']), then=F('amount')),
+                default=Value(Decimal('0')),
+                output_field=DecimalField()
+            )
+            credit_cond = Case(
+                # Payments in and customer deductions
+                When(Q(category__type=TransactionCategory.TYPE_INCOME) & ~Q(record_type=FinancialRecord.RECORD_TYPE_INVOICE), then=F('amount')),
+                When(category__name__in=['Deductions', 'TDS', 'Shortage'], then=F('amount')),
+                When(record_type=FinancialRecord.RECORD_TYPE_INVOICE, associated_bill__category__name='Credit Note', then=F('amount')),
+                # Creditor bills and lorry hire accruals
+                When(Q(record_type=FinancialRecord.RECORD_TYPE_INVOICE) & is_creditor_inv & ~Q(associated_bill__category__name='Debit Note'), then=F('amount')),
+                When(Q(category__type=TransactionCategory.TYPE_EXPENSE) & Q(category__name='Lorry Hire') & ~Q(record_type=FinancialRecord.RECORD_TYPE_INVOICE), then=F('amount')),
+                default=Value(Decimal('0')),
+                output_field=DecimalField()
+            )
         else: # CREDITOR
             debit_cond = Case(
                 When(Q(category__type=TransactionCategory.TYPE_INCOME) & ~Q(record_type=FinancialRecord.RECORD_TYPE_INVOICE), then=F('amount')),
@@ -83,6 +112,73 @@ class BalanceService:
                 party.current_balance_cached = party_obj.current_balance_cached
             
             return party_obj.current_balance_cached
+
+    @staticmethod
+    def calculate_party_subledgers(party):
+        """
+        Calculates separate Customer (AR) and Vendor (AP) sub-ledger totals for dual-role parties.
+        Returns dict with ar_debit, ar_credit, ar_balance, ap_debit, ap_credit, ap_balance, net_balance.
+        """
+        from ledger.models import FinancialRecord, TransactionCategory
+        from django.db.models import Sum, Case, When, F, Value, DecimalField, Q
+        from django.db.models.functions import Coalesce
+
+        is_creditor_inv = (
+            Q(associated_bill__customer_bill__isnull=False) | 
+            Q(associated_bill__category__name='Lorry Hire') |
+            Q(category__name='Lorry Hire')
+        )
+
+        # AR (Customer) Conditions
+        ar_debit_cond = Case(
+            When(Q(record_type=FinancialRecord.RECORD_TYPE_INVOICE) & ~is_creditor_inv & ~Q(associated_bill__category__name='Credit Note'), then=F('amount')),
+            When(Q(category__type=TransactionCategory.TYPE_EXPENSE) & ~Q(category__name__in=['Deductions', 'TDS', 'Shortage', 'Payment Out', 'Lorry Hire']), then=F('amount')),
+            default=Value(Decimal('0')),
+            output_field=DecimalField()
+        )
+        ar_credit_cond = Case(
+            When(Q(category__type=TransactionCategory.TYPE_INCOME) & ~Q(record_type=FinancialRecord.RECORD_TYPE_INVOICE), then=F('amount')),
+            When(category__name__in=['Deductions', 'TDS', 'Shortage'], then=F('amount')),
+            When(record_type=FinancialRecord.RECORD_TYPE_INVOICE, associated_bill__category__name='Credit Note', then=F('amount')),
+            default=Value(Decimal('0')),
+            output_field=DecimalField()
+        )
+
+        # AP (Vendor) Conditions
+        ap_debit_cond = Case(
+            When(category__name='Payment Out', then=F('amount')),
+            When(category__name__in=['Deductions', 'TDS', 'Shortage'], then=F('amount')),
+            When(record_type=FinancialRecord.RECORD_TYPE_INVOICE, associated_bill__category__name='Debit Note', then=F('amount')),
+            default=Value(Decimal('0')),
+            output_field=DecimalField()
+        )
+        ap_credit_cond = Case(
+            When(Q(record_type=FinancialRecord.RECORD_TYPE_INVOICE) & is_creditor_inv & ~Q(associated_bill__category__name='Debit Note'), then=F('amount')),
+            When(Q(category__type=TransactionCategory.TYPE_EXPENSE) & Q(category__name='Lorry Hire') & ~Q(record_type=FinancialRecord.RECORD_TYPE_INVOICE), then=F('amount')),
+            default=Value(Decimal('0')),
+            output_field=DecimalField()
+        )
+
+        res = party.financial_records.aggregate(
+            ar_debit=Coalesce(Sum(ar_debit_cond), Value(Decimal('0'))),
+            ar_credit=Coalesce(Sum(ar_credit_cond), Value(Decimal('0'))),
+            ap_debit=Coalesce(Sum(ap_debit_cond), Value(Decimal('0'))),
+            ap_credit=Coalesce(Sum(ap_credit_cond), Value(Decimal('0')))
+        )
+
+        ar_balance = res['ar_debit'] - res['ar_credit']
+        ap_balance = res['ap_credit'] - res['ap_debit']
+        net_balance = ar_balance - ap_balance
+
+        return {
+            'ar_debit': res['ar_debit'],
+            'ar_credit': res['ar_credit'],
+            'ar_balance': ar_balance,
+            'ap_debit': res['ap_debit'],
+            'ap_credit': res['ap_credit'],
+            'ap_balance': ap_balance,
+            'net_balance': net_balance,
+        }
 
     @staticmethod
     def calculate_account_balance(account):

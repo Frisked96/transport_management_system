@@ -384,7 +384,11 @@ class BillingService:
         if not bill.pk:
             return Decimal('0')
 
-        is_creditor = bool(bill.customer_bill_id or (bill.party and bill.party.party_type == Party.TYPE_CREDITOR))
+        is_creditor = bool(
+            bill.customer_bill_id or 
+            (bill.category and bill.category.name in ['Lorry Hire', 'Expense', 'Payment Out', 'Tyre Purchase']) or 
+            (bill.party and bill.party.party_type == Party.TYPE_CREDITOR)
+        )
 
         if is_creditor:
             # Direct links for creditor bill

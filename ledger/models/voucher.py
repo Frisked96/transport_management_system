@@ -72,6 +72,7 @@ class FinancialVoucher(models.Model):
     VOUCHER_TYPE_TRIP_ACCRUAL = 'trip_accrual'
     VOUCHER_TYPE_TYRE_PURCHASE = 'tyre_purchase'
     VOUCHER_TYPE_DIRECT = 'direct_entry'
+    VOUCHER_TYPE_INTER_PARTY_SETTLEMENT = 'inter_party_settlement'
     VOUCHER_TYPE_OTHER = 'other'
 
     VOUCHER_TYPE_CHOICES = [
@@ -86,6 +87,7 @@ class FinancialVoucher(models.Model):
         (VOUCHER_TYPE_TRIP_ACCRUAL, 'Trip Revenue Accrual'),
         (VOUCHER_TYPE_TYRE_PURCHASE, 'Tyre Purchase / Service'),
         (VOUCHER_TYPE_DIRECT, 'Direct Payment / Inflow'),
+        (VOUCHER_TYPE_INTER_PARTY_SETTLEMENT, 'Inter-Party Contra Settlement'),
         (VOUCHER_TYPE_OTHER, 'Other'),
     ]
 
@@ -109,6 +111,14 @@ class FinancialVoucher(models.Model):
         blank=True,
         related_name='vouchers',
         verbose_name='Party / Entity'
+    )
+    payer_party = models.ForeignKey(
+        Party,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='payer_vouchers',
+        verbose_name='Payer / Remitter'
     )
     account = models.ForeignKey(
         CompanyAccount,
@@ -317,6 +327,9 @@ class FinancialVoucher(models.Model):
         
         if self.voucher_type in [self.VOUCHER_TYPE_TRIP_ACCRUAL, self.VOUCHER_TYPE_BILL_INVOICE]:
             self.total_settled_amount = invoice_amt
+        elif self.voucher_type == self.VOUCHER_TYPE_INTER_PARTY_SETTLEMENT:
+            self.total_payment_amount = Decimal('0.00')
+            self.total_settled_amount = (payment_amt / 2) if payment_amt > 0 else payment_amt
         else:
             self.total_settled_amount = payment_amt + tds_amt + ded_amt
 

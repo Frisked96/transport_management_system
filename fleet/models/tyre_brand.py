@@ -26,7 +26,7 @@ class TyreBrand(models.Model):
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        limit_choices_to={'party_type': 'Creditor'},
+        limit_choices_to={'party_type__in': ['Creditor', 'Both']},
         verbose_name='Default Vendor',
         help_text='Vendor to automatically bill when a tyre of this brand is created'
     )

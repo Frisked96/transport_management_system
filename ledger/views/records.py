@@ -18,7 +18,7 @@ from django.http import JsonResponse, HttpResponse
 from ledger.models import FinancialRecord, FinancialVoucher, Party, CompanyAccount, TripAllocation, BillAllocation, TransactionCategory, Bill, BillTrip, TollRecharge
 from ledger.forms import FinancialRecordForm
 from trips.models import Trip
-from ledger.services import BillingService, TripFinancialService
+from ledger.services import BalanceService, BillingService, TripFinancialService
 from ledger.views.base import BaseLedgerPermissionMixin
 from ledger.utils import format_indian_comma, format_balance
 from transport_mgmt.utils import get_local_iso_timestamp
@@ -291,8 +291,13 @@ class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, Cre
         has_tds = bool(tds_amount and tds_amount > 0)
         has_deduction = bool(deduction_amount and deduction_amount > 0)
 
+        is_inter_party = form.cleaned_data.get('is_inter_party_adjustment', False)
+        paid_by_party = form.cleaned_data.get('paid_by_party')
+
         # Determine voucher type and generate unified voucher reference
-        if distribution_json:
+        if is_inter_party:
+            v_type = FinancialVoucher.VOUCHER_TYPE_INTER_PARTY_SETTLEMENT
+        elif distribution_json:
             v_type = FinancialVoucher.VOUCHER_TYPE_TRIP_PAYMENT
         elif bill_distribution_json:
             v_type = FinancialVoucher.VOUCHER_TYPE_BILL_PAYMENT
@@ -315,7 +320,8 @@ class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, Cre
             date=form.cleaned_data['date'],
             voucher_type=v_type,
             party=form.cleaned_data.get('party'),
-            account=form.cleaned_data.get('account'),
+            payer_party=paid_by_party or form.cleaned_data.get('party'),
+            account=None if is_inter_party else form.cleaned_data.get('account'),
             driver=form.cleaned_data.get('driver'),
             created_by=self.request.user,
             verification_status=FinancialVoucher.STATUS_PENDING,
@@ -331,6 +337,89 @@ class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, Cre
                 }
             }]
         )
+
+        # 0. Inter-Party Contra Settlement Flow
+        if is_inter_party:
+            try:
+                with transaction.atomic():
+                    source_party = form.cleaned_data.get('party')
+                    target_party = form.cleaned_data.get('adjustment_target_party')
+                    settle_amt = form.cleaned_data.get('amount') or Decimal('0.00')
+                    if settle_amt <= 0:
+                        raise ValueError("Please specify an adjustment amount greater than zero.")
+
+                    cat_contra, _ = TransactionCategory.objects.get_or_create(
+                        name='Payment Out' if (source_party and source_party.is_creditor) else 'Debit Note',
+                        defaults={'type': TransactionCategory.TYPE_EXPENSE}
+                    )
+                    cat_credit, _ = TransactionCategory.objects.get_or_create(
+                        name='Trip Payment' if (target_party and target_party.is_debtor) else 'Payment In',
+                        defaults={'type': TransactionCategory.TYPE_INCOME}
+                    )
+
+                    desc_source = form.cleaned_data.get('description') or f"Inter-party set-off with {target_party.name}"
+                    desc_target = form.cleaned_data.get('description') or f"Inter-party set-off adjusted by {source_party.name}"
+
+                    # Leg 1: Source party (reducing vendor payable or charging debtor)
+                    rec_source = FinancialRecord.objects.create(
+                        date=form.cleaned_data['date'],
+                        account=None,
+                        party=source_party,
+                        paid_by_party=source_party,
+                        is_inter_party_adjustment=True,
+                        adjustment_target_party=target_party,
+                        record_type=FinancialRecord.RECORD_TYPE_TRANSACTION,
+                        category=cat_contra,
+                        amount=settle_amt,
+                        description=desc_source,
+                        recorded_by=self.request.user,
+                        voucher=voucher,
+                        verification_status=FinancialVoucher.STATUS_PENDING
+                    )
+
+                    # Leg 2: Target party (reducing customer receivable)
+                    rec_target = FinancialRecord.objects.create(
+                        date=form.cleaned_data['date'],
+                        account=None,
+                        party=target_party,
+                        paid_by_party=source_party,
+                        is_inter_party_adjustment=True,
+                        adjustment_target_party=source_party,
+                        associated_trip=form.cleaned_data.get('associated_trip'),
+                        associated_bill=form.cleaned_data.get('associated_bill'),
+                        record_type=FinancialRecord.RECORD_TYPE_TRANSACTION,
+                        category=cat_credit,
+                        amount=settle_amt,
+                        description=desc_target,
+                        recorded_by=self.request.user,
+                        voucher=voucher,
+                        verification_status=FinancialVoucher.STATUS_PENDING
+                    )
+
+                    if form.cleaned_data.get('associated_bill'):
+                        ba = BillAllocation(financial_record=rec_target, bill=form.cleaned_data['associated_bill'], amount=settle_amt)
+                        ba._suppress_cache_cascade = True
+                        ba.save()
+                        BillingService.update_bill_financial_caches(form.cleaned_data['associated_bill'])
+
+                    if form.cleaned_data.get('associated_trip'):
+                        ta = TripAllocation(financial_record=rec_target, trip=form.cleaned_data['associated_trip'], amount=settle_amt)
+                        ta._suppress_cache_cascade = True
+                        ta.save()
+                        TripFinancialService.update_trip_financial_caches(form.cleaned_data['associated_trip'])
+
+                    BalanceService.refresh_party_balance(source_party)
+                    BalanceService.refresh_party_balance(target_party)
+                    voucher.update_totals()
+
+                    self.object = rec_source
+                    messages.success(self.request, f'Inter-Party Contra Settlement recorded between {source_party.name} and {target_party.name} under Reference #{voucher.voucher_number}.')
+                    if '_save_same_party' in self.request.POST:
+                        return self._redirect_same_party(form)
+                    return redirect('party-detail', pk=source_party.pk)
+            except Exception as e:
+                form.add_error(None, f"Error processing inter-party adjustment: {str(e)}")
+                return self.form_invalid(form)
 
         # 1. Multi-Trip Distribution Flow
         if distribution_json:
@@ -507,7 +596,64 @@ class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, Cre
             try:
                 with transaction.atomic():
                     bill_data = json.loads(bill_distribution_json)
+                    bill_ids = [item.get('bill_id') for item in bill_data if item.get('bill_id')]
+                    bills_by_id = Bill.objects.select_related('party').in_bulk(bill_ids)
+
+                    # Group bills by party to support multi-party remittances under single voucher
+                    from collections import defaultdict
+                    bills_by_party = defaultdict(list)
+                    for item in bill_data:
+                        b_id = item.get('bill_id')
+                        if b_id in bills_by_id:
+                            bills_by_party[bills_by_id[b_id].party].append((bills_by_id[b_id], item))
+
+                    if len(bills_by_party) > 1:
+                        # Multi-Party Split Payment Flow
+                        self.object = None
+                        remitter = paid_by_party or form.cleaned_data.get('party')
+
+                        for p, p_items in bills_by_party.items():
+                            p_total = sum(Decimal(str(item.get('amount', 0))) for b, item in p_items)
+                            p_rec = FinancialRecord.objects.create(
+                                date=form.cleaned_data['date'],
+                                account=form.cleaned_data.get('account'),
+                                party=p,
+                                paid_by_party=remitter,
+                                record_type=form.cleaned_data.get('record_type', 'Transaction'),
+                                category=form.cleaned_data['category'],
+                                amount=p_total,
+                                description=f"Paid across invoices (Payer: {remitter.name})" if remitter != p else (form.cleaned_data.get('description') or ''),
+                                recorded_by=self.request.user,
+                                voucher=voucher,
+                                verification_status=FinancialVoucher.STATUS_PENDING
+                            )
+                            if not self.object:
+                                self.object = p_rec
+
+                            for b, item in p_items:
+                                b_amt = Decimal(str(item.get('amount', 0)))
+                                if b_amt > 0:
+                                    ba = BillAllocation(financial_record=p_rec, bill=b, amount=b_amt)
+                                    ba._suppress_cache_cascade = True
+                                    ba.save()
+
+                            BalanceService.refresh_party_balance(p)
+
+                        for bill in bills_by_id.values():
+                            BillingService.update_bill_financial_caches(bill)
+
+                        if form.cleaned_data.get('account'):
+                            BalanceService.refresh_account_balance(form.cleaned_data['account'])
+
+                        voucher.update_totals()
+                        messages.success(self.request, f'Payment recorded across {len(bill_data)} bills for {len(bills_by_party)} parties under Reference #{voucher.voucher_number}.')
+                        if remitter:
+                            return redirect('party-detail', pk=remitter.pk)
+                        return redirect('financialrecord-list')
+
+                    # Single-Party Distribution Flow
                     self.object = form.save(commit=False)
+                    self.object.paid_by_party = paid_by_party
                     self.object.recorded_by = self.request.user
                     self.object.voucher = voucher
                     self.object.verification_status = FinancialVoucher.STATUS_PENDING
@@ -524,6 +670,7 @@ class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, Cre
                             date=self.object.date,
                             account=None,
                             party=self.object.party,
+                            paid_by_party=paid_by_party,
                             driver=self.object.driver,
                             associated_bill=self.object.associated_bill,
                             record_type=self.object.record_type,
@@ -534,9 +681,6 @@ class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, Cre
                             voucher=voucher,
                             verification_status=FinancialVoucher.STATUS_PENDING
                         )
-
-                    bill_ids = [item.get('bill_id') for item in bill_data if item.get('bill_id')]
-                    bills_by_id = Bill.objects.in_bulk(bill_ids)
 
                     total_allocated = sum(Decimal(str(item.get('amount', 0))) for item in bill_data)
                     for item in bill_data:
@@ -573,7 +717,8 @@ class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, Cre
                     if not self.object.description:
                         bill_nums = [a.bill.bill_number or 'Draft' for a in self.object.bill_allocations.select_related('bill').all()]
                         if bill_nums:
-                            self.object.description = f"Paid across invoices: {', '.join(bill_nums)}"
+                            payer_note = f" (Paid by {paid_by_party.name})" if paid_by_party and paid_by_party != self.object.party else ""
+                            self.object.description = f"Paid across invoices: {', '.join(bill_nums)}{payer_note}"
                             self.object.save(update_fields=['description'])
 
                     voucher.update_totals()
@@ -595,9 +740,13 @@ class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, Cre
 
             if payment_amount > 0:
                 self.object = form.save(commit=False)
+                self.object.paid_by_party = paid_by_party
                 self.object.recorded_by = self.request.user
                 self.object.voucher = voucher
                 self.object.verification_status = FinancialVoucher.STATUS_PENDING
+                if paid_by_party and paid_by_party != self.object.party and not self.object.description:
+                    self.object.description = f"Payment from {paid_by_party.name}"
+                self.object.save()
                 self.object.save()
 
             # Auto-create TDS record if specified

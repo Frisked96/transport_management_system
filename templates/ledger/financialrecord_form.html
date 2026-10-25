@@ -668,6 +668,8 @@
             $('#id_account').select2({ theme: 'bootstrap-5', width: '100%' });
             $('#id_category').select2({ theme: 'bootstrap-5', width: '100%' });
             $('#id_driver').select2({ theme: 'bootstrap-5', width: '100%', placeholder: 'Search Driver...' });
+            $('#id_paid_by_party').select2({ theme: 'bootstrap-5', width: '100%', placeholder: 'Same as Party (Direct)' });
+            $('#id_adjustment_target_party').select2({ theme: 'bootstrap-5', width: '100%', placeholder: 'Select Offset Party...' });
 
             const bridgeEvent = (el) => {
                 $(el).on('select2:select select2:unselect select2:clear', function() {
@@ -678,6 +680,10 @@
             if (categorySelect) bridgeEvent(categorySelect);
             if (associatedBillSelect) bridgeEvent(associatedBillSelect);
             if (associatedTripSelect) bridgeEvent(associatedTripSelect);
+            const interPartyEl = document.getElementById('id_is_inter_party_adjustment');
+            if (interPartyEl) {
+                interPartyEl.addEventListener('change', updateUIState);
+            }
         }
 
         initFormSearch();
@@ -706,9 +712,15 @@
                     else driverFieldWrapper.classList.remove('hidden');
                 }
 
-                // Account field visibility (Deductions and TDS are non-bank adjustments)
+                // Account field visibility (Deductions, TDS, and Inter-Party contra are non-bank adjustments)
+                const isInterParty = document.getElementById('id_is_inter_party_adjustment') && document.getElementById('id_is_inter_party_adjustment').checked;
+                const wrapperTargetParty = document.getElementById('wrapper_id_adjustment_target_party');
+                if (wrapperTargetParty) {
+                    if (isInterParty) wrapperTargetParty.classList.remove('hidden');
+                    else wrapperTargetParty.classList.add('hidden');
+                }
                 if (wrapperAccount) {
-                    if (isDeduction || isTDS) {
+                    if (isDeduction || isTDS || isInterParty) {
                         wrapperAccount.classList.add('hidden');
                     } else {
                         wrapperAccount.classList.remove('hidden');

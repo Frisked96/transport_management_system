@@ -27,11 +27,13 @@ class TripQuerySet(models.QuerySet):
 
         return self.annotate(
             annotated_is_billed=Exists(
-                Bill.objects.filter(trips=OuterRef('pk'), customer_bill__isnull=True).exclude(party__party_type='Creditor')
+                Bill.objects.filter(trips=OuterRef('pk'), customer_bill__isnull=True).exclude(category__name='Lorry Hire').filter(
+                    Q(party=OuterRef('party')) | ~Q(party__party_type='Creditor')
+                )
             ),
             annotated_is_creditor_billed=Exists(
                 Bill.objects.filter(trips=OuterRef('pk')).filter(
-                    Q(customer_bill__isnull=False) | Q(party__party_type='Creditor')
+                    Q(customer_bill__isnull=False) | Q(category__name='Lorry Hire') | Q(party__party_type='Creditor')
                 )
             ),
             annotated_gst_type=Case(

@@ -126,7 +126,7 @@ class TyreBrandForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         tailwind_classes = "block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white"
         self.fields['suggestive_price'].widget.attrs.update({'class': tailwind_classes + " pl-7"})
-        self.fields['vendor'].queryset = self.fields['vendor'].queryset.filter(party_type='Creditor')
+        self.fields['vendor'].queryset = self.fields['vendor'].queryset.filter(party_type__in=['Creditor', 'Both'])
         for field_name, field in self.fields.items():
             if field_name != 'suggestive_price':
                 field.widget.attrs.update({'class': tailwind_classes})

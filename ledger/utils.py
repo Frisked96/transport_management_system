@@ -46,24 +46,16 @@ def format_indian_comma(amount):
 def format_balance(val, party_type=None):
     """
     Formats a balance with Indian commas and Dr / Cr notation.
-    If party_type is 'Creditor', positive is Cr and negative is Dr.
-    Otherwise (Debtor or Asset/Account), positive is Dr and negative is Cr.
+    Standard accounting rule: positive is Dr (debit balance) and negative is Cr (credit balance).
     """
-    if val is None:
+    if val is None or val == 0:
         return "0.00"
     formatted_val = format_indian_comma(abs(val))
-    if party_type == 'Creditor':
-        if val > 0:
-            return f"{formatted_val}\u00A0Cr"
-        elif val < 0:
-            return f"{formatted_val}\u00A0Dr"
-        return "0.00"
-    else:
-        if val > 0:
-            return f"{formatted_val}\u00A0Dr"
-        elif val < 0:
-            return f"{formatted_val}\u00A0Cr"
-        return "0.00"
+    if val > 0:
+        return f"{formatted_val}\u00A0Dr"
+    elif val < 0:
+        return f"{formatted_val}\u00A0Cr"
+    return "0.00"
 
 
 def parse_date_range(request):

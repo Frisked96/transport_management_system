@@ -107,6 +107,26 @@ class FinancialRecord(models.Model):
         related_name='financial_records',
         verbose_name='Associated Party'
     )
+    paid_by_party = models.ForeignKey(
+        Party,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='payments_made_for_others',
+        verbose_name='Paid By (Payer/Remitter)'
+    )
+    is_inter_party_adjustment = models.BooleanField(
+        default=False,
+        verbose_name='Is Inter-Party Adjustment'
+    )
+    adjustment_target_party = models.ForeignKey(
+        Party,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='adjustments_received',
+        verbose_name='Adjusted Against Party'
+    )
     driver = models.ForeignKey(
         'drivers.Driver',
         on_delete=models.SET_NULL,
@@ -287,8 +307,8 @@ class FinancialRecord(models.Model):
         if self.associated_trip and not self.party:
             self.party = self.associated_trip.party
             
-        # Deductions, TDS, Shortage are non-bank adjustments: ensure account is None
-        if self.is_deduction:
+        # Deductions, TDS, Shortage and Inter-Party Adjustments are non-bank adjustments: ensure account is None
+        if self.is_deduction or self.is_inter_party_adjustment:
             self.account = None
 
         # Guarantee system-generated immutable voucher attachment
@@ -525,6 +545,7 @@ class FinancialRecord(models.Model):
             )
             is_payment_out = self.category.name == 'Payment Out' if self.category else False
             is_deduction = self.is_deduction
+            is_lorry_hire = (self.category and self.category.name == 'Lorry Hire') or (self.associated_bill and self.associated_bill.customer_bill_id is not None)
 
             if self.party.party_type == Party.TYPE_DEBTOR:
                 # Debtors: Invoices are usually Debits (+). Credit Notes are Credits (-).
@@ -533,6 +554,14 @@ class FinancialRecord(models.Model):
                     return self.amount
                 # Expenses/Transactions:
                 if self.is_expense and not self.is_deduction:
+                    return self.amount
+            elif self.party.party_type == Party.TYPE_BOTH:
+                # Dual-role: Evaluate based on transaction type
+                if is_payment_out or (self.is_invoice and is_debit_note):
+                    return self.amount
+                if self.is_invoice and not is_credit_note and not is_lorry_hire:
+                    return self.amount
+                if self.is_expense and not is_deduction and not is_lorry_hire:
                     return self.amount
             else: # CREDITOR
                 # Creditors: Payments/Income/Debit Notes are Debits (+).
@@ -568,12 +597,21 @@ class FinancialRecord(models.Model):
             )
             is_payment_out = self.category.name == 'Payment Out' if self.category else False
             is_deduction = self.is_deduction
+            is_lorry_hire = (self.category and self.category.name == 'Lorry Hire') or (self.associated_bill and self.associated_bill.customer_bill_id is not None)
 
             if self.party.party_type == Party.TYPE_DEBTOR:
                 # Debtors: Payments/Income/Credit Notes are Credits (-).
                 if (self.is_income and not self.is_invoice) or self.is_deduction:
                     return self.amount
                 if self.is_invoice and is_credit_note:
+                    return self.amount
+            elif self.party.party_type == Party.TYPE_BOTH:
+                # Dual-role: Evaluate based on transaction type
+                if (self.is_income and not self.is_invoice) or self.is_deduction:
+                    return self.amount
+                if self.is_invoice and (is_credit_note or (is_lorry_hire and not is_debit_note)):
+                    return self.amount
+                if self.is_expense and is_lorry_hire and not is_payment_out:
                     return self.amount
             else: # CREDITOR
                 # Creditors: Invoices are usually Credits (-). Liability increases.

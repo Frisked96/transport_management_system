@@ -223,9 +223,9 @@ def get_party_unpaid_trips(request):
     AJAX endpoint to get unpaid trips for a party (used in payment distribution).
     Can include trips associated with a specific FinancialRecord being edited,
     or explicitly included trip IDs, with balances adjusted to reflect their pending
-    amount before this record was applied.
+    amount before this record was applied. Supports target_party_id for on-behalf payments.
     """
-    party_id = request.GET.get('party_id')
+    party_id = request.GET.get('target_party_id') or request.GET.get('party_id')
     if not party_id:
         return JsonResponse({'trips': []})
     
@@ -439,10 +439,11 @@ def get_party_unbilled_trips(request):
 
 def get_party_bills(request):
     """
-    AJAX endpoint to get bills for a party (excluding adjustment notes)
+    AJAX endpoint to get bills for a party (excluding adjustment notes).
+    Supports target_party_id for on-behalf third-party payments.
     Uses prefetching + Python calculation to avoid SQLite parser stack overflow.
     """
-    party_id = request.GET.get('party_id')
+    party_id = request.GET.get('target_party_id') or request.GET.get('party_id')
     unpaid_only = request.GET.get('unpaid_only') == 'true'
     include_bill_id = request.GET.get('include_bill_id')
 

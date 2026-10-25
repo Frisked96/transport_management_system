@@ -45,7 +45,7 @@
                 Financial Summary & Identity
             </h2>
             <div class="flex items-center gap-4">
-                <p class="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase">Balance Type: <span class="text-white">{% if party.party_type == 'Debtor' %}Receivable{% else %}Payable{% endif %}</span></p>
+                <p class="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase">Balance Type: <span class="text-white">{% if party.party_type == 'Debtor' %}Receivable{% elif party.party_type == 'Both' %}Customer & Vendor (Dual){% else %}Payable{% endif %}</span></p>
             </div>
         </div>
 
@@ -469,6 +469,16 @@
                                 </td>
                                 <td class="px-6 py-3 text-[10px] text-slate-500 font-medium">
                                     {{ record.description|default:"-"|truncatechars:30 }}
+                                    {% if record.paid_by_party and record.paid_by_party != party %}
+                                    <span class="inline-flex items-center text-[9px] font-bold text-amber-600 block mt-0.5">
+                                        <i class="fa-solid fa-arrow-right-to-bracket mr-1 text-[8px]"></i>Paid by {{ record.paid_by_party.name }}
+                                    </span>
+                                    {% endif %}
+                                    {% if record.is_inter_party_adjustment and record.adjustment_target_party %}
+                                    <span class="inline-flex items-center text-[9px] font-bold text-indigo-600 block mt-0.5">
+                                        <i class="fa-solid fa-right-left mr-1 text-[8px]"></i>Offset with {{ record.adjustment_target_party.name }}
+                                    </span>
+                                    {% endif %}
                                 </td>
                                 <td class="px-6 py-3 text-sm text-right font-black text-blue-600">
                                     {% if record.debit_amount %}₹{{ record.debit_amount|indian_comma }}{% else %}-{% endif %}

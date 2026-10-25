@@ -69,9 +69,13 @@ def party_statement_pdf(request, pk):
 
         balance_class = "balance-dr" if current_running_bal > 0 else ("balance-cr" if current_running_bal < 0 else "")
 
+        desc = rec.description or (rec.category.name if rec.category else 'Transaction')
+        if rec.paid_by_party and rec.paid_by_party != rec.party and 'Paid by' not in desc:
+            desc = f"{desc} (Paid by {rec.paid_by_party.name})"
+
         statement_rows.append({
             'date': rec.date,
-            'description': rec.description or (rec.category.name if rec.category else 'Transaction'),
+            'description': desc,
             'reference': ref,
             'debit': debit,
             'credit': credit,
