@@ -98,10 +98,10 @@
                     </select>
                 </div>
 
-                <!-- Route Type Filter -->
+                <!-- Route Default GST Filter -->
                 <div class="w-40">
                     <select name="route_type" onchange="this.form.submit()" class="block w-full py-1.5 px-3 border border-slate-300 rounded-lg text-xs font-medium focus:ring-emerald-500 focus:border-emerald-500 bg-white">
-                        <option value="">All Route Types</option>
+                        <option value="">All GST Types</option>
                         {% for val, label in route_type_choices %}
                         <option value="{{ val }}" {% if selected_route_type == val %}selected{% endif %}>{{ label }}</option>
                         {% endfor %}

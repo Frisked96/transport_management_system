@@ -12,6 +12,12 @@ class RouteForm(forms.ModelForm):
     class Meta:
         model = Route
         fields = ['pickup_location', 'delivery_location', 'route_type', 'default_rate']
+        labels = {
+            'route_type': 'Default GST Type',
+        }
+        help_texts = {
+            'route_type': 'Default GST rate for trips on this route (can be changed per trip).',
+        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

@@ -30,7 +30,8 @@ class Route(models.Model):
         max_length=10, 
         choices=ROUTE_TYPE_CHOICES, 
         default=ROUTE_TYPE_LOCAL,
-        verbose_name='Route Type'
+        verbose_name='Default GST Type',
+        help_text='Default GST rate applied when this route is selected for a trip (can be overridden per trip).'
     )
 
     default_rate = models.DecimalField(
