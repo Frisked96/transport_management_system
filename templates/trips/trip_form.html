@@ -110,6 +110,34 @@
                         {% if form.route.errors %}<p class="text-rose-600 text-[10px] mt-1 font-bold">{{ form.route.errors.0 }}</p>{% endif %}
                     </div>
 
+                    <!-- Row 2b: GST Type Toggle -->
+                    <div class="md:col-span-12">
+                        <label class="block text-xs sm:text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">
+                            GST Type <span class="text-slate-400 font-normal normal-case">(Decoupled from route; toggle tax treatment)</span>
+                        </label>
+                        {{ form.gst_type_snapshot }}
+                        <div class="grid grid-cols-3 gap-2 max-w-xl" id="gst-toggle-group">
+                            <button type="button" data-gst="GST" class="gst-toggle-btn px-3 py-2 border rounded-lg text-xs font-black uppercase tracking-wider flex items-center justify-center space-x-1.5 transition-all {% if form.gst_type_snapshot.value == 'GST' or not form.gst_type_snapshot.value %}bg-slate-900 text-white border-slate-900 shadow-sm is-active{% else %}bg-white text-slate-700 border-slate-300 hover:bg-slate-50{% endif %}">
+                                <i class="fa-solid fa-percent text-emerald-500"></i>
+                                <span>Local GST (18%)</span>
+                            </button>
+                            <button type="button" data-gst="IGST" class="gst-toggle-btn px-3 py-2 border rounded-lg text-xs font-black uppercase tracking-wider flex items-center justify-center space-x-1.5 transition-all {% if form.gst_type_snapshot.value == 'IGST' %}bg-slate-900 text-white border-slate-900 shadow-sm is-active{% else %}bg-white text-slate-700 border-slate-300 hover:bg-slate-50{% endif %}">
+                                <i class="fa-solid fa-arrows-split-up-and-left text-blue-500"></i>
+                                <span>Interstate IGST (18%)</span>
+                            </button>
+                            <button type="button" data-gst="NONE" class="gst-toggle-btn px-3 py-2 border rounded-lg text-xs font-black uppercase tracking-wider flex items-center justify-center space-x-1.5 transition-all {% if form.gst_type_snapshot.value == 'NONE' %}bg-slate-900 text-white border-slate-900 shadow-sm is-active{% else %}bg-white text-slate-700 border-slate-300 hover:bg-slate-50{% endif %}">
+                                <i class="fa-solid fa-ban text-amber-500"></i>
+                                <span>Non-GST (0%)</span>
+                            </button>
+                        </div>
+                        {% if form.gst_type_snapshot.errors %}<p class="text-rose-600 text-[10px] mt-1 font-bold">{{ form.gst_type_snapshot.errors.0 }}</p>{% endif %}
+                        {% if object and object.is_billed %}
+                            <p class="text-amber-600 text-xs mt-1 font-semibold flex items-center">
+                                <i class="fa-solid fa-lock mr-1"></i> GST Type is locked because this trip is already billed.
+                            </p>
+                        {% endif %}
+                    </div>
+
                     <!-- Row 3: Revenue & Weight -->
                     <div class="md:col-span-3">
                         <label class="block text-xs sm:text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Revenue Type</label>
@@ -126,9 +154,10 @@
                         {% if form.rate_per_ton.errors %}<p class="text-rose-600 text-[10px] mt-1 font-bold">{{ form.rate_per_ton.errors.0 }}</p>{% endif %}
                     </div>
                     <div class="md:col-span-3">
-                        <label class="block text-xs sm:text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1.5">Est. Revenue</label>
-                        <div id="est-revenue" class="bg-emerald-50 border border-emerald-100 rounded-md px-3 py-2 text-xs sm:text-sm font-black text-emerald-700 min-h-[38px] flex items-center shadow-inner">
-                            ₹ 0.00
+                        <label class="block text-xs sm:text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1.5">Est. Total Revenue</label>
+                        <div id="est-revenue" class="bg-emerald-50 border border-emerald-100 rounded-md px-3 py-1.5 text-xs sm:text-sm font-black text-emerald-700 min-h-[38px] flex flex-col justify-center shadow-inner">
+                            <div id="est-revenue-total">₹ 0.00</div>
+                            <div id="est-revenue-breakdown" class="text-[9px] text-emerald-600 font-semibold tracking-tight">Base: ₹ 0.00 | GST: ₹ 0.00</div>
                         </div>
                     </div>
 
@@ -211,40 +240,62 @@ $(document).ready(function() {
         });
     });
 
-    // Revenue logic (unchanged)
+    // Revenue & Tax logic
     const $revenueType = $('#id_revenue_type');
     const $weight = $('#id_weight');
     const $rate = $('#id_rate_per_ton');
     const $rateLabel = $('#rate-label');
-    const $estRevenue = $('#est-revenue');
+    const $estRevenueTotal = $('#est-revenue-total');
+    const $estRevenueBreakdown = $('#est-revenue-breakdown');
     const $weightContainer = $('#weight-container');
+    const $gstInput = $('#id_gst_type_snapshot');
 
     function updateRevenue() {
         const type = $revenueType.val();
         const weight = parseFloat($weight.val()) || 0;
         const rate = parseFloat($rate.val()) || 0;
-        let revenue = 0;
+        let baseRevenue = 0;
 
         if (type === 'fixed') {
-            revenue = rate;
+            baseRevenue = rate;
             $rateLabel.text('Fixed Amount');
             $weightContainer.addClass('opacity-40 grayscale pointer-events-none');
         } else {
-            revenue = weight * rate;
+            baseRevenue = weight * rate;
             $rateLabel.text('Rate per Ton');
             $weightContainer.removeClass('opacity-40 grayscale pointer-events-none');
         }
 
-        $estRevenue.text('₹ ' + revenue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+        const gstType = $gstInput.val() || 'GST';
+        let gstRate = (gstType === 'GST' || gstType === 'IGST') ? 0.18 : 0.0;
+        let gstAmount = baseRevenue * gstRate;
+        let totalRevenue = baseRevenue + gstAmount;
+
+        $estRevenueTotal.text('₹ ' + totalRevenue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+        $estRevenueBreakdown.text('Base: ₹ ' + baseRevenue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' | GST: ₹ ' + gstAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
     }
 
     $revenueType.on('change', updateRevenue);
     $weight.on('input', updateRevenue);
     $rate.on('input', updateRevenue);
+
+    // GST Toggle button click handler
+    $('.gst-toggle-btn').on('click', function() {
+        {% if object and object.is_billed %}
+        return; // Locked on billed trips
+        {% endif %}
+        const gstVal = $(this).data('gst');
+        $gstInput.val(gstVal);
+        $('.gst-toggle-btn').removeClass('bg-slate-900 text-white border-slate-900 shadow-sm is-active').addClass('bg-white text-slate-700 border-slate-300 hover:bg-slate-50');
+        $(this).addClass('bg-slate-900 text-white border-slate-900 shadow-sm is-active').removeClass('bg-white text-slate-700 border-slate-300 hover:bg-slate-50');
+        updateRevenue();
+    });
+
     updateRevenue();
 
-    // Route default rate logic
+    // Route default rate and GST logic
     let routeRates = {{ route_rates|safe }};
+    let routeGstTypes = {{ route_gst_types|default:'{}'|safe }};
     const $routeSelect = $('#id_route');
     
     // Refresh if data syncs in background
@@ -252,20 +303,27 @@ $(document).ready(function() {
         if (data.routes) {
             data.routes.forEach(r => {
                 routeRates[r.id] = parseFloat(r.default_rate) || 0;
+                routeGstTypes[r.id] = r.default_gst || (r.route_type === 'intra' ? 'IGST' : (r.route_type === 'none' ? 'NONE' : 'GST'));
             });
         }
     });
     
     $routeSelect.on('change', function() {
         const routeId = $(this).val();
-        if (routeId && routeRates[routeId]) {
-            const defaultRate = routeRates[routeId];
-            // Only update if current rate is 0 or empty (to avoid overwriting manual edits)
-            const currentRate = parseFloat($rate.val()) || 0;
-            if (currentRate === 0) {
-                $rate.val(defaultRate);
-                updateRevenue();
+        if (routeId) {
+            if (routeRates[routeId]) {
+                const defaultRate = routeRates[routeId];
+                const currentRate = parseFloat($rate.val()) || 0;
+                if (currentRate === 0) {
+                    $rate.val(defaultRate);
+                }
             }
+            // Auto-select route default GST unless billed
+            {% if not object or not object.is_billed %}
+            const defaultGst = routeGstTypes[routeId] || 'GST';
+            $(`.gst-toggle-btn[data-gst="${defaultGst}"]`).trigger('click');
+            {% endif %}
+            updateRevenue();
         }
     });
 

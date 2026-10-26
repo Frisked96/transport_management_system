@@ -637,8 +637,17 @@ class RouteUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
         response = super().form_valid(form)
         if 'route_type' in form.changed_data or 'pickup_location' in form.changed_data or 'delivery_location' in form.changed_data:
             from trips.models import Trip
+            from ledger.models import Bill
+            new_gst_type = Bill.GST_TYPE_GST
+            if self.object.route_type == Route.ROUTE_TYPE_INTRA:
+                new_gst_type = Bill.GST_TYPE_IGST
+            elif self.object.route_type == Route.ROUTE_TYPE_NONE:
+                new_gst_type = Bill.GST_TYPE_NONE
+
             for trip in Trip.objects.filter(route=self.object):
                 if not trip.is_billed:
+                    if 'route_type' in form.changed_data:
+                        trip.gst_type_snapshot = new_gst_type
                     trip.save()
         messages.success(self.request, 'Route updated successfully.')
         return response

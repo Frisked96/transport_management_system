@@ -248,7 +248,7 @@ class Trip(models.Model):
                     old_instance = Trip.objects.get(pk=self.pk)
                     self._old_instance = old_instance
                 
-                financial_fields = ['weight', 'rate_per_ton', 'revenue_type', 'route', 'party']
+                financial_fields = ['weight', 'rate_per_ton', 'revenue_type', 'route', 'party', 'gst_type_snapshot']
                 changed_fields = []
                 for field in financial_fields:
                     if getattr(old_instance, field) != getattr(self, field):
@@ -304,12 +304,21 @@ class Trip(models.Model):
             self.delivery_location = self.route.delivery_location
             if not self.is_billed:
                 from ledger.models import Bill
+                route_gst = Bill.GST_TYPE_GST
                 if self.route.route_type == Route.ROUTE_TYPE_INTRA:
-                    self.gst_type_snapshot = Bill.GST_TYPE_IGST
+                    route_gst = Bill.GST_TYPE_IGST
                 elif self.route.route_type == Route.ROUTE_TYPE_NONE:
-                    self.gst_type_snapshot = Bill.GST_TYPE_NONE
+                    route_gst = Bill.GST_TYPE_NONE
+
+                if is_new:
+                    if not self.gst_type_snapshot:
+                        self.gst_type_snapshot = route_gst
                 else:
-                    self.gst_type_snapshot = Bill.GST_TYPE_GST
+                    # If route changed and gst_type_snapshot was not explicitly modified, sync to new route
+                    if old_instance and old_instance.route_id != self.route_id and self.gst_type_snapshot == old_instance.gst_type_snapshot:
+                        self.gst_type_snapshot = route_gst
+                    elif not self.gst_type_snapshot:
+                        self.gst_type_snapshot = route_gst
             elif not self.gst_type_snapshot:
                 from ledger.models import Bill
                 if self.route.route_type == Route.ROUTE_TYPE_INTRA:
@@ -318,7 +327,7 @@ class Trip(models.Model):
                     self.gst_type_snapshot = Bill.GST_TYPE_NONE
                 else:
                     self.gst_type_snapshot = Bill.GST_TYPE_GST
-        elif not self.is_billed and old_instance and old_instance.route_id:
+        elif not self.is_billed and old_instance and old_instance.route_id and not self.gst_type_snapshot:
             self.gst_type_snapshot = ""
 
         # Handle Trip Number generation and regeneration
@@ -359,7 +368,7 @@ class Trip(models.Model):
         if not is_new:
             if self.is_billed:
                 # Check for financial changes
-                financial_fields = ['weight', 'rate_per_ton', 'revenue_type', 'route']
+                financial_fields = ['weight', 'rate_per_ton', 'revenue_type', 'route', 'gst_type_snapshot']
                 changed_fields = []
                 for field in financial_fields:
                     if getattr(old_instance, field) != getattr(self, field):

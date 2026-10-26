@@ -27,6 +27,18 @@ class TripForm(forms.ModelForm):
     """
     Form for creating and editing trips
     """
+    GST_CHOICES = [
+        ('GST', 'Local GST (18%)'),
+        ('IGST', 'Interstate IGST (18%)'),
+        ('NONE', 'Non-GST (0%)'),
+    ]
+    gst_type_snapshot = forms.ChoiceField(
+        choices=GST_CHOICES,
+        initial='GST',
+        required=False,
+        label='GST Type',
+        widget=forms.HiddenInput()
+    )
     
     class Meta:
         model = Trip
@@ -37,6 +49,7 @@ class TripForm(forms.ModelForm):
             'driver',
             'party',
             'route',
+            'gst_type_snapshot',
             'revenue_type',
             'pickup_location',
             'delivery_location',
@@ -50,6 +63,7 @@ class TripForm(forms.ModelForm):
             'rate_per_ton': 'Rate',
             'lr_no': 'LR Number',
             'vendor_hire_amount': 'Vendor Hire (₹)',
+            'gst_type_snapshot': 'GST Type',
         }
         
         widgets = {
@@ -80,20 +94,37 @@ class TripForm(forms.ModelForm):
         ).order_by('registration_plate')
         
         # Disable fields if trip is billed
-        if self.instance and self.instance.pk and self.instance.is_billed:
-            billed_fields = ['party', 'route', 'revenue_type', 'weight', 'rate_per_ton', 'vendor_hire_amount']
-            for field_name in billed_fields:
-                if field_name in self.fields:
-                    self.fields[field_name].disabled = True
-                    # Add help text only if not already present or to the main financial ones
-                    if field_name in ['party', 'rate_per_ton']:
-                        self.fields[field_name].help_text = f"{self.fields[field_name].label} cannot be changed because this trip is already billed. Delete the associated bill first."
+        if self.instance and self.instance.pk:
+            current_gst = self.instance.gst_type_snapshot or self.instance.gst_type
+            if current_gst:
+                self.fields['gst_type_snapshot'].initial = current_gst
+
+            if self.instance.is_billed:
+                billed_fields = ['party', 'route', 'revenue_type', 'weight', 'rate_per_ton', 'vendor_hire_amount', 'gst_type_snapshot']
+                for field_name in billed_fields:
+                    if field_name in self.fields:
+                        self.fields[field_name].disabled = True
+                        if field_name in ['party', 'rate_per_ton', 'gst_type_snapshot']:
+                            self.fields[field_name].help_text = f"{self.fields[field_name].label} cannot be changed because this trip is already billed. Delete the associated bill first."
         
         # Add basic Tailwind styling for clarity
         tailwind_classes = "block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white"
         for field_name, field in self.fields.items():
             if isinstance(field.widget, (forms.TextInput, forms.Select, forms.Textarea, forms.DateTimeInput, forms.DateInput, forms.NumberInput)):
                 field.widget.attrs.update({'class': tailwind_classes})
+
+    def clean_gst_type_snapshot(self):
+        val = self.cleaned_data.get('gst_type_snapshot')
+        if not val:
+            route = self.cleaned_data.get('route')
+            if route:
+                if route.route_type == Route.ROUTE_TYPE_INTRA:
+                    return 'IGST'
+                elif route.route_type == Route.ROUTE_TYPE_NONE:
+                    return 'NONE'
+                return 'GST'
+            return 'GST'
+        return val
 
     def clean(self):
         cleaned_data = super().clean()

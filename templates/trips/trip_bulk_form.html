@@ -52,17 +52,48 @@
 {% endblock %}
 
 {% block content %}
-<header class="mb-6 flex items-center justify-between">
+<header class="mb-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
     <div>
-        <div class="flex items-center space-x-2 text-sm text-slate-500 mb-2">
+        <div class="flex items-center space-x-2 text-xs font-semibold text-slate-500 mb-1">
             <a href="{% url 'trip-list' %}" class="hover:text-emerald-600 transition-colors">Trips</a>
-            <i class="fa-solid fa-chevron-right text-[10px]"></i>
-            <span>Bulk Add Trips</span>
+            <i class="fa-solid fa-chevron-right text-[9px] text-slate-400"></i>
+            <span>Trip Entry</span>
         </div>
-        <h1 class="text-3xl font-bold text-slate-900">Bulk Add Trips</h1>
+        <h1 class="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">Trip Entry</h1>
     </div>
-    <div></div>
+    <div class="flex items-center space-x-2">
+        <a href="{% url 'trip-list' %}" class="px-3 py-1.5 border border-slate-300 rounded-md text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 transition-colors shadow-sm inline-flex items-center gap-1.5">
+            <i class="fa-solid fa-arrow-left text-slate-400"></i>
+            <span>Trips List</span>
+        </a>
+    </div>
 </header>
+
+<!-- Batch GST and Actions Toolbar -->
+<div class="bg-white border border-slate-200 rounded-xl p-3 sm:p-4 shadow-sm mb-4 flex flex-wrap items-center justify-between gap-3">
+    <div class="flex flex-wrap items-center gap-2">
+        <span class="text-xs font-black text-slate-500 uppercase tracking-wider mr-1">Batch GST:</span>
+        <button type="button" class="batch-gst-btn px-2.5 py-1 text-xs font-bold rounded-lg bg-slate-100 hover:bg-slate-900 hover:text-white text-slate-700 border border-slate-200 transition-all flex items-center gap-1" data-gst="GST">
+            <i class="fa-solid fa-percent text-emerald-500"></i>
+            <span>All Local GST (18%)</span>
+        </button>
+        <button type="button" class="batch-gst-btn px-2.5 py-1 text-xs font-bold rounded-lg bg-slate-100 hover:bg-slate-900 hover:text-white text-slate-700 border border-slate-200 transition-all flex items-center gap-1" data-gst="IGST">
+            <i class="fa-solid fa-arrows-split-up-and-left text-blue-500"></i>
+            <span>All Interstate IGST (18%)</span>
+        </button>
+        <button type="button" class="batch-gst-btn px-2.5 py-1 text-xs font-bold rounded-lg bg-slate-100 hover:bg-slate-900 hover:text-white text-slate-700 border border-slate-200 transition-all flex items-center gap-1" data-gst="NONE">
+            <i class="fa-solid fa-ban text-amber-500"></i>
+            <span>All Non-GST (0%)</span>
+        </button>
+    </div>
+    <div class="flex items-center space-x-2">
+        <button type="button" id="top-add-trip-btn" class="flex items-center space-x-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-bold hover:bg-emerald-100 transition-all active:scale-95">
+            <i class="fa-solid fa-plus text-xs"></i>
+            <span>Add Row</span>
+        </button>
+        <span class="text-xs font-bold text-slate-500">Total Rows: <span id="total-rows-badge" class="px-1.5 py-0.5 bg-slate-100 text-slate-800 rounded font-black">1</span></span>
+    </div>
+</div>
 
 <div class="mx-auto">
     <form method="post" id="bulk-trip-form" class="space-y-4">
@@ -119,6 +150,24 @@
                                 <div class="relative select2-parent">{{ single_form.route }}</div>
                                 {% if single_form.route.errors %}<p class="text-rose-600 text-[10px] mt-1 font-bold">{{ single_form.route.errors.0 }}</p>{% endif %}
                             </div>
+
+                            <!-- GST Type -->
+                            <div class="xl:col-span-3">
+                                <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">GST Type</label>
+                                {{ single_form.gst_type_snapshot }}
+                                <div class="grid grid-cols-3 gap-1 row-gst-group">
+                                    <button type="button" data-gst="GST" class="row-gst-btn px-1.5 py-1.5 border rounded text-[10px] font-bold text-center transition-all {% if single_form.gst_type_snapshot.value == 'GST' or not single_form.gst_type_snapshot.value %}bg-slate-900 text-white border-slate-900 shadow-sm is-active{% else %}bg-white text-slate-600 border-slate-200 hover:bg-slate-50{% endif %}">
+                                        GST (18%)
+                                    </button>
+                                    <button type="button" data-gst="IGST" class="row-gst-btn px-1.5 py-1.5 border rounded text-[10px] font-bold text-center transition-all {% if single_form.gst_type_snapshot.value == 'IGST' %}bg-slate-900 text-white border-slate-900 shadow-sm is-active{% else %}bg-white text-slate-600 border-slate-200 hover:bg-slate-50{% endif %}">
+                                        IGST (18%)
+                                    </button>
+                                    <button type="button" data-gst="NONE" class="row-gst-btn px-1.5 py-1.5 border rounded text-[10px] font-bold text-center transition-all {% if single_form.gst_type_snapshot.value == 'NONE' %}bg-slate-900 text-white border-slate-900 shadow-sm is-active{% else %}bg-white text-slate-600 border-slate-200 hover:bg-slate-50{% endif %}">
+                                        Non-GST
+                                    </button>
+                                </div>
+                                {% if single_form.gst_type_snapshot.errors %}<p class="text-rose-600 text-[10px] mt-1 font-bold">{{ single_form.gst_type_snapshot.errors.0 }}</p>{% endif %}
+                            </div>
                             
                             <!-- Vehicle -->
                             <div class="xl:col-span-2">
@@ -164,8 +213,9 @@
                             <!-- Est Revenue -->
                             <div class="xl:col-span-2">
                                 <label class="block text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1">Est. Revenue</label>
-                                <div class="est-revenue bg-emerald-50 border border-emerald-100 rounded-md px-3 py-2 text-xs font-black text-emerald-700 min-h-[38px] flex items-center shadow-inner">
-                                    ₹ 0.00
+                                <div class="est-revenue bg-emerald-50 border border-emerald-100 rounded-md px-2 py-1 text-xs font-black text-emerald-700 min-h-[38px] flex flex-col justify-center shadow-inner">
+                                    <div class="est-revenue-total">₹ 0.00</div>
+                                    <div class="est-revenue-sub text-[9px] text-emerald-600 font-medium tracking-tight">Base: 0 | Tax: 0</div>
                                 </div>
                             </div>
 
@@ -225,6 +275,22 @@
                             <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Route *</label>
                             <div class="relative select2-parent">{{ form.empty_form.route }}</div>
                         </div>
+
+                        <div class="xl:col-span-3">
+                            <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">GST Type</label>
+                            {{ form.empty_form.gst_type_snapshot }}
+                            <div class="grid grid-cols-3 gap-1 row-gst-group">
+                                <button type="button" data-gst="GST" class="row-gst-btn px-1.5 py-1.5 border rounded text-[10px] font-bold text-center transition-all bg-slate-900 text-white border-slate-900 shadow-sm is-active">
+                                    GST (18%)
+                                </button>
+                                <button type="button" data-gst="IGST" class="row-gst-btn px-1.5 py-1.5 border rounded text-[10px] font-bold text-center transition-all bg-white text-slate-600 border-slate-200 hover:bg-slate-50">
+                                    IGST (18%)
+                                </button>
+                                <button type="button" data-gst="NONE" class="row-gst-btn px-1.5 py-1.5 border rounded text-[10px] font-bold text-center transition-all bg-white text-slate-600 border-slate-200 hover:bg-slate-50">
+                                    Non-GST
+                                </button>
+                            </div>
+                        </div>
                         
                         <div class="xl:col-span-2">
                             <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Vehicle *</label>
@@ -258,8 +324,9 @@
 
                         <div class="xl:col-span-2">
                             <label class="block text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1">Est. Revenue</label>
-                            <div class="est-revenue bg-emerald-50 border border-emerald-100 rounded-md px-3 py-2 text-xs font-black text-emerald-700 min-h-[38px] flex items-center shadow-inner">
-                                ₹ 0.00
+                            <div class="est-revenue bg-emerald-50 border border-emerald-100 rounded-md px-2 py-1 text-xs font-black text-emerald-700 min-h-[38px] flex flex-col justify-center shadow-inner">
+                                <div class="est-revenue-total">₹ 0.00</div>
+                                <div class="est-revenue-sub text-[9px] text-emerald-600 font-medium tracking-tight">Base: 0 | Tax: 0</div>
                             </div>
                         </div>
 
@@ -302,9 +369,13 @@
                     <i class="fa-solid fa-arrow-down text-xs"></i>
                     <span>Minimize</span>
                 </button>
+                <button type="submit" name="_save_and_add" value="1" class="w-full sm:w-auto flex items-center justify-center space-x-1.5 px-4 py-3 bg-slate-700 text-white rounded-lg text-xs font-black hover:bg-slate-800 transition-all active:scale-95 uppercase tracking-wider">
+                    <i class="fa-solid fa-plus-circle"></i>
+                    <span>Save & Add Another</span>
+                </button>
                 <button type="submit" id="save-trips-btn" class="w-full sm:w-auto flex items-center justify-center space-x-2 px-8 py-3 bg-emerald-600 text-white rounded-lg text-sm font-black hover:bg-emerald-700 shadow-lg shadow-emerald-100 transition-all active:scale-95 uppercase tracking-widest">
                     <i class="fa-solid fa-circle-check"></i>
-                    <span>Save All Trips</span>
+                    <span>Save Trip(s)</span>
                 </button>
             </div>
         </div>
@@ -316,6 +387,7 @@
 <script>
 $(document).ready(function() {
     let routeRates = {{ route_rates|safe }};
+    let routeGstTypes = {{ route_gst_types|default:'{}'|safe }};
     const DRAFT_KEY = 'bulk_trips_draft';
 
     function loadCachedMetadata() {
@@ -323,6 +395,7 @@ $(document).ready(function() {
         if (cached.routes) {
             cached.routes.forEach(r => {
                 routeRates[r.id] = parseFloat(r.default_rate) || 0;
+                routeGstTypes[r.id] = r.default_gst || (r.route_type === 'intra' ? 'IGST' : (r.route_type === 'none' ? 'NONE' : 'GST'));
             });
         }
     }
@@ -367,6 +440,12 @@ $(document).ready(function() {
                                 $el.filter(`[value="${item.value}"]`).prop('checked', true);
                             } else {
                                 $el.val(item.value);
+                            }
+                            if (item.name.endsWith('-gst_type_snapshot')) {
+                                const $row = $el.closest('.form-row');
+                                const $group = $row.find('.row-gst-group');
+                                $group.find('.row-gst-btn').removeClass('bg-slate-900 text-white border-slate-900 shadow-sm is-active').addClass('bg-white text-slate-600 border-slate-200 hover:bg-slate-50');
+                                $group.find(`.row-gst-btn[data-gst="${item.value}"]`).addClass('bg-slate-900 text-white border-slate-900 shadow-sm is-active').removeClass('bg-white text-slate-600 border-slate-200 hover:bg-slate-50');
                             }
                             // Trigger change for select2 and calculations
                             if ($el.hasClass('select2-hidden-accessible')) {
@@ -497,31 +576,39 @@ $(document).ready(function() {
         });
     }
 
-    // Revenue Calculation
+    // Revenue & Tax Calculation
     function updateRevenue($row) {
         const $revenueType = $row.find('[name$="-revenue_type"]');
         const $weight = $row.find('[name$="-weight"]');
         const $rate = $row.find('[name$="-rate_per_ton"]');
         const $rateLabel = $row.find('.rate-label');
-        const $estRevenue = $row.find('.est-revenue');
+        const $estRevenueTotal = $row.find('.est-revenue-total');
+        const $estRevenueSub = $row.find('.est-revenue-sub');
         const $weightContainer = $row.find('.weight-container');
+        const $gstInput = $row.find('[name$="-gst_type_snapshot"]');
 
         const type = $revenueType.val();
         const weight = parseFloat($weight.val()) || 0;
         const rate = parseFloat($rate.val()) || 0;
-        let revenue = 0;
+        let baseRevenue = 0;
 
         if (type === 'fixed') {
-            revenue = rate;
+            baseRevenue = rate;
             $rateLabel.text('Fixed Amount');
             $weightContainer.addClass('opacity-40 grayscale pointer-events-none');
         } else {
-            revenue = weight * rate;
+            baseRevenue = weight * rate;
             $rateLabel.text('Rate per Ton');
             $weightContainer.removeClass('opacity-40 grayscale pointer-events-none');
         }
 
-        $estRevenue.text('₹ ' + revenue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+        const gstType = $gstInput.val() || 'GST';
+        let gstRate = (gstType === 'GST' || gstType === 'IGST') ? 0.18 : 0.0;
+        let gstAmount = baseRevenue * gstRate;
+        let totalRevenue = baseRevenue + gstAmount;
+
+        $estRevenueTotal.text('₹ ' + totalRevenue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+        $estRevenueSub.text('Base: ₹ ' + baseRevenue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' | GST: ₹ ' + gstAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
         
         // Vendor hire auto-sync logic
         const $vendorHireContainer = $row.find('.vendor-hire-container');
@@ -532,11 +619,39 @@ $(document).ready(function() {
         if (!$vendorHireContainer.hasClass('hidden')) {
             // Only auto-update if it's currently 0 or matches the previous revenue
             if (currentVendorHire === 0 || currentVendorHire === prevRevenue) {
-                $vendorHireInput.val(revenue);
+                $vendorHireInput.val(baseRevenue);
             }
         }
-        $row.data('prev-revenue', revenue);
+        $row.data('prev-revenue', baseRevenue);
     }
+
+    // Row-level GST Toggle Button Handler
+    $(document).on('click', '.row-gst-btn', function() {
+        const $btn = $(this);
+        const $group = $btn.closest('.row-gst-group');
+        const $row = $btn.closest('.form-row');
+        const gstVal = $btn.data('gst');
+        
+        $row.find('[name$="-gst_type_snapshot"]').val(gstVal);
+        $group.find('.row-gst-btn').removeClass('bg-slate-900 text-white border-slate-900 shadow-sm is-active').addClass('bg-white text-slate-600 border-slate-200 hover:bg-slate-50');
+        $btn.addClass('bg-slate-900 text-white border-slate-900 shadow-sm is-active').removeClass('bg-white text-slate-600 border-slate-200 hover:bg-slate-50');
+        
+        updateRevenue($row);
+        saveDraft();
+    });
+
+    // Batch GST Apply Button Handler
+    $(document).on('click', '.batch-gst-btn', function() {
+        const gstVal = $(this).data('gst');
+        $('.form-row:not(#empty-form-template .form-row)').each(function() {
+            const $row = $(this);
+            $row.find('[name$="-gst_type_snapshot"]').val(gstVal);
+            $row.find('.row-gst-btn').removeClass('bg-slate-900 text-white border-slate-900 shadow-sm is-active').addClass('bg-white text-slate-600 border-slate-200 hover:bg-slate-50');
+            $row.find(`.row-gst-btn[data-gst="${gstVal}"]`).addClass('bg-slate-900 text-white border-slate-900 shadow-sm is-active').removeClass('bg-white text-slate-600 border-slate-200 hover:bg-slate-50');
+            updateRevenue($row);
+        });
+        saveDraft();
+    });
 
     function updateVendorHireState($row) {
         const vehicleId = $row.find('[name$="-vehicle"]').val();
@@ -573,14 +688,22 @@ $(document).ready(function() {
         $row.on('change', '[name$="-route"]', function() {
             const routeId = $(this).val();
             const $rate = $row.find('[name$="-rate_per_ton"]');
-            if (routeId && routeRates[routeId]) {
-                const defaultRate = routeRates[routeId];
-                const currentRate = parseFloat($rate.val()) || 0;
-                if (currentRate === 0 || $rate.val() === '') {
-                    $rate.val(defaultRate);
-                    updateRevenue($row);
-                    saveDraft();
+            if (routeId) {
+                if (routeRates[routeId]) {
+                    const defaultRate = routeRates[routeId];
+                    const currentRate = parseFloat($rate.val()) || 0;
+                    if (currentRate === 0 || $rate.val() === '') {
+                        $rate.val(defaultRate);
+                    }
                 }
+                const defaultGst = routeGstTypes[routeId] || 'GST';
+                const $gstGroup = $row.find('.row-gst-group');
+                $row.find('[name$="-gst_type_snapshot"]').val(defaultGst);
+                $gstGroup.find('.row-gst-btn').removeClass('bg-slate-900 text-white border-slate-900 shadow-sm is-active').addClass('bg-white text-slate-600 border-slate-200 hover:bg-slate-50');
+                $gstGroup.find(`.row-gst-btn[data-gst="${defaultGst}"]`).addClass('bg-slate-900 text-white border-slate-900 shadow-sm is-active').removeClass('bg-white text-slate-600 border-slate-200 hover:bg-slate-50');
+
+                updateRevenue($row);
+                saveDraft();
             }
         });
         
@@ -610,6 +733,7 @@ $(document).ready(function() {
             const prevVehicle = $(`[name="${prevPrefix}-vehicle"]`).val();
             const prevRate = $(`[name="${prevPrefix}-rate_per_ton"]`).val();
             const prevRevenueType = $(`[name="${prevPrefix}-revenue_type"]`).val();
+            const prevGst = $(`[name="${prevPrefix}-gst_type_snapshot"]`).val();
             
             if (prevDate) $newRow.find(`[name="${newPrefix}-date"]`).val(prevDate);
             if (prevParty) $newRow.find(`[name="${newPrefix}-party"]`).val(prevParty);
@@ -617,9 +741,15 @@ $(document).ready(function() {
             if (prevVehicle) $newRow.find(`[name="${newPrefix}-vehicle"]`).val(prevVehicle);
             if (prevRate) $newRow.find(`[name="${newPrefix}-rate_per_ton"]`).val(prevRate);
             if (prevRevenueType) $newRow.find(`[name="${newPrefix}-revenue_type"]`).val(prevRevenueType);
+            if (prevGst) {
+                $newRow.find(`[name="${newPrefix}-gst_type_snapshot"]`).val(prevGst);
+                $newRow.find('.row-gst-btn').removeClass('bg-slate-900 text-white border-slate-900 shadow-sm is-active').addClass('bg-white text-slate-600 border-slate-200 hover:bg-slate-50');
+                $newRow.find(`.row-gst-btn[data-gst="${prevGst}"]`).addClass('bg-slate-900 text-white border-slate-900 shadow-sm is-active').removeClass('bg-white text-slate-600 border-slate-200 hover:bg-slate-50');
+            }
         }
         
         $('#id_form-TOTAL_FORMS').val(totalForms + 1);
+        $('#total-rows-badge').text(totalForms + 1);
         
         initSelect2($newRow);
         attachRowListeners($newRow);
@@ -629,7 +759,7 @@ $(document).ready(function() {
     }
 
     // Initialization
-    $('#add-trip-btn').on('click', addFormRow);
+    $('#add-trip-btn, #top-add-trip-btn').on('click', addFormRow);
     
     $('#formset-container').on('click', '.remove-row-btn', function() {
         const rowCount = $('.form-row:not(#empty-form-template .form-row)').length;
@@ -657,6 +787,7 @@ $(document).ready(function() {
                 index++;
             });
             $('#id_form-TOTAL_FORMS').val(index);
+            $('#total-rows-badge').text(index);
             saveDraft();
         } else {
             alert('You must have at least one trip row.');

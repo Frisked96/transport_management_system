@@ -4,9 +4,9 @@ Core CRUD views for Trip model.
 from datetime import datetime, timedelta
 from decimal import Decimal
 import hashlib
-from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView, FormView
+from django.views.generic import View, ListView, DetailView, CreateView, UpdateView, DeleteView, FormView
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
-from django.shortcuts import redirect
+from django.shortcuts import redirect, render
 from django.urls import reverse_lazy
 from django.contrib import messages
 from django.db.models import Q, Sum
@@ -205,152 +205,149 @@ class TripDetailView(LoginRequiredMixin, BaseTripPermissionMixin, DetailView):
         return context
 
 
-class TripBulkCreateView(LoginRequiredMixin, PermissionRequiredMixin, FormView):
+TripFormSet = modelformset_factory(
+    Trip,
+    form=TripForm,
+    extra=1,
+    can_delete=True
+)
+
+
+class TripCreateView(LoginRequiredMixin, PermissionRequiredMixin, View):
     """
-    Bulk create view for multiple trips.
+    Consolidated dynamic trip entry view.
+    Acts as both single and multi-trip creation interface.
     """
+    permission_required = 'trips.add_trip'
     template_name = 'trips/trip_bulk_form.html'
-    permission_required = 'trips.add_trip'
     success_url = reverse_lazy('trip-list')
-    
-    def get_form_class(self):
-        return modelformset_factory(
-            Trip,
-            form=TripForm,
-            extra=1,
-            can_delete=True
-        )
 
-    def get_form_kwargs(self):
-        kwargs = super().get_form_kwargs()
-        kwargs['queryset'] = Trip.objects.none()
-        return kwargs
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        routes = Route.objects.all().values('id', 'default_rate')
-        route_rates = {str(r['id']): float(r['default_rate']) for r in routes}
-        context['route_rates'] = route_rates
-        return context
-
-    def form_valid(self, form):
-        # Prevent rapid duplicate submissions (e.g. double click or network replay)
-        post_data = self.request.POST.copy()
-        post_data.pop('csrfmiddlewaretoken', None)
-        fingerprint = hashlib.md5(str(sorted(post_data.items())).encode('utf-8')).hexdigest()
-        cache_key = f"bulk_trip_submit_{self.request.user.id}_{fingerprint}"
-        
-        if not cache.add(cache_key, '1', timeout=10):
-            messages.warning(self.request, "Your trips have already been submitted.")
-            return redirect(self.success_url)
-
-        with transaction.atomic():
-            instances = form.save(commit=False)
-            if not instances:
-                return super().form_valid(form)
-
-            batch_voucher = None
-            if len(instances) > 1:
-                from ledger.services import VoucherService
-                from ledger.models import FinancialVoucher, CompanyAccount
-                first_party = instances[0].party
-                same_party = all(inst.party == first_party for inst in instances)
-                batch_party = first_party if same_party else None
-                first_date = instances[0].date or timezone.now().date()
-                account = CompanyAccount.objects.first()
-
-                batch_voucher = VoucherService.create_voucher(
-                    date=first_date,
-                    voucher_type=FinancialVoucher.VOUCHER_TYPE_TRIP_ACCRUAL,
-                    created_by=self.request.user,
-                    party=batch_party,
-                    account=account,
-                    description=f"Bulk Trip Creation ({len(instances)} Trips)"
-                )
-
-            for instance in instances:
-                instance.created_by = self.request.user
-                if not instance.date:
-                     instance.date = timezone.now().date()
-                if batch_voucher:
-                    instance._batch_voucher = batch_voucher
-                instance.save()
-
-            if batch_voucher:
-                batch_voucher.update_totals()
-
-        messages.success(self.request, f'{len(instances)} Trips created successfully!')
-        return super().form_valid(form)
-
-    def form_invalid(self, form):
-        messages.error(self.request, "There were errors saving the trips. Please correct the highlighted fields below.")
-        return super().form_invalid(form)
-
-
-class TripCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
-    """
-    Create view for new trips.
-    """
-    model = Trip
-    form_class = TripForm
-    template_name = 'trips/trip_form.html'
-    permission_required = 'trips.add_trip'
-    
-    def get_initial(self):
-        initial = super().get_initial()
-        
-        # Handle date from GET
+    def get_initial_data(self):
+        initial = {}
         date_str = self.request.GET.get('date')
         if date_str:
             try:
                 initial['date'] = datetime.strptime(date_str, '%Y-%m-%d').date()
             except (ValueError, TypeError):
                 pass
-                
-        # Handle party from GET
         party_id = self.request.GET.get('party')
         if party_id:
             initial['party'] = party_id
-            
+        vehicle_id = self.request.GET.get('vehicle')
+        if vehicle_id:
+            initial['vehicle'] = vehicle_id
+        route_id = self.request.GET.get('route')
+        if route_id:
+            initial['route'] = route_id
         return initial
 
-    def form_valid(self, form):
-        form.instance.created_by = self.request.user
-        
-        # Set date from GET param if not provided in form (e.g. if field was somehow omitted)
-        if not form.cleaned_data.get('date'):
-            date_str = self.request.GET.get('date')
-            if date_str:
-                try:
-                    form.instance.date = datetime.strptime(date_str, '%Y-%m-%d').date()
-                except ValueError:
-                    form.instance.date = timezone.now().date()
-            else:
-                form.instance.date = timezone.now().date()
-
-        response = super().form_valid(form)
-        messages.success(self.request, 'Trip created successfully!')
-        
-        # Handle "Save and Add New" options
-        if '_save_new_date' in self.request.POST:
-            date_str = self.object.date.strftime('%Y-%m-%d') if self.object.date else ''
-            return redirect(f"{self.request.path}?date={date_str}")
-        elif '_save_new_party' in self.request.POST:
-            party_id = self.object.party.id if self.object.party else ''
-            return redirect(f"{self.request.path}?party={party_id}")
-            
-        return response
-    
     def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        # Provide route default rates for JS auto-population
-        routes = Route.objects.all().values('id', 'default_rate')
-        route_rates = {str(r['id']): float(r['default_rate']) for r in routes}
+        context = kwargs
+        routes = Route.objects.all().values('id', 'default_rate', 'route_type')
+        route_rates = {str(r['id']): float(r['default_rate'] or 0) for r in routes}
+        route_gst_types = {}
+        for r in routes:
+            if r['route_type'] == 'intra':
+                route_gst_types[str(r['id'])] = 'IGST'
+            elif r['route_type'] == 'none':
+                route_gst_types[str(r['id'])] = 'NONE'
+            else:
+                route_gst_types[str(r['id'])] = 'GST'
+
         context['route_rates'] = route_rates
+        context['route_gst_types'] = route_gst_types
         return context
 
-    def get_success_url(self):
-        return reverse_lazy('trip-list')
+    def get(self, request, *args, **kwargs):
+        initial_list = [self.get_initial_data()]
+        formset = TripFormSet(queryset=Trip.objects.none(), initial=initial_list)
+        context = self.get_context_data(form=formset)
+        return render(request, self.template_name, context)
+
+    def post(self, request, *args, **kwargs):
+        # Prevent rapid duplicate submissions
+        post_data = request.POST.copy()
+        post_data.pop('csrfmiddlewaretoken', None)
+        fingerprint = hashlib.md5(str(sorted(post_data.items())).encode('utf-8')).hexdigest()
+        cache_key = f"trip_submit_{request.user.id}_{fingerprint}"
+        
+        if not cache.add(cache_key, '1', timeout=10):
+            messages.warning(request, "Your trips have already been submitted.")
+            return redirect(self.success_url)
+
+        # Handle legacy or direct single-form POST if formset management form is missing
+        if 'form-TOTAL_FORMS' not in request.POST:
+            form = TripForm(request.POST)
+            if form.is_valid():
+                trip = form.save(commit=False)
+                trip.created_by = request.user
+                if not trip.date:
+                    trip.date = timezone.now().date()
+                trip.save()
+                messages.success(request, f'Trip {trip.trip_number} created successfully!')
+                if '_save_new_date' in request.POST:
+                    return redirect(f"{request.path}?date={trip.date.strftime('%Y-%m-%d')}")
+                elif '_save_new_party' in request.POST and trip.party_id:
+                    return redirect(f"{request.path}?party={trip.party_id}")
+                return redirect(self.success_url)
+            else:
+                context = self.get_context_data(form=form)
+                return render(request, 'trips/trip_form.html', context)
+
+        # Standard formset processing
+        formset = TripFormSet(request.POST, queryset=Trip.objects.none())
+        if formset.is_valid():
+            with transaction.atomic():
+                instances = formset.save(commit=False)
+                if not instances:
+                    return redirect(self.success_url)
+
+                batch_voucher = None
+                if len(instances) > 1:
+                    from ledger.services import VoucherService
+                    from ledger.models import FinancialVoucher, CompanyAccount
+                    first_party = instances[0].party
+                    same_party = all(inst.party == first_party for inst in instances)
+                    batch_party = first_party if same_party else None
+                    first_date = instances[0].date or timezone.now().date()
+                    account = CompanyAccount.objects.first()
+
+                    batch_voucher = VoucherService.create_voucher(
+                        date=first_date,
+                        voucher_type=FinancialVoucher.VOUCHER_TYPE_TRIP_ACCRUAL,
+                        created_by=request.user,
+                        party=batch_party,
+                        account=account,
+                        description=f"Bulk Trip Creation ({len(instances)} Trips)"
+                    )
+
+                for instance in instances:
+                    instance.created_by = request.user
+                    if not instance.date:
+                        instance.date = timezone.now().date()
+                    if batch_voucher:
+                        instance._batch_voucher = batch_voucher
+                    instance.save()
+
+                if batch_voucher:
+                    batch_voucher.update_totals()
+
+            count = len(instances)
+            trip_str = "Trip" if count == 1 else "Trips"
+            messages.success(request, f'{count} {trip_str} created successfully!')
+
+            if '_save_and_add' in request.POST and instances:
+                last_trip = instances[-1]
+                return redirect(f"{request.path}?date={last_trip.date.strftime('%Y-%m-%d')}&party={last_trip.party_id}")
+
+            return redirect(self.success_url)
+        else:
+            messages.error(request, "There were errors saving the trips. Please correct the highlighted fields below.")
+            context = self.get_context_data(form=formset)
+            return render(request, self.template_name, context)
+
+
+TripBulkCreateView = TripCreateView
 
 
 class TripUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
@@ -369,10 +366,17 @@ class TripUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        # Provide route default rates for JS auto-population
-        routes = Route.objects.all().values('id', 'default_rate')
-        route_rates = {str(r['id']): float(r['default_rate']) for r in routes}
-        context['route_rates'] = route_rates
+        routes = Route.objects.all().values('id', 'default_rate', 'route_type')
+        context['route_rates'] = {str(r['id']): float(r['default_rate'] or 0) for r in routes}
+        route_gst_types = {}
+        for r in routes:
+            if r['route_type'] == 'intra':
+                route_gst_types[str(r['id'])] = 'IGST'
+            elif r['route_type'] == 'none':
+                route_gst_types[str(r['id'])] = 'NONE'
+            else:
+                route_gst_types[str(r['id'])] = 'GST'
+        context['route_gst_types'] = route_gst_types
         return context
 
     def get_success_url(self):
@@ -389,10 +393,17 @@ class TripDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        # Provide route default rates for JS auto-population
-        routes = Route.objects.all().values('id', 'default_rate')
-        route_rates = {str(r['id']): float(r['default_rate']) for r in routes}
-        context['route_rates'] = route_rates
+        routes = Route.objects.all().values('id', 'default_rate', 'route_type')
+        context['route_rates'] = {str(r['id']): float(r['default_rate'] or 0) for r in routes}
+        route_gst_types = {}
+        for r in routes:
+            if r['route_type'] == 'intra':
+                route_gst_types[str(r['id'])] = 'IGST'
+            elif r['route_type'] == 'none':
+                route_gst_types[str(r['id'])] = 'NONE'
+            else:
+                route_gst_types[str(r['id'])] = 'GST'
+        context['route_gst_types'] = route_gst_types
         return context
 
     def get_success_url(self):

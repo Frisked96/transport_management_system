@@ -44,7 +44,7 @@ class Route(models.Model):
     class Meta:
         verbose_name = 'Route'
         verbose_name_plural = 'Routes'
-        unique_together = ['pickup_location', 'delivery_location', 'route_type']
+        unique_together = ['pickup_location', 'delivery_location']
 
     def __str__(self):
         return f"{self.pickup_location} to {self.delivery_location} ({self.get_route_type_display()})"
