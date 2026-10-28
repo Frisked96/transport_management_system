@@ -87,12 +87,12 @@ class BillListView(LoginRequiredMixin, PermissionRequiredMixin, BaseLedgerPermis
         elif cat_filter == 'debit':
             queryset = queryset.filter(category__name='Debit Note')
 
-        # Filter by Payment Status
+        # Filter by Payment Status (Settlements/Adjustments are not pending/paid invoices)
         status_filter = self.request.GET.get('payment_status')
         if status_filter == 'pending':
-            queryset = queryset.filter(outstanding_balance_cached__gt=0)
+            queryset = queryset.exclude(category__name__in=['Credit Note', 'Debit Note']).filter(outstanding_balance_cached__gt=0)
         elif status_filter == 'paid':
-            queryset = queryset.filter(outstanding_balance_cached__lte=0)
+            queryset = queryset.exclude(category__name__in=['Credit Note', 'Debit Note']).filter(outstanding_balance_cached__lte=0)
 
         # Filter by Date Range
         start_date = self.request.GET.get('start_date')

@@ -199,19 +199,24 @@ class Bill(models.Model):
             self.total_amount_cached = self.rounded_total
             
             # Update payment caches as well
-            self.amount_received_cached = self.calculate_amount_received()
-            self.outstanding_balance_cached = self.total_amount_cached - self.amount_received_cached
-            
-            total = self.total_amount_cached
-            received = self.amount_received_cached
-            if total <= 0:
-                self.payment_status_cached = self.PAYMENT_STATUS_UNPAID
-            elif received >= total:
-                self.payment_status_cached = self.PAYMENT_STATUS_PAID
-            elif received > 0:
-                self.payment_status_cached = self.PAYMENT_STATUS_PARTIAL
+            if self.is_adjustment:
+                self.amount_received_cached = Decimal('0.00')
+                self.outstanding_balance_cached = Decimal('0.00')
+                self.payment_status_cached = 'Applied'
             else:
-                self.payment_status_cached = self.PAYMENT_STATUS_UNPAID
+                self.amount_received_cached = self.calculate_amount_received()
+                self.outstanding_balance_cached = self.total_amount_cached - self.amount_received_cached
+                
+                total = self.total_amount_cached
+                received = self.amount_received_cached
+                if total <= 0:
+                    self.payment_status_cached = self.PAYMENT_STATUS_UNPAID
+                elif received >= total:
+                    self.payment_status_cached = self.PAYMENT_STATUS_PAID
+                elif received > 0:
+                    self.payment_status_cached = self.PAYMENT_STATUS_PARTIAL
+                else:
+                    self.payment_status_cached = self.PAYMENT_STATUS_UNPAID
         finally:
             del self._bypass_cache
         
@@ -414,6 +419,8 @@ class Bill(models.Model):
     @property
     def outstanding_balance(self):
         """Returns outstanding balance, prioritizing cached value"""
+        if self.is_adjustment:
+            return Decimal('0.00')
         if self.outstanding_balance_cached is not None:
             return self.outstanding_balance_cached
         if hasattr(self, 'annotated_outstanding'):
@@ -423,6 +430,8 @@ class Bill(models.Model):
     @property
     def payment_status(self):
         """Returns payment status, prioritizing cached value"""
+        if self.is_adjustment:
+            return "Applied"
         if self.payment_status_cached:
             return self.payment_status_cached
             

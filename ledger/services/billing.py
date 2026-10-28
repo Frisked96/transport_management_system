@@ -343,20 +343,25 @@ class BillingService:
             bill.gst_amount_cached = bill.gst_amount
             bill.total_amount_cached = bill.rounded_total
             
-            received = BillingService.calculate_bill_received_amount(bill)
-            total = bill.total_amount_cached
-            
-            bill.amount_received_cached = received
-            bill.outstanding_balance_cached = total - received
-            
-            if total <= 0:
-                bill.payment_status_cached = bill.PAYMENT_STATUS_UNPAID
-            elif received >= total:
-                bill.payment_status_cached = bill.PAYMENT_STATUS_PAID
-            elif received > 0:
-                bill.payment_status_cached = bill.PAYMENT_STATUS_PARTIAL
+            if bill.is_adjustment:
+                bill.amount_received_cached = Decimal('0.00')
+                bill.outstanding_balance_cached = Decimal('0.00')
+                bill.payment_status_cached = 'Applied'
             else:
-                bill.payment_status_cached = bill.PAYMENT_STATUS_UNPAID
+                received = BillingService.calculate_bill_received_amount(bill)
+                total = bill.total_amount_cached
+                
+                bill.amount_received_cached = received
+                bill.outstanding_balance_cached = total - received
+                
+                if total <= 0:
+                    bill.payment_status_cached = bill.PAYMENT_STATUS_UNPAID
+                elif received >= total:
+                    bill.payment_status_cached = bill.PAYMENT_STATUS_PAID
+                elif received > 0:
+                    bill.payment_status_cached = bill.PAYMENT_STATUS_PARTIAL
+                else:
+                    bill.payment_status_cached = bill.PAYMENT_STATUS_UNPAID
         finally:
             del bill._bypass_cache
             

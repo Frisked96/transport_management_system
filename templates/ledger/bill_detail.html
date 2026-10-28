@@ -84,7 +84,8 @@
         <div class="flex gap-4 items-center">
             <span class="text-[10px] font-black uppercase text-slate-400">Payment Status:</span>
             <span class="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider 
-                {% if bill.payment_status == 'Paid' %}bg-emerald-100 text-emerald-700 border border-emerald-200
+                {% if bill.is_adjustment %}bg-indigo-100 text-indigo-700 border border-indigo-200
+                {% elif bill.payment_status == 'Paid' %}bg-emerald-100 text-emerald-700 border border-emerald-200
                 {% elif bill.payment_status == 'Partially Paid' %}bg-amber-100 text-amber-700 border border-amber-200
                 {% else %}bg-rose-100 text-rose-700 border border-rose-200{% endif %}">
                 {{ bill.payment_status }}
