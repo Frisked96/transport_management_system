@@ -15,7 +15,6 @@ from .renewals import (
     DocumentRenewalDeleteView,
 )
 from .files import (
-    get_upload_status,
     document_download_proxy,
     renewal_download_proxy,
 )
@@ -29,7 +28,6 @@ __all__ = [
     'DocumentHistoryView',
     'DocumentRenewalUpdateView',
     'DocumentRenewalDeleteView',
-    'get_upload_status',
     'document_download_proxy',
     'renewal_download_proxy',
 ]

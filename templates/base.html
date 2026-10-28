@@ -137,22 +137,6 @@
     {% block extra_head %}{% endblock %}
 </head>
 <body class="text-slate-800 flex flex-col min-h-screen">
-<!-- BEGIN: Background Upload Notification Bar -->
-<div id="upload-status-bar" class="fixed top-0 left-0 w-full z-[100] transform -translate-y-full transition-transform duration-500 ease-in-out">
-    <div class="bg-emerald-600 text-white px-4 py-2 shadow-lg flex items-center justify-between">
-        <div class="flex items-center space-x-3">
-            <div id="upload-spinner" class="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
-            <span id="upload-status-text" class="text-sm font-bold uppercase tracking-wider">Uploading files...</span>
-        </div>
-        <div class="flex items-center space-x-4">
-            <span id="upload-stats" class="text-xs font-medium bg-emerald-700 px-2 py-0.5 rounded-full"></span>
-            <button onclick="dismissUploadStatus()" class="text-white hover:text-emerald-200 p-2 ml-2">
-                <i class="fa-solid fa-xmark"></i>
-            </button>
-        </div>
-    </div>
-</div>
-<!-- END: Background Upload Notification Bar -->
 <!-- BEGIN: Top Navigation -->
 <nav class="bg-slate-800 text-white shadow-md relative z-50">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -353,77 +337,6 @@
     function getCachedData() {
         return JSON.parse(localStorage.getItem(CACHE_KEY) || '{}');
     }
-
-    // --- Background Upload Polling ---
-    let uploadPollingInterval;
-    let lastActiveCount = 0;
-    let uploadAutoDismissTimeout = null;
-
-    window.dismissUploadStatus = function() {
-        $('#upload-status-bar').addClass('-translate-y-full').removeClass('translate-y-0');
-        if (uploadAutoDismissTimeout) clearTimeout(uploadAutoDismissTimeout);
-        
-        // Store dismissed failed count in sessionStorage so it doesn't pop up on navigation
-        const currentFailed = $('#upload-status-bar').attr('data-failed-count') || '0';
-        sessionStorage.setItem('dismissedFailedCount', currentFailed);
-    };
-
-    function checkUploadStatus() {
-        {% if user.is_authenticated %}
-        $.getJSON('{% url "upload-status-api" %}', function(data) {
-            const $bar = $('#upload-status-bar');
-            const $text = $('#upload-status-text');
-            const $spinner = $('#upload-spinner');
-            const $stats = $('#upload-stats');
-            
-            const dismissedFailed = parseInt(sessionStorage.getItem('dismissedFailedCount') || '0');
-
-            if (data.active > 0) {
-                // Active uploads
-                $bar.removeClass('-translate-y-full').addClass('translate-y-0');
-                $bar.find('> div').removeClass('bg-red-600 bg-blue-600').addClass('bg-emerald-600');
-                $text.text(`Uploading ${data.active} files...`);
-                $spinner.show();
-                $stats.text(`${data.active} queued`);
-                lastActiveCount = data.active;
-                
-                sessionStorage.setItem('dismissedFailedCount', '0'); // reset on new activity
-            } else if (lastActiveCount > 0 && data.active === 0) {
-                // Just finished
-                $bar.find('> div').removeClass('bg-emerald-600').addClass('bg-blue-600');
-                $text.text('All uploads completed successfully!');
-                $spinner.hide();
-                $stats.text('Done');
-                
-                // Hide after 5 seconds
-                setTimeout(() => {
-                    $bar.removeClass('translate-y-0').addClass('-translate-y-full');
-                    lastActiveCount = 0;
-                }, 5000);
-            } else if (data.failed > 0 && data.failed > dismissedFailed) {
-                 // Failed uploads (only if not active)
-                $bar.removeClass('-translate-y-full').addClass('translate-y-0');
-                $bar.find('> div').removeClass('bg-emerald-600 bg-blue-600').addClass('bg-red-600');
-                $text.text(`${data.failed} upload(s) failed. Check Document Logs.`);
-                $spinner.hide();
-                $stats.text('Error');
-                $bar.attr('data-failed-count', data.failed);
-                
-                // Auto dismiss after 15 seconds if unattended
-                if (uploadAutoDismissTimeout) clearTimeout(uploadAutoDismissTimeout);
-                uploadAutoDismissTimeout = setTimeout(() => {
-                    window.dismissUploadStatus();
-                }, 15000);
-            }
-        });
-        {% endif %}
-    }
-
-    // Start polling if user is logged in
-    {% if user.is_authenticated %}
-    uploadPollingInterval = setInterval(checkUploadStatus, 3000); // Every 3 seconds
-    $(document).ready(checkUploadStatus); // Initial check
-    {% endif %}
 
     // Universal Fix: Disable scroll from changing numeric input values
     $(document).on('wheel', 'input[type=number]', function(e) {

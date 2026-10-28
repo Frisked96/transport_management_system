@@ -3,34 +3,14 @@ File handling and download proxy views for Documents app.
 """
 import os
 import mimetypes
-from datetime import timedelta
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, permission_required
-from django.http import HttpResponseRedirect, JsonResponse, FileResponse
+from django.http import HttpResponseRedirect, FileResponse
 from django.shortcuts import get_object_or_404, redirect
-from django.utils import timezone
 from django.views.decorators.clickjacking import xframe_options_sameorigin
 
 from documents.models import DocumentFile, DocumentRenewal
-
-
-@login_required
-@permission_required('documents.view_document', raise_exception=True)
-def get_upload_status(request):
-    """
-    Returns counts of active and recently completed background uploads.
-    """
-    active_count = DocumentFile.objects.filter(upload_status__in=['pending', 'uploading']).count()
-    recent_time = timezone.now() - timedelta(minutes=10)
-    completed_count = DocumentFile.objects.filter(upload_status='completed', created_at__gte=recent_time).count()
-    failed_count = DocumentFile.objects.filter(upload_status='failed', created_at__gte=recent_time).count()
-    
-    return JsonResponse({
-        'active': active_count,
-        'completed': completed_count,
-        'failed': failed_count
-    })
 
 
 @login_required
