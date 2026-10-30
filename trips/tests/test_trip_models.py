@@ -398,6 +398,7 @@ class TripTollIntegrationTests(TestCase):
 
         self.party = Party.objects.create(name='Toll Test Party', party_type=Party.TYPE_DEBTOR)
         self.vehicle = Vehicle.objects.create(registration_plate='CG 04 PJ 8276')
+        self.account = CompanyAccount.objects.create(name='Operating Bank')
 
         self.toll_account = TollAccount.objects.create(
             name='BlackBuck',
@@ -495,5 +496,50 @@ class TripTollIntegrationTests(TestCase):
         self.assertContains(response, '04:45 PM')
         self.assertContains(response, '₹1,000')
         self.assertNotContains(response, '<details class="group" open>')
+
+    def test_trip_detail_view_shows_reference_and_voucher_number(self):
+        """Trip detail view should show the ref. / voucher number in header, Trip Info, and context."""
+        self.assertIsNotNone(self.trip1.voucher)
+        voucher_num = self.trip1.voucher.voucher_number
+        self.assertTrue(voucher_num.startswith('REF-'))
+        self.assertEqual(self.trip1.voucher_number, voucher_num)
+        self.assertEqual(self.trip1.reference_number, voucher_num)
+
+        response = self.client.get(reverse('trip-detail', kwargs={'pk': self.trip1.pk}))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['voucher'], self.trip1.voucher)
+        self.assertEqual(response.context['reference_number'], voucher_num)
+
+        # Assert HTML contains Ref. Number label and the voucher number
+        self.assertContains(response, 'Ref. Number')
+        self.assertContains(response, voucher_num)
+
+    def test_trip_detail_view_shows_payment_reference_in_ledger(self):
+        """Trip detail payment ledger section should show voucher / ref numbers for transactions."""
+        pay_cat = TransactionCategory.objects.create(name='Trip Advance', type=TransactionCategory.TYPE_INCOME)
+        payment_record = FinancialRecord.objects.create(
+            date=timezone.datetime(2026, 10, 12).date(),
+            account=CompanyAccount.objects.first(),
+            party=self.party,
+            associated_trip=self.trip1,
+            category=pay_cat,
+            amount=Decimal('5000.00'),
+            record_type=FinancialRecord.RECORD_TYPE_TRANSACTION
+        )
+        from ledger.services import VoucherService
+        voucher = VoucherService.create_voucher(
+            date=payment_record.date,
+            voucher_type='trip_payment',
+            party=self.party,
+            description="Advance payment"
+        )
+        payment_record.voucher = voucher
+        payment_record.save()
+
+        response = self.client.get(reverse('trip-detail', kwargs={'pk': self.trip1.pk}))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, voucher.voucher_number)
+        self.assertContains(response, f"Ref: {voucher.voucher_number}")
+
 
 

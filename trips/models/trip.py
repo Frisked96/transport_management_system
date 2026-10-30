@@ -664,6 +664,75 @@ class Trip(models.Model):
             return self.annotated_outstanding
         return self.total_revenue - self.amount_received
 
+    @property
+    def voucher(self):
+        """
+        Returns the primary FinancialVoucher for this trip (accrual voucher,
+        associated bill voucher, payment voucher, or allocation voucher).
+        """
+        if not self.pk:
+            return None
+
+        # Check in-memory prefetched records first
+        if hasattr(self, '_prefetched_objects_cache') and 'financial_records' in self._prefetched_objects_cache:
+            for rec in self.financial_records.all():
+                if rec.record_type == 'Invoice' and getattr(rec, 'voucher', None):
+                    return rec.voucher
+            for rec in self.financial_records.all():
+                if getattr(rec, 'voucher', None):
+                    return rec.voucher
+
+        if hasattr(self, '_prefetched_objects_cache') and 'payment_allocations' in self._prefetched_objects_cache:
+            for alloc in self.payment_allocations.all():
+                fr = getattr(alloc, 'financial_record', None)
+                if fr and getattr(fr, 'voucher', None):
+                    return fr.voucher
+
+        from ledger.models import FinancialRecord
+        # 1. Primary revenue accrual voucher (including soft-deleted if billed)
+        accrual_rec = FinancialRecord.all_objects.filter(
+            associated_trip=self,
+            record_type=FinancialRecord.RECORD_TYPE_INVOICE
+        ).select_related('voucher').first()
+        if accrual_rec and accrual_rec.voucher:
+            return accrual_rec.voucher
+
+        # 2. Any direct financial record linked to this trip
+        direct_rec = FinancialRecord.all_objects.filter(
+            associated_trip=self,
+            voucher__isnull=False
+        ).select_related('voucher').first()
+        if direct_rec and direct_rec.voucher:
+            return direct_rec.voucher
+
+        # 3. Any payment allocation linked to this trip
+        alloc = self.payment_allocations.select_related('financial_record__voucher').first()
+        if alloc and alloc.financial_record and alloc.financial_record.voucher:
+            return alloc.financial_record.voucher
+
+        # 4. Associated bill's voucher
+        bill = self.associated_bill
+        if bill:
+            bill_rec = FinancialRecord.all_objects.filter(
+                associated_bill=bill,
+                voucher__isnull=False
+            ).select_related('voucher').first()
+            if bill_rec and bill_rec.voucher:
+                return bill_rec.voucher
+
+        return None
+
+    @property
+    def voucher_number(self):
+        """Returns the voucher reference number for this trip, if available."""
+        v = self.voucher
+        return v.voucher_number if v else None
+
+    @property
+    def reference_number(self):
+        """Alias for voucher_number."""
+        return self.voucher_number
+
     def get_next_trip(self):
         """
         Returns the subsequent trip for the same vehicle (if any),

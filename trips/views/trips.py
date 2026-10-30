@@ -174,14 +174,17 @@ class TripDetailView(LoginRequiredMixin, BaseTripPermissionMixin, DetailView):
             'bills__category',
             'bills__financial_records',
             'bills__financial_records__category',
+            'bills__financial_records__voucher',
             'bills__trips',
             'bills__adjustment_bills',
             'bills__adjustment_bills__category',
             'financial_records',
             'financial_records__category',
+            'financial_records__voucher',
             'payment_allocations',
             'payment_allocations__financial_record',
-            'payment_allocations__financial_record__category'
+            'payment_allocations__financial_record__category',
+            'payment_allocations__financial_record__voucher'
         )
 
     def get_context_data(self, **kwargs):
@@ -202,6 +205,8 @@ class TripDetailView(LoginRequiredMixin, BaseTripPermissionMixin, DetailView):
         context['total_expenses'] = total_expenses
         context['net_profit'] = net_profit
         context['net_trip_profit'] = net_profit
+        context['voucher'] = trip.voucher
+        context['reference_number'] = trip.reference_number
         return context
 
 
