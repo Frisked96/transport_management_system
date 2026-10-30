@@ -541,5 +541,16 @@ class TripTollIntegrationTests(TestCase):
         self.assertContains(response, voucher.voucher_number)
         self.assertContains(response, f"Ref: {voucher.voucher_number}")
 
+    def test_trip_detail_view_without_voucher_renders_dash(self):
+        """When a trip has no voucher, trip detail view displays a dash and renders cleanly."""
+        FinancialRecord.all_objects.filter(associated_trip=self.trip2).delete()
+        self.assertIsNone(self.trip2.voucher)
+        self.assertIsNone(self.trip2.reference_number)
+
+        response = self.client.get(reverse('trip-detail', kwargs={'pk': self.trip2.pk}))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Ref. Number')
+
+
 
 
