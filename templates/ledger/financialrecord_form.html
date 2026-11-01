@@ -712,8 +712,21 @@ document.addEventListener('DOMContentLoaded', function() {
         $(remitterSelect).select2({ ...conf, placeholder: 'Direct (Same as party)' });
         $(contraPartySelect).select2({ ...conf, placeholder: 'Select Target Party...' });
 
+        // Select2 fires jQuery-only 'change' events. Forward them once as a native
+        // event so addEventListener('change') handlers run. The guard stops the
+        // forwarded native event from being re-forwarded (infinite recursion).
         const bridge = el => {
-            if (el) $(el).on('select2:select select2:clear change', () => el.dispatchEvent(new Event('change')));
+            if (!el) return;
+            let forwarding = false;
+            $(el).off('change.tmsBridge').on('change.tmsBridge', function () {
+                if (forwarding) return;
+                forwarding = true;
+                try {
+                    el.dispatchEvent(new Event('change'));
+                } finally {
+                    forwarding = false;
+                }
+            });
         };
         bridge(partySelect);
         bridge(accountSelect);
@@ -845,14 +858,59 @@ document.addEventListener('DOMContentLoaded', function() {
     modeTabs.forEach(btn => btn.addEventListener('click', () => setMode(btn.dataset.mode)));
     subtabs.forEach(btn => btn.addEventListener('click', () => setSubtab(btn.dataset.subtab)));
 
+    // --- Fetch coordination state (prevents stale/duplicate responses re-rendering the lists) ---
+    let activePartyId = partySelect ? (partySelect.value || '') : '';
+    let tripsReqSeq = 0, billsReqSeq = 0;
+    let tripsAbort = null, billsAbort = null;
+    let lastTripsSig = null, lastBillsSig = null;
+
+    function newAbortController() {
+        return (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    }
+
+    function hideById(id) {
+        const el = document.getElementById(id);
+        if (el) el.classList.add('hidden');
+    }
+
     // Party selection change
     if (partySelect) {
         partySelect.addEventListener('change', () => {
-            const pId = partySelect.value;
+            const pId = partySelect.value || '';
+
+            // A genuinely different party: drop selections that belonged to the old one
+            if (pId !== activePartyId) {
+                if (activePartyId) {
+                    selectedTripsMap = {};
+                    selectedBillsMap = {};
+                    associatedTripInput.value = '';
+                    associatedBillInput.value = '';
+                    paymentDistInput.value = '';
+                    billDistInput.value = '';
+                }
+                activePartyId = pId;
+                lastTripsSig = null;
+                lastBillsSig = null;
+                syncHiddenInputs();
+            }
+
             if (pId) {
                 fetchTrips(pId);
                 fetchBills(pId);
             } else {
+                // Cancel anything in flight and ignore late responses
+                tripsReqSeq++;
+                billsReqSeq++;
+                if (tripsAbort) tripsAbort.abort();
+                if (billsAbort) billsAbort.abort();
+                fetchedTrips = [];
+                fetchedBills = [];
+                lastTripsSig = null;
+                lastBillsSig = null;
+                hideById('trips-loading');
+                hideById('bills-loading');
+                hideById('trip-search-wrapper');
+                hideById('bill-search-wrapper');
                 renderTrips([]);
                 renderBills([]);
             }
@@ -872,19 +930,32 @@ document.addEventListener('DOMContentLoaded', function() {
         let url = `{% url 'get-party-unpaid-trips' %}?party_id=${encodeURIComponent(partyId)}`;
         if (recordId) url += `&record_id=${encodeURIComponent(recordId)}`;
 
-        fetch(url)
+        if (tripsAbort) tripsAbort.abort();
+        tripsAbort = newAbortController();
+        const seq = ++tripsReqSeq;
+
+        fetch(url, tripsAbort ? { signal: tripsAbort.signal } : undefined)
             .then(r => r.json())
             .then(data => {
+                if (seq !== tripsReqSeq) return; // stale response
                 if (loader) loader.classList.add('hidden');
-                fetchedTrips = data.trips || [];
+
+                const trips = data.trips || [];
+                fetchedTrips = trips;
                 if (searchBox) {
-                    if (fetchedTrips.length > 0) searchBox.classList.remove('hidden');
+                    if (trips.length > 0) searchBox.classList.remove('hidden');
                     else searchBox.classList.add('hidden');
                 }
-                renderTrips(fetchedTrips);
+
+                // Identical data already on screen: leave the DOM (and focused input) alone
+                const sig = partyId + '|' + JSON.stringify(trips);
+                if (trips.length > 0 && sig === lastTripsSig) return;
+                lastTripsSig = sig;
+                renderTrips(trips);
             })
             .catch(e => {
-                if (loader) loader.classList.add('hidden');
+                if (e && e.name === 'AbortError') return;
+                if (seq === tripsReqSeq && loader) loader.classList.add('hidden');
                 console.error(e);
             });
     }
@@ -1173,19 +1244,33 @@ document.addEventListener('DOMContentLoaded', function() {
         if (empty) empty.classList.add('hidden');
         if (vEmpty) vEmpty.classList.add('hidden');
 
-        fetch(`{% url 'get-party-bills' %}?party_id=${encodeURIComponent(partyId)}&unpaid_only=true`)
+        if (billsAbort) billsAbort.abort();
+        billsAbort = newAbortController();
+        const seq = ++billsReqSeq;
+
+        fetch(`{% url 'get-party-bills' %}?party_id=${encodeURIComponent(partyId)}&unpaid_only=true`,
+              billsAbort ? { signal: billsAbort.signal } : undefined)
             .then(r => r.json())
             .then(data => {
+                if (seq !== billsReqSeq) return; // stale response
                 if (loader) loader.classList.add('hidden');
-                fetchedBills = data.bills || [];
+
+                const bills = data.bills || [];
+                fetchedBills = bills;
                 if (searchBox) {
-                    if (fetchedBills.length > 0) searchBox.classList.remove('hidden');
+                    if (bills.length > 0) searchBox.classList.remove('hidden');
                     else searchBox.classList.add('hidden');
                 }
-                renderBills(fetchedBills);
+
+                // Identical data already on screen: leave the DOM (and focused input) alone
+                const sig = partyId + '|' + JSON.stringify(bills);
+                if (bills.length > 0 && sig === lastBillsSig) return;
+                lastBillsSig = sig;
+                renderBills(bills);
             })
             .catch(e => {
-                if (loader) loader.classList.add('hidden');
+                if (e && e.name === 'AbortError') return;
+                if (seq === billsReqSeq && loader) loader.classList.add('hidden');
                 console.error(e);
             });
     }
