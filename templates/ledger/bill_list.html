@@ -85,13 +85,20 @@
                             <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Invoice Type</label>
                             <select name="category" class="block w-full border-slate-300 rounded-md shadow-sm focus:ring-emerald-500 focus:border-emerald-500 sm:text-sm">
                                 <option value="">All Types</option>
-                                <option value="invoice" {% if request.GET.category == 'invoice' %}selected{% endif %}>Standard Invoices</option>
+                                <option value="invoice" {% if request.GET.category == 'invoice' or not request.GET.category %}selected{% endif %}>Standard Invoices</option>
                                 <option value="credit" {% if request.GET.category == 'credit' %}selected{% endif %}>Credit Notes</option>
                                 <option value="debit" {% if request.GET.category == 'debit' %}selected{% endif %}>Debit Notes</option>
                             </select>
                         </div>
-                        <!-- Empty for alignment -->
-                        <div></div>
+                        <!-- Bill Nature -->
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Bill Nature</label>
+                            <select name="bill_kind" id="bulk_bill_kind" class="block w-full border-slate-300 rounded-md shadow-sm focus:ring-emerald-500 focus:border-emerald-500 sm:text-sm">
+                                <option value="customer" {% if current_bill_kind != 'vendor' and current_bill_kind != 'all' %}selected{% endif %}>Customer Invoices (Sales)</option>
+                                <option value="vendor" {% if current_bill_kind == 'vendor' %}selected{% endif %}>Vendor Bills (Purchase / Attached)</option>
+                                <option value="all" {% if current_bill_kind == 'all' %}selected{% endif %}>All Bills & Invoices</option>
+                            </select>
+                        </div>
                     </div>
 
                     <div class="grid grid-cols-2 gap-4">
@@ -427,8 +434,17 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function openBulkDownloadModal() {
-    document.getElementById('bulk-download-modal').classList.remove('hidden');
-    document.body.style.overflow = 'hidden';
+    const modal = document.getElementById('bulk-download-modal');
+    if (modal) {
+        modal.classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+
+        const currentKind = document.getElementById('id_bill_kind')?.value;
+        const bulkKindSelect = document.getElementById('bulk_bill_kind');
+        if (bulkKindSelect && currentKind) {
+            bulkKindSelect.value = currentKind;
+        }
+    }
 }
 
 function closeBulkDownloadModal() {

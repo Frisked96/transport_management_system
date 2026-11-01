@@ -384,3 +384,74 @@ class BillLRSequencingTests(TestCase):
         bts = bill_contexts[0]['bill_trips']
         self.assertEqual([bt.lr_no for bt in bts], ["300", "900"])
 
+    def test_bulk_print_customer_invoices_excludes_vendor_bills(self):
+        """
+        Verify that bulk printing standard customer invoices includes customer invoices
+        with attached vehicles, but excludes auto-generated vendor accrual bills.
+        """
+        vendor = Party.objects.create(name="Vendor Fast Fleet", party_type=Party.TYPE_CREDITOR)
+        attached_veh = Vehicle.objects.create(
+            registration_plate="MH12VENDOR1",
+            purchase_date=timezone.now().date(),
+            ownership=Vehicle.OWNERSHIP_ATTACHED,
+            vendor=vendor
+        )
+        trip = Trip.objects.create(
+            date=datetime.date(2026, 9, 10),
+            party=self.party,
+            vehicle=attached_veh,
+            route=self.route,
+            weight=Decimal('15.00'),
+            rate_per_ton=Decimal('1500.00'),
+            vendor_hire_amount=Decimal('18000.00'),
+            lr_no="555"
+        )
+        customer_bill = Bill.objects.create(
+            bill_no=25,
+            bill_type='Trip',
+            issuer=self.issuer,
+            party=self.party,
+            date=datetime.date(2026, 9, 26),
+            gst_rate=0,
+            gst_type='NONE'
+        )
+        customer_bill.trips.add(trip)
+        customer_bill.sync_to_ledger()
+
+        # Verify linked vendor bill was created
+        self.assertTrue(Bill.objects.filter(customer_bill=customer_bill).exists())
+
+        # 1. Bulk print with bill_kind=customer (or default)
+        resp = self.client.get(reverse('bulk-print-invoices'), {
+            'issuer': self.issuer.pk,
+            'category': 'invoice',
+            'bill_numbers': '25'
+        })
+        self.assertEqual(resp.status_code, 200)
+        contexts = resp.context['bill_contexts']
+        self.assertEqual(len(contexts), 1)
+        self.assertEqual(contexts[0]['bill'].pk, customer_bill.pk)
+        self.assertFalse(contexts[0]['bill'].is_creditor_bill)
+
+        # 2. Bulk print with bill_kind=vendor and bill_numbers='25'
+        resp_vendor = self.client.get(reverse('bulk-print-invoices'), {
+            'issuer': self.issuer.pk,
+            'bill_kind': 'vendor',
+            'bill_numbers': '25'
+        })
+        self.assertEqual(resp_vendor.status_code, 200)
+        vendor_contexts = resp_vendor.context['bill_contexts']
+        self.assertEqual(len(vendor_contexts), 1)
+        self.assertTrue(vendor_contexts[0]['bill'].is_creditor_bill)
+        self.assertEqual(vendor_contexts[0]['bill'].customer_bill.pk, customer_bill.pk)
+
+    def test_parse_number_range_formats(self):
+        """
+        Verify parse_number_range correctly handles commas, ranges, spaces, and 'to'.
+        """
+        from ledger.views.bills import parse_number_range
+        self.assertEqual(parse_number_range("1, 3, 5-8, 12"), [1, 3, 5, 6, 7, 8, 12])
+        self.assertEqual(parse_number_range("1 to 4, 10"), [1, 2, 3, 4, 10])
+        self.assertEqual(parse_number_range("10 11 12"), [10, 11, 12])
+        self.assertEqual(parse_number_range(""), [])
+

@@ -17,7 +17,7 @@
 {% block content %}
     {% for ctx in bill_contexts %}
         <div class="page-container {% if not forloop.first %}page-break{% endif %}">
-            {% include "ledger/partials/bill_content.html" with bill=ctx.bill invoice_items=ctx.invoice_items bill_trips=ctx.bill_trips has_discount=ctx.has_discount has_lr=ctx.has_lr %}
+            {% include "ledger/partials/bill_content.html" with bill=ctx.bill invoice_items=ctx.invoice_items bill_trips=ctx.bill_trips has_discount=ctx.has_discount has_lr=ctx.has_lr total_weight=ctx.total_weight %}
         </div>
     {% endfor %}
 {% endblock %}

@@ -233,11 +233,11 @@
         }
 
         function applyFitMode() {
-            const sheet = document.querySelector('.page-container');
+            const sheets = document.querySelectorAll('.page-container');
             const scroller = document.getElementById('document-scroller');
             const viewer = document.getElementById('document-viewer');
             const zoomLabel = document.getElementById('zoom-label');
-            if (!sheet || !scroller || !viewer) return;
+            if (!sheets.length || !scroller || !viewer) return;
 
             currentZoomMode = 'fit';
             if (zoomLabel) zoomLabel.textContent = '100%';
@@ -247,25 +247,29 @@
                 const availableWidth = window.innerWidth - 16;
                 const scale = Math.min(1, availableWidth / sheetWidth);
 
-                sheet.style.width = sheetWidth + 'px';
-                sheet.style.minWidth = sheetWidth + 'px';
-                sheet.style.transform = `scale(${scale})`;
-                sheet.style.transformOrigin = 'top left';
-                sheet.style.margin = '0';
+                let totalScaledHeight = 0;
+                sheets.forEach(sheet => {
+                    sheet.style.width = sheetWidth + 'px';
+                    sheet.style.minWidth = sheetWidth + 'px';
+                    sheet.style.transform = `scale(${scale})`;
+                    sheet.style.transformOrigin = 'top left';
+                    sheet.style.margin = '0 0 16px 0';
+                    totalScaledHeight += Math.round(sheet.offsetHeight * scale) + 16;
+                });
 
                 const scaledWidth = Math.round(sheetWidth * scale);
-                const scaledHeight = Math.round(sheet.offsetHeight * scale);
-
                 scroller.style.width = scaledWidth + 'px';
-                scroller.style.height = (scaledHeight + 16) + 'px';
+                scroller.style.height = totalScaledHeight + 'px';
                 scroller.style.margin = '0 auto';
                 scroller.style.overflow = 'hidden';
                 viewer.style.overflowX = 'hidden';
             } else {
-                sheet.style.transform = 'none';
-                sheet.style.width = '';
-                sheet.style.minWidth = '';
-                sheet.style.margin = '0 auto';
+                sheets.forEach(sheet => {
+                    sheet.style.transform = 'none';
+                    sheet.style.width = '';
+                    sheet.style.minWidth = '';
+                    sheet.style.margin = '0 auto 24px auto';
+                });
                 scroller.style.width = '';
                 scroller.style.height = '';
                 scroller.style.overflow = 'visible';
@@ -274,20 +278,22 @@
         }
 
         function applyFullMode() {
-            const sheet = document.querySelector('.page-container');
+            const sheets = document.querySelectorAll('.page-container');
             const scroller = document.getElementById('document-scroller');
             const viewer = document.getElementById('document-viewer');
             const zoomLabel = document.getElementById('zoom-label');
-            if (!sheet || !scroller || !viewer) return;
+            if (!sheets.length || !scroller || !viewer) return;
 
             currentZoomMode = 'full';
             if (zoomLabel) zoomLabel.textContent = 'Fit';
 
             const sheetWidth = getSheetWidth();
-            sheet.style.transform = 'none';
-            sheet.style.width = sheetWidth + 'px';
-            sheet.style.minWidth = sheetWidth + 'px';
-            sheet.style.margin = '0 8px';
+            sheets.forEach(sheet => {
+                sheet.style.transform = 'none';
+                sheet.style.width = sheetWidth + 'px';
+                sheet.style.minWidth = sheetWidth + 'px';
+                sheet.style.margin = '0 8px 16px 8px';
+            });
 
             scroller.style.width = (sheetWidth + 16) + 'px';
             scroller.style.height = 'auto';

@@ -16,6 +16,7 @@ from itertools import groupby
 from django.http import JsonResponse, HttpResponse
 import os
 import logging
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -566,19 +567,26 @@ def get_next_invoice_number(request):
 
 def parse_number_range(range_str):
     """
-    Parses a string like "1,3,5-8,12" into a list of integers [1, 3, 5, 6, 7, 8, 12].
+    Parses a string like "1, 3, 5-8, 12", "1 to 5, 8", or "1 2 3" into a sorted list of unique integers.
     """
     if not range_str:
         return []
+    
+    # Normalize 'to' to '-'
+    normalized = re.sub(r'\s+to\s+', '-', str(range_str), flags=re.IGNORECASE)
+    # Split by commas, semicolons, or whitespace (while keeping '-' ranges intact)
+    parts = [p.strip() for p in re.split(r'[,;\s]+', normalized) if p.strip()]
+
     nums = set()
-    for part in range_str.split(','):
-        part = part.strip()
-        if not part:
-            continue
+    for part in parts:
         if '-' in part:
             try:
-                start, end = part.split('-')
-                nums.update(range(int(start), int(end) + 1))
+                subparts = part.split('-')
+                if len(subparts) == 2:
+                    start = int(subparts[0].strip())
+                    end = int(subparts[1].strip())
+                    if start <= end:
+                        nums.update(range(start, end + 1))
             except (ValueError, TypeError):
                 continue
         else:
@@ -596,6 +604,7 @@ def get_bulk_invoices_context(request):
     party_id = request.GET.get('party')
     category_id = request.GET.get('category_id') 
     category_name = request.GET.get('category') 
+    bill_kind = request.GET.get('bill_kind', 'customer')
     start_date_str = request.GET.get('start_date')
     end_date_str = request.GET.get('end_date')
     bill_numbers_str = request.GET.get('bill_numbers')
@@ -614,28 +623,46 @@ def get_bulk_invoices_context(request):
             category = TransactionCategory.objects.filter(name='Debit Note').first()
 
     queryset = Bill.objects.filter(issuer_id=issuer_id)
-    
+
+    # Filter by Bill Nature (Customer Invoices vs Vendor Bills)
+    if bill_kind == 'customer':
+        queryset = queryset.filter(customer_bill__isnull=True)
+    elif bill_kind == 'vendor':
+        queryset = queryset.filter(customer_bill__isnull=False)
+
     if party_id:
-        queryset = queryset.filter(party_id=party_id)
-    
+        # Match party directly OR matching customer bills carrying that vendor's attached vehicles
+        queryset = queryset.filter(
+            Q(party_id=party_id) | Q(trips__vehicle__vendor_id=party_id)
+        ).distinct()
+
     if category:
         queryset = queryset.filter(category=category)
     elif category_name == 'invoice':
-         queryset = queryset.exclude(category__name__in=['Credit Note', 'Debit Note'])
+        queryset = queryset.exclude(category__name__in=['Credit Note', 'Debit Note'])
 
     if start_date_str:
         queryset = queryset.filter(date__gte=start_date_str)
     if end_date_str:
         queryset = queryset.filter(date__lte=end_date_str)
-    
+
     if bill_numbers_str:
         bill_nos = parse_number_range(bill_numbers_str)
         if bill_nos:
-            queryset = queryset.filter(bill_no__in=bill_nos)
-    
-    bills = queryset.select_related('party', 'issuer', 'category').prefetch_related(
+            if bill_kind in ('vendor', 'all'):
+                queryset = queryset.filter(
+                    Q(bill_no__in=bill_nos) | Q(customer_bill__bill_no__in=bill_nos)
+                )
+            else:
+                queryset = queryset.filter(bill_no__in=bill_nos)
+
+    bills = queryset.select_related('party', 'issuer', 'category', 'customer_bill').prefetch_related(
         'trips', 'bill_trips', 'bill_trips__trip', 'bill_trips__trip__vehicle'
-    ).order_by('bill_no', 'date')
+    ).order_by(
+        F('bill_no').asc(nulls_last=True),
+        F('customer_bill__bill_no').asc(nulls_last=True),
+        'date'
+    )
 
     if not bills.exists():
         return None, "No invoices found matching the selected criteria."
@@ -644,7 +671,7 @@ def get_bulk_invoices_context(request):
     for bill in bills:
         bill_trips = sort_bill_trips(bill.bill_trips.select_related('trip', 'trip__vehicle'))
         invoice_items = group_trips_for_bill(bill, bill_trips=bill_trips)
-        
+
         has_discount = False
         if bill.bill_type == 'Standard':
             has_discount = (bill.discount or 0) > 0
@@ -655,17 +682,21 @@ def get_bulk_invoices_context(request):
         if bill.bill_type != 'Standard':
             has_lr = any(bt.lr_no or (bt.trip and bt.trip.lr_no) for bt in bill_trips)
 
+        total_weight = bill.standard_weight or 0 if bill.bill_type == 'Standard' else sum((bt.trip.weight or 0) for bt in bill_trips if bt.trip)
+
         all_bill_contexts.append({
             'bill': bill,
             'invoice_items': invoice_items,
             'bill_trips': bill_trips,
             'has_discount': has_discount,
             'has_lr': has_lr,
+            'total_weight': total_weight,
         })
 
     return {
         'bill_contexts': all_bill_contexts,
         'issuer_id': issuer_id,
+        'bill_kind': bill_kind,
         'is_bulk': True,
     }, None
 
