@@ -12,6 +12,7 @@ from django.contrib import messages
 from django.db.models import Q, Sum
 from django.db import transaction
 from django.utils import timezone
+from transport_mgmt.utils import get_local_date
 from django.forms import modelformset_factory
 from django.core.cache import cache
 
@@ -314,7 +315,7 @@ class TripCreateView(LoginRequiredMixin, PermissionRequiredMixin, View):
                     first_party = instances[0].party
                     same_party = all(inst.party == first_party for inst in instances)
                     batch_party = first_party if same_party else None
-                    first_date = instances[0].date or timezone.now().date()
+                    first_date = instances[0].date or get_local_date()
                     account = CompanyAccount.objects.first()
 
                     batch_voucher = VoucherService.create_voucher(

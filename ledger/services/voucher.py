@@ -6,7 +6,7 @@ from decimal import Decimal
 from django.db import transaction
 from django.utils import timezone
 from django.core.exceptions import PermissionDenied
-from transport_mgmt.utils import get_local_iso_timestamp, get_local_time_str
+from transport_mgmt.utils import get_local_iso_timestamp, get_local_time_str, get_local_date
 
 
 class VoucherService:
@@ -16,18 +16,20 @@ class VoucherService:
     """
 
     @staticmethod
-    def generate_reference(date=None):
-        """Generates a gapless REF-YYMM-##### sequence number atomically"""
+    def generate_reference(creation_date=None):
+        """Generates a gapless REF-YYMM-##### sequence number atomically based on creation date"""
         from ledger.models import FinancialVoucher
-        return FinancialVoucher.generate_voucher_number(date)
+        return FinancialVoucher.generate_voucher_number(creation_date)
 
     @staticmethod
-    def create_voucher(date, voucher_type, created_by=None, party=None, account=None, driver=None, description='', document_ref=None):
+    def create_voucher(date, voucher_type, created_by=None, party=None, account=None, driver=None, description='', document_ref=None, creation_date=None):
         """
         System-creates an immutable FinancialVoucher with atomic sequence number.
+        The reference sequence strictly follows the creation date (today), not the transaction
+        date (`date`), ensuring closed months never receive new reference numbers.
         """
         from ledger.models import FinancialVoucher
-        v_num = FinancialVoucher.generate_voucher_number(date)
+        v_num = FinancialVoucher.generate_voucher_number(creation_date)
         voucher = FinancialVoucher.objects.create(
             voucher_number=v_num,
             date=date,
@@ -89,7 +91,7 @@ class VoucherService:
         user = getattr(record, 'recorded_by', None) or getattr(record, '_current_user', None)
 
         voucher = cls.create_voucher(
-            date=record.date or timezone.now().date(),
+            date=record.date or get_local_date(),
             voucher_type=v_type,
             created_by=user,
             party=record.party,

@@ -155,7 +155,7 @@ class DocumentRenewal(models.Model):
                     record.save()
             else:
                 from ledger.models import FinancialVoucher
-                v_num = FinancialVoucher.generate_voucher_number(date)
+                v_num = FinancialVoucher.generate_voucher_number()
                 v = FinancialVoucher.objects.create(
                     voucher_number=v_num,
                     date=date,

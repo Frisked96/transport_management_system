@@ -19,6 +19,7 @@ from ledger.models import (
 )
 from trips.models import Trip, Route
 from fleet.models import Vehicle
+from ledger.services import VoucherService
 
 
 class FinancialReviewTestCase(TestCase):
@@ -110,6 +111,27 @@ class FinancialReviewTestCase(TestCase):
         expected_prefix = f"REF-{now.strftime('%y%m')}-"
         self.assertTrue(v_num.startswith(expected_prefix))
         self.assertEqual(len(v_num), len(expected_prefix) + 5)
+
+    def test_backdated_voucher_follows_creation_date_not_entry_date(self):
+        """
+        Verify that creating a voucher for a past month (e.g. May 2026) while in
+        a subsequent month (e.g. November 2026) generates a reference number
+        for the current creation month, ensuring closed months never receive new refs.
+        """
+        past_date = timezone.datetime(2026, 5, 14).date()
+        today = timezone.localdate()
+        current_yymm = today.strftime('%y%m')
+
+        voucher = VoucherService.create_voucher(
+            date=past_date,
+            voucher_type=FinancialVoucher.VOUCHER_TYPE_TRIP_PAYMENT,
+            created_by=self.manager_user
+        )
+        # Accounting date remains in May
+        self.assertEqual(voucher.date, past_date)
+        # Reference number strictly follows current creation month (e.g. REF-2611-...), NOT May (REF-2605-...)
+        self.assertTrue(voucher.voucher_number.startswith(f"REF-{current_yymm}-"))
+        self.assertFalse(voucher.voucher_number.startswith("REF-2605-"))
 
     def test_single_trip_settlement_creates_voucher_and_groups_records(self):
         """

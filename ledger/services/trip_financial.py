@@ -6,6 +6,7 @@ import uuid
 from django.db import transaction
 from django.db.models import Sum, Q
 from django.utils import timezone
+from transport_mgmt.utils import get_local_date
 
 
 class TripFinancialService:
@@ -45,7 +46,7 @@ class TripFinancialService:
         if not account:
              return
 
-        trip_date = trip.date or timezone.now().date()
+        trip_date = trip.date or get_local_date()
         user = trip.created_by or getattr(trip, '_current_user', None)
 
         batch_voucher = getattr(trip, '_batch_voucher', None)

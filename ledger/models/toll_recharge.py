@@ -164,7 +164,7 @@ class TollRecharge(models.Model):
                 record.save()
         else:
             from .voucher import FinancialVoucher
-            v_num = FinancialVoucher.generate_voucher_number(self.date)
+            v_num = FinancialVoucher.generate_voucher_number()
             v = FinancialVoucher.objects.create(
                 voucher_number=v_num,
                 date=self.date,

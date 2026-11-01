@@ -407,7 +407,7 @@ class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, Fin
         else:
             v_type = FinancialVoucher.VOUCHER_TYPE_DIRECT
 
-        voucher_ref = FinancialVoucher.generate_voucher_number(form.cleaned_data['date'])
+        voucher_ref = FinancialVoucher.generate_voucher_number()
         voucher = FinancialVoucher.objects.create(
             voucher_number=voucher_ref,
             date=form.cleaned_data['date'],

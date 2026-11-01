@@ -285,14 +285,16 @@ class FinancialVoucher(models.Model):
         return VoucherService.restore_voucher(self, user=user, reason=reason)
 
     @classmethod
-    def generate_voucher_number(cls, date=None):
+    def generate_voucher_number(cls, creation_date=None):
         """
-        Atomically generate reference number formatted as REF-YYMM-##### (Option A).
-        E.g. REF-2610-00001
+        Atomically generate reference number formatted as REF-YYMM-#####.
+        Sequence strictly follows the CREATION date (when entry is recorded in the system),
+        never the transaction/entry date, ensuring closed/past months do not receive new references.
+        E.g. REF-2611-00001
         """
-        if date is None:
-            date = get_local_date()
-        yymm = date.strftime('%y%m')
+        if creation_date is None:
+            creation_date = get_local_date()
+        yymm = creation_date.strftime('%y%m')
         seq_key = f"voucher_ref_{yymm}"
         seq_val = Sequence.next_value(seq_key)
         return f"REF-{yymm}-{seq_val:05d}"
