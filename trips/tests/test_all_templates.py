@@ -382,6 +382,7 @@ class AllTemplatesTest(TestCase):
 
             # Documents
             ('document-list', {}),
+            ('document-validity-print', {}),
             ('document-create-vehicle', {'vehicle_pk': self.vehicle.pk}),
             ('document-create-driver', {'driver_pk': self.driver.pk}),
             ('document-update', {'pk': self.document.pk}),
@@ -624,6 +625,7 @@ class AllTemplatesTest(TestCase):
             reverse('driver-ledger', kwargs={'pk': self.driver.pk}),
             reverse('driver-transaction-create', kwargs={'driver_pk': self.driver.pk}),
             reverse('document-list'),
+            reverse('document-validity-print'),
             reverse('document-create-vehicle', kwargs={'vehicle_pk': self.vehicle.pk}),
             reverse('document-create-driver', kwargs={'driver_pk': self.driver.pk}),
             reverse('document-update', kwargs={'pk': self.document.pk}),

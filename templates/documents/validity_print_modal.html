@@ -1,0 +1,204 @@
+<!-- Document Validity Print Configuration Modal -->
+<div id="validityPrintModal" class="fixed inset-0 z-50 hidden bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 md:p-6 transition-all duration-200">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[92vh] flex flex-col overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
+        
+        <!-- Modal Header -->
+        <div class="px-5 py-4 sm:px-6 bg-slate-50 border-b border-slate-200 flex items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 shadow-sm">
+                    <i class="fa-solid fa-print text-base"></i>
+                </div>
+                <div>
+                    <h3 class="text-base sm:text-lg font-black text-slate-900">Print Document Validity</h3>
+                    <p class="text-xs text-slate-500 font-medium">Configure firm, vehicle status, and document selection for PDF/Print</p>
+                </div>
+            </div>
+
+            <!-- Close Button -->
+            <button type="button" onclick="closeValidityPrintModal()" class="p-2 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-200/60 transition-colors" title="Close (Esc)">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+        </div>
+
+        <!-- Form for Generating Print Report -->
+        <form id="validityPrintForm" action="{% url 'document-validity-print' %}" method="GET" target="_blank" class="flex flex-col flex-1 overflow-hidden" onsubmit="return validatePrintForm()">
+            <div class="p-5 sm:p-6 overflow-y-auto space-y-5">
+                
+                <!-- Filter Grid: Firm & Vehicle Status -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <!-- Firm (Company Account) -->
+                    <div>
+                        <label for="id_print_firm" class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                            <i class="fa-solid fa-building mr-1 text-slate-400"></i>Firm / Company Account
+                        </label>
+                        <select name="firm" id="id_print_firm" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-emerald-500 focus:border-emerald-500 text-slate-800 font-medium shadow-xs">
+                            <option value="">🏢 All Operating Firms</option>
+                            {% for firm in firms %}
+                            <option value="{{ firm.id }}">{{ firm.name }}</option>
+                            {% endfor %}
+                        </select>
+                        <p class="text-[11px] text-slate-400 mt-1">Leave blank to print documents for all firms</p>
+                    </div>
+
+                    <!-- Vehicle Status -->
+                    <div>
+                        <label for="id_print_vehicle_status" class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                            <i class="fa-solid fa-gauge mr-1 text-slate-400"></i>Vehicle Status
+                        </label>
+                        <select name="vehicle_status" id="id_print_vehicle_status" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-emerald-500 focus:border-emerald-500 text-slate-800 font-medium shadow-xs">
+                            <option value="">All Vehicle Statuses</option>
+                            {% for val, label in vehicle_status_choices %}
+                            <option value="{{ val }}" {% if val == 'Active' %}selected{% endif %}>{{ label }}{% if val == 'Active' %} (Recommended){% endif %}</option>
+                            {% endfor %}
+                        </select>
+                        <p class="text-[11px] text-slate-400 mt-1">Filters by vehicle operational state</p>
+                    </div>
+                </div>
+
+                <!-- Fleet Ownership Filter -->
+                <div>
+                    <label for="id_print_ownership" class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                        <i class="fa-solid fa-truck mr-1 text-slate-400"></i>Fleet Ownership
+                    </label>
+                    <select name="ownership" id="id_print_ownership" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-emerald-500 focus:border-emerald-500 text-slate-800 font-medium shadow-xs">
+                        <option value="owned" selected>🏢 Company Owned Fleet (Default)</option>
+                        <option value="attached">🤝 Attached Vehicles</option>
+                        <option value="all">🌐 All Fleet (Owned + Attached)</option>
+                    </select>
+                </div>
+
+                <!-- Document Selection Section -->
+                <div class="border-t border-slate-200 pt-4">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+                        <div>
+                            <label class="block text-xs font-bold uppercase tracking-wider text-slate-800">
+                                <i class="fa-solid fa-file-shield mr-1 text-emerald-600"></i>Document Selection
+                            </label>
+                            <p class="text-xs text-slate-500">Choose which compliance documents to include in the printout</p>
+                        </div>
+                        
+                        <!-- Quick Selection Pills -->
+                        <div class="flex items-center gap-2 text-xs">
+                            <button type="button" onclick="selectDefaultDocs()" class="px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-semibold transition-colors border border-emerald-200" title="Select standard 5 core documents">
+                                Core 5 (Default)
+                            </button>
+                            <button type="button" onclick="selectAllDocs()" class="px-2.5 py-1 rounded-md bg-slate-100 text-slate-700 hover:bg-slate-200 font-semibold transition-colors border border-slate-200">
+                                All
+                            </button>
+                            <button type="button" onclick="clearAllDocs()" class="px-2.5 py-1 rounded-md bg-slate-100 text-slate-700 hover:bg-slate-200 font-semibold transition-colors border border-slate-200">
+                                Clear
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Checkboxes Grid -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 bg-slate-50 border border-slate-200 rounded-xl p-3.5">
+                        {% for doc in available_document_types %}
+                        <label class="flex items-center space-x-3 p-2 rounded-lg hover:bg-white hover:shadow-xs transition-all cursor-pointer border border-transparent hover:border-slate-200">
+                            <input type="checkbox" name="documents" value="{{ doc.key }}" data-default="{{ doc.default|yesno:'true,false' }}" {% if doc.default %}checked{% endif %} class="doc-checkbox rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4 border-slate-300">
+                            <div class="flex flex-col">
+                                <span class="text-sm font-bold text-slate-800 leading-tight">{{ doc.label }}</span>
+                                {% if doc.default %}
+                                <span class="text-[10px] font-semibold text-emerald-600 uppercase tracking-wider">Standard Order</span>
+                                {% else %}
+                                <span class="text-[10px] font-medium text-slate-400">Additional Document</span>
+                                {% endif %}
+                            </div>
+                        </label>
+                        {% endfor %}
+                    </div>
+                    <p id="doc-selection-error" class="hidden text-xs text-rose-600 font-bold mt-2">
+                        <i class="fa-solid fa-circle-exclamation mr-1"></i>Please select at least one document to print.
+                    </p>
+                </div>
+
+                <!-- Print Format Preview Note -->
+                <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-xs text-emerald-900 flex items-start gap-2.5">
+                    <i class="fa-solid fa-circle-info text-emerald-600 mt-0.5 text-sm shrink-0"></i>
+                    <div>
+                        <strong class="font-bold">Format Overview:</strong> The PDF prints vehicle-by-vehicle. First the Vehicle Number on the left with Fitness and its validity on the right, followed directly below by Insurance, 1 Year Permit, Road Tax, and 5 Year Permit (plus any other selected documents) with their respective validity dates on the right.
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="px-5 py-3.5 sm:px-6 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-3 shrink-0">
+                <button type="button" onclick="closeValidityPrintModal()" class="px-4 py-2 border border-slate-300 rounded-lg text-sm font-semibold text-slate-700 bg-white hover:bg-slate-100 transition-colors shadow-xs">
+                    Cancel
+                </button>
+                <button type="submit" class="inline-flex items-center px-5 py-2 rounded-lg text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm transition-colors focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500">
+                    <i class="fa-solid fa-print mr-2"></i>
+                    <span>Generate Print / PDF</span>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    function openValidityPrintModal() {
+        const modal = document.getElementById('validityPrintModal');
+        if (modal) {
+            modal.classList.remove('hidden');
+            document.body.classList.add('overflow-hidden');
+        }
+    }
+
+    function closeValidityPrintModal() {
+        const modal = document.getElementById('validityPrintModal');
+        if (modal) {
+            modal.classList.add('hidden');
+            document.body.classList.remove('overflow-hidden');
+        }
+    }
+
+    function selectDefaultDocs() {
+        document.querySelectorAll('.doc-checkbox').forEach(cb => {
+            cb.checked = (cb.dataset.default === 'true');
+        });
+        document.getElementById('doc-selection-error').classList.add('hidden');
+    }
+
+    function selectAllDocs() {
+        document.querySelectorAll('.doc-checkbox').forEach(cb => {
+            cb.checked = true;
+        });
+        document.getElementById('doc-selection-error').classList.add('hidden');
+    }
+
+    function clearAllDocs() {
+        document.querySelectorAll('.doc-checkbox').forEach(cb => {
+            cb.checked = false;
+        });
+    }
+
+    function validatePrintForm() {
+        const checkedCount = document.querySelectorAll('.doc-checkbox:checked').length;
+        const errEl = document.getElementById('doc-selection-error');
+        if (checkedCount === 0) {
+            if (errEl) errEl.classList.remove('hidden');
+            return false;
+        }
+        if (errEl) errEl.classList.add('hidden');
+        // Close modal after submission since report opens in new tab
+        setTimeout(closeValidityPrintModal, 500);
+        return true;
+    }
+
+    // Close on Escape key or clicking outside backdrop
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            const modal = document.getElementById('validityPrintModal');
+            if (modal && !modal.classList.contains('hidden')) {
+                closeValidityPrintModal();
+            }
+        }
+    });
+
+    document.getElementById('validityPrintModal')?.addEventListener('click', function(e) {
+        if (e.target === this) {
+            closeValidityPrintModal();
+        }
+    });
+</script>

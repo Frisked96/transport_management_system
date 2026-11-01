@@ -1,0 +1,190 @@
+{% extends 'print_base.html' %}
+{% load ledger_extras %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block extra_head %}
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @media print {
+            body {
+                background: #ffffff !important;
+                color: #0f172a !important;
+            }
+            .page-container {
+                max-width: 100% !important;
+                width: 100% !important;
+                padding: 6mm !important;
+                box-shadow: none !important;
+            }
+            .vehicle-group {
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
+            }
+            .no-print {
+                display: none !important;
+            }
+        }
+        .vehicle-group {
+            page-break-inside: avoid;
+            break-inside: avoid;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+<div class="page-container" style="max-width: 920px; width: 100%;">
+    
+    <!-- BEGIN: Report Header -->
+    <div class="flex flex-col sm:flex-row justify-between items-start gap-4 mb-5 border-b-2 border-slate-900 pb-4">
+        <div>
+            {% if selected_firm %}
+            <h1 class="text-2xl font-black text-slate-900 tracking-tight uppercase">{{ selected_firm.name }}</h1>
+            {% if selected_firm.address %}
+            <p class="text-xs text-slate-600 mt-0.5 max-w-md">{{ selected_firm.address }}</p>
+            {% endif %}
+            <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500 mt-1">
+                {% if selected_firm.gstin %}<span class="font-semibold">GSTIN: <span class="font-mono text-slate-700">{{ selected_firm.gstin }}</span></span>{% endif %}
+                {% if selected_firm.pan %}<span class="font-semibold">PAN: <span class="font-mono text-slate-700">{{ selected_firm.pan }}</span></span>{% endif %}
+                {% if selected_firm.phone_number %}<span class="font-semibold">Ph: <span class="text-slate-700">{{ selected_firm.phone_number }}</span></span>{% endif %}
+            </div>
+            <div class="inline-block mt-2 px-2.5 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[11px] font-extrabold uppercase tracking-wider">
+                Fleet Document Validity Report
+            </div>
+            {% else %}
+            <h1 class="text-2xl font-black text-slate-900 tracking-tight uppercase">FLEET COMPLIANCE & DOCUMENT VALIDITY</h1>
+            <p class="text-sm font-bold text-emerald-700 mt-0.5">Consolidated Report &bull; All Operating Firms</p>
+            <p class="text-xs text-slate-500">Official fleet compliance status verification across vehicles</p>
+            {% endif %}
+        </div>
+
+        <div class="text-left sm:text-right text-xs text-slate-600 space-y-1 shrink-0">
+            <p><strong>Report Date:</strong> {{ now|date:"d M Y, h:i A" }}</p>
+            <p><strong>Firm Filter:</strong> {{ selected_firm.name|default:"All Operating Firms" }}</p>
+            <p><strong>Vehicle Status:</strong> {{ vehicle_status|default:"All Statuses" }}</p>
+            <p><strong>Ownership:</strong> {{ ownership_display }}</p>
+            <p><strong>Total Vehicles:</strong> <span class="font-black text-slate-900">{{ total_vehicles }}</span></p>
+        </div>
+    </div>
+    <!-- END: Report Header -->
+
+    <!-- BEGIN: Summary Metrics Bar -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 border border-slate-200 rounded-lg p-3 mb-5 text-xs">
+        <div>
+            <span class="text-slate-500 uppercase tracking-wider block text-[10px] font-bold">Total Vehicles</span>
+            <span class="font-black text-slate-900 text-sm">{{ total_vehicles }}</span>
+        </div>
+        <div>
+            <span class="text-slate-500 uppercase tracking-wider block text-[10px] font-bold">Documents Checked</span>
+            <span class="font-bold text-slate-800 text-sm">{{ total_docs_count }}</span>
+        </div>
+        <div>
+            <span class="text-slate-500 uppercase tracking-wider block text-[10px] font-bold">Expired Documents</span>
+            <span class="font-black {% if total_expired > 0 %}text-rose-600{% else %}text-slate-900{% endif %} text-sm">
+                {{ total_expired }}
+            </span>
+        </div>
+        <div>
+            <span class="text-slate-500 uppercase tracking-wider block text-[10px] font-bold">Expiring Soon (30 Days)</span>
+            <span class="font-black {% if total_expiring_soon > 0 %}text-amber-600{% else %}text-slate-900{% endif %} text-sm">
+                {{ total_expiring_soon }}
+            </span>
+        </div>
+    </div>
+    <!-- END: Summary Metrics Bar -->
+
+    <!-- BEGIN: Validity Table -->
+    <table class="w-full text-left border-collapse text-xs mb-8">
+        <thead>
+            <tr class="bg-slate-900 text-white font-bold uppercase text-[10px] tracking-wider border border-slate-900">
+                <th class="py-2.5 px-3 w-[36%] border-r border-slate-800">Vehicle Details</th>
+                <th class="py-2.5 px-3 w-[34%] border-r border-slate-800">Document</th>
+                <th class="py-2.5 px-3 w-[30%] text-right">Validity Date / Status</th>
+            </tr>
+        </thead>
+        {% for row in vehicle_rows %}
+        <tbody class="vehicle-group border-2 border-slate-300">
+            {% for doc in row.documents %}
+            <tr class="border-b border-slate-200 {% cycle 'bg-white' 'bg-slate-50/50' %}">
+                {% if forloop.first %}
+                <td rowspan="{{ row.documents|length }}" class="py-2.5 px-3 align-top border-r-2 border-slate-300 bg-slate-50/80">
+                    <div class="text-sm font-black text-slate-900 tracking-wide font-mono">{{ row.vehicle.registration_plate }}</div>
+                    <div class="text-[11px] text-slate-600 font-medium mt-0.5">{{ row.vehicle.make_model }}</div>
+                    {% if row.vehicle.company_account %}
+                    <div class="text-[10px] font-bold text-emerald-800 mt-1 uppercase tracking-tight">
+                        <i class="fa-solid fa-building mr-1"></i>{{ row.vehicle.company_account.name }}
+                    </div>
+                    {% endif %}
+                    <div class="mt-1.5 flex flex-wrap gap-1">
+                        <span class="inline-block px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider {% if row.vehicle.ownership == 'Owned' %}bg-slate-200 text-slate-700{% else %}bg-amber-100 text-amber-800{% endif %}">
+                            {{ row.vehicle.get_ownership_display }}
+                        </span>
+                        <span class="inline-block px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider {% if row.vehicle.status == 'Active' %}bg-emerald-100 text-emerald-800{% else %}bg-slate-100 text-slate-600{% endif %}">
+                            {{ row.vehicle.status }}
+                        </span>
+                    </div>
+                </td>
+                {% endif %}
+                <td class="py-2 px-3 align-middle border-r border-slate-200">
+                    <span class="font-bold text-slate-800 text-xs">{{ doc.label }}</span>
+                    {% if doc.doc_number %}
+                    <span class="text-[10px] text-slate-500 font-mono block">No: {{ doc.doc_number }}</span>
+                    {% endif %}
+                </td>
+                <td class="py-2 px-3 align-middle text-right">
+                    {% if doc.never_expires %}
+                        <span class="font-bold text-slate-700 text-xs">Permanent / Lifetime</span>
+                        <span class="ml-1.5 inline-block px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wide bg-slate-100 text-slate-700 border border-slate-200">Permanent</span>
+                    {% elif doc.expiry_date %}
+                        <span class="font-bold text-xs {% if doc.is_expired %}text-rose-600{% elif doc.is_expiring_soon %}text-amber-600{% else %}text-slate-900{% endif %}">
+                            {{ doc.expiry_date|date:"d-M-Y" }}
+                        </span>
+                        {% if doc.is_expired %}
+                            <span class="ml-1.5 inline-block px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wide bg-rose-100 text-rose-700 border border-rose-200">Expired</span>
+                        {% elif doc.is_expiring_soon %}
+                            <span class="ml-1.5 inline-block px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wide bg-amber-100 text-amber-800 border border-amber-200">Expiring</span>
+                        {% else %}
+                            <span class="ml-1.5 inline-block px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wide bg-emerald-100 text-emerald-800 border border-emerald-200">Valid</span>
+                        {% endif %}
+                    {% elif doc.status == 'Not Set' %}
+                        <span class="text-slate-400 italic text-xs font-medium">Not Set</span>
+                        <span class="ml-1.5 inline-block px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wide bg-slate-100 text-slate-500 border border-slate-200">Not Set</span>
+                    {% else %}
+                        <span class="text-slate-400 italic text-xs font-medium">Not Available</span>
+                        <span class="ml-1.5 inline-block px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wide bg-slate-100 text-slate-500 border border-slate-200">Missing</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        {% empty %}
+        <tbody>
+            <tr>
+                <td colspan="3" class="py-12 text-center text-slate-500 text-sm">
+                    <i class="fa-solid fa-circle-exclamation text-2xl text-slate-400 block mb-2"></i>
+                    No vehicles found matching the selected criteria.
+                </td>
+            </tr>
+        </tbody>
+        {% endfor %}
+    </table>
+    <!-- END: Validity Table -->
+
+    <!-- BEGIN: Report Signatures & Verification Footer -->
+    <div class="pt-6 border-t border-slate-200 grid grid-cols-2 gap-8 text-xs text-slate-500">
+        <div>
+            <p class="font-bold text-slate-800">Generated by Transport Management System (TMS)</p>
+            <p class="text-[10px]">Verified Fleet Compliance & Validity Records</p>
+        </div>
+        <div class="text-right">
+            <div class="h-10"></div>
+            <p class="border-t border-slate-300 pt-1 font-bold text-slate-800 inline-block min-w-[150px]">
+                Authorized Signatory
+            </p>
+        </div>
+    </div>
+    <!-- END: Report Signatures & Verification Footer -->
+
+</div>
+{% endblock %}

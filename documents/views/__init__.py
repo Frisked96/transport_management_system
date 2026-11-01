@@ -7,6 +7,7 @@ from .documents import (
     DocumentCreateView,
     DocumentUpdateView,
     DocumentDeleteView,
+    document_validity_print,
 )
 from .renewals import (
     DocumentRenewView,
@@ -30,4 +31,5 @@ __all__ = [
     'DocumentRenewalDeleteView',
     'document_download_proxy',
     'renewal_download_proxy',
+    'document_validity_print',
 ]

@@ -4,7 +4,8 @@ Compliance Document CRUD views for Documents app.
 from datetime import timedelta
 from django.views.generic import ListView, CreateView, UpdateView, DeleteView
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
-from django.shortcuts import get_object_or_404, redirect
+from django.contrib.auth.decorators import login_required, permission_required
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
 from django.contrib import messages
 from django.db.models import Q, Count
@@ -14,6 +15,86 @@ from documents.models import Document
 from documents.forms import DocumentForm, DocumentFileFormSet
 from fleet.models import Vehicle
 from drivers.models import Driver
+from ledger.models import CompanyAccount
+
+
+AVAILABLE_VEHICLE_DOCUMENTS = [
+    {
+        'key': 'Fitness',
+        'label': 'Fitness',
+        'default': True,
+        'synonyms': ['fitness', 'fitness certificate'],
+    },
+    {
+        'key': 'Insurance',
+        'label': 'Insurance',
+        'default': True,
+        'synonyms': ['insurance', 'insurance policy'],
+    },
+    {
+        'key': '1 yr permit',
+        'label': '1 Year Permit',
+        'default': True,
+        'synonyms': ['1 yr permit', '1 year permit', '1-year permit', '1yr permit'],
+    },
+    {
+        'key': 'Tax',
+        'label': 'Road Tax',
+        'default': True,
+        'synonyms': ['tax', 'road tax', 'vehicle tax'],
+    },
+    {
+        'key': '5yr permit',
+        'label': '5 Year Permit',
+        'default': True,
+        'synonyms': ['5yr permit', '5 yr permit', '5 year permit', '5-year permit'],
+    },
+    {
+        'key': 'PUCC',
+        'label': 'PUCC',
+        'default': False,
+        'synonyms': ['pucc', 'puc', 'pollution', 'pollution under control', 'pollution certificate'],
+    },
+    {
+        'key': 'RC',
+        'label': 'Registration Certificate (RC)',
+        'default': False,
+        'synonyms': ['rc', 'registration certificate', 'rc book'],
+    },
+    {
+        'key': 'Vltd cirtificate',
+        'label': 'VLTD Certificate',
+        'default': False,
+        'synonyms': ['vltd cirtificate', 'vltd certificate', 'vltd', 'vltd cert'],
+    },
+]
+
+
+def get_available_vehicle_documents():
+    """
+    Returns available vehicle document specifications, including core base documents
+    and any custom vehicle documents currently configured in the fleet.
+    """
+    docs = list(AVAILABLE_VEHICLE_DOCUMENTS)
+    existing_keys = {d['key'].lower() for d in docs}
+
+    # Discover any custom vehicle compliance document names in the database
+    custom_names = (
+        Document.objects.filter(vehicle__isnull=False, is_base_document=False)
+        .values_list('document_name', flat=True)
+        .distinct()
+    )
+    for name in custom_names:
+        clean_name = name.strip()
+        if clean_name.lower() not in existing_keys:
+            docs.append({
+                'key': clean_name,
+                'label': clean_name,
+                'default': False,
+                'synonyms': [clean_name.lower()],
+            })
+            existing_keys.add(clean_name.lower())
+    return docs
 
 
 class DocumentListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
@@ -227,7 +308,12 @@ class DocumentListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
                 context['drivers'] = []
                 context['alerts'] = []
                 context['documents'] = []
-            
+
+        # Document Validity Print modal context
+        context['firms'] = CompanyAccount.objects.all().order_by('name')
+        context['vehicle_status_choices'] = Vehicle.STATUS_CHOICES
+        context['available_document_types'] = get_available_vehicle_documents()
+
         return context
 
 
@@ -396,3 +482,166 @@ class DocumentDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView
         elif self.object.driver:
             return reverse_lazy('driver-detail', kwargs={'pk': self.object.driver.pk})
         return reverse_lazy('home')
+
+
+# ==========================================
+# DOCUMENT VALIDITY PRINT & PDF VIEW
+# ==========================================
+
+@login_required
+@permission_required('documents.view_document', raise_exception=True)
+def document_validity_print(request):
+    """
+    Renders a print-ready A4 document validity report for vehicles,
+    supporting filtering by firm (CompanyAccount), vehicle status, ownership,
+    and user-selected document types.
+    """
+    firm_id = request.GET.get('firm', '').strip()
+    vehicle_status = request.GET.get('vehicle_status', '').strip()
+    ownership = request.GET.get('ownership', 'owned').strip().lower()
+    selected_doc_keys = request.GET.getlist('documents')
+
+    all_available_docs = get_available_vehicle_documents()
+
+    # If no documents selected, default to the 5 core documents
+    if not selected_doc_keys:
+        selected_doc_keys = [d['key'] for d in all_available_docs if d['default']]
+
+    selected_doc_keys_set = set(selected_doc_keys)
+    selected_specs = [d for d in all_available_docs if d['key'] in selected_doc_keys_set]
+    if not selected_specs:
+        selected_specs = [d for d in all_available_docs if d['default']]
+
+    vehicles_qs = Vehicle.objects.select_related('company_account').prefetch_related('documents').all()
+
+    selected_firm = None
+    if firm_id:
+        try:
+            selected_firm = CompanyAccount.objects.get(pk=firm_id)
+            vehicles_qs = vehicles_qs.filter(company_account=selected_firm)
+        except (CompanyAccount.DoesNotExist, ValueError):
+            selected_firm = None
+
+    if vehicle_status:
+        vehicles_qs = vehicles_qs.filter(status=vehicle_status)
+
+    if ownership == 'owned':
+        vehicles_qs = vehicles_qs.filter(ownership=Vehicle.OWNERSHIP_OWNED)
+        ownership_display = 'Company Owned Fleet'
+    elif ownership == 'attached':
+        vehicles_qs = vehicles_qs.filter(ownership=Vehicle.OWNERSHIP_ATTACHED)
+        ownership_display = 'Attached Vehicles'
+    else:
+        ownership_display = 'All Fleet'
+
+    vehicles = list(vehicles_qs.order_by('registration_plate'))
+
+    today = timezone.now().date()
+    warning_date = today + timedelta(days=30)
+
+    vehicle_rows = []
+    total_docs_count = 0
+    total_expired = 0
+    total_expiring_soon = 0
+
+    for veh in vehicles:
+        # Create map of vehicle's documents by lowercase name, preferring active/never_expires docs
+        veh_docs_map = {}
+        for d in veh.documents.all():
+            name_key = d.document_name.strip().lower()
+            existing = veh_docs_map.get(name_key)
+            if existing is None:
+                veh_docs_map[name_key] = d
+            else:
+                if d.never_expires and not existing.never_expires:
+                    veh_docs_map[name_key] = d
+                elif d.expiry_date and (not existing.expiry_date or d.expiry_date > existing.expiry_date):
+                    veh_docs_map[name_key] = d
+
+        doc_row_items = []
+        for spec in selected_specs:
+            matched_doc = None
+            # 1. Match exact key
+            key_lower = spec['key'].strip().lower()
+            if key_lower in veh_docs_map:
+                matched_doc = veh_docs_map[key_lower]
+            else:
+                # 2. Match synonyms
+                for syn in spec.get('synonyms', []):
+                    if syn.strip().lower() in veh_docs_map:
+                        matched_doc = veh_docs_map[syn.strip().lower()]
+                        break
+
+            total_docs_count += 1
+            if matched_doc:
+                is_expired = False
+                is_expiring_soon = False
+                if matched_doc.never_expires:
+                    status_text = 'Permanent'
+                    badge_class = 'badge-permanent'
+                elif matched_doc.expiry_date:
+                    if matched_doc.expiry_date < today:
+                        is_expired = True
+                        total_expired += 1
+                        status_text = 'Expired'
+                        badge_class = 'badge-expired'
+                    elif matched_doc.expiry_date <= warning_date:
+                        is_expiring_soon = True
+                        total_expiring_soon += 1
+                        status_text = 'Expiring Soon'
+                        badge_class = 'badge-expiring'
+                    else:
+                        status_text = 'Valid'
+                        badge_class = 'badge-valid'
+                else:
+                    status_text = 'Not Set'
+                    badge_class = 'badge-missing'
+
+                doc_row_items.append({
+                    'label': spec['label'],
+                    'key': spec['key'],
+                    'doc_number': matched_doc.document_number,
+                    'expiry_date': matched_doc.expiry_date,
+                    'never_expires': matched_doc.never_expires,
+                    'is_expired': is_expired,
+                    'is_expiring_soon': is_expiring_soon,
+                    'status': status_text,
+                    'badge_class': badge_class,
+                })
+            else:
+                doc_row_items.append({
+                    'label': spec['label'],
+                    'key': spec['key'],
+                    'doc_number': None,
+                    'expiry_date': None,
+                    'never_expires': False,
+                    'is_expired': False,
+                    'is_expiring_soon': False,
+                    'status': 'Not Available',
+                    'badge_class': 'badge-missing',
+                })
+
+        vehicle_rows.append({
+            'vehicle': veh,
+            'documents': doc_row_items,
+        })
+
+    title = f"Document Validity Report - {selected_firm.name if selected_firm else 'All Operating Firms'}"
+
+    context = {
+        'title': title,
+        'selected_firm': selected_firm,
+        'vehicle_status': vehicle_status,
+        'ownership': ownership,
+        'ownership_display': ownership_display,
+        'selected_specs': selected_specs,
+        'vehicle_rows': vehicle_rows,
+        'total_vehicles': len(vehicles),
+        'total_docs_count': total_docs_count,
+        'total_expired': total_expired,
+        'total_expiring_soon': total_expiring_soon,
+        'now': timezone.now(),
+    }
+
+    return render(request, 'documents/validity_print.html', context)
+
