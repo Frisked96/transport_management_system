@@ -801,7 +801,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (contraCheckbox) contraCheckbox.checked = true;
             syncCategory('contra');
         }
-
+        if ((mode === 'customer' || mode === 'vendor') && fetchedBills.length) renderBills(fetchedBills);
         syncHiddenInputs();
         updateSummary();
     }
@@ -1648,7 +1648,30 @@ document.addEventListener('DOMContentLoaded', function() {
             statusText.className = 'text-slate-400 font-bold';
         }
     }
+    // Mobile: hide sticky action bar while typing; select number contents on focus
+    (function keyboardAwareUI() {
+        const mq = window.matchMedia('(max-width: 639px)');
+        const isTextField = el => !!(el && el.matches && el.matches(
+            'input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=hidden]):not([type=submit]), textarea'
+        ));
+        let timer;
+        const update = () => {
+            clearTimeout(timer);
+            // Small delay avoids flicker when moving focus from one field to the next
+            timer = setTimeout(() => {
+                document.body.classList.toggle('kb-open', mq.matches && isTextField(document.activeElement));
+            }, 80);
+        };
+        document.addEventListener('focusin', update);
+        document.addEventListener('focusout', update);
 
+        document.addEventListener('focusin', e => {
+            const t = e.target;
+            if (t && t.matches && t.matches('input[type=number]')) {
+                setTimeout(() => { try { t.select(); } catch (_) {} }, 0);
+            }
+        });
+    })();
     // Launch initial state
     setMode(currentMode);
     if (partySelect && partySelect.value) {
