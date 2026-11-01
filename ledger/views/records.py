@@ -983,13 +983,19 @@ class FinancialRecordUpdateView(LoginRequiredMixin, PermissionRequiredMixin, Fin
                             a._suppress_cache_cascade = True
                             a.delete()
 
+                        # Also clear any bill allocations if switching
+                        for ba in self.object.bill_allocations.all():
+                            ba._suppress_cache_cascade = True
+                            ba.delete()
+
                         trip_ids = [item.get('trip_id') for item in distribution_data if item.get('trip_id')]
                         trips_by_id = Trip.objects.in_bulk(list(set(old_trip_ids + trip_ids)))
 
                         for item in distribution_data:
                             trip_id = item.get('trip_id')
+                            raw_val = item.get('payment') if item.get('payment') is not None else item.get('amount')
                             try:
-                                amount = Decimal(str(item.get('amount')))
+                                amount = Decimal(str(raw_val))
                             except (ValueError, InvalidOperation):
                                 raise ValueError(f"Invalid amount format for trip {trip_id}")
                             
@@ -1022,13 +1028,19 @@ class FinancialRecordUpdateView(LoginRequiredMixin, PermissionRequiredMixin, Fin
                             a._suppress_cache_cascade = True
                             a.delete()
 
+                        # Also clear any trip allocations if switching
+                        for ta in self.object.allocations.all():
+                            ta._suppress_cache_cascade = True
+                            ta.delete()
+
                         bill_ids = [item.get('bill_id') for item in bill_data if item.get('bill_id')]
                         bills_by_id = Bill.objects.in_bulk(list(set(old_bill_ids + bill_ids)))
 
                         for item in bill_data:
                             bill_id = item.get('bill_id')
+                            raw_val = item.get('payment') if item.get('payment') is not None else item.get('amount')
                             try:
-                                amount = Decimal(str(item.get('amount')))
+                                amount = Decimal(str(raw_val))
                             except (ValueError, InvalidOperation):
                                 raise ValueError(f"Invalid amount format for bill {bill_id}")
                             

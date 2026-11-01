@@ -352,7 +352,13 @@ class FinancialRecordForm(forms.ModelForm):
             elif party and cleaned_data.get('adjustment_target_party') and party.pk == cleaned_data.get('adjustment_target_party').pk:
                 self.add_error('adjustment_target_party', 'Offset party cannot be the same as the primary party.')
 
-        # Auto-populate amount from multi-trip distribution if amount was not provided
+        # Mutual exclusivity: Transaction can attach to trips OR invoices, not both simultaneously
+        has_trips = bool(cleaned_data.get('associated_trip') or cleaned_data.get('payment_distribution'))
+        has_bills = bool(cleaned_data.get('associated_bill') or cleaned_data.get('bill_distribution'))
+        if has_trips and has_bills:
+            self.add_error(None, 'A single financial transaction can be attached to multiple trips OR multiple invoices, not both simultaneously.')
+
+        # Allocation validation against header amount
         distribution_json = cleaned_data.get('payment_distribution')
         if distribution_json:
             try:
@@ -362,8 +368,13 @@ class FinancialRecordForm(forms.ModelForm):
                     total_tds = sum(Decimal(str(item.get('tds', 0) or 0)) for item in dist_data)
                     total_ded = sum(Decimal(str(item.get('deduction', 0) or 0)) for item in dist_data)
                     
-                    if not cleaned_data.get('amount') or cleaned_data.get('amount') == 0:
+                    header_amount = cleaned_data.get('amount')
+                    if header_amount is not None and header_amount > 0:
+                        if abs(total_p - header_amount) > Decimal('0.01'):
+                            self.add_error('amount', f'Total allocated across trips (₹{total_p:,.2f}) must exactly match total payment (₹{header_amount:,.2f}). Difference: ₹{abs(header_amount - total_p):,.2f}.')
+                    else:
                         cleaned_data['amount'] = total_p
+
                     if total_tds > 0 and (not cleaned_data.get('tds_amount') or cleaned_data.get('tds_amount') == 0):
                         cleaned_data['tds_amount'] = total_tds
                     if total_ded > 0 and (not cleaned_data.get('deduction_amount') or cleaned_data.get('deduction_amount') == 0):
@@ -377,7 +388,11 @@ class FinancialRecordForm(forms.ModelForm):
                 b_dist_data = json.loads(bill_distribution_json)
                 if b_dist_data:
                     total_b = sum(Decimal(str(item.get('amount', 0) or 0)) for item in b_dist_data)
-                    if not cleaned_data.get('amount') or cleaned_data.get('amount') == 0:
+                    header_amount = cleaned_data.get('amount')
+                    if header_amount is not None and header_amount > 0:
+                        if abs(total_b - header_amount) > Decimal('0.01'):
+                            self.add_error('amount', f'Total allocated across invoices (₹{total_b:,.2f}) must exactly match total payment (₹{header_amount:,.2f}). Difference: ₹{abs(header_amount - total_b):,.2f}.')
+                    else:
                         cleaned_data['amount'] = total_b
             except Exception:
                 pass
@@ -422,6 +437,14 @@ class FinancialRecordForm(forms.ModelForm):
             'date': forms.DateInput(
                 attrs={
                     'type': 'date'
+                }
+            ),
+            'amount': forms.NumberInput(
+                attrs={
+                    'step': '0.01',
+                    'min': '0',
+                    'placeholder': '0.00',
+                    'class': 'block w-full px-3 py-2 border border-slate-300 rounded-md text-sm font-bold text-slate-900 bg-white focus:ring-emerald-500 focus:border-emerald-500 shadow-sm'
                 }
             ),
             'tds_percentage': forms.NumberInput(

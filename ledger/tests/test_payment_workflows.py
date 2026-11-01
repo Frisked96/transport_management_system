@@ -398,5 +398,86 @@ class TripPaymentWorkflowTests(TestCase):
         self.assertEqual(self.trip1.outstanding_balance, Decimal('1000.00'))
         self.assertEqual(self.trip1.payment_status, Trip.PAYMENT_STATUS_PARTIAL)
 
+    def test_multi_trip_mismatched_amount_fails_validation(self):
+        """Verify that submitting mismatched amount and payment_distribution raises a form validation error."""
+        import json
+        distribution_data = [
+            {'trip_id': self.trip1.id, 'payment': 3000, 'tds': 0, 'deduction': 0},
+            {'trip_id': self.trip2.id, 'payment': 4000, 'tds': 0, 'deduction': 0}
+        ]
+        # Total distribution payment is 7000.00, but header amount specified is 6000.00
+        post_data = {
+            'date': timezone.now().date().isoformat(),
+            'record_type': 'Transaction',
+            'account': self.account.id,
+            'party': self.party.id,
+            'category': self.cat_trip_payment.id,
+            'amount': '6000.00',
+            'payment_distribution': json.dumps(distribution_data)
+        }
+        resp = self.client.post(reverse('financialrecord-create'), post_data)
+        self.assertEqual(resp.status_code, 200)
+        self.assertFormError(resp.context['form'], 'amount', 'Total allocated across trips (₹7,000.00) must exactly match total payment (₹6,000.00). Difference: ₹1,000.00.')
+
+    def test_multi_bill_mismatched_amount_fails_validation(self):
+        """Verify that submitting mismatched amount and bill_distribution raises a form validation error."""
+        import json
+        from ledger.models import Bill
+        bill1 = Bill.objects.create(
+            bill_number='INV-TEST-001',
+            bill_type=Bill.TYPE_STANDARD,
+            issuer=self.account,
+            date=timezone.now().date(),
+            party=self.party,
+            amount_override=Decimal('5000.00'),
+            category=self.cat_trip_payment,
+            gst_rate=0
+        )
+        bill_data = [
+            {'bill_id': bill1.id, 'amount': 3000}
+        ]
+        # Total allocated is 3000, but header amount specified is 5000
+        post_data = {
+            'date': timezone.now().date().isoformat(),
+            'record_type': 'Transaction',
+            'account': self.account.id,
+            'party': self.party.id,
+            'category': self.cat_trip_payment.id,
+            'amount': '5000.00',
+            'bill_distribution': json.dumps(bill_data)
+        }
+        resp = self.client.post(reverse('financialrecord-create'), post_data)
+        self.assertEqual(resp.status_code, 200)
+        self.assertFormError(resp.context['form'], 'amount', 'Total allocated across invoices (₹3,000.00) must exactly match total payment (₹5,000.00). Difference: ₹2,000.00.')
+
+    def test_mutual_exclusion_trips_and_bills(self):
+        """Verify that attempting to link both a trip and an invoice in a single transaction fails validation."""
+        from ledger.models import Bill
+        bill1 = Bill.objects.create(
+            bill_number='INV-TEST-002',
+            bill_type=Bill.TYPE_STANDARD,
+            issuer=self.account,
+            date=timezone.now().date(),
+            party=self.party,
+            amount_override=Decimal('5000.00'),
+            category=self.cat_trip_payment,
+            gst_rate=0
+        )
+        post_data = {
+            'date': timezone.now().date().isoformat(),
+            'record_type': 'Transaction',
+            'account': self.account.id,
+            'party': self.party.id,
+            'category': self.cat_trip_payment.id,
+            'associated_trip': self.trip1.id,
+            'associated_bill': bill1.id,
+            'amount': '5000.00'
+        }
+        resp = self.client.post(reverse('financialrecord-create'), post_data)
+        self.assertEqual(resp.status_code, 200)
+        form = resp.context['form']
+        self.assertTrue(any('not both simultaneously' in str(err) for err in form.non_field_errors()))
+
+
 
 

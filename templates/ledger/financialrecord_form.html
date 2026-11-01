@@ -81,6 +81,17 @@
             width: 100% !important;
         }
     }
+
+    /* Actions Toolbar Transition */
+    #financial-actions-bar {
+        transition: box-shadow 0.2s ease, background-color 0.2s ease;
+    }
+
+    @media (max-width: 639px) {
+        body.kb-open #financial-actions-bar {
+            display: none !important;
+        }
+    }
 </style>
 {% endblock %}
 
@@ -228,6 +239,17 @@
                         </label>
                         {{ form.paid_by_party }}
                     </div>
+
+                    <!-- Total Payment / Transaction Amount -->
+                    <div id="total-payment-field-container">
+                        <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1" for="id_amount" id="total-payment-field-label">
+                            Total Payment / Received (₹) <span class="text-rose-600">*</span>
+                        </label>
+                        {{ form.amount }}
+                        {% if form.amount.errors %}<p class="text-rose-600 text-xs mt-1 font-semibold">{{ form.amount.errors.0 }}</p>{% endif %}
+                        <p id="amount-custom-error" class="text-rose-600 text-xs mt-1 font-semibold hidden"></p>
+                        <p class="text-[10px] text-slate-400 mt-1" id="total-payment-hint">Transaction amount to allocate across trips or bills.</p>
+                    </div>
                 </div>
 
                 <!-- Inter-party adjustment hidden flag -->
@@ -241,6 +263,28 @@
         </div>
 
         <!-- STEP 3: TRANSACTION DETAILS & SETTLEMENT PANELS -->
+        <!-- REAL-TIME ALLOCATION TRACKER BANNER (Active for Customer & Vendor Settlement) -->
+        <div id="allocation-tracker-banner" class="bg-slate-900 text-white rounded-lg p-3 sm:p-4 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 transition-all duration-200">
+            <div class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 text-base">
+                    <i class="fa-solid fa-scale-balanced"></i>
+                </div>
+                <div>
+                    <div class="text-[10px] font-black uppercase tracking-wider text-slate-400">Transaction Allocation Status</div>
+                    <div class="text-xs sm:text-sm font-bold flex items-center gap-2 flex-wrap">
+                        <span>Total Payment: <span id="tracker-header-total" class="font-mono text-white">₹0.00</span></span>
+                        <span class="text-slate-600">•</span>
+                        <span>Allocated: <span id="tracker-allocated-total" class="font-mono text-emerald-400">₹0.00</span></span>
+                    </div>
+                </div>
+            </div>
+            <div class="w-full sm:w-auto flex items-center justify-between sm:justify-end gap-2">
+                <div id="tracker-diff-badge" class="px-3 py-1.5 rounded-md text-xs font-black uppercase tracking-wider flex items-center gap-1.5 bg-slate-800 text-slate-300">
+                    <i class="fa-solid fa-circle-info text-slate-400"></i>
+                    <span id="tracker-diff-text">Enter Total Payment in Header</span>
+                </div>
+            </div>
+        </div>
 
         <!-- 3A: CUSTOMER RECEIPT PANEL -->
         <div id="panel-customer" class="space-y-4">
@@ -323,7 +367,13 @@
                             0 Selected
                         </span>
                     </div>
-                    <div class="flex items-center gap-2">
+                    <div class="flex items-center gap-1.5 sm:gap-2">
+                        <button type="button" id="btn-select-all-bills" class="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-white text-[11px] font-bold rounded">
+                            Select All
+                        </button>
+                        <button type="button" id="btn-clear-all-bills" class="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-white text-[11px] font-bold rounded">
+                            Clear
+                        </button>
                         <button type="button" id="btn-toggle-bills-collapse" class="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-white text-[11px] font-bold rounded flex items-center gap-1">
                             <i class="fa-solid fa-chevron-up text-[10px]" id="bills-chevron-icon"></i>
                             <span id="bills-collapse-text">Collapse</span>
@@ -380,11 +430,21 @@
         <!-- 3B: VENDOR PAYMENT PANEL -->
         <div id="panel-vendor" class="hidden space-y-4">
             <div class="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
-                <div class="bg-slate-800 px-3 sm:px-4 py-2.5 flex items-center justify-between">
-                    <h3 class="text-white font-bold text-xs uppercase tracking-wider flex items-center gap-1.5">
-                        <i class="fa-solid fa-file-invoice mr-2 opacity-80"></i>
-                        <span>Select Vendor Bills to Settle</span>
-                    </h3>
+                <div class="bg-slate-800 px-3 sm:px-4 py-2.5 flex flex-wrap sm:flex-nowrap items-center justify-between gap-2">
+                    <div class="flex items-center gap-2">
+                        <h3 class="text-white font-bold text-xs uppercase tracking-wider flex items-center gap-1.5">
+                            <i class="fa-solid fa-file-invoice mr-2 opacity-80"></i>
+                            <span>Select Vendor Bills to Settle</span>
+                        </h3>
+                    </div>
+                    <div class="flex items-center gap-1.5 sm:gap-2">
+                        <button type="button" id="btn-select-all-vendor-bills" class="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-white text-[11px] font-bold rounded">
+                            Select All
+                        </button>
+                        <button type="button" id="btn-clear-all-vendor-bills" class="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-white text-[11px] font-bold rounded">
+                            Clear
+                        </button>
+                    </div>
                 </div>
                 <div class="p-4 space-y-3">
                     <div id="vendor-bills-empty" class="text-center py-8 text-slate-400 text-xs">
@@ -502,7 +562,6 @@
         <div class="hidden">
             {{ form.associated_trip }}
             {{ form.associated_bill }}
-            {{ form.amount }}
             {{ form.tds_amount }}
             {{ form.tds_percentage }}
             {{ form.deduction_amount }}
@@ -540,24 +599,39 @@
             </div>
         </div>
 
-        <!-- FORM ACTION BUTTONS (Functional theme matching TMS - Sticky above mobile bottom bar) -->
-        <div class="sticky bottom-16 sm:static z-20 bg-white/95 sm:bg-transparent backdrop-blur-sm sm:backdrop-blur-none p-3 sm:p-0 rounded-lg sm:rounded-none border border-slate-200 sm:border-0 shadow-lg sm:shadow-none flex items-center justify-between gap-2 pt-2">
-            <a href="{% if object %}{% url 'financialrecord-detail' object.pk %}{% else %}{% url 'financialrecord-list' %}{% endif %}" 
-               class="px-3 sm:px-4 py-2 border border-slate-300 rounded-md text-xs sm:text-sm font-bold text-slate-700 bg-white hover:bg-slate-50 transition-colors shadow-sm text-center">
-                Cancel
-            </a>
+        <!-- FOOTER ACTIONS BAR (Minimizable / Floating Toolbar matching TMS bulk forms) -->
+        <div id="financial-actions-bar" class="sticky bottom-16 lg:bottom-4 z-40 mt-6 shadow-xl bg-slate-50/95 backdrop-blur-sm px-4 sm:px-6 py-3.5 sm:py-4 border border-slate-200 rounded-xl flex flex-col sm:flex-row items-center justify-between transition-all duration-200">
+            <div class="flex items-center justify-between w-full sm:w-auto space-x-4 mb-3 sm:mb-0">
+                <div class="flex items-center space-x-4">
+                    <a href="{% if object %}{% url 'financialrecord-detail' object.pk %}{% else %}{% url 'financialrecord-list' %}{% endif %}" 
+                       class="text-sm font-bold text-slate-400 hover:text-slate-600 transition-colors flex items-center">
+                        <i class="fa-solid fa-xmark mr-1.5"></i> Cancel
+                    </a>
+                </div>
+                <!-- Minimize / Float button (mobile) -->
+                <button type="button" class="toggle-actions-dock-btn mobile-toggle sm:hidden text-slate-500 hover:text-slate-800 bg-slate-200/70 hover:bg-slate-200 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1" title="Minimize toolbar (move down to bottom of page)">
+                    <i class="fa-solid fa-arrow-down text-[10px]"></i>
+                    <span>Minimize</span>
+                </button>
+            </div>
 
-            <div class="flex items-center gap-2">
+            <div class="flex items-center space-x-3 w-full sm:w-auto justify-end">
+                <!-- Minimize / Float button (desktop) -->
+                <button type="button" class="toggle-actions-dock-btn desktop-toggle hidden sm:flex items-center space-x-1.5 px-3.5 py-2.5 text-slate-500 hover:text-slate-800 bg-slate-200/70 hover:bg-slate-200 rounded-lg text-xs font-bold transition-all" title="Minimize toolbar (move down to bottom of page)">
+                    <i class="fa-solid fa-arrow-down text-xs"></i>
+                    <span>Minimize</span>
+                </button>
+
                 {% if not object %}
                 <button type="submit" name="_save_same_party" value="1" id="btn-save-next" 
-                        class="px-3 sm:px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs sm:text-sm font-bold shadow-sm transition-colors flex items-center gap-1.5">
+                        class="w-full sm:w-auto flex items-center justify-center space-x-1.5 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs sm:text-sm font-bold shadow-sm transition-all active:scale-95">
                     <i class="fa-solid fa-forward-step"></i>
                     <span>Save & Next</span>
                 </button>
                 {% endif %}
 
                 <button type="submit" id="btn-submit" 
-                        class="px-4 sm:px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md text-xs sm:text-sm font-bold shadow-sm transition-colors flex items-center gap-1.5">
+                        class="w-full sm:w-auto flex items-center justify-center space-x-2 px-6 sm:px-8 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs sm:text-sm font-black shadow-lg shadow-emerald-100 transition-all active:scale-95 uppercase tracking-widest">
                     <i class="fa-solid fa-circle-check"></i>
                     <span>{% if object %}Update Entry{% else %}Save Entry{% endif %}</span>
                 </button>
@@ -631,6 +705,126 @@ document.addEventListener('DOMContentLoaded', function() {
     let selectedTripsMap = {}; // id -> { payment, tds, shortage, charges }
     let fetchedBills = [];
     let selectedBillsMap = {}; // id -> { payment, tds }
+    let initialTripsLoaded = false;
+    let initialBillsLoaded = false;
+
+    // Actions Toolbar Minimize / Float (matching bulk trip form)
+    const ACTIONS_MINIMIZED_KEY = 'financial_record_bar_minimized';
+    const $actionsBar = $('#financial-actions-bar');
+    const $toggleBtns = $('.toggle-actions-dock-btn');
+
+    function setActionsMinimized(minimized) {
+        if (minimized) {
+            $actionsBar
+                .removeClass('sticky bottom-16 lg:bottom-4 z-40 shadow-xl bg-slate-50/95 backdrop-blur-sm')
+                .addClass('relative mb-6 shadow-sm bg-slate-50');
+            
+            $toggleBtns.each(function() {
+                const $btn = $(this);
+                $btn.attr('title', 'Float toolbar on screen');
+                if ($btn.hasClass('mobile-toggle')) {
+                    $btn.html('<i class="fa-solid fa-thumbtack text-[10px]"></i><span>Float</span>');
+                } else {
+                    $btn.html('<i class="fa-solid fa-thumbtack text-xs"></i><span>Float Toolbar</span>');
+                }
+            });
+            localStorage.setItem(ACTIONS_MINIMIZED_KEY, 'true');
+        } else {
+            $actionsBar
+                .removeClass('relative mb-6 shadow-sm bg-slate-50')
+                .addClass('sticky bottom-16 lg:bottom-4 z-40 shadow-xl bg-slate-50/95 backdrop-blur-sm');
+            
+            $toggleBtns.each(function() {
+                const $btn = $(this);
+                $btn.attr('title', 'Minimize toolbar (move down to bottom of page)');
+                if ($btn.hasClass('mobile-toggle')) {
+                    $btn.html('<i class="fa-solid fa-arrow-down text-[10px]"></i><span>Minimize</span>');
+                } else {
+                    $btn.html('<i class="fa-solid fa-arrow-down text-xs"></i><span>Minimize</span>');
+                }
+            });
+            localStorage.setItem(ACTIONS_MINIMIZED_KEY, 'false');
+        }
+    }
+
+    $(document).on('click', '.toggle-actions-dock-btn', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const currentlyMinimized = localStorage.getItem(ACTIONS_MINIMIZED_KEY) === 'true';
+        setActionsMinimized(!currentlyMinimized);
+    });
+
+    const isInitiallyMinimized = localStorage.getItem(ACTIONS_MINIMIZED_KEY) === 'true';
+    setActionsMinimized(isInitiallyMinimized);
+
+    // Format remaining balance with negative support (-neg)
+    function formatRemainingBalance(rem) {
+        if (rem < -0.001) {
+            return `<span class="text-rose-600 font-extrabold bg-rose-50 px-2 py-0.5 rounded border border-rose-200 inline-block">-₹${Math.abs(rem).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span> <span class="text-[10px] text-rose-500 font-semibold block sm:inline mt-0.5 sm:mt-0">(Over-allocated by ₹${Math.abs(rem).toFixed(2)})</span>`;
+        } else if (Math.abs(rem) <= 0.001) {
+            return `<span class="font-bold text-emerald-700">₹0.00</span> <span class="text-[10px] text-emerald-600 font-semibold">(Fully Settled)</span>`;
+        } else {
+            return `<span class="font-bold text-slate-800">₹${rem.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>`;
+        }
+    }
+
+    // Real-Time Allocation Tracker Banner Controller
+    function updateAllocationTracker() {
+        const trackerBanner = document.getElementById('allocation-tracker-banner');
+        if (!trackerBanner) return;
+
+        const isTrips = (currentMode === 'customer' && currentSubtab === 'trips');
+        const isBills = (currentMode === 'customer' && currentSubtab === 'invoices') || (currentMode === 'vendor');
+        if (!isTrips && !isBills) {
+            trackerBanner.classList.add('hidden');
+            return;
+        } else {
+            trackerBanner.classList.remove('hidden');
+        }
+
+        const headerTotal = parseFloat(hiddenAmount.value) || 0;
+        let allocatedTotal = 0;
+
+        if (isTrips) {
+            Object.values(selectedTripsMap).forEach(item => {
+                allocatedTotal += (item.payment || 0);
+            });
+        } else if (isBills) {
+            Object.values(selectedBillsMap).forEach(item => {
+                allocatedTotal += (item.payment || 0);
+            });
+        }
+
+        const trackerHeader = document.getElementById('tracker-header-total');
+        const trackerAlloc = document.getElementById('tracker-allocated-total');
+        const diffBadge = document.getElementById('tracker-diff-badge');
+
+        if (trackerHeader) trackerHeader.textContent = '₹' + headerTotal.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        if (trackerAlloc) trackerAlloc.textContent = '₹' + allocatedTotal.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+        if (!diffBadge) return;
+
+        if (headerTotal <= 0) {
+            diffBadge.className = 'px-3 py-1.5 rounded-md text-xs font-black uppercase tracking-wider flex items-center gap-1.5 bg-slate-800 text-slate-300';
+            diffBadge.innerHTML = '<i class="fa-solid fa-circle-info text-slate-400"></i><span>Enter Total Payment in Header</span>';
+            return;
+        }
+
+        const diff = Math.round((allocatedTotal - headerTotal) * 100) / 100;
+
+        if (Math.abs(diff) < 0.01) {
+            diffBadge.className = 'px-3 py-1.5 rounded-md text-xs font-black uppercase tracking-wider flex items-center gap-1.5 bg-emerald-950/80 text-emerald-300 border border-emerald-600/50';
+            diffBadge.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-400"></i><span>Exact Match (₹${allocatedTotal.toLocaleString('en-IN', {minimumFractionDigits: 2})})</span>`;
+        } else if (diff < 0) {
+            const remaining = Math.abs(diff);
+            diffBadge.className = 'px-3 py-1.5 rounded-md text-xs font-black uppercase tracking-wider flex items-center gap-1.5 bg-amber-950/80 text-amber-300 border border-amber-600/50';
+            diffBadge.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-amber-400"></i><span>Unallocated: ₹${remaining.toLocaleString('en-IN', {minimumFractionDigits: 2})}</span>`;
+        } else {
+            const over = diff;
+            diffBadge.className = 'px-3 py-1.5 rounded-md text-xs font-black uppercase tracking-wider flex items-center gap-1.5 bg-rose-950/80 text-rose-300 border border-rose-600/50';
+            diffBadge.innerHTML = `<i class="fa-solid fa-circle-exclamation text-rose-400"></i><span>Over-allocated by: ₹${over.toLocaleString('en-IN', {minimumFractionDigits: 2})}</span>`;
+        }
+    }
 
     // Description Collapsible Handling
     const descTextarea = document.getElementById('id_description');
@@ -760,12 +954,17 @@ document.addEventListener('DOMContentLoaded', function() {
         contraTargetContainer.classList.add('hidden');
         contraCheckboxContainer.classList.add('hidden');
 
+        const headerAmountLabel = document.getElementById('total-payment-field-label');
+        const headerAmountHint = document.getElementById('total-payment-hint');
+
         if (mode === 'customer') {
             panelCustomer.classList.remove('hidden');
             partyContainer.classList.remove('hidden');
             remitterContainer.classList.remove('hidden');
             partyLabel.textContent = 'Customer *';
             accountLabel.textContent = 'Deposit To Account *';
+            if (headerAmountLabel) headerAmountLabel.innerHTML = 'Total Payment / Received (₹) <span class="text-rose-600">*</span>';
+            if (headerAmountHint) headerAmountHint.textContent = 'Transaction amount received to allocate across trips or bills.';
             recordTypeInput.value = 'Transaction';
             syncCategory('customer');
         } else if (mode === 'vendor') {
@@ -773,12 +972,16 @@ document.addEventListener('DOMContentLoaded', function() {
             partyContainer.classList.remove('hidden');
             partyLabel.textContent = 'Vendor *';
             accountLabel.textContent = 'Paid From Account *';
+            if (headerAmountLabel) headerAmountLabel.innerHTML = 'Total Payment / Paid Out (₹) <span class="text-rose-600">*</span>';
+            if (headerAmountHint) headerAmountHint.textContent = 'Transaction amount paid to allocate across vendor bills.';
             recordTypeInput.value = 'Transaction';
             syncCategory('vendor');
         } else if (mode === 'expense') {
             panelExpense.classList.remove('hidden');
             expenseCategoryContainer.classList.remove('hidden');
             accountLabel.textContent = 'Paid From Account *';
+            if (headerAmountLabel) headerAmountLabel.innerHTML = 'Expense Amount Paid (₹) <span class="text-rose-600">*</span>';
+            if (headerAmountHint) headerAmountHint.textContent = 'Operating expense disbursement.';
             recordTypeInput.value = 'General';
             syncCategory('expense');
             if (partySelect) $(partySelect).val('').trigger('change.select2');
@@ -787,6 +990,8 @@ document.addEventListener('DOMContentLoaded', function() {
             driverContainer.classList.remove('hidden');
             expenseCategoryContainer.classList.remove('hidden');
             accountLabel.textContent = 'Disbursed From Account *';
+            if (headerAmountLabel) headerAmountLabel.innerHTML = 'Driver Disbursement (₹) <span class="text-rose-600">*</span>';
+            if (headerAmountHint) headerAmountHint.textContent = 'Advance, salary, or allowance paid to driver.';
             recordTypeInput.value = 'Transaction';
             syncCategory('driver');
             if (partySelect) $(partySelect).val('').trigger('change.select2');
@@ -797,6 +1002,8 @@ document.addEventListener('DOMContentLoaded', function() {
             contraCheckboxContainer.classList.remove('hidden');
             accountContainer.classList.add('hidden');
             partyLabel.textContent = 'Source Party *';
+            if (headerAmountLabel) headerAmountLabel.innerHTML = 'Contra Set-Off Amount (₹) <span class="text-rose-600">*</span>';
+            if (headerAmountHint) headerAmountHint.textContent = 'Non-cash ledger adjustment between parties.';
             recordTypeInput.value = 'Transaction';
             if (contraCheckbox) contraCheckbox.checked = true;
             syncCategory('contra');
@@ -804,6 +1011,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if ((mode === 'customer' || mode === 'vendor') && fetchedBills.length) renderBills(fetchedBills);
         syncHiddenInputs();
         updateSummary();
+        updateAllocationTracker();
     }
 
     function syncCategory(mode) {
@@ -840,19 +1048,59 @@ document.addEventListener('DOMContentLoaded', function() {
         subpanelInvoices.classList.add('hidden');
         subpanelAccount.classList.add('hidden');
 
+        // Mutual exclusivity: clear alternate subtab selections
         if (subtab === 'trips') {
             subpanelTrips.classList.remove('hidden');
+            selectedBillsMap = {};
+            associatedBillInput.value = '';
+            billDistInput.value = '';
+            document.querySelectorAll('#bills-list .bill-checkbox, #vendor-bills-list .bill-checkbox').forEach(cb => {
+                cb.checked = false;
+                const r = cb.closest('.settle-row');
+                if (r) {
+                    r.classList.remove('is-selected');
+                    const inp = r.querySelector('.bill-inputs');
+                    if (inp) inp.classList.add('hidden');
+                    const prev = r.querySelector('.bill-balance-preview');
+                    if (prev) prev.classList.add('hidden');
+                }
+            });
+            const bBadge = document.getElementById('bills-selected-badge');
+            if (bBadge) bBadge.classList.add('hidden');
             syncCategory('customer');
         } else if (subtab === 'invoices') {
             subpanelInvoices.classList.remove('hidden');
+            selectedTripsMap = {};
+            associatedTripInput.value = '';
+            paymentDistInput.value = '';
+            document.querySelectorAll('#trips-list .trip-checkbox').forEach(cb => {
+                cb.checked = false;
+                const r = cb.closest('.settle-row');
+                if (r) {
+                    r.classList.remove('is-selected');
+                    const inp = r.querySelector('.trip-inputs');
+                    if (inp) inp.classList.add('hidden');
+                    const prev = r.querySelector('.trip-balance-preview');
+                    if (prev) prev.classList.add('hidden');
+                }
+            });
+            const tBadge = document.getElementById('trips-selected-badge');
+            if (tBadge) tBadge.classList.add('hidden');
             syncCategory('customer');
         } else if (subtab === 'account') {
             subpanelAccount.classList.remove('hidden');
+            selectedTripsMap = {};
+            selectedBillsMap = {};
+            associatedTripInput.value = '';
+            associatedBillInput.value = '';
+            paymentDistInput.value = '';
+            billDistInput.value = '';
             syncCategory('customer');
         }
 
         syncHiddenInputs();
         updateSummary();
+        updateAllocationTracker();
     }
 
     modeTabs.forEach(btn => btn.addEventListener('click', () => setMode(btn.dataset.mode)));
@@ -891,6 +1139,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 activePartyId = pId;
                 lastTripsSig = null;
                 lastBillsSig = null;
+                initialTripsLoaded = false;
+                initialBillsLoaded = false;
                 syncHiddenInputs();
             }
 
@@ -973,32 +1223,35 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         if (empty) empty.classList.add('hidden');
 
-        // Check if pre-selected via distribution or initial trip
-        const initialTrip = "{{ form.associated_trip.value|default:'' }}";
-        const distVal = paymentDistInput ? paymentDistInput.value : '';
-        if (distVal) {
-            try {
-                const arr = JSON.parse(distVal);
-                if (Array.isArray(arr)) {
-                    arr.forEach(item => {
-                        selectedTripsMap[item.trip_id] = {
-                            payment: item.payment || item.amount || 0,
-                            tds: item.tds || 0,
-                            shortage: item.deduction || 0,
-                            charges: 0
-                        };
-                    });
+        // Check if pre-selected via distribution or initial trip (run once on load)
+        if (!initialTripsLoaded) {
+            initialTripsLoaded = true;
+            const initialTrip = "{{ form.associated_trip.value|default:'' }}";
+            const distVal = paymentDistInput ? paymentDistInput.value : '';
+            if (distVal) {
+                try {
+                    const arr = JSON.parse(distVal);
+                    if (Array.isArray(arr)) {
+                        arr.forEach(item => {
+                            selectedTripsMap[item.trip_id] = {
+                                payment: item.payment || item.amount || 0,
+                                tds: item.tds || 0,
+                                shortage: item.deduction || 0,
+                                charges: 0
+                            };
+                        });
+                    }
+                } catch (e) {}
+            } else if (initialTrip && !selectedTripsMap[initialTrip]) {
+                const trip = trips.find(t => String(t.id) === String(initialTrip));
+                if (trip) {
+                    selectedTripsMap[trip.id] = {
+                        payment: parseFloat(hiddenAmount.value) || trip.balance,
+                        tds: parseFloat(hiddenTdsAmount.value) || 0,
+                        shortage: parseFloat(hiddenDedAmount.value) || 0,
+                        charges: 0
+                    };
                 }
-            } catch (e) {}
-        } else if (initialTrip && !selectedTripsMap[initialTrip]) {
-            const trip = trips.find(t => String(t.id) === String(initialTrip));
-            if (trip) {
-                selectedTripsMap[trip.id] = {
-                    payment: parseFloat(hiddenAmount.value) || trip.balance,
-                    tds: parseFloat(hiddenTdsAmount.value) || 0,
-                    shortage: parseFloat(hiddenDedAmount.value) || 0,
-                    charges: 0
-                };
             }
         }
 
@@ -1018,7 +1271,7 @@ document.addEventListener('DOMContentLoaded', function() {
             row.dataset.lr = (trip.lr_no || '').toLowerCase();
             row.dataset.tripNum = (trip.trip_number || '').toLowerCase();
 
-            const remaining = Math.max(0, trip.balance - state.payment - state.tds - state.shortage - state.charges);
+            const remaining = trip.balance - state.payment - state.tds - state.shortage - state.charges;
 
             row.innerHTML = `
                 <div class="flex items-start justify-between gap-3">
@@ -1049,7 +1302,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             <label class="text-[11px] font-bold text-slate-700 uppercase">Payment</label>
                             <button type="button" class="btn-trip-full text-[10px] font-bold text-emerald-700 hover:underline">Pay Full</button>
                         </div>
-                        <input type="number" step="0.01" min="0" inputmode="decimal" class="inp-trip-payment w-full px-2.5 py-1.5 border border-slate-300 rounded text-xs font-bold text-slate-900 bg-white" value="${state.payment}">
+                        <input type="number" step="0.01" inputmode="decimal" class="inp-trip-payment w-full px-2.5 py-1.5 border border-slate-300 rounded text-xs font-bold text-slate-900 bg-white" value="${state.payment}">
                     </div>
 
                     <!-- Block 2: TDS (Manual Entry + Quick Chips) -->
@@ -1085,7 +1338,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 <!-- Remaining Balance after entry -->
                 <div class="trip-balance-preview ${isSelected ? '' : 'hidden'} text-right text-xs pt-2 border-t border-slate-100 text-slate-500 font-mono">
-                    Trip Remaining Due: <span class="font-bold text-slate-800 span-trip-remaining">₹${remaining.toFixed(2)}</span>
+                    Trip Remaining Due: <span class="span-trip-remaining">${formatRemainingBalance(remaining)}</span>
                 </div>
             `;
 
@@ -1104,8 +1357,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 const t = parseFloat(tInp.value) || 0;
                 const s = parseFloat(sInp.value) || 0;
                 const c = parseFloat(cInp.value) || 0;
-                const rem = Math.max(0, trip.balance - p - t - s - c);
-                remSpan.textContent = '₹' + rem.toFixed(2);
+                const rem = trip.balance - p - t - s - c;
+                remSpan.innerHTML = formatRemainingBalance(rem);
 
                 if (chk.checked) {
                     selectedTripsMap[trip.id] = { payment: p, tds: t, shortage: s, charges: c };
@@ -1122,7 +1375,17 @@ document.addEventListener('DOMContentLoaded', function() {
                     inputsDiv.classList.remove('hidden');
                     previewDiv.classList.remove('hidden');
                     if (!pInp.value || parseFloat(pInp.value) === 0) {
-                        pInp.value = trip.balance;
+                        const hTotal = parseFloat(hiddenAmount.value) || 0;
+                        if (hTotal > 0) {
+                            let currAlloc = 0;
+                            Object.entries(selectedTripsMap).forEach(([id, item]) => {
+                                if (String(id) !== String(trip.id)) currAlloc += (item.payment || 0);
+                            });
+                            const unalloc = Math.max(0, hTotal - currAlloc);
+                            pInp.value = unalloc > 0 ? Math.min(trip.balance, unalloc).toFixed(2) : trip.balance.toFixed(2);
+                        } else {
+                            pInp.value = trip.balance.toFixed(2);
+                        }
                     }
                 } else {
                     row.classList.remove('is-selected');
@@ -1217,12 +1480,20 @@ document.addEventListener('DOMContentLoaded', function() {
     const btnSelectAll = document.getElementById('btn-select-all-trips');
     if (btnSelectAll) {
         btnSelectAll.addEventListener('click', () => {
+            const hTotal = parseFloat(hiddenAmount.value) || 0;
+            let remainingToAlloc = hTotal;
             fetchedTrips.forEach(t => {
-                if (!selectedTripsMap[t.id]) {
-                    selectedTripsMap[t.id] = { payment: t.balance, tds: 0, shortage: 0, charges: 0 };
+                let p = t.balance;
+                if (hTotal > 0) {
+                    p = remainingToAlloc > 0 ? Math.min(t.balance, remainingToAlloc) : 0;
+                    remainingToAlloc = Math.max(0, remainingToAlloc - p);
                 }
+                selectedTripsMap[t.id] = { payment: p, tds: 0, shortage: 0, charges: 0 };
             });
             renderTrips(fetchedTrips);
+            syncHiddenInputs();
+            updateSummary();
+            updateAllocationTracker();
         });
     }
 
@@ -1230,7 +1501,12 @@ document.addEventListener('DOMContentLoaded', function() {
     if (btnClearAll) {
         btnClearAll.addEventListener('click', () => {
             selectedTripsMap = {};
+            associatedTripInput.value = '';
+            paymentDistInput.value = '';
             renderTrips(fetchedTrips);
+            syncHiddenInputs();
+            updateSummary();
+            updateAllocationTracker();
         });
     }
 
@@ -1293,11 +1569,39 @@ document.addEventListener('DOMContentLoaded', function() {
         if (custEmpty) custEmpty.classList.add('hidden');
         if (vendEmpty) vendEmpty.classList.add('hidden');
 
+        // Check if pre-selected via distribution or initial bill (run once on load)
+        if (!initialBillsLoaded) {
+            initialBillsLoaded = true;
+            const initialBill = "{{ form.associated_bill.value|default:'' }}";
+            const bDistVal = billDistInput ? billDistInput.value : '';
+            if (bDistVal) {
+                try {
+                    const arr = JSON.parse(bDistVal);
+                    if (Array.isArray(arr)) {
+                        arr.forEach(item => {
+                            selectedBillsMap[item.bill_id] = {
+                                payment: item.amount || item.payment || 0,
+                                tds: item.tds || 0
+                            };
+                        });
+                    }
+                } catch (e) {}
+            } else if (initialBill && !selectedBillsMap[initialBill]) {
+                const b = bills.find(x => String(x.id) === String(initialBill));
+                if (b) {
+                    selectedBillsMap[b.id] = {
+                        payment: parseFloat(hiddenAmount.value) || parseFloat(b.outstanding) || 0,
+                        tds: parseFloat(hiddenTdsAmount.value) || 0
+                    };
+                }
+            }
+        }
+
         bills.forEach(bill => {
             const isSelected = !!selectedBillsMap[bill.id];
             const due = parseFloat(bill.outstanding) || 0;
             const state = selectedBillsMap[bill.id] || { payment: due, tds: 0 };
-            const remaining = Math.max(0, due - state.payment - state.tds);
+            const remaining = due - state.payment - state.tds;
 
             const card = document.createElement('div');
             card.className = `settle-row bg-white border ${isSelected ? 'is-selected' : 'border-slate-200'} rounded-lg p-3 sm:p-4 space-y-3`;
@@ -1330,7 +1634,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             <label class="text-[11px] font-bold text-slate-700 uppercase">Payment Amount</label>
                             <button type="button" class="btn-bill-full text-[10px] font-bold text-blue-700 hover:underline">Pay Full</button>
                         </div>
-                        <input type="number" step="0.01" min="0" inputmode="decimal" class="inp-bill-payment w-full px-2.5 py-1.5 border border-slate-300 rounded text-xs font-bold text-slate-900 bg-white" value="${state.payment}">
+                        <input type="number" step="0.01" inputmode="decimal" class="inp-bill-payment w-full px-2.5 py-1.5 border border-slate-300 rounded text-xs font-bold text-slate-900 bg-white" value="${state.payment}">
                     </div>
 
                     <div>
@@ -1346,7 +1650,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 </div>
 
                 <div class="bill-balance-preview ${isSelected ? '' : 'hidden'} text-right text-xs pt-2 border-t border-slate-100 text-slate-500 font-mono">
-                    Remaining Invoice Due: <span class="font-bold text-slate-800 span-bill-remaining">₹${remaining.toFixed(2)}</span>
+                    Remaining Invoice Due: <span class="span-bill-remaining">${formatRemainingBalance(remaining)}</span>
                 </div>
             `;
 
@@ -1360,8 +1664,8 @@ document.addEventListener('DOMContentLoaded', function() {
             const syncBill = () => {
                 const p = parseFloat(pInp.value) || 0;
                 const t = parseFloat(tInp.value) || 0;
-                const rem = Math.max(0, due - p - t);
-                remSpan.textContent = '₹' + rem.toFixed(2);
+                const rem = due - p - t;
+                remSpan.innerHTML = formatRemainingBalance(rem);
 
                 if (chk.checked) {
                     selectedBillsMap[bill.id] = { payment: p, tds: t };
@@ -1377,6 +1681,19 @@ document.addEventListener('DOMContentLoaded', function() {
                     card.classList.add('is-selected');
                     inputsDiv.classList.remove('hidden');
                     prevDiv.classList.remove('hidden');
+                    if (!pInp.value || parseFloat(pInp.value) === 0) {
+                        const hTotal = parseFloat(hiddenAmount.value) || 0;
+                        if (hTotal > 0) {
+                            let currAlloc = 0;
+                            Object.entries(selectedBillsMap).forEach(([id, item]) => {
+                                if (String(id) !== String(bill.id)) currAlloc += (item.payment || 0);
+                            });
+                            const unalloc = Math.max(0, hTotal - currAlloc);
+                            pInp.value = unalloc > 0 ? Math.min(due, unalloc).toFixed(2) : due.toFixed(2);
+                        } else {
+                            pInp.value = due.toFixed(2);
+                        }
+                    }
                 } else {
                     card.classList.remove('is-selected');
                     inputsDiv.classList.add('hidden');
@@ -1458,6 +1775,47 @@ document.addEventListener('DOMContentLoaded', function() {
             billSearchInput.focus();
         });
     }
+
+    // Select All / Clear All Invoices (Customer & Vendor)
+    function selectAllBills() {
+        const hTotal = parseFloat(hiddenAmount.value) || 0;
+        let remainingToAlloc = hTotal;
+        fetchedBills.forEach(b => {
+            const due = parseFloat(b.outstanding) || 0;
+            let p = due;
+            if (hTotal > 0) {
+                p = remainingToAlloc > 0 ? Math.min(due, remainingToAlloc) : 0;
+                remainingToAlloc = Math.max(0, remainingToAlloc - p);
+            }
+            selectedBillsMap[b.id] = { payment: p, tds: 0 };
+        });
+        renderBills(fetchedBills);
+        syncHiddenInputs();
+        updateSummary();
+        updateAllocationTracker();
+    }
+
+    function clearAllBills() {
+        selectedBillsMap = {};
+        associatedBillInput.value = '';
+        billDistInput.value = '';
+        renderBills(fetchedBills);
+        syncHiddenInputs();
+        updateSummary();
+        updateAllocationTracker();
+    }
+
+    const btnSelectAllBills = document.getElementById('btn-select-all-bills');
+    if (btnSelectAllBills) btnSelectAllBills.addEventListener('click', selectAllBills);
+
+    const btnClearAllBills = document.getElementById('btn-clear-all-bills');
+    if (btnClearAllBills) btnClearAllBills.addEventListener('click', clearAllBills);
+
+    const btnSelectAllVendorBills = document.getElementById('btn-select-all-vendor-bills');
+    if (btnSelectAllVendorBills) btnSelectAllVendorBills.addEventListener('click', selectAllBills);
+
+    const btnClearAllVendorBills = document.getElementById('btn-clear-all-vendor-bills');
+    if (btnClearAllVendorBills) btnClearAllVendorBills.addEventListener('click', clearAllBills);
 
     // Synchronize to Django Hidden Form Fields
     function syncHiddenInputs() {
@@ -1587,13 +1945,69 @@ document.addEventListener('DOMContentLoaded', function() {
         if (shortage > 0) notesList.push(`Shortage: ₹${shortage}`);
         if (charges > 0) notesList.push(`Charges: ₹${charges}`);
 
-        hiddenAmount.value = payment > 0 ? payment.toFixed(2) : '0.00';
+        const currentHeaderVal = parseFloat(hiddenAmount.value) || 0;
+        if (currentMode === 'expense') {
+            hiddenAmount.value = payment > 0 ? payment.toFixed(2) : (currentHeaderVal > 0 ? currentHeaderVal.toFixed(2) : '0.00');
+        } else if (currentMode === 'driver') {
+            hiddenAmount.value = payment > 0 ? payment.toFixed(2) : (currentHeaderVal > 0 ? currentHeaderVal.toFixed(2) : '0.00');
+        } else if (currentMode === 'contra') {
+            hiddenAmount.value = payment > 0 ? payment.toFixed(2) : (currentHeaderVal > 0 ? currentHeaderVal.toFixed(2) : '0.00');
+        } else if (currentMode === 'customer' && currentSubtab === 'account') {
+            hiddenAmount.value = payment > 0 ? payment.toFixed(2) : (currentHeaderVal > 0 ? currentHeaderVal.toFixed(2) : '0.00');
+        }
+        // Note: For customer trips/invoices and vendor bills, hiddenAmount (Header Total Payment)
+        // is strictly entered by the user in the header and must NEVER be overwritten by selecting rows.
+
         hiddenTdsAmount.value = tds > 0 ? tds.toFixed(2) : '';
         hiddenDedAmount.value = totalDeductions > 0 ? totalDeductions.toFixed(2) : '';
         hiddenDedNotes.value = notesList.join(', ');
+        updateAllocationTracker();
+    }
+
+    // Field-level error warning for Total Payment (identical to date validation bubble & styling)
+    function showAmountError(msg) {
+        const errEl = document.getElementById('amount-custom-error');
+        if (errEl) {
+            errEl.textContent = msg;
+            errEl.classList.remove('hidden');
+        }
+        if (hiddenAmount) {
+            hiddenAmount.classList.add('border-rose-500', 'focus:ring-rose-500', 'focus:border-rose-500');
+            hiddenAmount.classList.remove('border-slate-300');
+            hiddenAmount.setCustomValidity(msg);
+            hiddenAmount.reportValidity();
+            hiddenAmount.focus();
+        }
+    }
+
+    function clearAmountError() {
+        const errEl = document.getElementById('amount-custom-error');
+        if (errEl) {
+            errEl.textContent = '';
+            errEl.classList.add('hidden');
+        }
+        if (hiddenAmount) {
+            hiddenAmount.classList.remove('border-rose-500', 'focus:ring-rose-500', 'focus:border-rose-500');
+            hiddenAmount.classList.add('border-slate-300');
+            hiddenAmount.setCustomValidity('');
+        }
     }
 
     // Direct input listeners
+    if (hiddenAmount) {
+        hiddenAmount.addEventListener('input', () => {
+            clearAmountError();
+            const val = hiddenAmount.value;
+            if (currentMode === 'expense' && expenseAmountInput) expenseAmountInput.value = val;
+            else if (currentMode === 'driver' && driverAmountInput) driverAmountInput.value = val;
+            else if (currentMode === 'contra' && contraAmountInput) contraAmountInput.value = val;
+            else if (currentMode === 'customer' && currentSubtab === 'account' && onaccountAmountInput) onaccountAmountInput.value = val;
+
+            updateSummary();
+            updateAllocationTracker();
+        });
+    }
+
     [expenseAmountInput, driverAmountInput, contraAmountInput, onaccountAmountInput, onaccountTdsInput, vendorDirectAmountInput, vendorDirectTdsInput].forEach(inp => {
         if (inp) inp.addEventListener('input', () => {
             syncHiddenInputs();
@@ -1621,17 +2035,27 @@ document.addEventListener('DOMContentLoaded', function() {
 
         let shortageAmt = 0;
         let chargesAmt = 0;
+        let allocatedPayment = 0;
+        const isTrips = (currentMode === 'customer' && currentSubtab === 'trips');
+        const isBills = (currentMode === 'customer' && currentSubtab === 'invoices') || (currentMode === 'vendor');
 
-        if (currentMode === 'customer' && currentSubtab === 'trips') {
+        if (isTrips) {
             Object.values(selectedTripsMap).forEach(item => {
+                allocatedPayment += (item.payment || 0);
                 shortageAmt += (item.shortage || 0);
                 chargesAmt += (item.charges || 0);
             });
+        } else if (isBills) {
+            Object.values(selectedBillsMap).forEach(item => {
+                allocatedPayment += (item.payment || 0);
+            });
+            shortageAmt = d;
         } else {
+            allocatedPayment = p;
             shortageAmt = d;
         }
 
-        const totalSettled = p + t + d;
+        const totalSettled = (isTrips || isBills ? allocatedPayment : p) + t + d;
 
         document.getElementById('summary-bank-payment').textContent = '₹' + p.toLocaleString('en-IN', {minimumFractionDigits: 2});
         document.getElementById('summary-tds').textContent = t > 0 ? '₹' + t.toLocaleString('en-IN', {minimumFractionDigits: 2}) : '₹0.00';
@@ -1640,13 +2064,89 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('summary-total-settled').textContent = '₹' + totalSettled.toLocaleString('en-IN', {minimumFractionDigits: 2});
 
         const statusText = document.getElementById('summary-status-text');
-        if (totalSettled > 0) {
-            statusText.textContent = 'Ready to Save';
-            statusText.className = 'text-emerald-700 font-extrabold';
+        if (isTrips || isBills) {
+            const numSelected = isTrips ? Object.keys(selectedTripsMap).length : Object.keys(selectedBillsMap).length;
+            if (p <= 0 && numSelected === 0) {
+                statusText.textContent = 'Awaiting Amount';
+                statusText.className = 'text-slate-400 font-bold';
+            } else if (p <= 0) {
+                statusText.textContent = 'Enter Total Payment';
+                statusText.className = 'text-amber-600 font-bold';
+            } else {
+                const diff = Math.round((allocatedPayment - p) * 100) / 100;
+                if (Math.abs(diff) <= 0.01) {
+                    statusText.textContent = 'Ready to Save';
+                    statusText.className = 'text-emerald-700 font-extrabold';
+                } else if (diff < 0) {
+                    statusText.textContent = `Unallocated (₹${Math.abs(diff).toLocaleString('en-IN', {minimumFractionDigits: 2})})`;
+                    statusText.className = 'text-amber-600 font-bold';
+                } else {
+                    statusText.textContent = `Over-allocated (₹${diff.toLocaleString('en-IN', {minimumFractionDigits: 2})})`;
+                    statusText.className = 'text-rose-600 font-bold';
+                }
+            }
         } else {
-            statusText.textContent = 'Awaiting Amount';
-            statusText.className = 'text-slate-400 font-bold';
+            if (p > 0) {
+                statusText.textContent = 'Ready to Save';
+                statusText.className = 'text-emerald-700 font-extrabold';
+            } else {
+                statusText.textContent = 'Awaiting Amount';
+                statusText.className = 'text-slate-400 font-bold';
+            }
         }
+
+        updateAllocationTracker();
+    }
+
+    // Form Submission Interceptor: Enforces exact allocation matching
+    const entryForm = document.getElementById('financial-entry-form');
+    if (entryForm) {
+        entryForm.addEventListener('submit', function(e) {
+            syncHiddenInputs();
+
+            // Allocation check for customer & vendor settlements against trips/bills
+            if (currentMode === 'customer' || currentMode === 'vendor') {
+                const isTrips = (currentMode === 'customer' && currentSubtab === 'trips');
+                const isBills = (currentMode === 'customer' && currentSubtab === 'invoices') || (currentMode === 'vendor');
+
+                if (isTrips || isBills) {
+                    const headerTotal = parseFloat(hiddenAmount.value) || 0;
+                    let allocatedTotal = 0;
+
+                    if (isTrips) {
+                        Object.values(selectedTripsMap).forEach(item => {
+                            allocatedTotal += (item.payment || 0);
+                        });
+                    } else if (isBills) {
+                        Object.values(selectedBillsMap).forEach(item => {
+                            allocatedTotal += (item.payment || 0);
+                        });
+                    }
+
+                    const numSelected = isTrips ? Object.keys(selectedTripsMap).length : Object.keys(selectedBillsMap).length;
+
+                    if (numSelected > 0 || headerTotal > 0) {
+                        if (headerTotal <= 0) {
+                            e.preventDefault();
+                            showAmountError('Please fill out this field.');
+                            return false;
+                        }
+
+                        const diff = Math.round((allocatedTotal - headerTotal) * 100) / 100;
+                        if (Math.abs(diff) > 0.01) {
+                            e.preventDefault();
+                            const itemType = isTrips ? 'trips' : 'invoices';
+                            const msg = diff < 0
+                                ? `Total allocated across ${itemType} (₹${allocatedTotal.toLocaleString('en-IN', {minimumFractionDigits: 2})}) does not match Total Payment (₹${headerTotal.toLocaleString('en-IN', {minimumFractionDigits: 2})}). Remaining unallocated: ₹${Math.abs(diff).toLocaleString('en-IN', {minimumFractionDigits: 2})}.`
+                                : `Total allocated across ${itemType} (₹${allocatedTotal.toLocaleString('en-IN', {minimumFractionDigits: 2})}) exceeds Total Payment (₹${headerTotal.toLocaleString('en-IN', {minimumFractionDigits: 2})}) by ₹${diff.toLocaleString('en-IN', {minimumFractionDigits: 2})}.`;
+                            showAmountError(msg);
+                            return false;
+                        }
+                    }
+                }
+            }
+            clearAmountError();
+        });
     }
     // Mobile: hide sticky action bar while typing; select number contents on focus
     (function keyboardAwareUI() {
