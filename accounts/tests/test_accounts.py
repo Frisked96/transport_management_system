@@ -275,7 +275,19 @@ class TollRolePermissionTests(TestCase):
         self.vehicle = Vehicle.objects.create(registration_plate='HR 55 AB 1234', status=Vehicle.STATUS_ACTIVE)
 
         # Assign Toll Operator role
-        toll_operator_role = Group.objects.get(name='Toll Operator')
+        toll_operator_role, _ = Group.objects.get_or_create(name='Toll Operator')
+        operator_perms = [
+            ('ledger', 'view_tollaccount'),
+            ('ledger', 'add_tollentry'),
+            ('ledger', 'change_tollentry'),
+            ('fleet', 'view_vehicle'),
+            ('fleet', 'can_view_all_vehicles'),
+            ('trips', 'view_trip'),
+        ]
+        for app_label, codename in operator_perms:
+            p = Permission.objects.filter(content_type__app_label=app_label, codename=codename).first()
+            if p:
+                toll_operator_role.permissions.add(p)
         self.toll_user.groups.add(toll_operator_role)
 
     def test_role_form_includes_toll_module(self):

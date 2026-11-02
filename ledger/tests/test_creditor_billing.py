@@ -39,6 +39,8 @@ class CreditorAttachedVehicleBillingTests(TestCase):
         self.cat_lorry_hire, _ = TransactionCategory.objects.get_or_create(name='Lorry Hire', type='Expense')
         self.cat_payment_out, _ = TransactionCategory.objects.get_or_create(name='Payment Out', type='Expense')
         self.cat_tds, _ = TransactionCategory.objects.get_or_create(name='TDS', type='Expense')
+        self.cat_cn, _ = TransactionCategory.objects.get_or_create(name='Credit Note', defaults={'type': 'Expense'})
+        self.cat_dn, _ = TransactionCategory.objects.get_or_create(name='Debit Note', defaults={'type': 'Expense'})
 
         self.vehicle = Vehicle.objects.create(
             registration_plate="WB01AB9999",
@@ -437,7 +439,7 @@ class CreditorAttachedVehicleBillingTests(TestCase):
         self.assertEqual(creditor_bill.outstanding_balance_cached, Decimal('23600.00'))
 
         # Create Customer Credit Note for Shortage: ₹2,000 subtotal + 18% GST = ₹2,360
-        cat_cn = TransactionCategory.objects.get(name='Credit Note')
+        cat_cn = self.cat_cn
         cust_cn = Bill.objects.create(
             issuer=self.issuer,
             party=self.debtor,

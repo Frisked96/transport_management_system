@@ -6,7 +6,7 @@ from django.conf import settings
 from django.contrib.auth.models import Group, User
 from django.core.paginator import Paginator
 from django.template.loader import get_template, render_to_string
-from django.test import Client, RequestFactory, TestCase
+from django.test import Client, RequestFactory, TestCase, tag
 from django.urls import reverse
 
 from documents.models import Document, DocumentRenewal
@@ -25,6 +25,7 @@ from ledger.models import (
 from trips.models import Route, Trip
 
 
+@tag('slow', 'templates')
 class AllTemplatesTest(TestCase):
     """
     Automated test suite verifying that all .html templates in the project
