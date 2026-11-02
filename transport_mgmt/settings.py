@@ -88,6 +88,9 @@ DATABASES = {
 }
 
 if IS_TESTING:
+    # Custom test runner: defaults to parallel execution and suppresses repetitive DB clone/destroy noise
+    TEST_RUNNER = 'transport_mgmt.test_runner.TMSTestRunner'
+
     # Synchronize models directly into SQLite test db without executing 116 historical migrations.
     # Drops test database creation time from ~9.2s down to ~0.4s.
     DATABASES['default']['TEST'] = {
