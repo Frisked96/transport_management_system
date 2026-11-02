@@ -417,7 +417,7 @@ class TripPaymentWorkflowTests(TestCase):
         }
         resp = self.client.post(reverse('financialrecord-create'), post_data)
         self.assertEqual(resp.status_code, 200)
-        self.assertFormError(resp.context['form'], 'amount', 'Total allocated across trips (₹7,000.00) must exactly match total payment (₹6,000.00). Difference: ₹1,000.00.')
+        self.assertFormError(resp.context['form'], 'amount', 'Total allocated across trips (₹7,000.00) cannot exceed Total Payment (₹6,000.00). Over by ₹1,000.00.')
 
     def test_multi_bill_mismatched_amount_fails_validation(self):
         """Verify that submitting mismatched amount and bill_distribution raises a form validation error."""
@@ -479,5 +479,223 @@ class TripPaymentWorkflowTests(TestCase):
         self.assertTrue(any('not both simultaneously' in str(err) for err in form.non_field_errors()))
 
 
+class AdvancePaymentWorkflowTests(TestCase):
+    """Tests for advance payment and trip attachment workflows."""
 
+    def setUp(self):
+        super().setUp()
+        self.client = Client()
+        self.user = User.objects.create_superuser(username='advadmin', email='adv@test.com', password='password123')
+        self.client.login(username='advadmin', password='password123')
+
+        self.account = CompanyAccount.objects.create(
+            name="Advance Test Account",
+            opening_balance=Decimal('500000.00')
+        )
+        self.party = Party.objects.create(name="Advance Client", party_type=Party.TYPE_DEBTOR)
+        self.cat_trip_payment, _ = TransactionCategory.objects.get_or_create(
+            name='Trip Payment',
+            defaults={'type': TransactionCategory.TYPE_INCOME}
+        )
+        self.cat_payment_in, _ = TransactionCategory.objects.get_or_create(
+            name='Payment In',
+            defaults={'type': TransactionCategory.TYPE_INCOME}
+        )
+
+        self.vehicle = Vehicle.objects.create(registration_plate="MH12ADV001")
+        self.route = Route.objects.create(
+            pickup_location="Mumbai",
+            delivery_location="Delhi",
+            default_rate=Decimal('60000.00'),
+            route_type=Route.ROUTE_TYPE_NONE
+        )
+
+    def test_advance_first_then_allocate_to_trip(self):
+        """Case 1: Create advance ₹1,00,000, then edit to allocate ₹60,000 to a trip.
+        Parent record amount must remain ₹1,00,000. Trip receives ₹60,000 via TripAllocation."""
+        import json
+
+        # Step 1: Create advance (on-account, no trips)
+        advance_date = '2026-10-01'
+        post_data = {
+            'date': advance_date,
+            'record_type': 'Transaction',
+            'account': self.account.id,
+            'party': self.party.id,
+            'category': self.cat_payment_in.id,
+            'amount': '100000.00',
+            'description': 'Advance payment from client',
+        }
+        resp = self.client.post(reverse('financialrecord-create'), post_data)
+        self.assertIn(resp.status_code, [302, 200])
+
+        advance_rec = FinancialRecord.objects.filter(
+            party=self.party,
+            category=self.cat_payment_in,
+            amount=Decimal('100000.00')
+        ).first()
+        self.assertIsNotNone(advance_rec)
+        self.assertEqual(advance_rec.allocations.count(), 0)
+
+        # Step 2: Create trip for ₹60,000
+        trip = Trip.objects.create(
+            trip_number="TRIP-ADV-101",
+            date=datetime.date(2026, 10, 5),
+            vehicle=self.vehicle,
+            party=self.party,
+            route=self.route,
+            revenue_type=Trip.REVENUE_FIXED,
+            rate_per_ton=Decimal('60000.00')
+        )
+        trip.refresh_from_db()
+        self.assertEqual(trip.outstanding_balance, Decimal('60000.00'))
+
+        # Step 3: Edit advance record to allocate ₹60,000 to trip with advance mode
+        edit_url = reverse('financialrecord-update', kwargs={'pk': advance_rec.pk})
+        distribution_data = [{'trip_id': trip.id, 'payment': 60000.00}]
+        edit_data = {
+            'date': advance_date,
+            'record_type': 'Transaction',
+            'account': self.account.id,
+            'party': self.party.id,
+            'category': self.cat_payment_in.id,
+            'amount': '100000.00',
+            'payment_distribution': json.dumps(distribution_data),
+            'allow_advance_allocation': 'on',
+        }
+        resp = self.client.post(edit_url, edit_data)
+        self.assertIn(resp.status_code, [302, 200])
+
+        # Verify: Parent record amount stays ₹1,00,000
+        advance_rec.refresh_from_db()
+        self.assertEqual(advance_rec.amount, Decimal('100000.00'))
+
+        # Verify: TripAllocation of ₹60,000 exists
+        allocs = TripAllocation.objects.filter(financial_record=advance_rec)
+        self.assertEqual(allocs.count(), 1)
+        self.assertEqual(allocs.first().amount, Decimal('60000.00'))
+        self.assertEqual(allocs.first().trip, trip)
+
+        # Verify: Trip financial caches updated
+        trip.refresh_from_db()
+        self.assertEqual(trip.amount_received, Decimal('60000.00'))
+        self.assertEqual(trip.outstanding_balance, Decimal('0.00'))
+        self.assertEqual(trip.payment_status, Trip.PAYMENT_STATUS_PAID)
+
+    def test_trip_first_then_record_past_advance_with_allocation(self):
+        """Case 2: Create trip ₹80,000 first, then record advance of ₹1,00,000 on past date
+        and allocate ₹80,000 to the trip. Remaining ₹20,000 stays unallocated."""
+        import json
+
+        # Step 1: Create trip
+        trip = Trip.objects.create(
+            trip_number="TRIP-ADV-201",
+            date=datetime.date(2026, 10, 5),
+            vehicle=self.vehicle,
+            party=self.party,
+            route=self.route,
+            revenue_type=Trip.REVENUE_FIXED,
+            rate_per_ton=Decimal('80000.00')
+        )
+        trip.refresh_from_db()
+        self.assertEqual(trip.outstanding_balance, Decimal('80000.00'))
+
+        # Step 2: Record advance on past date with trip allocation
+        distribution_data = [{'trip_id': trip.id, 'payment': 80000.00}]
+        post_data = {
+            'date': '2026-09-28',
+            'record_type': 'Transaction',
+            'account': self.account.id,
+            'party': self.party.id,
+            'category': self.cat_trip_payment.id,
+            'amount': '100000.00',
+            'payment_distribution': json.dumps(distribution_data),
+            'allow_advance_allocation': 'on',
+        }
+        resp = self.client.post(reverse('financialrecord-create'), post_data)
+        self.assertIn(resp.status_code, [302, 200])
+
+        # Verify: Financial record created with full amount ₹1,00,000
+        fr = FinancialRecord.objects.filter(
+            party=self.party,
+            amount=Decimal('100000.00'),
+            date=datetime.date(2026, 9, 28)
+        ).first()
+        self.assertIsNotNone(fr)
+        self.assertEqual(fr.amount, Decimal('100000.00'))
+
+        # Verify: TripAllocation of ₹80,000
+        allocs = TripAllocation.objects.filter(financial_record=fr)
+        self.assertEqual(allocs.count(), 1)
+        self.assertEqual(allocs.first().amount, Decimal('80000.00'))
+
+        # Verify: Trip is Paid
+        trip.refresh_from_db()
+        self.assertEqual(trip.amount_received, Decimal('80000.00'))
+        self.assertEqual(trip.outstanding_balance, Decimal('0.00'))
+        self.assertEqual(trip.payment_status, Trip.PAYMENT_STATUS_PAID)
+
+    def test_over_allocation_blocked_even_in_advance_mode(self):
+        """Case 3: Allocating more than total payment is always rejected, even with advance checkbox."""
+        import json
+
+        trip = Trip.objects.create(
+            trip_number="TRIP-ADV-301",
+            date=datetime.date(2026, 10, 5),
+            vehicle=self.vehicle,
+            party=self.party,
+            route=self.route,
+            revenue_type=Trip.REVENUE_FIXED,
+            rate_per_ton=Decimal('120000.00')
+        )
+
+        distribution_data = [{'trip_id': trip.id, 'payment': 120000.00}]
+        post_data = {
+            'date': '2026-10-01',
+            'record_type': 'Transaction',
+            'account': self.account.id,
+            'party': self.party.id,
+            'category': self.cat_trip_payment.id,
+            'amount': '100000.00',
+            'payment_distribution': json.dumps(distribution_data),
+            'allow_advance_allocation': 'on',
+        }
+        resp = self.client.post(reverse('financialrecord-create'), post_data)
+        self.assertEqual(resp.status_code, 200)  # Form re-rendered with errors
+        self.assertFormError(
+            resp.context['form'], 'amount',
+            'Total allocated across trips (₹120,000.00) cannot exceed Total Payment (₹100,000.00). Over by ₹20,000.00.'
+        )
+
+    def test_under_allocation_without_advance_mode_blocked(self):
+        """Under-allocation without advance checkbox is still rejected (exact match required)."""
+        import json
+
+        trip = Trip.objects.create(
+            trip_number="TRIP-ADV-401",
+            date=datetime.date(2026, 10, 5),
+            vehicle=self.vehicle,
+            party=self.party,
+            route=self.route,
+            revenue_type=Trip.REVENUE_FIXED,
+            rate_per_ton=Decimal('60000.00')
+        )
+
+        distribution_data = [{'trip_id': trip.id, 'payment': 60000.00}]
+        post_data = {
+            'date': '2026-10-01',
+            'record_type': 'Transaction',
+            'account': self.account.id,
+            'party': self.party.id,
+            'category': self.cat_trip_payment.id,
+            'amount': '100000.00',
+            'payment_distribution': json.dumps(distribution_data),
+            # No allow_advance_allocation — exact match required
+        }
+        resp = self.client.post(reverse('financialrecord-create'), post_data)
+        self.assertEqual(resp.status_code, 200)  # Form re-rendered with errors
+        self.assertFormError(
+            resp.context['form'], 'amount',
+            'Total allocated across trips (₹60,000.00) must exactly match total payment (₹100,000.00). Difference: ₹40,000.00.'
+        )
 

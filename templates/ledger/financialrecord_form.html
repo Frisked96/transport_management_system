@@ -137,6 +137,7 @@
         <!-- Technical & Distribution Hidden Inputs -->
         <input type="hidden" name="payment_distribution" id="id_payment_distribution" value="{{ form.payment_distribution.value|default:'' }}">
         <input type="hidden" name="bill_distribution" id="id_bill_distribution" value="{{ form.bill_distribution.value|default:'' }}">
+        <input type="hidden" name="allow_advance_allocation" id="id_allow_advance_allocation" value="">
         <input type="hidden" name="record_type" id="id_record_type" value="{{ form.record_type.value|default:'Transaction' }}">
 
         <!-- STEP 1: TRANSACTION TYPE TABS (Functional, Fixed hover styling, Touch-friendly) -->
@@ -329,6 +330,15 @@
                 </div>
 
                 <div id="trips-collapsible-body" class="p-4 space-y-3">
+                    <!-- Advance Allocation Option -->
+                    <div id="advance-allocation-option" class="hidden flex items-center gap-2 pb-2 border-b border-slate-200 mb-2">
+                        <label class="inline-flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700">
+                            <input type="checkbox" id="chk-allow-advance" class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 w-4 h-4">
+                            <span>Allow saving unallocated balance as customer advance</span>
+                        </label>
+                        <span class="text-[10px] text-slate-400 font-medium">(Remaining amount stays on customer account)</span>
+                    </div>
+
                     <!-- Active Search Bar for Reg No / LR No -->
                     <div id="trip-search-wrapper" class="hidden relative">
                         <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
@@ -817,8 +827,15 @@ document.addEventListener('DOMContentLoaded', function() {
             diffBadge.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-400"></i><span>Exact Match (₹${allocatedTotal.toLocaleString('en-IN', {minimumFractionDigits: 2})})</span>`;
         } else if (diff < 0) {
             const remaining = Math.abs(diff);
-            diffBadge.className = 'px-3 py-1.5 rounded-md text-xs font-black uppercase tracking-wider flex items-center gap-1.5 bg-amber-950/80 text-amber-300 border border-amber-600/50';
-            diffBadge.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-amber-400"></i><span>Unallocated: ₹${remaining.toLocaleString('en-IN', {minimumFractionDigits: 2})}</span>`;
+            const advanceCheckbox = document.getElementById('chk-allow-advance');
+            const isAdvanceMode = advanceCheckbox && advanceCheckbox.checked;
+            if (isAdvanceMode && isTrips) {
+                diffBadge.className = 'px-3 py-1.5 rounded-md text-xs font-black uppercase tracking-wider flex items-center gap-1.5 bg-emerald-950/80 text-emerald-300 border border-emerald-600/50';
+                diffBadge.innerHTML = `<i class="fa-solid fa-piggy-bank text-emerald-400"></i><span>Advance Remaining: ₹${remaining.toLocaleString('en-IN', {minimumFractionDigits: 2})}</span>`;
+            } else {
+                diffBadge.className = 'px-3 py-1.5 rounded-md text-xs font-black uppercase tracking-wider flex items-center gap-1.5 bg-amber-950/80 text-amber-300 border border-amber-600/50';
+                diffBadge.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-amber-400"></i><span>Unallocated: ₹${remaining.toLocaleString('en-IN', {minimumFractionDigits: 2})}</span>`;
+            }
         } else {
             const over = diff;
             diffBadge.className = 'px-3 py-1.5 rounded-md text-xs font-black uppercase tracking-wider flex items-center gap-1.5 bg-rose-950/80 text-rose-300 border border-rose-600/50';
@@ -1012,6 +1029,7 @@ document.addEventListener('DOMContentLoaded', function() {
         syncHiddenInputs();
         updateSummary();
         updateAllocationTracker();
+        updateAdvanceOptionVisibility();
     }
 
     function syncCategory(mode) {
@@ -1101,6 +1119,7 @@ document.addEventListener('DOMContentLoaded', function() {
         syncHiddenInputs();
         updateSummary();
         updateAllocationTracker();
+        updateAdvanceOptionVisibility();
     }
 
     modeTabs.forEach(btn => btn.addEventListener('click', () => setMode(btn.dataset.mode)));
@@ -1993,6 +2012,30 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    // Advance allocation checkbox syncing
+    const advanceCheckbox = document.getElementById('chk-allow-advance');
+    const advanceHidden = document.getElementById('id_allow_advance_allocation');
+    const advanceOptionDiv = document.getElementById('advance-allocation-option');
+    if (advanceCheckbox) {
+        advanceCheckbox.addEventListener('change', () => {
+            if (advanceHidden) advanceHidden.value = advanceCheckbox.checked ? 'on' : '';
+            updateAllocationTracker();
+            updateSummary();
+        });
+    }
+
+    // Show/hide advance option based on mode+subtab
+    function updateAdvanceOptionVisibility() {
+        if (!advanceOptionDiv) return;
+        if (currentMode === 'customer' && currentSubtab === 'trips') {
+            advanceOptionDiv.classList.remove('hidden');
+        } else {
+            advanceOptionDiv.classList.add('hidden');
+            if (advanceCheckbox) advanceCheckbox.checked = false;
+            if (advanceHidden) advanceHidden.value = '';
+        }
+    }
+
     // Direct input listeners
     if (hiddenAmount) {
         hiddenAmount.addEventListener('input', () => {
@@ -2078,8 +2121,15 @@ document.addEventListener('DOMContentLoaded', function() {
                     statusText.textContent = 'Ready to Save';
                     statusText.className = 'text-emerald-700 font-extrabold';
                 } else if (diff < 0) {
-                    statusText.textContent = `Unallocated (₹${Math.abs(diff).toLocaleString('en-IN', {minimumFractionDigits: 2})})`;
-                    statusText.className = 'text-amber-600 font-bold';
+                    const advChk = document.getElementById('chk-allow-advance');
+                    const isAdvMode = isTrips && advChk && advChk.checked;
+                    if (isAdvMode) {
+                        statusText.textContent = `Advance ₹${Math.abs(diff).toLocaleString('en-IN', {minimumFractionDigits: 2})} Unallocated`;
+                        statusText.className = 'text-emerald-600 font-bold';
+                    } else {
+                        statusText.textContent = `Unallocated (₹${Math.abs(diff).toLocaleString('en-IN', {minimumFractionDigits: 2})})`;
+                        statusText.className = 'text-amber-600 font-bold';
+                    }
                 } else {
                     statusText.textContent = `Over-allocated (₹${diff.toLocaleString('en-IN', {minimumFractionDigits: 2})})`;
                     statusText.className = 'text-rose-600 font-bold';
@@ -2098,7 +2148,7 @@ document.addEventListener('DOMContentLoaded', function() {
         updateAllocationTracker();
     }
 
-    // Form Submission Interceptor: Enforces exact allocation matching
+    // Form Submission Interceptor: Enforces allocation rules (exact match or advance partial)
     const entryForm = document.getElementById('financial-entry-form');
     if (entryForm) {
         entryForm.addEventListener('submit', function(e) {
@@ -2124,6 +2174,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
 
                     const numSelected = isTrips ? Object.keys(selectedTripsMap).length : Object.keys(selectedBillsMap).length;
+                    const advChk = document.getElementById('chk-allow-advance');
+                    const isAdvanceMode = isTrips && advChk && advChk.checked;
 
                     if (numSelected > 0 || headerTotal > 0) {
                         if (headerTotal <= 0) {
@@ -2133,14 +2185,27 @@ document.addEventListener('DOMContentLoaded', function() {
                         }
 
                         const diff = Math.round((allocatedTotal - headerTotal) * 100) / 100;
-                        if (Math.abs(diff) > 0.01) {
+
+                        // Over-allocation: always blocked
+                        if (diff > 0.01) {
                             e.preventDefault();
                             const itemType = isTrips ? 'trips' : 'invoices';
-                            const msg = diff < 0
-                                ? `Total allocated across ${itemType} (₹${allocatedTotal.toLocaleString('en-IN', {minimumFractionDigits: 2})}) does not match Total Payment (₹${headerTotal.toLocaleString('en-IN', {minimumFractionDigits: 2})}). Remaining unallocated: ₹${Math.abs(diff).toLocaleString('en-IN', {minimumFractionDigits: 2})}.`
-                                : `Total allocated across ${itemType} (₹${allocatedTotal.toLocaleString('en-IN', {minimumFractionDigits: 2})}) exceeds Total Payment (₹${headerTotal.toLocaleString('en-IN', {minimumFractionDigits: 2})}) by ₹${diff.toLocaleString('en-IN', {minimumFractionDigits: 2})}.`;
-                            showAmountError(msg);
+                            showAmountError(`Total allocated across ${itemType} (₹${allocatedTotal.toLocaleString('en-IN', {minimumFractionDigits: 2})}) exceeds Total Payment (₹${headerTotal.toLocaleString('en-IN', {minimumFractionDigits: 2})}) by ₹${diff.toLocaleString('en-IN', {minimumFractionDigits: 2})}.`);
                             return false;
+                        }
+
+                        // Under-allocation
+                        if (diff < -0.01) {
+                            if (isAdvanceMode) {
+                                // Advance mode: partial allocation permitted, sync hidden field
+                                if (advanceHidden) advanceHidden.value = 'on';
+                            } else {
+                                // Exact match required
+                                e.preventDefault();
+                                const itemType = isTrips ? 'trips' : 'invoices';
+                                showAmountError(`Total allocated across ${itemType} (₹${allocatedTotal.toLocaleString('en-IN', {minimumFractionDigits: 2})}) does not match Total Payment (₹${headerTotal.toLocaleString('en-IN', {minimumFractionDigits: 2})}). Remaining unallocated: ₹${Math.abs(diff).toLocaleString('en-IN', {minimumFractionDigits: 2})}. Check "Allow saving unallocated balance as customer advance" if this is an advance payment.`);
+                                return false;
+                            }
                         }
                     }
                 }

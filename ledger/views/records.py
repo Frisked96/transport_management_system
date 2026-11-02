@@ -538,9 +538,15 @@ class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, Fin
                     trips_by_id = Trip.objects.in_bulk(trip_ids)
 
                     # 1.1 Bank Payment Record
-                    if total_payment > 0:
+                    # When advance allocation is enabled, preserve the full header amount
+                    # (total bank inflow) instead of only the allocated portion
+                    allow_advance = form.cleaned_data.get('allow_advance_allocation', False)
+                    header_amount = form.cleaned_data.get('amount') or Decimal('0')
+                    record_amount = header_amount if (allow_advance and header_amount > 0) else total_payment
+
+                    if record_amount > 0:
                         self.object = form.save(commit=False)
-                        self.object.amount = total_payment
+                        self.object.amount = record_amount
                         self.object.recorded_by = self.request.user
                         self.object.voucher = voucher
                         self.object.verification_status = FinancialVoucher.STATUS_PENDING
@@ -972,7 +978,15 @@ class FinancialRecordUpdateView(LoginRequiredMixin, PermissionRequiredMixin, Fin
             try:
                 with transaction.atomic():
                     # 1. Update the parent FinancialRecord
-                    self.object = form.save()
+                    # When advance allocation is enabled, preserve header amount (full transaction)
+                    allow_advance = form.cleaned_data.get('allow_advance_allocation', False)
+                    if allow_advance:
+                        self.object = form.save(commit=False)
+                        header_amount = form.cleaned_data.get('amount') or self.object.amount
+                        self.object.amount = header_amount
+                        self.object.save()
+                    else:
+                        self.object = form.save()
                     
                     # 2. Update Trip Allocations (Delete old ones first)
                     if distribution_json:

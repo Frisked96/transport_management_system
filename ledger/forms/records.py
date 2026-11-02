@@ -37,6 +37,8 @@ class FinancialRecordForm(forms.ModelForm):
     payment_distribution = forms.CharField(widget=forms.HiddenInput(), required=False)
     # Hidden field to store JSON data for multi-bill payment distribution
     bill_distribution = forms.CharField(widget=forms.HiddenInput(), required=False)
+    # Hidden field to allow partial advance allocation (allocated < total_payment)
+    allow_advance_allocation = forms.BooleanField(required=False, initial=False, widget=forms.HiddenInput())
     
     associated_trip = TripChoiceField(
         queryset=Trip.objects.none(),
@@ -330,7 +332,7 @@ class FinancialRecordForm(forms.ModelForm):
 
         # Add basic styling for clarity
         for field_name, field in self.fields.items():
-            if field_name not in ['payment_distribution', 'bill_distribution', 'is_inter_party_adjustment']:
+            if field_name not in ['payment_distribution', 'bill_distribution', 'is_inter_party_adjustment', 'allow_advance_allocation']:
                 field.widget.attrs.update({'class': 'block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white'})
 
     def clean(self):
@@ -360,6 +362,7 @@ class FinancialRecordForm(forms.ModelForm):
 
         # Allocation validation against header amount
         distribution_json = cleaned_data.get('payment_distribution')
+        allow_advance = cleaned_data.get('allow_advance_allocation', False)
         if distribution_json:
             try:
                 dist_data = json.loads(distribution_json)
@@ -370,8 +373,14 @@ class FinancialRecordForm(forms.ModelForm):
                     
                     header_amount = cleaned_data.get('amount')
                     if header_amount is not None and header_amount > 0:
-                        if abs(total_p - header_amount) > Decimal('0.01'):
+                        if total_p > header_amount + Decimal('0.01'):
+                            # Over-allocation: always blocked regardless of advance mode
+                            self.add_error('amount', f'Total allocated across trips (₹{total_p:,.2f}) cannot exceed Total Payment (₹{header_amount:,.2f}). Over by ₹{(total_p - header_amount):,.2f}.')
+                        elif abs(total_p - header_amount) > Decimal('0.01') and not allow_advance:
+                            # Under-allocation without advance mode: exact match required
                             self.add_error('amount', f'Total allocated across trips (₹{total_p:,.2f}) must exactly match total payment (₹{header_amount:,.2f}). Difference: ₹{abs(header_amount - total_p):,.2f}.')
+                        # If allow_advance and total_p <= header_amount: valid partial allocation
+                        # Keep cleaned_data['amount'] = header_amount (full bank transaction amount)
                     else:
                         cleaned_data['amount'] = total_p
 
