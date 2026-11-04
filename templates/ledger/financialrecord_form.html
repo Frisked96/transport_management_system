@@ -823,6 +823,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const diff = Math.round((allocatedTotal - headerTotal) * 100) / 100;
 
         if (Math.abs(diff) < 0.01) {
+            clearAmountError();
             diffBadge.className = 'px-3 py-1.5 rounded-md text-xs font-black uppercase tracking-wider flex items-center gap-1.5 bg-emerald-950/80 text-emerald-300 border border-emerald-600/50';
             diffBadge.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-400"></i><span>Exact Match (₹${allocatedTotal.toLocaleString('en-IN', {minimumFractionDigits: 2})})</span>`;
         } else if (diff < 0) {
@@ -830,6 +831,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const advanceCheckbox = document.getElementById('chk-allow-advance');
             const isAdvanceMode = advanceCheckbox && advanceCheckbox.checked;
             if (isAdvanceMode && isTrips) {
+                clearAmountError();
                 diffBadge.className = 'px-3 py-1.5 rounded-md text-xs font-black uppercase tracking-wider flex items-center gap-1.5 bg-emerald-950/80 text-emerald-300 border border-emerald-600/50';
                 diffBadge.innerHTML = `<i class="fa-solid fa-piggy-bank text-emerald-400"></i><span>Advance Remaining: ₹${remaining.toLocaleString('en-IN', {minimumFractionDigits: 2})}</span>`;
             } else {
@@ -1423,7 +1425,17 @@ document.addEventListener('DOMContentLoaded', function() {
                 const t = parseFloat(tInp.value) || 0;
                 const s = parseFloat(sInp.value) || 0;
                 const c = parseFloat(cInp.value) || 0;
-                pInp.value = Math.max(0, trip.balance - t - s - c).toFixed(2);
+                const hTotal = parseFloat(hiddenAmount.value) || 0;
+                let maxPay = Math.max(0, trip.balance - t - s - c);
+                if (hTotal > 0) {
+                    let currAlloc = 0;
+                    Object.entries(selectedTripsMap).forEach(([id, item]) => {
+                        if (String(id) !== String(trip.id)) currAlloc += (item.payment || 0);
+                    });
+                    const unalloc = Math.max(0, hTotal - currAlloc);
+                    if (unalloc > 0) maxPay = Math.min(maxPay, unalloc);
+                }
+                pInp.value = maxPay.toFixed(2);
                 syncRow();
             });
 
@@ -1434,7 +1446,17 @@ document.addEventListener('DOMContentLoaded', function() {
                     tInp.value = calculated.toFixed(2);
                     const s = parseFloat(sInp.value) || 0;
                     const c = parseFloat(cInp.value) || 0;
-                    pInp.value = Math.max(0, trip.balance - calculated - s - c).toFixed(2);
+                    const hTotal = parseFloat(hiddenAmount.value) || 0;
+                    let maxPay = Math.max(0, trip.balance - calculated - s - c);
+                    if (hTotal > 0) {
+                        let currAlloc = 0;
+                        Object.entries(selectedTripsMap).forEach(([id, item]) => {
+                            if (String(id) !== String(trip.id)) currAlloc += (item.payment || 0);
+                        });
+                        const unalloc = Math.max(0, hTotal - currAlloc);
+                        if (unalloc > 0) maxPay = Math.min(maxPay, unalloc);
+                    }
+                    pInp.value = maxPay.toFixed(2);
                     syncRow();
                 });
             });
@@ -1726,7 +1748,17 @@ document.addEventListener('DOMContentLoaded', function() {
 
             card.querySelector('.btn-bill-full').addEventListener('click', () => {
                 const t = parseFloat(tInp.value) || 0;
-                pInp.value = Math.max(0, due - t).toFixed(2);
+                const hTotal = parseFloat(hiddenAmount.value) || 0;
+                let maxPay = Math.max(0, due - t);
+                if (hTotal > 0) {
+                    let currAlloc = 0;
+                    Object.entries(selectedBillsMap).forEach(([id, item]) => {
+                        if (String(id) !== String(bill.id)) currAlloc += (item.payment || 0);
+                    });
+                    const unalloc = Math.max(0, hTotal - currAlloc);
+                    if (unalloc > 0) maxPay = Math.min(maxPay, unalloc);
+                }
+                pInp.value = maxPay.toFixed(2);
                 syncBill();
             });
 
@@ -1736,7 +1768,17 @@ document.addEventListener('DOMContentLoaded', function() {
                     const base = parseFloat(bill.subtotal) || due;
                     const calculated = Math.round(base * (pct / 100) * 100) / 100;
                     tInp.value = calculated.toFixed(2);
-                    pInp.value = Math.max(0, due - calculated).toFixed(2);
+                    const hTotal = parseFloat(hiddenAmount.value) || 0;
+                    let maxPay = Math.max(0, due - calculated);
+                    if (hTotal > 0) {
+                        let currAlloc = 0;
+                        Object.entries(selectedBillsMap).forEach(([id, item]) => {
+                            if (String(id) !== String(bill.id)) currAlloc += (item.payment || 0);
+                        });
+                        const unalloc = Math.max(0, hTotal - currAlloc);
+                        if (unalloc > 0) maxPay = Math.min(maxPay, unalloc);
+                    }
+                    pInp.value = maxPay.toFixed(2);
                     syncBill();
                 });
             });
@@ -1996,6 +2038,12 @@ document.addEventListener('DOMContentLoaded', function() {
             hiddenAmount.setCustomValidity(msg);
             hiddenAmount.reportValidity();
             hiddenAmount.focus();
+            // Clear custom validity shortly after displaying the browser validation bubble.
+            // This prevents the browser from permanently locking the form with a stale error.
+            // Every save attempt will re-evaluate current numbers freshly in the submit handler.
+            setTimeout(() => {
+                if (hiddenAmount) hiddenAmount.setCustomValidity('');
+            }, 50);
         }
     }
 
@@ -2118,12 +2166,14 @@ document.addEventListener('DOMContentLoaded', function() {
             } else {
                 const diff = Math.round((allocatedPayment - p) * 100) / 100;
                 if (Math.abs(diff) <= 0.01) {
+                    clearAmountError();
                     statusText.textContent = 'Ready to Save';
                     statusText.className = 'text-emerald-700 font-extrabold';
                 } else if (diff < 0) {
                     const advChk = document.getElementById('chk-allow-advance');
                     const isAdvMode = isTrips && advChk && advChk.checked;
                     if (isAdvMode) {
+                        clearAmountError();
                         statusText.textContent = `Advance ₹${Math.abs(diff).toLocaleString('en-IN', {minimumFractionDigits: 2})} Unallocated`;
                         statusText.className = 'text-emerald-600 font-bold';
                     } else {
@@ -2151,7 +2201,65 @@ document.addEventListener('DOMContentLoaded', function() {
     // Form Submission Interceptor: Enforces allocation rules (exact match or advance partial)
     const entryForm = document.getElementById('financial-entry-form');
     if (entryForm) {
+        // Clear any previous error when user modifies any input or control
+        entryForm.addEventListener('input', clearAmountError);
+        entryForm.addEventListener('change', clearAmountError);
+
+        // Reset stale browser validation validity before submit initiates
+        const resetStaleValidity = () => {
+            if (hiddenAmount) hiddenAmount.setCustomValidity('');
+        };
+        entryForm.querySelectorAll('button[type="submit"], input[type="submit"]').forEach(btn => {
+            btn.addEventListener('click', resetStaleValidity);
+            btn.addEventListener('pointerdown', resetStaleValidity);
+        });
+        entryForm.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') resetStaleValidity();
+        });
+
         entryForm.addEventListener('submit', function(e) {
+            // Always clear previous error so every submit checks dynamically afresh
+            clearAmountError();
+
+            // Re-sync all checked invoice cards directly from DOM to ensure 100% current state
+            document.querySelectorAll('#bills-list .settle-row, #vendor-bills-list .settle-row').forEach(card => {
+                const chk = card.querySelector('.bill-checkbox');
+                const bId = card.dataset.billId;
+                if (chk && chk.checked && bId) {
+                    const pInp = card.querySelector('.inp-bill-payment');
+                    const tInp = card.querySelector('.inp-bill-tds');
+                    if (pInp) {
+                        const p = parseFloat(pInp.value) || 0;
+                        const t = tInp ? (parseFloat(tInp.value) || 0) : 0;
+                        selectedBillsMap[bId] = { payment: p, tds: t };
+                    }
+                } else if (chk && !chk.checked && bId) {
+                    delete selectedBillsMap[bId];
+                }
+            });
+
+            // Re-sync all checked trip cards directly from DOM to ensure 100% current state
+            document.querySelectorAll('#trips-list .settle-row').forEach(card => {
+                const chk = card.querySelector('.trip-checkbox');
+                const tId = card.dataset.tripId;
+                if (chk && chk.checked && tId) {
+                    const pInp = card.querySelector('.inp-trip-payment');
+                    const tInp = card.querySelector('.inp-trip-tds');
+                    const sInp = card.querySelector('.inp-trip-shortage');
+                    const cInp = card.querySelector('.inp-trip-charges');
+                    if (pInp) {
+                        selectedTripsMap[tId] = {
+                            payment: parseFloat(pInp.value) || 0,
+                            tds: tInp ? (parseFloat(tInp.value) || 0) : 0,
+                            shortage: sInp ? (parseFloat(sInp.value) || 0) : 0,
+                            charges: cInp ? (parseFloat(cInp.value) || 0) : 0
+                        };
+                    }
+                } else if (chk && !chk.checked && tId) {
+                    delete selectedTripsMap[tId];
+                }
+            });
+
             syncHiddenInputs();
 
             // Allocation check for customer & vendor settlements against trips/bills
@@ -2180,7 +2288,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (numSelected > 0 || headerTotal > 0) {
                         if (headerTotal <= 0) {
                             e.preventDefault();
-                            showAmountError('Please fill out this field.');
+                            showAmountError('Please enter a valid Total Payment amount.');
                             return false;
                         }
 
