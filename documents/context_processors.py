@@ -3,12 +3,13 @@ from datetime import timedelta
 from django.db import models
 from django.db.models import Q, F
 from .models import Document
-from fleet.models import MaintenanceRecord
+from fleet.models import MaintenanceRecord, Vehicle
 
 def document_alerts(request):
     """
     Returns counts and querysets for expiring/expired documents and maintenance alerts.
     Uses optimized database-level logic to avoid N+1 and memory issues.
+    Excludes retired vehicles from alert notifications.
     """
     if not request.user.is_authenticated:
         return {}
@@ -22,14 +23,18 @@ def document_alerts(request):
     today = timezone.now().date()
     warning_date = today + timedelta(days=30)
     
-    expiring_docs_qs = Document.objects.filter(
+    expiring_docs_qs = Document.objects.exclude(
+        vehicle__status=Vehicle.STATUS_RETIRED
+    ).filter(
         never_expires=False,
         expiry_date__isnull=False,
         expiry_date__lte=warning_date,
         expiry_date__gte=today
     ).order_by('expiry_date')
     
-    expired_docs_qs = Document.objects.filter(
+    expired_docs_qs = Document.objects.exclude(
+        vehicle__status=Vehicle.STATUS_RETIRED
+    ).filter(
         never_expires=False,
         expiry_date__isnull=False,
         expiry_date__lt=today
@@ -38,6 +43,8 @@ def document_alerts(request):
     # 2. Maintenance Alerts (Moved logic to SQL)
     due_maintenance_qs = MaintenanceRecord.objects.filter(
         is_completed=False
+    ).exclude(
+        vehicle__status=Vehicle.STATUS_RETIRED
     ).filter(
         Q(expiry_date__lte=today) | 
         Q(expiry_km__lte=F('vehicle__current_odometer'))

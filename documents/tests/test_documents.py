@@ -153,6 +153,40 @@ class DocumentAlertsTests(TestCase):
         req_anon.user = AnonymousUser()
         self.assertEqual(document_alerts(req_anon), {})
 
+    def test_retired_vehicle_documents_and_maintenance_excluded_from_alerts(self):
+        """Verify that retired vehicles do not generate document or maintenance alerts."""
+        today = timezone.now().date()
+        veh_retired = Vehicle.objects.create(
+            registration_plate='MH 12 RETIRED',
+            status=Vehicle.STATUS_RETIRED,
+            current_odometer=50000
+        )
+        Document.objects.create(
+            vehicle=veh_retired,
+            document_name='Retired Expired Tax',
+            expiry_date=today - timedelta(days=5)
+        )
+        Document.objects.create(
+            vehicle=veh_retired,
+            document_name='Retired Expiring Permit',
+            expiry_date=today + timedelta(days=5)
+        )
+        MaintenanceRecord.objects.create(
+            vehicle=veh_retired,
+            name='Retired Maintenance',
+            expiry_date=today - timedelta(days=2),
+            is_completed=False
+        )
+
+        req = self.factory.get('/')
+        req.user = self.manager
+        alerts = document_alerts(req)
+
+        self.assertEqual(alerts['total_alerts'], 0)
+        self.assertEqual(alerts['expired_docs'].count(), 0)
+        self.assertEqual(alerts['expiring_docs'].count(), 0)
+        self.assertEqual(alerts['due_maintenance'].count(), 0)
+
     def test_regular_user_sees_notifications_in_template(self):
         """Verify that regular non-manager users see the notification bell and alerts in the UI with vehicle numbers."""
         today = timezone.now().date()
@@ -320,6 +354,34 @@ class DocumentAlertsTests(TestCase):
         self.assertIn(veh_expired, vehicles_alerts)
         self.assertIn(veh_expiring, vehicles_alerts)
         self.assertNotIn(veh_clean, vehicles_alerts)
+
+    def test_retired_vehicle_excluded_from_document_list_alerts(self):
+        """Test that retired vehicles and their documents are excluded from alert filters and alert counts."""
+        today = timezone.now().date()
+        veh_retired = Vehicle.objects.create(
+            registration_plate='MH 12 RETIRED ALERT',
+            status=Vehicle.STATUS_RETIRED
+        )
+        Document.objects.create(
+            vehicle=veh_retired,
+            document_name='Insurance',
+            expiry_date=today - timedelta(days=10)
+        )
+
+        view_perm = Permission.objects.get(codename='view_document')
+        self.regular_user.user_permissions.add(view_perm)
+        self.client.login(username='driver_john', password='password123')
+
+        url = reverse('document-list')
+        # Check alerts summary counts do not include retired vehicles
+        res_all = self.client.get(url, {'type': 'vehicles'})
+        self.assertEqual(res_all.context['summary_counts']['expired'], 0)
+        self.assertEqual(res_all.context['summary_counts']['alerts'], 0)
+
+        # Check expired alert filter does not return retired vehicle's documents
+        res_expired = self.client.get(url, {'type': 'vehicles', 'alert': 'expired'})
+        self.assertEqual(res_expired.status_code, 200)
+        self.assertEqual(len(res_expired.context['page_obj']), 0)
 
     def test_document_list_view_alert_filters_drivers(self):
         """Test filtering document list view by alert statuses for drivers."""

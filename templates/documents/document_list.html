@@ -525,6 +525,11 @@
                             {% else %}
                             <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-100 text-blue-800">Attached</span>
                             {% endif %}
+                            {% if vehicle.status == 'Retired' %}
+                            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-200 text-slate-700">Retired</span>
+                            {% elif vehicle.status == 'Maintenance' %}
+                            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-800">Maintenance</span>
+                            {% endif %}
                         </div>
                         <p class="text-xs text-slate-500">{{ vehicle.make_model }}</p>
                     </div>

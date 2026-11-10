@@ -152,7 +152,7 @@ class DocumentListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
                     vehicle__isnull=False,
                     never_expires=False,
                     expiry_date__isnull=False
-                )
+                ).exclude(vehicle__status=Vehicle.STATUS_RETIRED)
 
                 # Ownership filter (default: Company Owned)
                 if self.ownership_filter == 'owned':
@@ -203,11 +203,11 @@ class DocumentListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
                 total_docs=Count('documents'),
                 expiring_count=Count(
                     'documents', 
-                    filter=Q(documents__never_expires=False, documents__expiry_date__lte=warning_date, documents__expiry_date__gte=today)
+                    filter=Q(~Q(status=Vehicle.STATUS_RETIRED), documents__never_expires=False, documents__expiry_date__lte=warning_date, documents__expiry_date__gte=today)
                 ),
                 expired_count=Count(
                     'documents', 
-                    filter=Q(documents__never_expires=False, documents__expiry_date__lt=today)
+                    filter=Q(~Q(status=Vehicle.STATUS_RETIRED), documents__never_expires=False, documents__expiry_date__lt=today)
                 )
             ).all().order_by('registration_plate')
             
@@ -275,12 +275,14 @@ class DocumentListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
 
             context['summary_counts'] = base_veh.aggregate(
                 total=Count('id', distinct=True),
-                expired=Count('id', filter=Q(documents__never_expires=False, documents__expiry_date__lt=today), distinct=True),
-                expiring=Count('id', filter=Q(documents__never_expires=False, documents__expiry_date__lte=warning_date, documents__expiry_date__gte=today), distinct=True),
-                alerts=Count('id', filter=Q(documents__never_expires=False, documents__expiry_date__lte=warning_date), distinct=True),
+                expired=Count('id', filter=Q(~Q(status=Vehicle.STATUS_RETIRED), documents__never_expires=False, documents__expiry_date__lt=today), distinct=True),
+                expiring=Count('id', filter=Q(~Q(status=Vehicle.STATUS_RETIRED), documents__never_expires=False, documents__expiry_date__lte=warning_date, documents__expiry_date__gte=today), distinct=True),
+                alerts=Count('id', filter=Q(~Q(status=Vehicle.STATUS_RETIRED), documents__never_expires=False, documents__expiry_date__lte=warning_date), distinct=True),
             )
 
-            base_doc_qs = Document.objects.filter(vehicle__isnull=False, never_expires=False, expiry_date__isnull=False)
+            base_doc_qs = Document.objects.filter(
+                vehicle__isnull=False, never_expires=False, expiry_date__isnull=False
+            ).exclude(vehicle__status=Vehicle.STATUS_RETIRED)
             if self.ownership_filter == 'owned':
                 base_doc_qs = base_doc_qs.filter(vehicle__ownership=Vehicle.OWNERSHIP_OWNED)
             elif self.ownership_filter == 'attached':
