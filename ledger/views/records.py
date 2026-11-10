@@ -973,6 +973,7 @@ class FinancialRecordUpdateView(LoginRequiredMixin, PermissionRequiredMixin, Fin
 
         distribution_json = form.cleaned_data.get('payment_distribution')
         bill_distribution_json = form.cleaned_data.get('bill_distribution')
+        dist_notes = []
         
         if distribution_json or bill_distribution_json:
             try:
@@ -1031,6 +1032,9 @@ class FinancialRecordUpdateView(LoginRequiredMixin, PermissionRequiredMixin, Fin
                         for bill in touched_bills:
                             BillingService.update_bill_financial_caches(bill)
 
+                        allocated_trip_nums = [trips_by_id[tid].trip_number for tid in trip_ids if tid in trips_by_id]
+                        if allocated_trip_nums:
+                            dist_notes.append(f"Allocated across trips: {', '.join(allocated_trip_nums)}")
                         messages.success(self.request, f'Financial record updated and redistributed across trips!')
 
                     # 3. Update Bill Allocations (Delete old ones first)
@@ -1071,9 +1075,10 @@ class FinancialRecordUpdateView(LoginRequiredMixin, PermissionRequiredMixin, Fin
                         for bill in bills_by_id.values():
                             BillingService.update_bill_financial_caches(bill)
 
+                        allocated_bill_nums = [bills_by_id[bid].bill_number or f"Bill #{bid}" for bid in bill_ids if bid in bills_by_id]
+                        if allocated_bill_nums:
+                            dist_notes.append(f"Allocated across invoices: {', '.join(allocated_bill_nums)}")
                         messages.success(self.request, f'Financial record updated and redistributed across bills!')
-                    
-                    return redirect(self.get_success_url())
 
             except Exception as e:
                 form.add_error(None, f"Error processing distribution: {str(e)}")
@@ -1088,6 +1093,7 @@ class FinancialRecordUpdateView(LoginRequiredMixin, PermissionRequiredMixin, Fin
                 a.delete()
             for t in old_trips:
                 TripFinancialService.update_trip_financial_caches(t)
+            dist_notes.append("Cleared trip allocations")
 
         if not bill_distribution_json and self.object.bill_allocations.exists():
             old_bill_allocs = list(self.object.bill_allocations.all())
@@ -1097,8 +1103,10 @@ class FinancialRecordUpdateView(LoginRequiredMixin, PermissionRequiredMixin, Fin
                 a.delete()
             for b in old_bills:
                 BillingService.update_bill_financial_caches(b)
+            dist_notes.append("Cleared invoice allocations")
 
-        response = super().form_valid(form)
+        if not distribution_json and not bill_distribution_json:
+            self.object = form.save()
 
         # Check for field diffs and log to voucher audit history
         new_data = {
@@ -1121,11 +1129,17 @@ class FinancialRecordUpdateView(LoginRequiredMixin, PermissionRequiredMixin, Fin
         self.object.save(update_fields=['verification_status', 'verified_by', 'verified_at'])
         if self.object.voucher:
             from ledger.services import VoucherService
-            VoucherService.record_alteration(self.object.voucher, self.request.user, diffs)
+            if distribution_json and self.object.voucher.voucher_type == FinancialVoucher.VOUCHER_TYPE_DIRECT:
+                self.object.voucher.voucher_type = FinancialVoucher.VOUCHER_TYPE_TRIP_PAYMENT
+            elif bill_distribution_json and self.object.voucher.voucher_type == FinancialVoucher.VOUCHER_TYPE_DIRECT:
+                self.object.voucher.voucher_type = FinancialVoucher.VOUCHER_TYPE_BILL_PAYMENT
+
+            alteration_note = "; ".join(dist_notes) if dist_notes else ''
+            VoucherService.record_alteration(self.object.voucher, self.request.user, diffs, notes=alteration_note)
             self.object.voucher.update_totals()
 
         messages.success(self.request, 'Financial record updated successfully! (Submitted for re-verification)')
-        return response
+        return redirect(self.get_success_url())
     
     def get_success_url(self):
         return reverse_lazy('financialrecord-detail', kwargs={'pk': self.object.pk})

@@ -399,7 +399,9 @@ class FinancialRecordForm(forms.ModelForm):
                     total_b = sum(Decimal(str(item.get('amount', 0) or 0)) for item in b_dist_data)
                     header_amount = cleaned_data.get('amount')
                     if header_amount is not None and header_amount > 0:
-                        if abs(total_b - header_amount) > Decimal('0.01'):
+                        if total_b > header_amount + Decimal('0.01'):
+                            self.add_error('amount', f'Total allocated across invoices (₹{total_b:,.2f}) cannot exceed Total Payment (₹{header_amount:,.2f}). Over by ₹{(total_b - header_amount):,.2f}.')
+                        elif abs(total_b - header_amount) > Decimal('0.01') and not allow_advance:
                             self.add_error('amount', f'Total allocated across invoices (₹{total_b:,.2f}) must exactly match total payment (₹{header_amount:,.2f}). Difference: ₹{abs(header_amount - total_b):,.2f}.')
                     else:
                         cleaned_data['amount'] = total_b

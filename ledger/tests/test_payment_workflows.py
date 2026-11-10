@@ -3,6 +3,7 @@ from django.utils import timezone
 from django.db import models
 from django.urls import reverse
 import datetime
+import json
 from decimal import Decimal
 from ledger.models import (
     Bill, Party, CompanyAccount, TransactionCategory, FinancialRecord,
@@ -698,4 +699,65 @@ class AdvancePaymentWorkflowTests(TestCase):
             resp.context['form'], 'amount',
             'Total allocated across trips (₹60,000.00) must exactly match total payment (₹100,000.00). Difference: ₹40,000.00.'
         )
+
+    def test_single_trip_payment_distribution_creates_allocation(self):
+        """Single-trip payment distribution creates TripAllocation and sets trip_payment voucher type"""
+        trip = Trip.objects.create(
+            vehicle=self.vehicle,
+            party=self.party,
+            date=datetime.date(2026, 10, 5),
+            revenue_type=Trip.REVENUE_FIXED,
+            rate_per_ton=Decimal('25000.00')
+        )
+        distribution_data = [{'trip_id': trip.id, 'payment': 25000.00}]
+        post_data = {
+            'date': '2026-10-01',
+            'record_type': 'Transaction',
+            'account': self.account.id,
+            'party': self.party.id,
+            'category': self.cat_trip_payment.id,
+            'amount': '25000.00',
+            'payment_distribution': json.dumps(distribution_data),
+        }
+        resp = self.client.post(reverse('financialrecord-create'), post_data)
+        self.assertIn(resp.status_code, [200, 302])
+
+        record = FinancialRecord.objects.filter(amount=Decimal('25000.00'), party=self.party).order_by('-id').first()
+        self.assertIsNotNone(record)
+        self.assertEqual(record.allocations.count(), 1)
+        self.assertEqual(record.allocations.first().trip, trip)
+        from ledger.models import FinancialVoucher
+        self.assertEqual(record.voucher.voucher_type, FinancialVoucher.VOUCHER_TYPE_TRIP_PAYMENT)
+
+    def test_bill_partial_advance_allocation_supported(self):
+        """Customer paying more than bill total with allow_advance_allocation succeeds"""
+        bill = Bill.objects.create(
+            bill_number='INV-TEST-ADV-001',
+            bill_type=Bill.TYPE_STANDARD,
+            issuer=self.account,
+            date=datetime.date(2026, 10, 1),
+            party=self.party,
+            amount_override=Decimal('30000.00'),
+            category=self.cat_trip_payment,
+            gst_rate=0
+        )
+        bill_distribution = [{'bill_id': bill.id, 'amount': 30000.00}]
+        post_data = {
+            'date': '2026-10-01',
+            'record_type': 'Transaction',
+            'account': self.account.id,
+            'party': self.party.id,
+            'category': self.cat_trip_payment.id,
+            'amount': '50000.00',
+            'bill_distribution': json.dumps(bill_distribution),
+            'allow_advance_allocation': 'on',
+        }
+        resp = self.client.post(reverse('financialrecord-create'), post_data)
+        self.assertIn(resp.status_code, [200, 302])
+
+        record = FinancialRecord.objects.filter(amount=Decimal('50000.00'), party=self.party).order_by('-id').first()
+        self.assertIsNotNone(record)
+        self.assertEqual(record.bill_allocations.count(), 1)
+        self.assertEqual(record.bill_allocations.first().amount, Decimal('30000.00'))
+        self.assertEqual(record.voucher.total_settled_amount, Decimal('50000.00'))
 

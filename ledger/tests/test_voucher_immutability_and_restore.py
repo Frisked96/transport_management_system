@@ -233,6 +233,56 @@ class VoucherImmutabilityAndRestoreTests(TestCase):
         self.assertEqual(altered_events[0]['details']['amount']['old'], '5000.00')
         self.assertEqual(altered_events[0]['details']['amount']['new'], '7500.00')
 
+    def test_edit_record_with_distribution_logs_alteration_and_promotes_voucher(self):
+        """Editing an on-account payment to allocate trips logs the alteration and promotes voucher type"""
+        voucher = FinancialVoucher.objects.create(
+            voucher_number='REF-TEST-0001',
+            date=timezone.now().date(),
+            voucher_type=FinancialVoucher.VOUCHER_TYPE_DIRECT,
+            party=self.debtor,
+            account=self.account,
+            created_by=self.operator,
+            verification_status=FinancialVoucher.STATUS_VERIFIED,
+            audit_log=[{'action': 'created', 'timestamp': '2026-11-10T10:00:00', 'user': 'akash'}]
+        )
+        record = FinancialRecord.objects.create(
+            date=timezone.now().date(),
+            account=self.account,
+            party=self.debtor,
+            category=self.cat_payment_in,
+            amount=Decimal('10000.00'),
+            voucher=voucher,
+            verification_status=FinancialVoucher.STATUS_VERIFIED,
+            recorded_by=self.operator
+        )
+
+        import json
+        self.client.login(username='akash', password='akashpass')
+        update_url = reverse('financialrecord-update', kwargs={'pk': record.pk})
+        dist_data = [{'trip_id': self.trip.pk, 'payment': 10000.0, 'tds': 0, 'deduction': 0}]
+        form_data = {
+            'date': str(record.date),
+            'account': str(self.account.pk),
+            'party': str(self.debtor.pk),
+            'category': str(self.cat_payment_in.pk),
+            'record_type': 'Transaction',
+            'amount': '10000.00',
+            'payment_distribution': json.dumps(dist_data),
+        }
+        resp = self.client.post(update_url, data=form_data, follow=True)
+        self.assertEqual(resp.status_code, 200)
+
+        # Voucher should be promoted to trip_payment and reset to pending
+        voucher.refresh_from_db()
+        self.assertEqual(voucher.voucher_type, FinancialVoucher.VOUCHER_TYPE_TRIP_PAYMENT)
+        self.assertEqual(voucher.verification_status, FinancialVoucher.STATUS_PENDING)
+
+        # Audit log should contain altered event with trip allocation notes
+        altered_events = [ev for ev in voucher.audit_log if ev.get('action') == 'altered']
+        self.assertTrue(len(altered_events) >= 1)
+        self.assertIn('Allocated across trips', altered_events[0]['summary'])
+        self.assertEqual(record.allocations.count(), 1)
+
     def test_review_view_status_tabs_include_deleted(self):
         """Review dashboard properly lists pending, verified, flagged, and deleted vouchers"""
         # Create 1 active and 1 deleted voucher
