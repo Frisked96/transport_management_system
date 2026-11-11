@@ -600,7 +600,16 @@ class TripExportExcelTests(TestCase):
         header = rows[0]
         data_rows = rows[1:]
 
-        # Exactly 1 data row should be exported, NOT 2
+        # Check vehicle owner property directly
+        self.assertEqual(self.vehicle.owner_name, 'Vendor Logistics')
+
+        owned_vehicle = Vehicle.objects.create(
+            registration_plate='MH 12 CD 1111',
+            ownership=Vehicle.OWNERSHIP_OWNED,
+            company_account=self.issuer,
+            status='Active'
+        )
+        self.assertEqual(owned_vehicle.owner_name, 'GS KHALSA ROADLINES')
         self.assertEqual(len(data_rows), 1)
 
         row = data_rows[0]
@@ -608,5 +617,6 @@ class TripExportExcelTests(TestCase):
         self.assertEqual(row[3], 'Customer Corp')                  # Party Name
         self.assertEqual(row[4], '03AAAAA0000A1Z5')               # GST No.
         self.assertEqual(row[6], 'PB 05 AQ 9999')                 # Truck no
+        self.assertEqual(row[7], 'Vendor Logistics')              # Vehicle Owner
 
 

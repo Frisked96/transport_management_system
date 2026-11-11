@@ -187,6 +187,15 @@ class Vehicle(models.Model):
         return self.ownership == self.OWNERSHIP_ATTACHED
     
     @property
+    def owner_name(self):
+        """Returns the name of the entity that owns this vehicle (vendor or company account)."""
+        if self.vendor:
+            return self.vendor.name
+        if self.company_account:
+            return self.company_account.name
+        return self.ownership or "N/A"
+    
+    @property
     def chassie_number(self):
         """Alias for chassis_number"""
         return self.chassis_number

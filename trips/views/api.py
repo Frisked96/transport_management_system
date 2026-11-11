@@ -138,7 +138,7 @@ def trip_export_excel(request):
         ).annotate(
             customer_bill_no=Subquery(customer_bills.values('bill_no')[:1], output_field=IntegerField()),
             customer_bill_issuer_id=Subquery(customer_bills.values('issuer_id')[:1], output_field=IntegerField()),
-        ).select_related('vehicle', 'party').prefetch_related('bills')
+        ).select_related('vehicle__vendor', 'vehicle__company_account', 'party').prefetch_related('bills')
 
         # Filter by selected issuers (firms) if provided
         if selected_issuers:
@@ -166,7 +166,7 @@ def trip_export_excel(request):
         # Header Row
         headers = [
             'Sr no.', 'Invoice No.', 'Date of Invoice', 'Party Name', 'GST No.', 
-            'lo-Date', 'Truck no', 'From', 'To', 'Weight', 'Rate', 'Freight', 'GST (18%)', 'Total Taxable Value'
+            'lo-Date', 'Truck no', 'Vehicle Owner', 'From', 'To', 'Weight', 'Rate', 'Freight', 'GST (18%)', 'Total Taxable Value'
         ]
         
         for col_num, header in enumerate(headers, 1):
@@ -193,13 +193,14 @@ def trip_export_excel(request):
             ws.cell(row=row_num, column=5, value=trip.party.gstin if trip.party else 'N/A').border = border
             ws.cell(row=row_num, column=6, value=trip.date.strftime('%d-%m-%Y') if trip.date else '-').border = border
             ws.cell(row=row_num, column=7, value=trip.vehicle.registration_plate if trip.vehicle else 'N/A').border = border
-            ws.cell(row=row_num, column=8, value=trip.pickup_location or 'N/A').border = border
-            ws.cell(row=row_num, column=9, value=trip.delivery_location or 'N/A').border = border
-            ws.cell(row=row_num, column=10, value=float(trip.weight or 0)).border = border
-            ws.cell(row=row_num, column=11, value=float(trip.rate_per_ton or 0)).border = border
-            ws.cell(row=row_num, column=12, value=float(freight)).border = border
-            ws.cell(row=row_num, column=13, value=float(gst)).border = border
-            ws.cell(row=row_num, column=14, value=float(total_taxable)).border = border
+            ws.cell(row=row_num, column=8, value=trip.vehicle.owner_name if trip.vehicle else 'N/A').border = border
+            ws.cell(row=row_num, column=9, value=trip.pickup_location or 'N/A').border = border
+            ws.cell(row=row_num, column=10, value=trip.delivery_location or 'N/A').border = border
+            ws.cell(row=row_num, column=11, value=float(trip.weight or 0)).border = border
+            ws.cell(row=row_num, column=12, value=float(trip.rate_per_ton or 0)).border = border
+            ws.cell(row=row_num, column=13, value=float(freight)).border = border
+            ws.cell(row=row_num, column=14, value=float(gst)).border = border
+            ws.cell(row=row_num, column=15, value=float(total_taxable)).border = border
             
             row_num += 1
 
