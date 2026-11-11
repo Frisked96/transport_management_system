@@ -514,3 +514,99 @@ class TripBulkCreateDuplicatePreventionTests(TestCase):
         # Should still be 1, NOT 2
         self.assertEqual(Trip.objects.filter(vehicle=self.vehicle).count(), 1)
 
+
+class TripExportExcelTests(TestCase):
+    def setUp(self):
+        import io
+        import openpyxl
+        self.io = io
+        self.openpyxl = openpyxl
+
+        self.user = User.objects.create_superuser(
+            username='exportuser',
+            email='export@example.com',
+            password='password123'
+        )
+        self.issuer = CompanyAccount.objects.create(name='GS KHALSA ROADLINES')
+        self.vendor = Party.objects.create(name='Vendor Logistics', party_type='Creditor')
+        self.customer = Party.objects.create(name='Customer Corp', party_type='Debtor', gstin='03AAAAA0000A1Z5')
+        self.vehicle = Vehicle.objects.create(
+            registration_plate='PB 05 AQ 9999',
+            ownership=Vehicle.OWNERSHIP_ATTACHED,
+            vendor=self.vendor,
+            status='Active'
+        )
+        self.trip = Trip.objects.create(
+            vehicle=self.vehicle,
+            party=self.customer,
+            date=timezone.now().date(),
+            weight=Decimal('20.00'),
+            rate_per_ton=Decimal('1500.00'),
+            vendor_hire_amount=Decimal('20000.00'),
+            pickup_location='Ludhiana',
+            delivery_location='Delhi'
+        )
+        # Create Customer Bill
+        self.customer_bill = Bill.objects.create(
+            bill_number='GS-KRL-26-27/500',
+            bill_no=500,
+            bill_type=Bill.TYPE_TRIP,
+            issuer=self.issuer,
+            party=self.customer,
+            date=timezone.now().date()
+        )
+        BillTrip.objects.create(bill=self.customer_bill, trip=self.trip)
+
+        # Create linked Creditor Bill (as BillingService does for attached vehicles)
+        lorry_cat, _ = TransactionCategory.objects.get_or_create(
+            name='Lorry Hire',
+            defaults={'type': TransactionCategory.TYPE_EXPENSE}
+        )
+        self.creditor_bill = Bill.objects.create(
+            customer_bill=self.customer_bill,
+            bill_number='CR-GS-KRL-26-27/500',
+            bill_no=None,
+            bill_type=Bill.TYPE_TRIP,
+            category=lorry_cat,
+            issuer=self.issuer,
+            party=self.vendor,
+            date=timezone.now().date()
+        )
+        BillTrip.objects.create(bill=self.creditor_bill, trip=self.trip)
+
+    def test_vendor_vehicle_trip_not_duplicated_in_excel_export(self):
+        """
+        Verify that attached/vendor vehicle trips with both a customer bill and
+        a creditor bill are only printed once in the exported Excel sheet.
+        """
+        client = Client()
+        client.force_login(self.user)
+
+        response = client.post(reverse('trip-export-excel'), {
+            'issuers': [str(self.issuer.pk)],
+            'vehicles': [str(self.vehicle.pk)]
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response['Content-Type'],
+            'application/vnd.openpyxl.sheet'
+        )
+
+        wb = self.openpyxl.load_workbook(self.io.BytesIO(response.content))
+        ws = wb.active
+        rows = list(ws.iter_rows(values_only=True))
+
+        header = rows[0]
+        data_rows = rows[1:]
+
+        # Exactly 1 data row should be exported, NOT 2
+        self.assertEqual(len(data_rows), 1)
+
+        row = data_rows[0]
+        self.assertEqual(row[1], self.customer_bill.bill_number)  # Invoice No.
+        self.assertEqual(row[3], 'Customer Corp')                  # Party Name
+        self.assertEqual(row[4], '03AAAAA0000A1Z5')               # GST No.
+        self.assertEqual(row[6], 'PB 05 AQ 9999')                 # Truck no
+
+

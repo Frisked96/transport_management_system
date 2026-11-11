@@ -8,6 +8,7 @@ from django.contrib.auth.decorators import login_required, permission_required
 from django.contrib import messages
 from django.http import JsonResponse, HttpResponse
 from django.utils import timezone
+from django.db.models import Subquery, OuterRef, Q, IntegerField, F
 from transport_mgmt.utils import get_local_time_str
 
 try:
@@ -17,7 +18,7 @@ except ImportError:
     openpyxl = None
 
 from trips.models import Trip, Route
-from ledger.models import Party, CompanyAccount
+from ledger.models import Party, CompanyAccount, Bill
 from fleet.models import Vehicle, Tyre, TyreBrand
 from drivers.models import Driver
 
@@ -120,15 +121,28 @@ def trip_export_excel(request):
             messages.error(request, "Please select at least one vehicle.")
             return redirect('trip-export-excel')
 
+        # Define customer bill subquery for this trip
+        customer_bills = Bill.objects.filter(
+            trips=OuterRef('pk'),
+            customer_bill__isnull=True
+        ).exclude(
+            category__name='Lorry Hire'
+        ).filter(
+            Q(party=OuterRef('party')) | ~Q(party__party_type='Creditor')
+        ).order_by('-id')
+
         # Filter trips: only billed trips for selected vehicles
         trips = Trip.objects.with_billing_info().filter(
             annotated_is_billed=True,
             vehicle_id__in=selected_vehicles
+        ).annotate(
+            customer_bill_no=Subquery(customer_bills.values('bill_no')[:1], output_field=IntegerField()),
+            customer_bill_issuer_id=Subquery(customer_bills.values('issuer_id')[:1], output_field=IntegerField()),
         ).select_related('vehicle', 'party').prefetch_related('bills')
 
         # Filter by selected issuers (firms) if provided
         if selected_issuers:
-            trips = trips.filter(bills__issuer_id__in=selected_issuers).distinct()
+            trips = trips.filter(customer_bill_issuer_id__in=selected_issuers)
 
         if start_date:
             trips = trips.filter(date__gte=start_date)
@@ -136,7 +150,7 @@ def trip_export_excel(request):
             trips = trips.filter(date__lte=end_date)
 
         # Sort by invoice number (numeric part) primarily, then by date
-        trips = trips.order_by('bills__bill_no', 'date').distinct()
+        trips = trips.order_by(F('customer_bill_no').asc(nulls_last=True), 'date')
 
         # Create Workbook
         wb = openpyxl.Workbook()
@@ -178,7 +192,7 @@ def trip_export_excel(request):
             ws.cell(row=row_num, column=4, value=trip.party.name if trip.party else 'N/A').border = border
             ws.cell(row=row_num, column=5, value=trip.party.gstin if trip.party else 'N/A').border = border
             ws.cell(row=row_num, column=6, value=trip.date.strftime('%d-%m-%Y') if trip.date else '-').border = border
-            ws.cell(row=row_num, column=7, value=trip.vehicle.registration_plate).border = border
+            ws.cell(row=row_num, column=7, value=trip.vehicle.registration_plate if trip.vehicle else 'N/A').border = border
             ws.cell(row=row_num, column=8, value=trip.pickup_location or 'N/A').border = border
             ws.cell(row=row_num, column=9, value=trip.delivery_location or 'N/A').border = border
             ws.cell(row=row_num, column=10, value=float(trip.weight or 0)).border = border
