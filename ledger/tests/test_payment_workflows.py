@@ -761,3 +761,131 @@ class AdvancePaymentWorkflowTests(TestCase):
         self.assertEqual(record.bill_allocations.first().amount, Decimal('30000.00'))
         self.assertEqual(record.voucher.total_settled_amount, Decimal('50000.00'))
 
+    def test_tds_edit_includes_fully_paid_tagged_bill_in_ajax(self):
+        """When editing a TDS record, the tagged invoice is returned with restored pending balance"""
+        bill = Bill.objects.create(
+            bill_number='INV-TEST-TDS-001',
+            bill_type=Bill.TYPE_STANDARD,
+            issuer=self.account,
+            date=datetime.date(2026, 10, 1),
+            party=self.party,
+            amount_override=Decimal('10000.00'),
+            category=self.cat_trip_payment,
+            gst_rate=0
+        )
+        cat_tds, _ = TransactionCategory.objects.get_or_create(
+            name='TDS', defaults={'type': TransactionCategory.TYPE_EXPENSE}
+        )
+        cat_inv_pay, _ = TransactionCategory.objects.get_or_create(
+            name='Invoice Payment', defaults={'type': TransactionCategory.TYPE_INCOME}
+        )
+        pay_rec = FinancialRecord.objects.create(
+            date=datetime.date(2026, 10, 2),
+            account=self.account,
+            party=self.party,
+            record_type='Transaction',
+            category=cat_inv_pay,
+            amount=Decimal('9800.00'),
+            associated_bill=bill
+        )
+        tds_rec = FinancialRecord.objects.create(
+            date=datetime.date(2026, 10, 2),
+            account=None,
+            party=self.party,
+            record_type='Transaction',
+            category=cat_tds,
+            amount=Decimal('200.00'),
+            associated_bill=bill
+        )
+        from ledger.services import BillingService
+        BillingService.update_bill_financial_caches(bill)
+        self.assertEqual(bill.outstanding_balance, Decimal('0.00'))
+
+        # Without record_id, paid bill is skipped
+        resp_unpaid = self.client.get(reverse('get-party-bills'), {
+            'party_id': self.party.id,
+            'unpaid_only': 'true'
+        })
+        self.assertEqual(resp_unpaid.status_code, 200)
+        self.assertEqual(len(resp_unpaid.json()['bills']), 0)
+
+        # With record_id=tds_rec.id, the bill is returned and outstanding includes 200.00
+        resp_tds = self.client.get(reverse('get-party-bills'), {
+            'party_id': self.party.id,
+            'unpaid_only': 'true',
+            'record_id': tds_rec.id
+        })
+        self.assertEqual(resp_tds.status_code, 200)
+        bills_data = resp_tds.json()['bills']
+        self.assertEqual(len(bills_data), 1)
+        self.assertEqual(bills_data[0]['id'], bill.id)
+        self.assertEqual(bills_data[0]['outstanding'], 200.0)
+
+        # Test FinancialRecordUpdateView sets invoices subtab and pre-populates distribution
+        update_resp = self.client.get(reverse('financialrecord-update', kwargs={'pk': tds_rec.id}))
+        self.assertEqual(update_resp.status_code, 200)
+        self.assertEqual(update_resp.context['initial_subtab'], 'invoices')
+        dist_json = update_resp.context['form'].initial.get('bill_distribution')
+        self.assertIsNotNone(dist_json)
+        dist_data = json.loads(dist_json)
+        self.assertEqual(len(dist_data), 1)
+        self.assertEqual(dist_data[0]['bill_id'], bill.id)
+        self.assertEqual(dist_data[0]['amount'], 200.0)
+
+    def test_trip_payment_edit_view_initial_data_and_ajax(self):
+        """When editing a trip payment, the tagged trip is returned with restored balance and pre-selected"""
+        from trips.models import Trip
+        trip = Trip.objects.create(
+            trip_number='TRIP-TEST-EDIT-01',
+            date=datetime.date(2026, 10, 1),
+            party=self.party,
+            vehicle=self.vehicle,
+            revenue_type=Trip.REVENUE_FIXED,
+            rate_per_ton=Decimal('15000.00')
+        )
+        cat_trip_pay, _ = TransactionCategory.objects.get_or_create(
+            name='Trip Payment', defaults={'type': TransactionCategory.TYPE_INCOME}
+        )
+        tot_rev = trip.total_revenue
+        pay_rec = FinancialRecord.objects.create(
+            date=datetime.date(2026, 10, 2),
+            account=self.account,
+            party=self.party,
+            record_type='Transaction',
+            category=cat_trip_pay,
+            amount=tot_rev,
+            associated_trip=trip
+        )
+        from ledger.services import TripFinancialService
+        TripFinancialService.update_trip_financial_caches(trip)
+        self.assertEqual(trip.outstanding_balance, Decimal('0.00'))
+
+        # Without record_id, paid trip is skipped
+        resp_unpaid = self.client.get(reverse('get-party-unpaid-trips'), {
+            'party_id': self.party.id,
+        })
+        self.assertEqual(resp_unpaid.status_code, 200)
+        self.assertEqual(len(resp_unpaid.json()['trips']), 0)
+
+        # With record_id=pay_rec.id, trip is returned and balance includes tot_rev
+        resp_trip = self.client.get(reverse('get-party-unpaid-trips'), {
+            'party_id': self.party.id,
+            'record_id': pay_rec.id
+        })
+        self.assertEqual(resp_trip.status_code, 200)
+        trips_data = resp_trip.json()['trips']
+        self.assertEqual(len(trips_data), 1)
+        self.assertEqual(trips_data[0]['id'], trip.id)
+        self.assertEqual(trips_data[0]['balance'], float(tot_rev))
+
+        # FinancialRecordUpdateView sets trips subtab and pre-populates distribution
+        update_resp = self.client.get(reverse('financialrecord-update', kwargs={'pk': pay_rec.id}))
+        self.assertEqual(update_resp.status_code, 200)
+        self.assertEqual(update_resp.context['initial_subtab'], 'trips')
+        dist_json = update_resp.context['form'].initial.get('payment_distribution')
+        self.assertIsNotNone(dist_json)
+        dist_data = json.loads(dist_json)
+        self.assertEqual(len(dist_data), 1)
+        self.assertEqual(dist_data[0]['trip_id'], trip.id)
+        self.assertEqual(dist_data[0]['amount'], float(tot_rev))
+

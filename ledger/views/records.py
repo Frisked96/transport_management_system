@@ -280,6 +280,36 @@ class FinancialFormContextMixin:
                 pass
 
         context['initial_mode'] = initial_mode
+
+        initial_subtab = 'trips'
+        if curr_obj:
+            if curr_obj.associated_bill_id or curr_obj.bill_allocations.exists():
+                initial_subtab = 'invoices'
+            elif curr_obj.associated_trip_id or curr_obj.allocations.exists():
+                initial_subtab = 'trips'
+            elif cat_obj and cat_obj.name == 'Invoice Payment':
+                initial_subtab = 'invoices'
+            elif cat_obj and cat_obj.name == 'Trip Payment':
+                initial_subtab = 'trips'
+            elif cat_obj and cat_obj.name == 'TDS':
+                if curr_obj.associated_bill_id or curr_obj.bill_allocations.exists():
+                    initial_subtab = 'invoices'
+                elif curr_obj.associated_trip_id or curr_obj.allocations.exists():
+                    initial_subtab = 'trips'
+                elif curr_obj.voucher:
+                    v_has_bill = curr_obj.voucher.financial_records.exclude(pk=curr_obj.pk).filter(
+                        Q(associated_bill__isnull=False) | Q(bill_allocations__isnull=False)
+                    ).exists()
+                    if v_has_bill:
+                        initial_subtab = 'invoices'
+        elif b_id or req.GET.get('associated_bill'):
+            initial_subtab = 'invoices'
+        elif t_id or req.GET.get('associated_trip'):
+            initial_subtab = 'trips'
+        elif req.GET.get('subtab') in ['trips', 'invoices', 'account']:
+            initial_subtab = req.GET.get('subtab')
+
+        context['initial_subtab'] = initial_subtab
         return context
 
 
@@ -951,12 +981,40 @@ class FinancialRecordUpdateView(LoginRequiredMixin, PermissionRequiredMixin, Fin
                 {'trip_id': a.trip_id, 'amount': float(a.amount)}
                 for a in self.object.allocations.all()
             ])
+        elif self.object.associated_trip_id:
+            initial['payment_distribution'] = json.dumps([
+                {'trip_id': self.object.associated_trip_id, 'amount': float(self.object.amount or 0)}
+            ])
+            initial['associated_trip'] = self.object.associated_trip_id
+        elif self.object.category and self.object.category.name == 'TDS' and self.object.voucher:
+            v_rec = self.object.voucher.financial_records.exclude(pk=self.object.pk).filter(
+                associated_trip__isnull=False
+            ).first()
+            if v_rec and v_rec.associated_trip_id:
+                initial['payment_distribution'] = json.dumps([
+                    {'trip_id': v_rec.associated_trip_id, 'amount': float(self.object.amount or 0)}
+                ])
+                initial['associated_trip'] = v_rec.associated_trip_id
         
         if self.object.bill_allocations.exists():
             initial['bill_distribution'] = json.dumps([
                 {'bill_id': a.bill_id, 'amount': float(a.amount)}
                 for a in self.object.bill_allocations.all()
             ])
+        elif self.object.associated_bill_id:
+            initial['bill_distribution'] = json.dumps([
+                {'bill_id': self.object.associated_bill_id, 'amount': float(self.object.amount or 0)}
+            ])
+            initial['associated_bill'] = self.object.associated_bill_id
+        elif self.object.category and self.object.category.name == 'TDS' and self.object.voucher:
+            v_rec = self.object.voucher.financial_records.exclude(pk=self.object.pk).filter(
+                associated_bill__isnull=False
+            ).first()
+            if v_rec and v_rec.associated_bill_id:
+                initial['bill_distribution'] = json.dumps([
+                    {'bill_id': v_rec.associated_bill_id, 'amount': float(self.object.amount or 0)}
+                ])
+                initial['associated_bill'] = v_rec.associated_bill_id
         return initial
 
     def form_valid(self, form):
@@ -994,6 +1052,8 @@ class FinancialRecordUpdateView(LoginRequiredMixin, PermissionRequiredMixin, Fin
                         distribution_data = json.loads(distribution_json)
                         old_allocs = list(self.object.allocations.all())
                         old_trip_ids = [a.trip_id for a in old_allocs]
+                        if self.object.associated_trip_id and self.object.associated_trip_id not in old_trip_ids:
+                            old_trip_ids.append(self.object.associated_trip_id)
                         for a in old_allocs:
                             a._suppress_cache_cascade = True
                             a.delete()
@@ -1042,6 +1102,8 @@ class FinancialRecordUpdateView(LoginRequiredMixin, PermissionRequiredMixin, Fin
                         bill_data = json.loads(bill_distribution_json)
                         old_allocs = list(self.object.bill_allocations.all())
                         old_bill_ids = [a.bill_id for a in old_allocs]
+                        if self.object.associated_bill_id and self.object.associated_bill_id not in old_bill_ids:
+                            old_bill_ids.append(self.object.associated_bill_id)
                         for a in old_allocs:
                             a._suppress_cache_cascade = True
                             a.delete()

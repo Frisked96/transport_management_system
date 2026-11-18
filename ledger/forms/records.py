@@ -176,8 +176,14 @@ class FinancialRecordForm(forms.ModelForm):
                     if self.instance.associated_bill.pk not in unpaid_bill_ids:
                         unpaid_bill_ids.append(self.instance.associated_bill.pk)
                 initial_bill = kwargs.get('initial', {}).get('associated_bill')
-                if initial_bill and initial_bill.pk not in unpaid_bill_ids:
-                    unpaid_bill_ids.append(initial_bill.pk)
+                if initial_bill:
+                    initial_bill_pk = initial_bill.pk if hasattr(initial_bill, 'pk') else initial_bill
+                    try:
+                        initial_bill_pk = int(initial_bill_pk)
+                        if initial_bill_pk not in unpaid_bill_ids:
+                            unpaid_bill_ids.append(initial_bill_pk)
+                    except (ValueError, TypeError):
+                        pass
 
                 self.fields['associated_bill'].queryset = Bill.objects.with_payment_info().filter(id__in=unpaid_bill_ids).order_by('-date')
 
@@ -229,8 +235,14 @@ class FinancialRecordForm(forms.ModelForm):
                     if self.instance.associated_bill.pk not in unpaid_bill_ids:
                         unpaid_bill_ids.append(self.instance.associated_bill.pk)
                 initial_bill = kwargs.get('initial', {}).get('associated_bill')
-                if initial_bill and initial_bill.pk not in unpaid_bill_ids:
-                    unpaid_bill_ids.append(initial_bill.pk)
+                if initial_bill:
+                    initial_bill_pk = initial_bill.pk if hasattr(initial_bill, 'pk') else initial_bill
+                    try:
+                        initial_bill_pk = int(initial_bill_pk)
+                        if initial_bill_pk not in unpaid_bill_ids:
+                            unpaid_bill_ids.append(initial_bill_pk)
+                    except (ValueError, TypeError):
+                        pass
 
                 self.fields['associated_bill'].queryset = Bill.objects.with_payment_info().filter(id__in=unpaid_bill_ids).order_by('-date')
                 self.fields['category'].queryset = TransactionCategory.objects.filter(
@@ -283,8 +295,14 @@ class FinancialRecordForm(forms.ModelForm):
                     if self.instance.associated_bill.pk not in unpaid_bill_ids:
                         unpaid_bill_ids.append(self.instance.associated_bill.pk)
                 initial_bill = kwargs.get('initial', {}).get('associated_bill')
-                if initial_bill and initial_bill.pk not in unpaid_bill_ids:
-                    unpaid_bill_ids.append(initial_bill.pk)
+                if initial_bill:
+                    initial_bill_pk = initial_bill.pk if hasattr(initial_bill, 'pk') else initial_bill
+                    try:
+                        initial_bill_pk = int(initial_bill_pk)
+                        if initial_bill_pk not in unpaid_bill_ids:
+                            unpaid_bill_ids.append(initial_bill_pk)
+                    except (ValueError, TypeError):
+                        pass
                 
                 self.fields['associated_bill'].queryset = Bill.objects.with_payment_info().filter(id__in=unpaid_bill_ids).order_by('-date')
                 

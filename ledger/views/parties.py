@@ -245,7 +245,7 @@ def get_party_unpaid_trips(request):
         try:
             from ledger.models import FinancialRecord
             record = FinancialRecord.objects.filter(pk=record_id).select_related(
-                'associated_trip'
+                'associated_trip', 'category', 'voucher'
             ).prefetch_related('allocations').first()
             if record:
                 rec_amount = record.amount or Decimal('0')
@@ -259,12 +259,29 @@ def get_party_unpaid_trips(request):
                     record_contributions[alloc.trip_id] = (
                         record_contributions.get(alloc.trip_id, Decimal('0')) + (alloc.amount or Decimal('0'))
                     )
+                # If TDS or payment record without direct trip, inspect other records in the same voucher
+                if not include_ids and record.voucher:
+                    v_records = record.voucher.financial_records.exclude(pk=record.pk).prefetch_related('allocations').all()
+                    for vr in v_records:
+                        if vr.associated_trip_id:
+                            include_ids.add(vr.associated_trip_id)
+                            record_contributions[vr.associated_trip_id] = (
+                                record_contributions.get(vr.associated_trip_id, Decimal('0')) + rec_amount
+                            )
+                        for va in vr.allocations.all():
+                            include_ids.add(va.trip_id)
+                            record_contributions[va.trip_id] = (
+                                record_contributions.get(va.trip_id, Decimal('0')) + rec_amount
+                            )
         except Exception:
             pass
     
     try:
         from django.db import models
-        base_qs = Trip.objects.with_payment_info().filter(party_id=party_id)
+        base_filter = models.Q(party_id=party_id)
+        if include_ids:
+            base_filter |= models.Q(id__in=include_ids)
+        base_qs = Trip.objects.with_payment_info().filter(base_filter)
         if include_ids:
             trips = base_qs.filter(
                 models.Q(id__in=include_ids) | ~models.Q(annotated_status=Trip.PAYMENT_STATUS_PAID)
@@ -441,21 +458,73 @@ def get_party_bills(request):
     """
     AJAX endpoint to get bills for a party (excluding adjustment notes).
     Supports target_party_id for on-behalf third-party payments.
+    Can include bills associated with a specific FinancialRecord being edited,
+    or explicitly included bill IDs, with balances adjusted to reflect their pending
+    amount before this record was applied.
     Uses prefetching + Python calculation to avoid SQLite parser stack overflow.
     """
     party_id = request.GET.get('target_party_id') or request.GET.get('party_id')
     unpaid_only = request.GET.get('unpaid_only') == 'true'
     include_bill_id = request.GET.get('include_bill_id')
+    record_id = request.GET.get('record_id')
 
     if not party_id:
         return JsonResponse({'bills': []})
 
+    include_ids = set()
+    record_contributions = {}
+
+    if include_bill_id:
+        for part in str(include_bill_id).split(','):
+            part = part.strip()
+            if part.isdigit():
+                include_ids.add(int(part))
+
+    if record_id:
+        try:
+            from ledger.models import FinancialRecord
+            record = FinancialRecord.objects.filter(pk=record_id).select_related(
+                'associated_bill', 'category', 'voucher'
+            ).prefetch_related('bill_allocations').first()
+            if record:
+                rec_amount = record.amount or Decimal('0')
+                if record.associated_bill_id:
+                    include_ids.add(record.associated_bill_id)
+                    record_contributions[record.associated_bill_id] = (
+                        record_contributions.get(record.associated_bill_id, Decimal('0')) + rec_amount
+                    )
+                for alloc in record.bill_allocations.all():
+                    include_ids.add(alloc.bill_id)
+                    record_contributions[alloc.bill_id] = (
+                        record_contributions.get(alloc.bill_id, Decimal('0')) + (alloc.amount or Decimal('0'))
+                    )
+                # If TDS or payment record without direct bill, inspect other records in the same voucher
+                if not include_ids and record.voucher:
+                    v_records = record.voucher.financial_records.exclude(pk=record.pk).prefetch_related('bill_allocations').all()
+                    for vr in v_records:
+                        if vr.associated_bill_id:
+                            include_ids.add(vr.associated_bill_id)
+                            record_contributions[vr.associated_bill_id] = (
+                                record_contributions.get(vr.associated_bill_id, Decimal('0')) + rec_amount
+                            )
+                        for va in vr.bill_allocations.all():
+                            include_ids.add(va.bill_id)
+                            record_contributions[va.bill_id] = (
+                                record_contributions.get(va.bill_id, Decimal('0')) + rec_amount
+                            )
+        except Exception:
+            pass
+
     try:
         from django.db import models
         
+        base_filter = models.Q(party_id=party_id)
+        if include_ids:
+            base_filter |= models.Q(id__in=include_ids)
+
         # We use prefetch_related instead of complex annotations to avoid parser stack overflow
         bills_qs = Bill.objects.filter(
-            party_id=party_id
+            base_filter
         ).select_related('issuer', 'category').prefetch_related(
             'trips',
             'bill_trips',
@@ -472,21 +541,22 @@ def get_party_bills(request):
         data = []
         for bill in bills_qs:
             # Python-side calculation using optimized prefetch data
-            outstanding = bill.outstanding_balance
+            orig_outstanding = bill.outstanding_balance
+            contributed = record_contributions.get(bill.id, Decimal('0'))
+            adj_outstanding = max(Decimal('0'), orig_outstanding + contributed)
             
             # Skip paid bills UNLESS specifically requested to include it (for editing)
-            if unpaid_only and outstanding <= 0:
-                if not include_bill_id or str(bill.id) != str(include_bill_id):
-                    continue
+            if unpaid_only and bill.id not in include_ids and adj_outstanding <= 0:
+                continue
                 
             data.append({
                 'id': bill.id,
                 'bill_number': bill.bill_number or 'Draft',
                 'date': bill.date.strftime('%d/%m/%Y'),
-                'outstanding': float(outstanding),
+                'outstanding': float(adj_outstanding),
                 'total': float(bill.rounded_total),
                 'subtotal': float(bill.subtotal),
-                'label': f"{bill.bill_number or 'Draft'} - {bill.date.strftime('%d/%m/%Y')} (Pending: ₹{outstanding:,.2f})"
+                'label': f"{bill.bill_number or 'Draft'} - {bill.date.strftime('%d/%m/%Y')} (Pending: ₹{adj_outstanding:,.2f})"
             })
 
         return JsonResponse({'bills': data})
