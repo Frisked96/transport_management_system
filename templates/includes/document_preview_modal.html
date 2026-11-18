@@ -1,4 +1,18 @@
 <!-- Document In-Site Preview Modal -->
+<script>
+    function onDocPreviewLoaded() {
+        const loading = document.getElementById('docPreviewLoading');
+        if (loading) loading.classList.add('hidden');
+    }
+    function onDocPreviewError() {
+        const loading = document.getElementById('docPreviewLoading');
+        const imgContainer = document.getElementById('docPreviewImageContainer');
+        const fallback = document.getElementById('docPreviewFallback');
+        if (loading) loading.classList.add('hidden');
+        if (imgContainer) imgContainer.classList.add('hidden');
+        if (fallback) fallback.classList.remove('hidden');
+    }
+</script>
 <div id="documentPreviewModal" class="fixed inset-0 z-50 hidden bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 md:p-6 transition-all duration-200">
     <div class="bg-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[92vh] flex flex-col overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
         

@@ -976,45 +976,101 @@ class FinancialRecordUpdateView(LoginRequiredMixin, PermissionRequiredMixin, Fin
     def get_initial(self):
         initial = super().get_initial()
         # Pre-populate distributions for editing
+        is_tds = bool(self.object.category and self.object.category.name == 'TDS')
+        is_ded = bool(self.object.category and self.object.category.name == 'Deductions')
+
         if self.object.allocations.exists():
             initial['payment_distribution'] = json.dumps([
-                {'trip_id': a.trip_id, 'amount': float(a.amount)}
+                {
+                    'trip_id': a.trip_id,
+                    'payment': 0 if (is_tds or is_ded) else float(a.amount),
+                    'tds': float(a.amount) if is_tds else 0,
+                    'shortage': float(a.amount) if is_ded else 0,
+                    'charges': 0
+                }
                 for a in self.object.allocations.all()
             ])
+            if self.object.allocations.count() == 1:
+                initial['associated_trip'] = self.object.allocations.first().trip_id
         elif self.object.associated_trip_id:
+            amt = float(self.object.amount or 0)
             initial['payment_distribution'] = json.dumps([
-                {'trip_id': self.object.associated_trip_id, 'amount': float(self.object.amount or 0)}
+                {
+                    'trip_id': self.object.associated_trip_id,
+                    'payment': 0 if (is_tds or is_ded) else amt,
+                    'tds': amt if is_tds else 0,
+                    'shortage': amt if is_ded else 0,
+                    'charges': 0
+                }
             ])
             initial['associated_trip'] = self.object.associated_trip_id
-        elif self.object.category and self.object.category.name == 'TDS' and self.object.voucher:
+        elif is_tds and self.object.voucher:
             v_rec = self.object.voucher.financial_records.exclude(pk=self.object.pk).filter(
-                associated_trip__isnull=False
+                Q(associated_trip__isnull=False) | Q(allocations__isnull=False)
             ).first()
-            if v_rec and v_rec.associated_trip_id:
-                initial['payment_distribution'] = json.dumps([
-                    {'trip_id': v_rec.associated_trip_id, 'amount': float(self.object.amount or 0)}
-                ])
-                initial['associated_trip'] = v_rec.associated_trip_id
+            if v_rec:
+                if v_rec.associated_trip_id:
+                    initial['associated_trip'] = v_rec.associated_trip_id
+                    initial['payment_distribution'] = json.dumps([
+                        {'trip_id': v_rec.associated_trip_id, 'payment': 0, 'tds': float(self.object.amount or 0), 'shortage': 0, 'charges': 0}
+                    ])
+                elif v_rec.allocations.exists():
+                    first_t = v_rec.allocations.first()
+                    initial['associated_trip'] = first_t.trip_id
+                    initial['payment_distribution'] = json.dumps([
+                        {'trip_id': first_t.trip_id, 'payment': 0, 'tds': float(self.object.amount or 0), 'shortage': 0, 'charges': 0}
+                    ])
         
         if self.object.bill_allocations.exists():
             initial['bill_distribution'] = json.dumps([
-                {'bill_id': a.bill_id, 'amount': float(a.amount)}
+                {
+                    'bill_id': a.bill_id,
+                    'payment': 0 if is_tds else float(a.amount),
+                    'tds': float(a.amount) if is_tds else 0
+                }
                 for a in self.object.bill_allocations.all()
             ])
+            if self.object.bill_allocations.count() == 1:
+                initial['associated_bill'] = self.object.bill_allocations.first().bill_id
         elif self.object.associated_bill_id:
+            amt = float(self.object.amount or 0)
             initial['bill_distribution'] = json.dumps([
-                {'bill_id': self.object.associated_bill_id, 'amount': float(self.object.amount or 0)}
+                {
+                    'bill_id': self.object.associated_bill_id,
+                    'payment': 0 if is_tds else amt,
+                    'tds': amt if is_tds else 0
+                }
             ])
             initial['associated_bill'] = self.object.associated_bill_id
-        elif self.object.category and self.object.category.name == 'TDS' and self.object.voucher:
+        elif is_tds and self.object.voucher:
             v_rec = self.object.voucher.financial_records.exclude(pk=self.object.pk).filter(
-                associated_bill__isnull=False
+                Q(associated_bill__isnull=False) | Q(bill_allocations__isnull=False)
             ).first()
-            if v_rec and v_rec.associated_bill_id:
-                initial['bill_distribution'] = json.dumps([
-                    {'bill_id': v_rec.associated_bill_id, 'amount': float(self.object.amount or 0)}
-                ])
-                initial['associated_bill'] = v_rec.associated_bill_id
+            if v_rec:
+                if v_rec.associated_bill_id:
+                    initial['associated_bill'] = v_rec.associated_bill_id
+                    initial['bill_distribution'] = json.dumps([
+                        {'bill_id': v_rec.associated_bill_id, 'payment': 0, 'tds': float(self.object.amount or 0)}
+                    ])
+                elif v_rec.bill_allocations.exists():
+                    first_b = v_rec.bill_allocations.first()
+                    initial['associated_bill'] = first_b.bill_id
+                    initial['bill_distribution'] = json.dumps([
+                        {'bill_id': first_b.bill_id, 'payment': 0, 'tds': float(self.object.amount or 0)}
+                    ])
+
+        # If account is not directly on this record (e.g. TDS record), inherit from sibling in voucher
+        if not self.object.account_id and self.object.voucher:
+            sibling = self.object.voucher.financial_records.exclude(pk=self.object.pk).filter(account__isnull=False).first()
+            if sibling and sibling.account_id:
+                initial['account'] = sibling.account_id
+
+        # If category is TDS or Deductions, prefill corresponding fields
+        if is_tds:
+            initial['tds_amount'] = self.object.amount
+        if is_ded:
+            initial['deduction_amount'] = self.object.amount
+
         return initial
 
     def form_valid(self, form):

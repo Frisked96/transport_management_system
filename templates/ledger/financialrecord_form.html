@@ -745,6 +745,36 @@ document.addEventListener('DOMContentLoaded', function() {
     let initialTripsLoaded = false;
     let initialBillsLoaded = false;
 
+    // Immediately parse initial distributions so state is never wiped during initial setMode/setSubtab
+    if (paymentDistInput && paymentDistInput.value) {
+        try {
+            const arr = JSON.parse(paymentDistInput.value);
+            if (Array.isArray(arr)) {
+                arr.forEach(item => {
+                    selectedTripsMap[item.trip_id] = {
+                        payment: item.payment !== undefined ? item.payment : (item.amount || 0),
+                        tds: item.tds || 0,
+                        shortage: item.shortage || item.deduction || 0,
+                        charges: item.charges || 0
+                    };
+                });
+            }
+        } catch (e) {}
+    }
+    if (billDistInput && billDistInput.value) {
+        try {
+            const arr = JSON.parse(billDistInput.value);
+            if (Array.isArray(arr)) {
+                arr.forEach(item => {
+                    selectedBillsMap[item.bill_id] = {
+                        payment: item.payment !== undefined ? item.payment : (item.amount || 0),
+                        tds: item.tds || 0
+                    };
+                });
+            }
+        } catch (e) {}
+    }
+
     // Actions Toolbar Minimize / Float (matching bulk trip form)
     const ACTIONS_MINIMIZED_KEY = 'financial_record_bar_minimized';
     const $actionsBar = $('#financial-actions-bar');
@@ -1010,7 +1040,7 @@ document.addEventListener('DOMContentLoaded', function() {
             accountLabel.textContent = 'Deposit To Account *';
             if (headerAmountLabel) headerAmountLabel.innerHTML = 'Total Payment / Received (₹) <span class="text-rose-600">*</span>';
             if (headerAmountHint) headerAmountHint.textContent = 'Transaction amount received to allocate across trips or bills.';
-            recordTypeInput.value = 'Transaction';
+            if (!isEditing || userChangedMode) recordTypeInput.value = 'Transaction';
             syncCategory('customer');
         } else if (mode === 'vendor') {
             panelVendor.classList.remove('hidden');
@@ -1019,7 +1049,7 @@ document.addEventListener('DOMContentLoaded', function() {
             accountLabel.textContent = 'Paid From Account *';
             if (headerAmountLabel) headerAmountLabel.innerHTML = 'Total Payment / Paid Out (₹) <span class="text-rose-600">*</span>';
             if (headerAmountHint) headerAmountHint.textContent = 'Transaction amount paid to allocate across vendor bills.';
-            recordTypeInput.value = 'Transaction';
+            if (!isEditing || userChangedMode) recordTypeInput.value = 'Transaction';
             syncCategory('vendor');
         } else if (mode === 'expense') {
             panelExpense.classList.remove('hidden');
@@ -1027,9 +1057,9 @@ document.addEventListener('DOMContentLoaded', function() {
             accountLabel.textContent = 'Paid From Account *';
             if (headerAmountLabel) headerAmountLabel.innerHTML = 'Expense Amount Paid (₹) <span class="text-rose-600">*</span>';
             if (headerAmountHint) headerAmountHint.textContent = 'Operating expense disbursement.';
-            recordTypeInput.value = 'General';
+            if (!isEditing || userChangedMode) recordTypeInput.value = 'General';
             syncCategory('expense');
-            if (partySelect) $(partySelect).val('').trigger('change.select2');
+            if (partySelect && userChangedMode) $(partySelect).val('').trigger('change.select2');
         } else if (mode === 'driver') {
             panelDriver.classList.remove('hidden');
             driverContainer.classList.remove('hidden');
@@ -1037,9 +1067,9 @@ document.addEventListener('DOMContentLoaded', function() {
             accountLabel.textContent = 'Disbursed From Account *';
             if (headerAmountLabel) headerAmountLabel.innerHTML = 'Driver Disbursement (₹) <span class="text-rose-600">*</span>';
             if (headerAmountHint) headerAmountHint.textContent = 'Advance, salary, or allowance paid to driver.';
-            recordTypeInput.value = 'Transaction';
+            if (!isEditing || userChangedMode) recordTypeInput.value = 'Transaction';
             syncCategory('driver');
-            if (partySelect) $(partySelect).val('').trigger('change.select2');
+            if (partySelect && userChangedMode) $(partySelect).val('').trigger('change.select2');
         } else if (mode === 'contra') {
             panelContra.classList.remove('hidden');
             partyContainer.classList.remove('hidden');
@@ -1049,7 +1079,7 @@ document.addEventListener('DOMContentLoaded', function() {
             partyLabel.textContent = 'Source Party *';
             if (headerAmountLabel) headerAmountLabel.innerHTML = 'Contra Set-Off Amount (₹) <span class="text-rose-600">*</span>';
             if (headerAmountHint) headerAmountHint.textContent = 'Non-cash ledger adjustment between parties.';
-            recordTypeInput.value = 'Transaction';
+            if (!isEditing || userChangedMode) recordTypeInput.value = 'Transaction';
             if (contraCheckbox) contraCheckbox.checked = true;
             syncCategory('contra');
         }
@@ -1084,7 +1114,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Subtab Switching (Customer)
-    function setSubtab(subtab) {
+    function setSubtab(subtab, isUserAction = false) {
         currentSubtab = subtab;
         subtabs.forEach(btn => {
             if (btn.dataset.subtab === subtab) btn.classList.add('is-active');
@@ -1095,54 +1125,59 @@ document.addEventListener('DOMContentLoaded', function() {
         subpanelInvoices.classList.add('hidden');
         subpanelAccount.classList.add('hidden');
 
-        // Mutual exclusivity: clear alternate subtab selections
         if (subtab === 'trips') {
             subpanelTrips.classList.remove('hidden');
-            selectedBillsMap = {};
-            associatedBillInput.value = '';
-            billDistInput.value = '';
-            document.querySelectorAll('#bills-list .bill-checkbox, #vendor-bills-list .bill-checkbox').forEach(cb => {
-                cb.checked = false;
-                const r = cb.closest('.settle-row');
-                if (r) {
-                    r.classList.remove('is-selected');
-                    const inp = r.querySelector('.bill-inputs');
-                    if (inp) inp.classList.add('hidden');
-                    const prev = r.querySelector('.bill-balance-preview');
-                    if (prev) prev.classList.add('hidden');
-                }
-            });
-            const bBadge = document.getElementById('bills-selected-badge');
-            if (bBadge) bBadge.classList.add('hidden');
-            syncCategory('customer');
+            if (isUserAction) {
+                selectedBillsMap = {};
+                associatedBillInput.value = '';
+                billDistInput.value = '';
+                document.querySelectorAll('#bills-list .bill-checkbox, #vendor-bills-list .bill-checkbox').forEach(cb => {
+                    cb.checked = false;
+                    const r = cb.closest('.settle-row');
+                    if (r) {
+                        r.classList.remove('is-selected');
+                        const inp = r.querySelector('.bill-inputs');
+                        if (inp) inp.classList.add('hidden');
+                        const prev = r.querySelector('.bill-balance-preview');
+                        if (prev) prev.classList.add('hidden');
+                    }
+                });
+                const bBadge = document.getElementById('bills-selected-badge');
+                if (bBadge) bBadge.classList.add('hidden');
+                syncCategory('customer');
+            }
         } else if (subtab === 'invoices') {
             subpanelInvoices.classList.remove('hidden');
-            selectedTripsMap = {};
-            associatedTripInput.value = '';
-            paymentDistInput.value = '';
-            document.querySelectorAll('#trips-list .trip-checkbox').forEach(cb => {
-                cb.checked = false;
-                const r = cb.closest('.settle-row');
-                if (r) {
-                    r.classList.remove('is-selected');
-                    const inp = r.querySelector('.trip-inputs');
-                    if (inp) inp.classList.add('hidden');
-                    const prev = r.querySelector('.trip-balance-preview');
-                    if (prev) prev.classList.add('hidden');
-                }
-            });
-            const tBadge = document.getElementById('trips-selected-badge');
-            if (tBadge) tBadge.classList.add('hidden');
-            syncCategory('customer');
+            if (isUserAction) {
+                selectedTripsMap = {};
+                associatedTripInput.value = '';
+                paymentDistInput.value = '';
+                document.querySelectorAll('#trips-list .trip-checkbox').forEach(cb => {
+                    cb.checked = false;
+                    const r = cb.closest('.settle-row');
+                    if (r) {
+                        r.classList.remove('is-selected');
+                        const inp = r.querySelector('.trip-inputs');
+                        if (inp) inp.classList.add('hidden');
+                        const prev = r.querySelector('.trip-balance-preview');
+                        if (prev) prev.classList.add('hidden');
+                    }
+                });
+                const tBadge = document.getElementById('trips-selected-badge');
+                if (tBadge) tBadge.classList.add('hidden');
+                syncCategory('customer');
+            }
         } else if (subtab === 'account') {
             subpanelAccount.classList.remove('hidden');
-            selectedTripsMap = {};
-            selectedBillsMap = {};
-            associatedTripInput.value = '';
-            associatedBillInput.value = '';
-            paymentDistInput.value = '';
-            billDistInput.value = '';
-            syncCategory('customer');
+            if (isUserAction) {
+                selectedTripsMap = {};
+                selectedBillsMap = {};
+                associatedTripInput.value = '';
+                associatedBillInput.value = '';
+                paymentDistInput.value = '';
+                billDistInput.value = '';
+                syncCategory('customer');
+            }
         }
 
         syncHiddenInputs();
@@ -1157,7 +1192,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }));
     subtabs.forEach(btn => btn.addEventListener('click', () => {
         userChangedMode = true;
-        setSubtab(btn.dataset.subtab);
+        setSubtab(btn.dataset.subtab, true);
     }));
 
     // --- Fetch coordination state (prevents stale/duplicate responses re-rendering the lists) ---
@@ -1301,10 +1336,13 @@ document.addEventListener('DOMContentLoaded', function() {
             } else if (initialTrip && !selectedTripsMap[initialTrip]) {
                 const trip = trips.find(t => String(t.id) === String(initialTrip));
                 if (trip) {
+                    const hVal = parseFloat(hiddenAmount.value) || 0;
+                    const tVal = parseFloat(hiddenTdsAmount.value) || 0;
+                    const dVal = parseFloat(hiddenDedAmount.value) || 0;
                     selectedTripsMap[trip.id] = {
-                        payment: parseFloat(hiddenAmount.value) || trip.balance,
-                        tds: parseFloat(hiddenTdsAmount.value) || 0,
-                        shortage: parseFloat(hiddenDedAmount.value) || 0,
+                        payment: hVal > 0 ? hVal : (tVal > 0 || dVal > 0 ? 0 : trip.balance),
+                        tds: tVal,
+                        shortage: dVal,
                         charges: 0
                     };
                 }
@@ -1478,11 +1516,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 syncRow();
             });
-                    inputsDiv.classList.add('hidden');
-                    previewDiv.classList.add('hidden');
-                }
-                syncRow();
-            });
 
             pInp.addEventListener('input', syncRow);
             tInp.addEventListener('input', syncRow);
@@ -1552,13 +1585,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const rows = document.querySelectorAll('#trips-list .settle-row');
         let visibleCount = 0;
+        const preselectedTripId = (Object.keys(selectedTripsMap).length === 1) ? Object.keys(selectedTripsMap)[0] : null;
 
         rows.forEach(row => {
+            const tripId = row.dataset.tripId || '';
             const vehicle = row.dataset.vehicle || '';
             const lr = row.dataset.lr || '';
             const tripNum = row.dataset.tripNum || '';
 
-            const matches = !q || vehicle.includes(q) || lr.includes(q) || tripNum.includes(q);
+            const isPreselected = (preselectedTripId && String(tripId) === String(preselectedTripId));
+            const matches = !q || isPreselected || vehicle.includes(q) || lr.includes(q) || tripNum.includes(q);
 
             if (matches) {
                 row.style.display = '';
@@ -1703,9 +1739,12 @@ document.addEventListener('DOMContentLoaded', function() {
             } else if (initialBill && !selectedBillsMap[initialBill]) {
                 const b = bills.find(x => String(x.id) === String(initialBill));
                 if (b) {
+                    const hVal = parseFloat(hiddenAmount.value) || 0;
+                    const tVal = parseFloat(hiddenTdsAmount.value) || 0;
+                    const bDue = parseFloat(b.outstanding) || 0;
                     selectedBillsMap[b.id] = {
-                        payment: parseFloat(hiddenAmount.value) || parseFloat(b.outstanding) || 0,
-                        tds: parseFloat(hiddenTdsAmount.value) || 0
+                        payment: hVal > 0 ? hVal : (tVal > 0 ? 0 : bDue),
+                        tds: tVal
                     };
                 }
             }
@@ -1904,10 +1943,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const cards = document.querySelectorAll('#bills-list .settle-row');
         let visibleCount = 0;
+        const preselectedBillId = (Object.keys(selectedBillsMap).length === 1) ? Object.keys(selectedBillsMap)[0] : null;
 
         cards.forEach(card => {
+            const billId = card.dataset.billId || '';
             const billNum = card.dataset.billNumber || '';
-            const matches = !q || billNum.includes(q);
+            const isPreselected = (preselectedBillId && String(billId) === String(preselectedBillId));
+            const matches = !q || isPreselected || billNum.includes(q);
 
             if (matches) {
                 card.style.display = '';
@@ -2020,7 +2062,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     } else {
                         associatedTripInput.value = '';
                     }
-                } else {
+                } else if (initialTripsLoaded) {
                     associatedTripInput.value = '';
                     paymentDistInput.value = '';
                 }
@@ -2049,7 +2091,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     } else {
                         associatedBillInput.value = '';
                     }
-                } else {
+                } else if (initialBillsLoaded) {
                     associatedBillInput.value = '';
                     billDistInput.value = '';
                 }
