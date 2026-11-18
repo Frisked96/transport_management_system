@@ -7,6 +7,7 @@ from .financial_record import FinancialRecord, financial_record_upload_path
 from .allocation import TripAllocation, BillAllocation
 from .managers import BillQuerySet, BillManager
 from .bill_trip import BillTrip
+from .bill_item import BillItem
 from .bill import (
     Bill,
     is_bill_deleting,
@@ -34,6 +35,7 @@ __all__ = [
     'BillAllocation',
     'Bill',
     'BillTrip',
+    'BillItem',
     'BillQuerySet',
     'BillManager',
     'is_bill_deleting',

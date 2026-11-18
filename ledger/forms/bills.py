@@ -2,17 +2,21 @@
 Form for creating and editing Bill (Invoice) instances and associated BillTrip relationships.
 """
 import json
+from decimal import Decimal, InvalidOperation
 from django import forms
 from django.db import models, transaction
 
-from ledger.models import Bill, BillTrip, CompanyAccount, TransactionCategory
+from ledger.models import Bill, BillTrip, BillItem, CompanyAccount, TransactionCategory
 from ledger.utils import sort_trips_for_bill_generation, parse_numeric_lr
 from trips.models import Trip
+from fleet.models import Vehicle
 
 
 class BillForm(forms.ModelForm):
     # Hidden field to store JSON mapping of trip_id -> lr_no
     trips_data = forms.CharField(widget=forms.HiddenInput(), required=False)
+    # Hidden field to store JSON array of standard line items (vehicle rows)
+    items_data = forms.CharField(widget=forms.HiddenInput(), required=False)
     prefix = forms.CharField(required=False, widget=forms.TextInput(attrs={
         'id': 'id_prefix',
         'readonly': 'readonly',
@@ -44,7 +48,8 @@ class BillForm(forms.ModelForm):
             'gst_type',
             'use_roundoff',
             'trips',
-            'trips_data'
+            'trips_data',
+            'items_data'
         ]
         widgets = {
             'date': forms.DateInput(attrs={'type': 'date', 'id': 'id_date'}),
@@ -70,7 +75,7 @@ class BillForm(forms.ModelForm):
 
         # Apply Tailwind classes
         for name, field in self.fields.items():
-            if name not in ['trips', 'trips_data', 'prefix', 'bill_no', 'date']:
+            if name not in ['trips', 'trips_data', 'items_data', 'prefix', 'bill_no', 'date']:
                 field.widget.attrs.update({'class': 'block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white'})
 
         # Filter categories for standard invoices
@@ -79,6 +84,7 @@ class BillForm(forms.ModelForm):
         ).order_by('name')
         self.fields['category'].empty_label = "Select Category (Standard Only)"
         self.fields['category'].required = False
+        self.fields['discount'].required = False
 
         # 1. Pre-populate bill_no for new records if issuer exists
         if not self.instance.pk:
@@ -153,10 +159,32 @@ class BillForm(forms.ModelForm):
         if self.instance and self.instance.pk:
             bt_data = {bt.trip_id: {'lr_no': bt.lr_no, 'discount': str(bt.discount)} for bt in self.instance.bill_trips.all()}
             self.fields['trips_data'].initial = json.dumps(bt_data)
+            
+            if self.instance.bill_type == Bill.TYPE_STANDARD:
+                items_list = [
+                    {
+                        'id': it.id,
+                        'vehicle_id': it.vehicle_id or '',
+                        'vehicle_number': it.vehicle_number or (it.vehicle.registration_plate if it.vehicle else ''),
+                        'description': it.description or '',
+                        'quantity': str(it.quantity) if it.quantity is not None else '1',
+                        'rate': str(it.rate) if it.rate is not None else '0',
+                        'amount': str(it.amount) if it.amount is not None else '0',
+                        'lr_no': it.lr_no or '',
+                    }
+                    for it in self.instance.items.select_related('vehicle').all()
+                ]
+                self.fields['items_data'].initial = json.dumps(items_list)
         elif 'trips' in self.initial:
             trips = Trip.objects.filter(id__in=self.initial['trips'])
             bt_data = {trip.id: {'lr_no': trip.lr_no, 'discount': '0.00'} for trip in trips if trip.lr_no}
             self.fields['trips_data'].initial = json.dumps(bt_data)
+
+    def clean_discount(self):
+        val = self.cleaned_data.get('discount')
+        if val is None or val == '':
+            return Decimal('0.00')
+        return val
 
     def clean(self):
         cleaned_data = super().clean()
@@ -176,6 +204,29 @@ class BillForm(forms.ModelForm):
                 
                 derived_gst_type = list(trip_gst_types)[0]
                 cleaned_data['gst_type'] = derived_gst_type
+
+        # Logic for Standard Invoices / Halting / Credit Notes
+        if bill_type == 'Standard':
+            items_data_json = cleaned_data.get('items_data')
+            if items_data_json:
+                try:
+                    parsed_items = json.loads(items_data_json)
+                    if isinstance(parsed_items, list):
+                        valid_items = [
+                            it for it in parsed_items
+                            if (it.get('amount') and float(it.get('amount') or 0) > 0)
+                            or it.get('vehicle_number')
+                            or it.get('vehicle_id')
+                            or it.get('description')
+                        ]
+                        if valid_items:
+                            items_total = sum(Decimal(str(it.get('amount') or 0)) for it in valid_items)
+                            cleaned_data['amount_override'] = items_total
+                            cat = cleaned_data.get('category')
+                            if not cleaned_data.get('item_type'):
+                                cleaned_data['item_type'] = cat.name if cat else 'Standard Item'
+                except (json.JSONDecodeError, TypeError, ValueError, InvalidOperation):
+                    pass
 
         # Validation for Credit/Debit Notes
         category = cleaned_data.get('category')
@@ -197,7 +248,65 @@ class BillForm(forms.ModelForm):
         if commit:
             with transaction.atomic():
                 instance._suppress_billtrip_sync = True
+
+                # Parse items_data if Standard bill
+                items_data_json = self.cleaned_data.get('items_data')
+                parsed_items = []
+                if items_data_json:
+                    try:
+                        parsed_items = json.loads(items_data_json)
+                    except (json.JSONDecodeError, TypeError):
+                        parsed_items = []
+
+                if instance.bill_type == Bill.TYPE_STANDARD and parsed_items:
+                    valid_items = [
+                        it for it in parsed_items
+                        if (it.get('amount') and float(it.get('amount') or 0) > 0)
+                        or it.get('vehicle_number')
+                        or it.get('vehicle_id')
+                        or it.get('description')
+                    ]
+                    if valid_items:
+                        items_total = sum(Decimal(str(it.get('amount') or 0)) for it in valid_items)
+                        instance.amount_override = items_total
+                        if not instance.item_type:
+                            instance.item_type = instance.category.name if instance.category else 'Standard Item'
+
                 instance.save()
+
+                if instance.bill_type == Bill.TYPE_STANDARD:
+                    instance.items.all().delete()
+                    if parsed_items:
+                        valid_items = [
+                            it for it in parsed_items
+                            if (it.get('amount') and float(it.get('amount') or 0) > 0)
+                            or it.get('vehicle_number')
+                            or it.get('vehicle_id')
+                            or it.get('description')
+                        ]
+                        items_to_create = []
+                        for it in valid_items:
+                            v_id = it.get('vehicle_id')
+                            vehicle_obj = None
+                            if v_id and str(v_id).isdigit():
+                                vehicle_obj = Vehicle.objects.filter(pk=int(v_id)).first()
+                            
+                            v_num = (it.get('vehicle_number') or '').strip()
+                            if vehicle_obj and not v_num:
+                                v_num = vehicle_obj.registration_plate
+
+                            items_to_create.append(BillItem(
+                                bill=instance,
+                                vehicle=vehicle_obj,
+                                vehicle_number=v_num,
+                                description=it.get('description') or '',
+                                quantity=Decimal(str(it.get('quantity') or 1)),
+                                rate=Decimal(str(it.get('rate') or 0)),
+                                amount=Decimal(str(it.get('amount') or 0)),
+                                lr_no=it.get('lr_no') or '',
+                            ))
+                        if items_to_create:
+                            BillItem.objects.bulk_create(items_to_create)
                 
                 selected_trips = list(self.cleaned_data.get('trips', []))
                 trips_data_json = self.cleaned_data.get('trips_data', '{}')

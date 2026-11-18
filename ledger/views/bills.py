@@ -49,7 +49,9 @@ class BillListView(LoginRequiredMixin, PermissionRequiredMixin, BaseLedgerPermis
             'bill_trips',
             'bill_trips__trip',
             'adjustment_bills',
-            'adjustment_bills__category'
+            'adjustment_bills__category',
+            'items',
+            'items__vehicle'
         ).order_by('-date', '-category__name', '-bill_no')
         
         # Filter by Issuer (Company Account)
@@ -139,6 +141,14 @@ class BillCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
                 kwargs['initial']['trips'] = self.request.GET.getlist('trip_ids')
         return kwargs
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        from fleet.models import Vehicle
+        vehicles = list(Vehicle.objects.all().order_by('registration_plate').values('id', 'registration_plate', 'ownership'))
+        context['vehicles'] = vehicles
+        context['vehicles_json'] = json.dumps(vehicles)
+        return context
+
     def form_valid(self, form):
         form.instance.created_by = self.request.user
         response = super().form_valid(form)
@@ -155,6 +165,14 @@ class BillUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
     form_class = BillForm
     template_name = 'ledger/bill_form.html'
     permission_required = 'ledger.change_bill'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        from fleet.models import Vehicle
+        vehicles = list(Vehicle.objects.all().order_by('registration_plate').values('id', 'registration_plate', 'ownership'))
+        context['vehicles'] = vehicles
+        context['vehicles_json'] = json.dumps(vehicles)
+        return context
 
     def dispatch(self, request, *args, **kwargs):
         obj = self.get_object()
@@ -235,7 +253,9 @@ class BillDetailView(LoginRequiredMixin, PermissionRequiredMixin, BaseLedgerPerm
     permission_required = 'ledger.view_bill'
 
     def get_queryset(self):
-        return Bill.objects.select_related('party', 'issuer', 'category', 'original_bill', 'customer_bill', 'created_by')
+        return Bill.objects.select_related(
+            'party', 'issuer', 'category', 'original_bill', 'customer_bill', 'created_by'
+        ).prefetch_related('items', 'items__vehicle')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -262,13 +282,16 @@ class BillDetailView(LoginRequiredMixin, PermissionRequiredMixin, BaseLedgerPerm
         has_lr = False
         if bill.bill_type != 'Standard':
             has_lr = any(bt.lr_no or (bt.trip and bt.trip.lr_no) for bt in bill_trips)
+        else:
+            has_lr = any(bool(item.lr_no) for item in bill.items.all())
 
         context['has_discount'] = has_discount
         context['has_lr'] = has_lr
 
         # Precompute total weight in memory without extra queries
         if bill.bill_type == 'Standard':
-            total_weight = bill.standard_weight or 0
+            items = list(bill.items.all())
+            total_weight = sum((it.quantity or Decimal('0')) for it in items) if items else (bill.standard_weight or 0)
         else:
             total_weight = sum((bt.trip.weight or 0) for bt in bill_trips if bt.trip)
         context['total_weight'] = total_weight
@@ -465,8 +488,14 @@ def _get_combined_bill_context(bill):
     has_lr = False
     if bill.bill_type != 'Standard':
         has_lr = any(bt.lr_no or (bt.trip and bt.trip.lr_no) for bt in bill_trips)
+    else:
+        has_lr = any(bool(item.lr_no) for item in bill.items.all())
 
-    total_weight = bill.standard_weight or 0 if bill.bill_type == 'Standard' else sum(bt.trip.weight or 0 for bt in bill_trips if bt.trip)
+    if bill.bill_type == 'Standard':
+        items = list(bill.items.all())
+        total_weight = sum((it.quantity or Decimal('0')) for it in items) if items else (bill.standard_weight or 0)
+    else:
+        total_weight = sum(bt.trip.weight or 0 for bt in bill_trips if bt.trip)
 
     return {
         'bill': bill,

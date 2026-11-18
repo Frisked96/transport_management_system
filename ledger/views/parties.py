@@ -529,6 +529,7 @@ def get_party_bills(request):
             'trips',
             'bill_trips',
             'bill_trips__trip',
+            'bill_trips__trip__vehicle',
             'financial_records',
             'financial_records__category',
             'trips__payment_allocations',
@@ -549,6 +550,17 @@ def get_party_bills(request):
             if unpaid_only and bill.id not in include_ids and adj_outstanding <= 0:
                 continue
                 
+            veh_list = []
+            seen_v = set()
+            for bt in bill.bill_trips.all():
+                if bt.trip and bt.trip.vehicle_id and bt.trip.vehicle_id not in seen_v:
+                    seen_v.add(bt.trip.vehicle_id)
+                    veh_list.append({
+                        'id': bt.trip.vehicle_id,
+                        'plate': bt.trip.vehicle.registration_plate if bt.trip.vehicle else '',
+                        'lr_no': bt.lr_no or (bt.trip.lr_no if bt.trip else '') or ''
+                    })
+
             data.append({
                 'id': bill.id,
                 'bill_number': bill.bill_number or 'Draft',
@@ -556,7 +568,8 @@ def get_party_bills(request):
                 'outstanding': float(adj_outstanding),
                 'total': float(bill.rounded_total),
                 'subtotal': float(bill.subtotal),
-                'label': f"{bill.bill_number or 'Draft'} - {bill.date.strftime('%d/%m/%Y')} (Pending: ₹{adj_outstanding:,.2f})"
+                'label': f"{bill.bill_number or 'Draft'} - {bill.date.strftime('%d/%m/%Y')} (Pending: ₹{adj_outstanding:,.2f})",
+                'vehicles': veh_list
             })
 
         return JsonResponse({'bills': data})

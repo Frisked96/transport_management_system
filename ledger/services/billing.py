@@ -208,6 +208,25 @@ class BillingService:
                             cr_dn.bill_number = cr_dn_number
                         cr_dn.save()
 
+                    # Also sync line items to cr_dn if customer credit note has items
+                    from ledger.models import BillItem
+                    cr_dn.items.all().delete()
+                    if bill.items.exists():
+                        new_items = [
+                            BillItem(
+                                bill=cr_dn,
+                                vehicle=ci.vehicle,
+                                vehicle_number=ci.vehicle_number,
+                                description=ci.description,
+                                quantity=ci.quantity,
+                                rate=ci.rate,
+                                amount=ci.amount,
+                                lr_no=ci.lr_no
+                            )
+                            for ci in bill.items.all()
+                        ]
+                        BillItem.objects.bulk_create(new_items)
+
                     BillingService.update_bill_financial_caches(cr_dn)
                     cr_dn.sync_to_ledger()
                     BillingService.update_bill_financial_caches(cr_bill)

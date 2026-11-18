@@ -29,6 +29,7 @@
                 {% endif %}
 
                 {{ form.trips_data }}
+                {{ form.items_data }}
 
                 <!-- BEGIN: Bill Type Section -->
                 <div class="bg-white p-6 rounded-lg border border-slate-200 mb-10 flex flex-wrap items-center gap-8">
@@ -185,32 +186,127 @@
                         </div>
 
                         <div class="space-y-2">
-                            <label class="block text-xs font-bold text-slate-500 uppercase">Item Description / Type</label>
+                            <label class="block text-xs font-bold text-slate-500 uppercase">Bill Subject / Item Description</label>
                             {{ form.item_type }}
-                            <p class="text-[10px] text-slate-400">e.g., Detention Charges, Loading/Unloading, etc.</p>
+                            <p class="text-[10px] text-slate-400">e.g., Halting Charges, Detention, Shortage Deduction, etc.</p>
+                        </div>
+
+                        <!-- Quick suggestion for vehicles from original bill -->
+                        <div id="originalBillVehiclesHint" class="hidden col-span-full p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs">
+                            <div class="flex items-center justify-between flex-wrap gap-2">
+                                <div class="flex items-center gap-2 flex-wrap">
+                                    <i class="fa-solid fa-lightbulb text-amber-600"></i>
+                                    <span class="font-bold text-amber-900">Vehicles on Selected Invoice:</span>
+                                    <div id="originalBillVehiclesBadges" class="flex items-center gap-1.5 flex-wrap"></div>
+                                </div>
+                                <button type="button" id="addAllOriginalVehiclesBtn" class="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded text-[11px] transition-colors flex items-center">
+                                    <i class="fa-solid fa-plus-circle mr-1"></i>Add All Vehicles as Rows
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- BEGIN: Vehicle Line Items Table -->
+                        <div id="standardItemsSection" class="col-span-full mt-2">
+                            <div class="flex items-center justify-between mb-3 pb-2 border-b border-slate-200 flex-wrap gap-2">
+                                <div>
+                                    <h4 class="text-xs font-black text-slate-700 uppercase tracking-wider flex items-center">
+                                        <i class="fa-solid fa-truck-moving text-emerald-600 mr-2 text-sm"></i>
+                                        Vehicle & Item Breakdown
+                                    </h4>
+                                    <p class="text-[11px] text-slate-500">
+                                        Add vehicle rows with halting days, shortage, or adjustment charges. One bill can have multiple vehicles.
+                                    </p>
+                                </div>
+                                <button type="button" id="addVehicleRowBtn" class="px-3.5 py-1.5 bg-emerald-600 text-white text-xs font-bold rounded-md shadow-sm hover:bg-emerald-700 transition-colors flex items-center">
+                                    <i class="fa-solid fa-plus mr-1.5"></i> Add Vehicle Row
+                                </button>
+                            </div>
+
+                            <div class="overflow-x-auto border border-slate-200 rounded-lg bg-white shadow-sm">
+                                <table class="w-full text-left border-collapse" id="standardItemsTable">
+                                    <thead>
+                                        <tr class="bg-slate-100 text-slate-600 border-b border-slate-200 text-[10px] font-black uppercase tracking-wider">
+                                            <th class="px-3 py-2.5 w-10 text-center">#</th>
+                                            <th class="px-3 py-2.5 min-w-[220px]">Vehicle</th>
+                                            <th class="px-3 py-2.5 min-w-[200px]">Description / Reason</th>
+                                            <th class="px-3 py-2.5 w-24 text-right">Days / Qty</th>
+                                            <th class="px-3 py-2.5 w-28 text-right">Rate (₹)</th>
+                                            <th class="px-3 py-2.5 w-32 text-right">Amount (₹)</th>
+                                            <th class="px-3 py-2.5 w-28">LR No.</th>
+                                            <th class="px-3 py-2.5 w-12 text-center"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="standardItemsBody" class="divide-y divide-slate-200 text-xs">
+                                        <!-- Dynamic rows will be inserted here -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <!-- END: Vehicle Line Items Table -->
+
+                        <!-- Hidden fields for standard_weight & standard_rate to satisfy form binding -->
+                        <div class="hidden">
+                            {{ form.standard_weight }}
+                            {{ form.standard_rate }}
                         </div>
 
                         <!-- Calculations Grid -->
-                        <div class="space-y-2">
-                            <label class="block text-xs font-bold text-slate-500 uppercase">Weight (Optional)</label>
-                            {{ form.standard_weight }}
+                        <div class="col-span-full grid grid-cols-1 sm:grid-cols-3 gap-6 pt-4 border-t border-slate-200 bg-emerald-50/40 p-4 rounded-lg mt-2">
+                            <div class="space-y-1">
+                                <label class="block text-xs font-bold text-slate-700 uppercase">Subtotal / Base Amount (Excl. GST)</label>
+                                {{ form.amount_override }}
+                                <p class="text-[10px] text-slate-400 italic">Auto-calculated from vehicle rows above</p>
+                            </div>
+                            <div class="space-y-1">
+                                <label class="block text-xs font-bold text-slate-700 uppercase">GST Amount</label>
+                                <input type="number" id="id_gst_amount_manual" name="gst_amount_manual" step="0.01" class="block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white">
+                                <p class="text-[10px] text-slate-400 italic">Auto-calculated based on GST Rate %</p>
+                            </div>
+                            <div class="space-y-1">
+                                <label class="block text-xs font-bold text-emerald-800 uppercase font-black">Final Total Amount (Incl. GST)</label>
+                                <input type="number" id="id_total_amount_manual" name="total_amount_manual" step="0.01" class="block w-full px-3 py-2 border-2 border-emerald-500 rounded-md text-sm shadow-sm font-bold focus:ring-emerald-600 focus:border-emerald-600 bg-white text-emerald-900">
+                                <p class="text-[10px] text-emerald-600 italic font-medium">Payable / Adjusted Total</p>
+                            </div>
                         </div>
-                        <div class="space-y-2">
-                            <label class="block text-xs font-bold text-slate-500 uppercase">Rate per Ton</label>
-                            {{ form.standard_rate }}
-                        </div>
-                        <div class="space-y-2">
-                            <label class="block text-xs font-bold text-slate-500 uppercase">Base Amount (Excl. GST)</label>
-                            {{ form.amount_override }}
-                        </div>
-                        <div class="space-y-2">
-                            <label class="block text-xs font-bold text-slate-500 uppercase">GST Amount</label>
-                            <input type="number" id="id_gst_amount_manual" name="gst_amount_manual" step="0.01" class="block w-full px-3 py-2 border border-slate-300 rounded-md text-sm shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white">
-                        </div>
-                        <div class="space-y-2">
-                            <label class="block text-xs font-bold text-slate-500 uppercase font-black text-emerald-700">Final Total Amount (Incl. GST)</label>
-                            <input type="number" id="id_total_amount_manual" name="total_amount_manual" step="0.01" class="block w-full px-3 py-2 border-2 border-emerald-500 rounded-md text-sm shadow-sm font-bold focus:ring-emerald-600 focus:border-emerald-600 bg-white text-emerald-900">
-                        </div>
+
+                        <!-- Template for a new item row -->
+                        <template id="itemRowTemplate">
+                            <tr class="item-row hover:bg-slate-50/80 transition-colors">
+                                <td class="px-3 py-2 text-center text-slate-400 font-bold row-index">1</td>
+                                <td class="px-3 py-2">
+                                    <div class="space-y-1">
+                                        <select class="item-vehicle block w-full px-2 py-1.5 border border-slate-300 rounded text-xs focus:ring-emerald-500 focus:border-emerald-500 bg-white font-medium">
+                                            <option value="">-- Select Vehicle (Optional) --</option>
+                                            {% for v in vehicles %}
+                                            <option value="{{ v.id }}" data-plate="{{ v.registration_plate }}">{{ v.registration_plate }} ({{ v.ownership }})</option>
+                                            {% endfor %}
+                                            <option value="OTHER">+ Enter Manual Vehicle Plate</option>
+                                        </select>
+                                        <input type="text" class="item-vehicle-custom hidden block w-full px-2 py-1 border border-amber-300 bg-amber-50/50 rounded text-xs font-bold uppercase tracking-wider text-slate-800 focus:ring-amber-500 focus:border-amber-500" placeholder="Type Vehicle No. (e.g. RJ14GA1234)">
+                                    </div>
+                                </td>
+                                <td class="px-3 py-2">
+                                    <input type="text" class="item-description block w-full px-2 py-1.5 border border-slate-300 rounded text-xs focus:ring-emerald-500 focus:border-emerald-500 bg-white" placeholder="e.g. Halting 2 days / Shortage">
+                                </td>
+                                <td class="px-3 py-2">
+                                    <input type="number" step="0.001" min="0" class="item-qty block w-full px-2 py-1.5 border border-slate-300 rounded text-xs text-right focus:ring-emerald-500 focus:border-emerald-500 bg-white" placeholder="1" value="1">
+                                </td>
+                                <td class="px-3 py-2">
+                                    <input type="number" step="0.01" min="0" class="item-rate block w-full px-2 py-1.5 border border-slate-300 rounded text-xs text-right focus:ring-emerald-500 focus:border-emerald-500 bg-white" placeholder="0.00">
+                                </td>
+                                <td class="px-3 py-2">
+                                    <input type="number" step="0.01" min="0" class="item-amount block w-full px-2 py-1.5 border border-slate-300 rounded text-xs text-right font-black text-emerald-700 focus:ring-emerald-500 focus:border-emerald-500 bg-white" placeholder="0.00">
+                                </td>
+                                <td class="px-3 py-2">
+                                    <input type="text" class="item-lr block w-full px-2 py-1.5 border border-slate-300 rounded text-xs focus:ring-emerald-500 focus:border-emerald-500 bg-white font-mono" placeholder="LR No.">
+                                </td>
+                                <td class="px-3 py-2 text-center">
+                                    <button type="button" class="btn-remove-row text-slate-400 hover:text-rose-600 p-1.5 transition-colors rounded hover:bg-rose-50" title="Remove Row">
+                                        <i class="fa-solid fa-trash-can text-sm"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        </template>
                     </div>
                 </div>
                 <!-- END: Standard Invoice Fields -->
@@ -394,13 +490,26 @@
             console.error("Error parsing trips data", e);
         }
 
-        // --- 2. Standard Invoice Calculation Logic ---
+        // --- 2. Standard Invoice Calculation & Vehicle Breakdown Logic ---
         const weightInput = $('#id_standard_weight');
         const rateInput = $('#id_standard_rate');
         const baseAmountInput = $('#id_amount_override');
         const gstRateInput = $('#id_gst_rate');
         const gstAmountInput = $('#id_gst_amount_manual');
         const totalAmountInput = $('#id_total_amount_manual');
+        const itemsDataInput = document.getElementById('id_items_data');
+        const $itemsBody = $('#standardItemsBody');
+        const itemRowTemplate = document.getElementById('itemRowTemplate');
+
+        let standardItems = [];
+        try {
+            if (itemsDataInput && itemsDataInput.value) {
+                standardItems = JSON.parse(itemsDataInput.value);
+            }
+        } catch (e) {
+            console.error("Error parsing items data", e);
+            standardItems = [];
+        }
 
         function getGstRate() {
             return parseFloat(gstRateInput.val()) || 0;
@@ -410,16 +519,13 @@
             const base = parseFloat(baseAmountInput.val()) || 0;
             const gstRate = getGstRate();
             const gst = base * (gstRate / 100);
-            const total = base + gst;
+            let total = base + gst;
+            if ($('#id_use_roundoff').is(':checked')) {
+                total = Math.round(total);
+            }
 
             gstAmountInput.val(gst.toFixed(2));
             totalAmountInput.val(total.toFixed(2));
-
-            // Update Rate if Weight exists
-            const weight = parseFloat(weightInput.val()) || 0;
-            if (weight > 0) {
-                rateInput.val((base / weight).toFixed(2));
-            }
         }
 
         function updateFromTotal() {
@@ -432,21 +538,6 @@
 
             baseAmountInput.val(base.toFixed(2));
             gstAmountInput.val(gst.toFixed(2));
-
-            // Update Rate if Weight exists
-            const weight = parseFloat(weightInput.val()) || 0;
-            if (weight > 0) {
-                rateInput.val((base / weight).toFixed(2));
-            }
-        }
-
-        function updateFromWeightRate() {
-            const weight = parseFloat(weightInput.val()) || 0;
-            const rate = parseFloat(rateInput.val()) || 0;
-            if (weight > 0 && rate > 0) {
-                baseAmountInput.val((weight * rate).toFixed(2));
-                updateFromBase();
-            }
         }
 
         function updateFromGst() {
@@ -454,28 +545,226 @@
             const gstRate = getGstRate();
             
             if (gstRate > 0) {
-                // If rate exists, calculate base from gst
                 const base = gst / (gstRate / 100);
-                const total = base + gst;
-                
+                let total = base + gst;
+                if ($('#id_use_roundoff').is(':checked')) {
+                    total = Math.round(total);
+                }
                 baseAmountInput.val(base.toFixed(2));
                 totalAmountInput.val(total.toFixed(2));
-
-                // Update Rate if Weight exists
-                const weight = parseFloat(weightInput.val()) || 0;
-                if (weight > 0) {
-                    rateInput.val((base / weight).toFixed(2));
-                }
             } else {
-                // If rate is 0, just update total based on current base + new gst
                 const base = parseFloat(baseAmountInput.val()) || 0;
-                totalAmountInput.val((base + gst).toFixed(2));
+                let total = base + gst;
+                if ($('#id_use_roundoff').is(':checked')) {
+                    total = Math.round(total);
+                }
+                totalAmountInput.val(total.toFixed(2));
             }
         }
 
+        function reindexRows() {
+            $itemsBody.find('.item-row').each(function(index) {
+                $(this).find('.row-index').text(index + 1);
+            });
+        }
+
+        function syncItemsData() {
+            const items = [];
+            $itemsBody.find('.item-row').each(function() {
+                const $row = $(this);
+                const vehicleSelect = $row.find('.item-vehicle');
+                const vehicleVal = vehicleSelect.val();
+                let vehicleId = "";
+                let vehicleNumber = "";
+
+                if (vehicleVal === "OTHER") {
+                    vehicleNumber = $row.find('.item-vehicle-custom').val().trim().toUpperCase();
+                } else if (vehicleVal) {
+                    vehicleId = vehicleVal;
+                    let plate = vehicleSelect.find('option:selected').data('plate') || vehicleSelect.find('option:selected').text();
+                    if (plate.includes(' (')) {
+                        plate = plate.split(' (')[0].trim();
+                    }
+                    vehicleNumber = plate;
+                }
+
+                const desc = $row.find('.item-description').val().trim();
+                const qty = parseFloat($row.find('.item-qty').val()) || 1;
+                const rate = parseFloat($row.find('.item-rate').val()) || 0;
+                const amount = parseFloat($row.find('.item-amount').val()) || 0;
+                const lr = $row.find('.item-lr').val().trim();
+
+                if (amount > 0 || vehicleId || vehicleNumber || desc) {
+                    items.push({
+                        'vehicle_id': vehicleId,
+                        'vehicle_number': vehicleNumber,
+                        'description': desc,
+                        'quantity': qty,
+                        'rate': rate,
+                        'amount': amount,
+                        'lr_no': lr
+                    });
+                }
+            });
+
+            if (itemsDataInput) {
+                itemsDataInput.value = JSON.stringify(items);
+            }
+            return items;
+        }
+
+        function calculateSubtotalFromItems() {
+            let subtotal = 0;
+            $itemsBody.find('.item-row').each(function() {
+                const amt = parseFloat($(this).find('.item-amount').val()) || 0;
+                subtotal += amt;
+            });
+
+            baseAmountInput.val(subtotal > 0 ? subtotal.toFixed(2) : '');
+            updateFromBase();
+            syncItemsData();
+        }
+
+        function createItemRow(data = {}) {
+            if (!itemRowTemplate) return null;
+            const clone = itemRowTemplate.content.cloneNode(true);
+            const $row = $(clone).find('.item-row');
+
+            const $vehicleSelect = $row.find('.item-vehicle');
+            const $vehicleCustom = $row.find('.item-vehicle-custom');
+            const $descInput = $row.find('.item-description');
+            const $qtyInput = $row.find('.item-qty');
+            const $rateInput = $row.find('.item-rate');
+            const $amtInput = $row.find('.item-amount');
+            const $lrInput = $row.find('.item-lr');
+            const $removeBtn = $row.find('.btn-remove-row');
+
+            // Set vehicle
+            if (data.vehicle_id) {
+                $vehicleSelect.val(data.vehicle_id);
+            } else if (data.vehicle_number) {
+                let matched = false;
+                $vehicleSelect.find('option').each(function() {
+                    const plate = ($(this).data('plate') || '').toUpperCase().replace(/\s+/g, '');
+                    const target = (data.vehicle_number || '').toUpperCase().replace(/\s+/g, '');
+                    if (plate && target && plate === target) {
+                        $vehicleSelect.val($(this).val());
+                        matched = true;
+                        return false;
+                    }
+                });
+                if (!matched) {
+                    $vehicleSelect.val('OTHER');
+                    $vehicleCustom.val(data.vehicle_number).removeClass('hidden');
+                }
+            }
+
+            if (data.description) {
+                $descInput.val(data.description);
+            } else {
+                const catText = $('#id_category option:selected').text();
+                if (catText.includes('Halting')) {
+                    $descInput.val('Halting Charges');
+                } else if (catText.includes('Credit Note')) {
+                    $descInput.val('Credit Note / Deduction');
+                } else if (catText.includes('Debit Note')) {
+                    $descInput.val('Debit Note / Deduction');
+                }
+            }
+
+            if (data.quantity !== undefined && data.quantity !== '') {
+                $qtyInput.val(data.quantity);
+            }
+            if (data.rate !== undefined && data.rate !== '') {
+                $rateInput.val(data.rate);
+            }
+            if (data.amount !== undefined && data.amount !== '') {
+                $amtInput.val(data.amount);
+            }
+            if (data.lr_no) {
+                $lrInput.val(data.lr_no);
+            }
+
+            // Events
+            $vehicleSelect.on('change', function() {
+                if ($(this).val() === 'OTHER') {
+                    $vehicleCustom.removeClass('hidden').focus();
+                } else {
+                    $vehicleCustom.addClass('hidden').val('');
+                }
+                syncItemsData();
+            });
+
+            function calcRowAmount() {
+                const qty = parseFloat($qtyInput.val()) || 0;
+                const rate = parseFloat($rateInput.val()) || 0;
+                if (qty > 0 && rate > 0) {
+                    $amtInput.val((qty * rate).toFixed(2));
+                }
+                calculateSubtotalFromItems();
+            }
+
+            $qtyInput.on('input change', calcRowAmount);
+            $rateInput.on('input change', calcRowAmount);
+            $amtInput.on('input change', function() {
+                calculateSubtotalFromItems();
+            });
+            $vehicleCustom.on('input change', syncItemsData);
+            $descInput.on('input change', syncItemsData);
+            $lrInput.on('input change', syncItemsData);
+
+            $removeBtn.on('click', function() {
+                if ($itemsBody.find('.item-row').length > 1) {
+                    $row.remove();
+                    reindexRows();
+                    calculateSubtotalFromItems();
+                } else {
+                    $vehicleSelect.val('');
+                    $vehicleCustom.val('').addClass('hidden');
+                    $descInput.val('');
+                    $qtyInput.val('1');
+                    $rateInput.val('');
+                    $amtInput.val('');
+                    $lrInput.val('');
+                    calculateSubtotalFromItems();
+                }
+            });
+
+            return $row;
+        }
+
+        function initItemsTable() {
+            $itemsBody.empty();
+            if (standardItems && standardItems.length > 0) {
+                standardItems.forEach(itemData => {
+                    const $row = createItemRow(itemData);
+                    if ($row) $itemsBody.append($row);
+                });
+            } else {
+                const existingBase = parseFloat(baseAmountInput.val()) || 0;
+                const existingDesc = $('#id_item_type').val() || '';
+                const initData = {};
+                if (existingBase > 0) {
+                    initData.amount = existingBase.toFixed(2);
+                    initData.description = existingDesc;
+                }
+                const $row = createItemRow(initData);
+                if ($row) $itemsBody.append($row);
+            }
+            reindexRows();
+            calculateSubtotalFromItems();
+        }
+
+        $('#addVehicleRowBtn').on('click', function() {
+            const $row = createItemRow();
+            if ($row) {
+                $itemsBody.append($row);
+                reindexRows();
+                $row.find('.item-vehicle').focus();
+            }
+        });
+
         // Event listeners for Standard Invoice fields
-        weightInput.on('input', updateFromWeightRate);
-        rateInput.on('input', updateFromWeightRate);
         baseAmountInput.on('input', updateFromBase);
         gstAmountInput.on('input', updateFromGst);
         totalAmountInput.on('input', updateFromTotal);
@@ -484,11 +773,14 @@
                 updateFromBase();
             }
         });
+        $('#id_use_roundoff').on('change', function() {
+            if ($('#id_bill_type').val() === 'Standard') {
+                updateFromBase();
+            }
+        });
 
-        // Initial Calc for Edit mode
-        if ($('#id_bill_type').val() === 'Standard') {
-            updateFromBase();
-        }
+        // Initialize table
+        initItemsTable();
 
         // Bill Type Toggle Logic
         function updateBillTypeUI() {
@@ -497,6 +789,9 @@
                 $('#standardInvoiceFields').removeClass('hidden');
                 $('#tripsSelectionArea').addClass('hidden');
                 $('#partyTripNote').addClass('hidden');
+                if ($itemsBody.find('.item-row').length === 0) {
+                    initItemsTable();
+                }
             } else {
                 $('#standardInvoiceFields').addClass('hidden');
                 $('#tripsSelectionArea').removeClass('hidden');
@@ -651,7 +946,21 @@
                 $('#originalBillContainer').removeClass('hidden');
             } else {
                 $('#originalBillContainer').addClass('hidden');
+                $('#originalBillVehiclesHint').addClass('hidden');
             }
+
+            // Auto-populate Item Description / Type if empty or generic
+            const currentItemType = ($('#id_item_type').val() || '').trim();
+            if (!currentItemType || currentItemType === 'Standard Item' || currentItemType === 'Halting Charges' || currentItemType === 'Credit Note' || currentItemType === 'Debit Note') {
+                if (categoryText.includes('Halting')) {
+                    $('#id_item_type').val('Halting Charges');
+                } else if (categoryText.includes('Credit Note')) {
+                    $('#id_item_type').val('Credit Note');
+                } else if (categoryText.includes('Debit Note')) {
+                    $('#id_item_type').val('Debit Note');
+                }
+            }
+
             updateInvoiceNumber($('#id_issuer').val());
         }
 
@@ -806,10 +1115,94 @@
         }
 
         // Function to update original bills (Against Invoice) via AJAX
+        let partyBillsData = [];
+
+        function renderOriginalBillVehiclesHint(selectedBillId) {
+            const $hint = $('#originalBillVehiclesHint');
+            const $badges = $('#originalBillVehiclesBadges');
+            $badges.empty();
+
+            if (!selectedBillId) {
+                $hint.addClass('hidden');
+                return;
+            }
+
+            const targetBill = partyBillsData.find(b => b.id.toString() === selectedBillId.toString());
+            if (targetBill && targetBill.vehicles && targetBill.vehicles.length > 0) {
+                targetBill.vehicles.forEach(veh => {
+                    const $badge = $(`
+                        <button type="button" class="px-2 py-0.5 bg-white border border-amber-300 hover:border-amber-500 hover:bg-amber-100 text-amber-900 rounded font-bold text-[11px] shadow-xs transition-colors flex items-center gap-1">
+                            <span>${veh.plate}</span>
+                            ${veh.lr_no ? `<span class="text-[9px] text-amber-600 font-mono">(${veh.lr_no})</span>` : ''}
+                            <i class="fa-solid fa-plus text-[9px] text-amber-600"></i>
+                        </button>
+                    `);
+                    $badge.on('click', function() {
+                        const $emptyRow = $itemsBody.find('.item-row').filter(function() {
+                            return !$(this).find('.item-vehicle').val() && !$(this).find('.item-amount').val();
+                        }).first();
+
+                        const rowData = {
+                            'vehicle_id': veh.id,
+                            'vehicle_number': veh.plate,
+                            'lr_no': veh.lr_no || '',
+                            'description': 'Credit Note / Deduction'
+                        };
+
+                        if ($emptyRow.length > 0) {
+                            $emptyRow.find('.item-vehicle').val(veh.id).trigger('change');
+                            if (veh.lr_no) $emptyRow.find('.item-lr').val(veh.lr_no);
+                            $emptyRow.find('.item-description').val('Credit Note / Deduction');
+                            $emptyRow.find('.item-amount').focus();
+                        } else {
+                            const $newRow = createItemRow(rowData);
+                            $itemsBody.append($newRow);
+                            reindexRows();
+                            $newRow.find('.item-amount').focus();
+                        }
+                        syncItemsData();
+                    });
+                    $badges.append($badge);
+                });
+
+                $('#addAllOriginalVehiclesBtn').off('click').on('click', function() {
+                    targetBill.vehicles.forEach((veh, idx) => {
+                        const rowData = {
+                            'vehicle_id': veh.id,
+                            'vehicle_number': veh.plate,
+                            'lr_no': veh.lr_no || '',
+                            'description': 'Credit Note / Deduction'
+                        };
+                        if (idx === 0) {
+                            const $emptyRow = $itemsBody.find('.item-row').filter(function() {
+                                return !$(this).find('.item-vehicle').val() && !$(this).find('.item-amount').val();
+                            }).first();
+                            if ($emptyRow.length > 0) {
+                                $emptyRow.find('.item-vehicle').val(veh.id).trigger('change');
+                                if (veh.lr_no) $emptyRow.find('.item-lr').val(veh.lr_no);
+                                $emptyRow.find('.item-description').val('Credit Note / Deduction');
+                                return;
+                            }
+                        }
+                        const $newRow = createItemRow(rowData);
+                        $itemsBody.append($newRow);
+                    });
+                    reindexRows();
+                    calculateSubtotalFromItems();
+                });
+
+                $hint.removeClass('hidden');
+            } else {
+                $hint.addClass('hidden');
+            }
+        }
+
         function updateOriginalBills(partyId) {
             const billSelect = $('#id_original_bill');
             if (!partyId) {
                 billSelect.empty().append('<option value="">---------</option>');
+                partyBillsData = [];
+                renderOriginalBillVehiclesHint(null);
                 return;
             }
 
@@ -820,18 +1213,24 @@
                 data: { 'party_id': partyId },
                 success: function(data) {
                     billSelect.empty().append('<option value="">---------</option>');
-                    if (data.bills.length > 0) {
+                    partyBillsData = data.bills || [];
+                    if (data.bills && data.bills.length > 0) {
                         data.bills.forEach(bill => {
                             const isSelected = bill.id.toString() === currentOriginalBillId ? 'selected' : '';
                             billSelect.append(`<option value="${bill.id}" ${isSelected}>${bill.label}</option>`);
                         });
                     }
+                    renderOriginalBillVehiclesHint(billSelect.val());
                 },
                 error: function() {
                     console.error("Failed to fetch bills for party");
                 }
             });
         }
+
+        $('#id_original_bill').on('change', function() {
+            renderOriginalBillVehiclesHint($(this).val());
+        });
 
         // AJAX Load on Party change
         $('#id_party').on('change', function() {
@@ -855,6 +1254,11 @@
         $('#invoiceForm').on('submit', function() {
             // Re-enable disabled fields so they are submitted
             $('#id_gst_type').prop('disabled', false);
+
+            // Sync standard vehicle line items
+            if ($('#id_bill_type').val() === 'Standard') {
+                syncItemsData();
+            }
             
             const finalData = {};
             $('.lr-input').each(function() {

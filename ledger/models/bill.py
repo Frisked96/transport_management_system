@@ -342,12 +342,17 @@ class Bill(models.Model):
     def _calculate_subtotal(self):
         """Core logic for subtotal calculation"""
         if self.bill_type == self.TYPE_STANDARD:
-            base = 0
+            if self.pk:
+                items = list(self.items.all())
+                if items:
+                    items_total = sum((item.amount or Decimal('0')) for item in items)
+                    return max(Decimal('0'), items_total - (Decimal(str(self.discount or 0))))
+            base = Decimal('0')
             if self.amount_override is not None:
-                base = self.amount_override
+                base = Decimal(str(self.amount_override))
             elif self.standard_weight and self.standard_rate:
-                base = self.standard_weight * self.standard_rate
-            return max(0, base - (self.discount or 0))
+                base = Decimal(str(self.standard_weight)) * Decimal(str(self.standard_rate))
+            return max(Decimal('0'), base - (Decimal(str(self.discount or 0))))
 
         if not self.pk:
             return Decimal('0')
@@ -500,6 +505,10 @@ class Bill(models.Model):
     @property
     def total_weight(self):
         if self.bill_type == self.TYPE_STANDARD:
+            if self.pk:
+                items = list(self.items.all())
+                if items:
+                    return sum((item.quantity or Decimal('0')) for item in items)
             return self.standard_weight or 0
         
         if not self.pk:
@@ -517,3 +526,4 @@ class Bill(models.Model):
 
 
 from .bill_trip import BillTrip
+from .bill_item import BillItem

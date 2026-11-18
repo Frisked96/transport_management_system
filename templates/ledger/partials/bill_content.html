@@ -85,6 +85,33 @@
         </thead>
         <tbody>
             {% if bill.bill_type == 'Standard' %}
+            {% if bill.items.all %}
+            {% for item in bill.items.all %}
+            <tr>
+                <td class="text-center">{{ forloop.counter }}</td>
+                <td>
+                    {% if item.display_vehicle %}
+                    <strong>Vehicle: {{ item.display_vehicle }}</strong><br>
+                    {% elif bill.item_type %}
+                    <strong>{{ bill.item_type }}</strong><br>
+                    {% else %}
+                    <strong>Standard Item</strong><br>
+                    {% endif %}
+                    {% if item.description %}
+                    <span style="font-size: 9px; color: #666;">{{ item.description }}</span>
+                    {% elif bill.description %}
+                    <span style="font-size: 9px; color: #666;">{{ bill.description }}</span>
+                    {% endif %}
+                </td>
+                {% if has_lr %}<td class="text-center">{{ item.lr_no|default:"-" }}</td>{% endif %}
+                <td class="text-center">{{ bill.hsn_code }}</td>
+                <td class="text-right">{% if item.quantity %}{{ item.quantity|indian_comma }}{% else %}-{% endif %}</td>
+                <td class="text-right">{% if item.rate %}{{ item.rate|indian_comma }}{% else %}-{% endif %}</td>
+                {% if has_discount %}<td class="text-right">-</td>{% endif %}
+                <td class="text-right font-bold">{{ item.amount|indian_comma }}</td>
+            </tr>
+            {% endfor %}
+            {% else %}
             <tr>
                 <td class="text-center">1</td>
                 <td>
@@ -98,6 +125,7 @@
                 {% if has_discount %}<td class="text-right" style="color: #c00;">{% if bill.discount %}{{ bill.discount|indian_comma }}{% else %}-{% endif %}</td>{% endif %}
                 <td class="text-right font-bold">{{ bill.subtotal|indian_comma }}</td>
             </tr>
+            {% endif %}
             {% elif bill_trips|length <= 3 %}
             {% for bt in bill_trips %}
             <tr>
