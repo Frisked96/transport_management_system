@@ -4,6 +4,40 @@
 
 {% block title %}{% if form.instance.pk %}Edit Invoice{% else %}Create Invoice{% endif %} - TMS{% endblock %}
 
+{% block extra_css %}
+<style>
+    /* Styling for searchable Select2 inside table cells */
+    #standardItemsTable .select2-container--bootstrap-5 .select2-selection--single {
+        min-height: 32px !important;
+        height: 32px !important;
+        padding: 3px 8px !important;
+        font-size: 0.75rem !important;
+        border-color: #cbd5e1 !important;
+        border-radius: 0.25rem !important;
+        background-color: #ffffff !important;
+    }
+    #standardItemsTable .select2-container--bootstrap-5 .select2-selection--single .select2-selection__rendered {
+        line-height: 24px !important;
+        font-size: 0.75rem !important;
+        font-weight: 600 !important;
+        color: #1e293b !important;
+        padding-left: 2px !important;
+    }
+    #standardItemsTable .select2-container--bootstrap-5 .select2-selection--single .select2-selection__arrow {
+        height: 30px !important;
+        right: 4px !important;
+    }
+    .select2-container--bootstrap-5 .select2-dropdown .select2-search .select2-search__field {
+        font-size: 0.8125rem !important;
+        padding: 4px 8px !important;
+    }
+    .select2-container--bootstrap-5 .select2-dropdown .select2-results__option {
+        font-size: 0.75rem !important;
+        padding: 5px 8px !important;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <!-- BEGIN: Action Bar -->
 <div class="mb-6">
@@ -625,21 +659,16 @@
             syncItemsData();
         }
 
-        function createItemRow(data = {}) {
-            if (!itemRowTemplate) return null;
-            const clone = itemRowTemplate.content.cloneNode(true);
-            const $row = $(clone).find('.item-row');
-
+        function initVehicleSelect($row, data = {}) {
             const $vehicleSelect = $row.find('.item-vehicle');
             const $vehicleCustom = $row.find('.item-vehicle-custom');
-            const $descInput = $row.find('.item-description');
-            const $qtyInput = $row.find('.item-qty');
-            const $rateInput = $row.find('.item-rate');
-            const $amtInput = $row.find('.item-amount');
-            const $lrInput = $row.find('.item-lr');
-            const $removeBtn = $row.find('.btn-remove-row');
 
-            // Set vehicle
+            // Destroy existing select2 instance if any
+            if ($vehicleSelect.data('select2')) {
+                $vehicleSelect.select2('destroy');
+            }
+
+            // Set initial value before initializing Select2
             if (data.vehicle_id) {
                 $vehicleSelect.val(data.vehicle_id);
             } else if (data.vehicle_number) {
@@ -654,10 +683,44 @@
                     }
                 });
                 if (!matched) {
-                    $vehicleSelect.val('OTHER');
-                    $vehicleCustom.val(data.vehicle_number).removeClass('hidden');
+                    const newOption = new Option(data.vehicle_number, data.vehicle_number, true, true);
+                    $vehicleSelect.append(newOption);
+                    $vehicleSelect.val(data.vehicle_number);
                 }
             }
+
+            // Initialize Select2 with search capability
+            $vehicleSelect.select2({
+                theme: 'bootstrap-5',
+                width: '100%',
+                placeholder: 'Search / Select Vehicle...',
+                allowClear: true,
+                dropdownParent: $('body'),
+                tags: true
+            }).on('change', function() {
+                const val = $(this).val();
+                if (val === 'OTHER') {
+                    $vehicleCustom.removeClass('hidden').focus();
+                } else {
+                    $vehicleCustom.addClass('hidden').val('');
+                }
+                syncItemsData();
+            });
+        }
+
+        function appendItemRow(data = {}) {
+            if (!itemRowTemplate) return null;
+            const clone = itemRowTemplate.content.cloneNode(true);
+            const $row = $(clone).find('.item-row');
+
+            const $vehicleSelect = $row.find('.item-vehicle');
+            const $vehicleCustom = $row.find('.item-vehicle-custom');
+            const $descInput = $row.find('.item-description');
+            const $qtyInput = $row.find('.item-qty');
+            const $rateInput = $row.find('.item-rate');
+            const $amtInput = $row.find('.item-amount');
+            const $lrInput = $row.find('.item-lr');
+            const $removeBtn = $row.find('.btn-remove-row');
 
             if (data.description) {
                 $descInput.val(data.description);
@@ -685,16 +748,6 @@
                 $lrInput.val(data.lr_no);
             }
 
-            // Events
-            $vehicleSelect.on('change', function() {
-                if ($(this).val() === 'OTHER') {
-                    $vehicleCustom.removeClass('hidden').focus();
-                } else {
-                    $vehicleCustom.addClass('hidden').val('');
-                }
-                syncItemsData();
-            });
-
             function calcRowAmount() {
                 const qty = parseFloat($qtyInput.val()) || 0;
                 const rate = parseFloat($rateInput.val()) || 0;
@@ -715,11 +768,14 @@
 
             $removeBtn.on('click', function() {
                 if ($itemsBody.find('.item-row').length > 1) {
+                    if ($vehicleSelect.data('select2')) {
+                        $vehicleSelect.select2('destroy');
+                    }
                     $row.remove();
                     reindexRows();
                     calculateSubtotalFromItems();
                 } else {
-                    $vehicleSelect.val('');
+                    $vehicleSelect.val('').trigger('change');
                     $vehicleCustom.val('').addClass('hidden');
                     $descInput.val('');
                     $qtyInput.val('1');
@@ -730,15 +786,23 @@
                 }
             });
 
+            // Append to DOM before initializing Select2
+            $itemsBody.append($row);
+            initVehicleSelect($row, data);
+            reindexRows();
             return $row;
         }
 
         function initItemsTable() {
+            $itemsBody.find('.item-vehicle').each(function() {
+                if ($(this).data('select2')) {
+                    $(this).select2('destroy');
+                }
+            });
             $itemsBody.empty();
             if (standardItems && standardItems.length > 0) {
                 standardItems.forEach(itemData => {
-                    const $row = createItemRow(itemData);
-                    if ($row) $itemsBody.append($row);
+                    appendItemRow(itemData);
                 });
             } else {
                 const existingBase = parseFloat(baseAmountInput.val()) || 0;
@@ -748,19 +812,15 @@
                     initData.amount = existingBase.toFixed(2);
                     initData.description = existingDesc;
                 }
-                const $row = createItemRow(initData);
-                if ($row) $itemsBody.append($row);
+                appendItemRow(initData);
             }
-            reindexRows();
             calculateSubtotalFromItems();
         }
 
         $('#addVehicleRowBtn').on('click', function() {
-            const $row = createItemRow();
+            const $row = appendItemRow();
             if ($row) {
-                $itemsBody.append($row);
-                reindexRows();
-                $row.find('.item-vehicle').focus();
+                $row.find('.item-vehicle').select2('open');
             }
         });
 
@@ -1155,10 +1215,8 @@
                             $emptyRow.find('.item-description').val('Credit Note / Deduction');
                             $emptyRow.find('.item-amount').focus();
                         } else {
-                            const $newRow = createItemRow(rowData);
-                            $itemsBody.append($newRow);
-                            reindexRows();
-                            $newRow.find('.item-amount').focus();
+                            const $newRow = appendItemRow(rowData);
+                            if ($newRow) $newRow.find('.item-amount').focus();
                         }
                         syncItemsData();
                     });
@@ -1184,10 +1242,8 @@
                                 return;
                             }
                         }
-                        const $newRow = createItemRow(rowData);
-                        $itemsBody.append($newRow);
+                        appendItemRow(rowData);
                     });
-                    reindexRows();
                     calculateSubtotalFromItems();
                 });
 
