@@ -984,6 +984,7 @@ class FinancialRecordUpdateView(LoginRequiredMixin, PermissionRequiredMixin, Fin
                 {
                     'trip_id': a.trip_id,
                     'payment': 0 if (is_tds or is_ded) else float(a.amount),
+                    'amount': float(a.amount),
                     'tds': float(a.amount) if is_tds else 0,
                     'shortage': float(a.amount) if is_ded else 0,
                     'charges': 0
@@ -998,6 +999,7 @@ class FinancialRecordUpdateView(LoginRequiredMixin, PermissionRequiredMixin, Fin
                 {
                     'trip_id': self.object.associated_trip_id,
                     'payment': 0 if (is_tds or is_ded) else amt,
+                    'amount': amt,
                     'tds': amt if is_tds else 0,
                     'shortage': amt if is_ded else 0,
                     'charges': 0
@@ -1009,16 +1011,17 @@ class FinancialRecordUpdateView(LoginRequiredMixin, PermissionRequiredMixin, Fin
                 Q(associated_trip__isnull=False) | Q(allocations__isnull=False)
             ).first()
             if v_rec:
+                amt = float(self.object.amount or 0)
                 if v_rec.associated_trip_id:
                     initial['associated_trip'] = v_rec.associated_trip_id
                     initial['payment_distribution'] = json.dumps([
-                        {'trip_id': v_rec.associated_trip_id, 'payment': 0, 'tds': float(self.object.amount or 0), 'shortage': 0, 'charges': 0}
+                        {'trip_id': v_rec.associated_trip_id, 'payment': 0, 'amount': amt, 'tds': amt, 'shortage': 0, 'charges': 0}
                     ])
                 elif v_rec.allocations.exists():
                     first_t = v_rec.allocations.first()
                     initial['associated_trip'] = first_t.trip_id
                     initial['payment_distribution'] = json.dumps([
-                        {'trip_id': first_t.trip_id, 'payment': 0, 'tds': float(self.object.amount or 0), 'shortage': 0, 'charges': 0}
+                        {'trip_id': first_t.trip_id, 'payment': 0, 'amount': amt, 'tds': amt, 'shortage': 0, 'charges': 0}
                     ])
         
         if self.object.bill_allocations.exists():
@@ -1026,6 +1029,7 @@ class FinancialRecordUpdateView(LoginRequiredMixin, PermissionRequiredMixin, Fin
                 {
                     'bill_id': a.bill_id,
                     'payment': 0 if is_tds else float(a.amount),
+                    'amount': float(a.amount),
                     'tds': float(a.amount) if is_tds else 0
                 }
                 for a in self.object.bill_allocations.all()
@@ -1038,6 +1042,7 @@ class FinancialRecordUpdateView(LoginRequiredMixin, PermissionRequiredMixin, Fin
                 {
                     'bill_id': self.object.associated_bill_id,
                     'payment': 0 if is_tds else amt,
+                    'amount': amt,
                     'tds': amt if is_tds else 0
                 }
             ])
@@ -1047,16 +1052,17 @@ class FinancialRecordUpdateView(LoginRequiredMixin, PermissionRequiredMixin, Fin
                 Q(associated_bill__isnull=False) | Q(bill_allocations__isnull=False)
             ).first()
             if v_rec:
+                amt = float(self.object.amount or 0)
                 if v_rec.associated_bill_id:
                     initial['associated_bill'] = v_rec.associated_bill_id
                     initial['bill_distribution'] = json.dumps([
-                        {'bill_id': v_rec.associated_bill_id, 'payment': 0, 'tds': float(self.object.amount or 0)}
+                        {'bill_id': v_rec.associated_bill_id, 'payment': 0, 'amount': amt, 'tds': amt}
                     ])
                 elif v_rec.bill_allocations.exists():
                     first_b = v_rec.bill_allocations.first()
                     initial['associated_bill'] = first_b.bill_id
                     initial['bill_distribution'] = json.dumps([
-                        {'bill_id': first_b.bill_id, 'payment': 0, 'tds': float(self.object.amount or 0)}
+                        {'bill_id': first_b.bill_id, 'payment': 0, 'amount': amt, 'tds': amt}
                     ])
 
         # If account is not directly on this record (e.g. TDS record), inherit from sibling in voucher

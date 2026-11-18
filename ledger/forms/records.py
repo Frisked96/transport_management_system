@@ -390,17 +390,30 @@ class FinancialRecordForm(forms.ModelForm):
                     total_ded = sum(Decimal(str(item.get('deduction', 0) or 0)) for item in dist_data)
                     
                     header_amount = cleaned_data.get('amount')
+                    is_tds = bool(category and category.name == 'TDS')
+                    is_ded = bool(category and category.name in ['Deductions', 'Shortage'])
+
+                    check_p = total_p
+                    if is_tds:
+                        check_p = total_tds
+                    elif is_ded:
+                        check_p = total_ded
+                    elif total_p == 0 and total_tds > 0 and header_amount and abs(total_tds - header_amount) < Decimal('0.01'):
+                        check_p = total_tds
+                    elif total_p == 0 and total_ded > 0 and header_amount and abs(total_ded - header_amount) < Decimal('0.01'):
+                        check_p = total_ded
+
                     if header_amount is not None and header_amount > 0:
-                        if total_p > header_amount + Decimal('0.01'):
+                        if check_p > header_amount + Decimal('0.01'):
                             # Over-allocation: always blocked regardless of advance mode
-                            self.add_error('amount', f'Total allocated across trips (₹{total_p:,.2f}) cannot exceed Total Payment (₹{header_amount:,.2f}). Over by ₹{(total_p - header_amount):,.2f}.')
-                        elif abs(total_p - header_amount) > Decimal('0.01') and not allow_advance:
+                            self.add_error('amount', f'Total allocated across trips (₹{check_p:,.2f}) cannot exceed Total Payment (₹{header_amount:,.2f}). Over by ₹{(check_p - header_amount):,.2f}.')
+                        elif abs(check_p - header_amount) > Decimal('0.01') and not allow_advance:
                             # Under-allocation without advance mode: exact match required
-                            self.add_error('amount', f'Total allocated across trips (₹{total_p:,.2f}) must exactly match total payment (₹{header_amount:,.2f}). Difference: ₹{abs(header_amount - total_p):,.2f}.')
-                        # If allow_advance and total_p <= header_amount: valid partial allocation
+                            self.add_error('amount', f'Total allocated across trips (₹{check_p:,.2f}) must exactly match total payment (₹{header_amount:,.2f}). Difference: ₹{abs(header_amount - check_p):,.2f}.')
+                        # If allow_advance and check_p <= header_amount: valid partial allocation
                         # Keep cleaned_data['amount'] = header_amount (full bank transaction amount)
                     else:
-                        cleaned_data['amount'] = total_p
+                        cleaned_data['amount'] = check_p
 
                     if total_tds > 0 and (not cleaned_data.get('tds_amount') or cleaned_data.get('tds_amount') == 0):
                         cleaned_data['tds_amount'] = total_tds
@@ -414,15 +427,27 @@ class FinancialRecordForm(forms.ModelForm):
             try:
                 b_dist_data = json.loads(bill_distribution_json)
                 if b_dist_data:
-                    total_b = sum(Decimal(str(item.get('amount', 0) or 0)) for item in b_dist_data)
+                    total_b = sum(Decimal(str(item.get('payment', item.get('amount', 0)) or 0)) for item in b_dist_data)
+                    total_b_tds = sum(Decimal(str(item.get('tds', 0) or 0)) for item in b_dist_data)
                     header_amount = cleaned_data.get('amount')
+                    is_tds = bool(category and category.name == 'TDS')
+
+                    check_b = total_b
+                    if is_tds:
+                        check_b = total_b_tds
+                    elif total_b == 0 and total_b_tds > 0 and header_amount and abs(total_b_tds - header_amount) < Decimal('0.01'):
+                        check_b = total_b_tds
+
                     if header_amount is not None and header_amount > 0:
-                        if total_b > header_amount + Decimal('0.01'):
-                            self.add_error('amount', f'Total allocated across invoices (₹{total_b:,.2f}) cannot exceed Total Payment (₹{header_amount:,.2f}). Over by ₹{(total_b - header_amount):,.2f}.')
-                        elif abs(total_b - header_amount) > Decimal('0.01') and not allow_advance:
-                            self.add_error('amount', f'Total allocated across invoices (₹{total_b:,.2f}) must exactly match total payment (₹{header_amount:,.2f}). Difference: ₹{abs(header_amount - total_b):,.2f}.')
+                        if check_b > header_amount + Decimal('0.01'):
+                            self.add_error('amount', f'Total allocated across invoices (₹{check_b:,.2f}) cannot exceed Total Payment (₹{header_amount:,.2f}). Over by ₹{(check_b - header_amount):,.2f}.')
+                        elif abs(check_b - header_amount) > Decimal('0.01') and not allow_advance:
+                            self.add_error('amount', f'Total allocated across invoices (₹{check_b:,.2f}) must exactly match total payment (₹{header_amount:,.2f}). Difference: ₹{abs(header_amount - check_b):,.2f}.')
                     else:
-                        cleaned_data['amount'] = total_b
+                        cleaned_data['amount'] = check_b
+
+                    if total_b_tds > 0 and (not cleaned_data.get('tds_amount') or cleaned_data.get('tds_amount') == 0):
+                        cleaned_data['tds_amount'] = total_b_tds
             except Exception:
                 pass
 

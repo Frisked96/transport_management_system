@@ -889,3 +889,42 @@ class AdvancePaymentWorkflowTests(TestCase):
         self.assertEqual(dist_data[0]['trip_id'], trip.id)
         self.assertEqual(dist_data[0]['amount'], float(tot_rev))
 
+    def test_edit_tds_entry_form_validation_with_tds_block(self):
+        """When editing a TDS entry where amount is in the TDS block of an invoice, validation succeeds"""
+        cat_tds, _ = TransactionCategory.objects.get_or_create(
+            name='TDS', defaults={'type': TransactionCategory.TYPE_EXPENSE}
+        )
+        bill = Bill.objects.create(
+            bill_number='BILL-TDS-TEST-99',
+            date=datetime.date(2026, 10, 1),
+            party=self.party,
+            issuer=self.account
+        )
+        tds_rec = FinancialRecord.objects.create(
+            category=cat_tds,
+            party=self.party,
+            date=datetime.date(2026, 10, 1),
+            amount=Decimal('16361.00'),
+            associated_bill=bill,
+            record_type=FinancialRecord.RECORD_TYPE_TRANSACTION
+        )
+
+        post_data = {
+            'date': '2026-10-01',
+            'party': self.party.id,
+            'category': cat_tds.id,
+            'amount': '16361.00',
+            'record_type': 'Transaction',
+            'bill_distribution': json.dumps([
+                {'bill_id': bill.id, 'payment': 0, 'tds': 16361.00}
+            ])
+        }
+        resp = self.client.post(reverse('financialrecord-update', kwargs={'pk': tds_rec.id}), post_data)
+        self.assertIn(resp.status_code, [200, 302])
+        if resp.status_code == 200:
+            form = resp.context.get('form')
+            self.assertFalse(form.errors, f'Form errors: {form.errors}')
+
+        tds_rec.refresh_from_db()
+        self.assertEqual(tds_rec.amount, Decimal('16361.00'))
+

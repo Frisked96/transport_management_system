@@ -851,15 +851,30 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const headerTotal = parseFloat(hiddenAmount.value) || 0;
         let allocatedTotal = 0;
+        let pAlloc = 0, tAlloc = 0, dAlloc = 0;
 
         if (isTrips) {
             Object.values(selectedTripsMap).forEach(item => {
-                allocatedTotal += (item.payment || 0);
+                pAlloc += (item.payment || 0);
+                tAlloc += (item.tds || 0);
+                dAlloc += (item.shortage || 0) + (item.charges || 0);
             });
         } else if (isBills) {
             Object.values(selectedBillsMap).forEach(item => {
-                allocatedTotal += (item.payment || 0);
+                pAlloc += (item.payment || 0);
+                tAlloc += (item.tds || 0);
             });
+        }
+
+        const isTds = Boolean(categorySelect && categorySelect.options[categorySelect.selectedIndex] && categorySelect.options[categorySelect.selectedIndex].text.toLowerCase().includes('tds'));
+        const isDed = Boolean(categorySelect && categorySelect.options[categorySelect.selectedIndex] && (categorySelect.options[categorySelect.selectedIndex].text.toLowerCase().includes('deduction') || categorySelect.options[categorySelect.selectedIndex].text.toLowerCase().includes('shortage')));
+
+        if (isTds || (pAlloc === 0 && tAlloc > 0 && Math.abs(tAlloc - headerTotal) < 0.01)) {
+            allocatedTotal = tAlloc;
+        } else if (isDed || (pAlloc === 0 && dAlloc > 0 && Math.abs(dAlloc - headerTotal) < 0.01)) {
+            allocatedTotal = dAlloc;
+        } else {
+            allocatedTotal = pAlloc;
         }
 
         const trackerHeader = document.getElementById('tracker-header-total');
@@ -2083,7 +2098,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     billIds.forEach(id => {
                         payment += selectedBillsMap[id].payment;
                         tds += selectedBillsMap[id].tds;
-                        bDist.push({ bill_id: parseInt(id), amount: selectedBillsMap[id].payment });
+                        bDist.push({
+                            bill_id: parseInt(id),
+                            payment: selectedBillsMap[id].payment,
+                            amount: selectedBillsMap[id].payment,
+                            tds: selectedBillsMap[id].tds
+                        });
                     });
                     billDistInput.value = JSON.stringify(bDist);
                     if (billIds.length === 1) {
@@ -2110,6 +2130,55 @@ document.addEventListener('DOMContentLoaded', function() {
                 billIds.forEach(id => {
                     payment += selectedBillsMap[id].payment;
                     tds += selectedBillsMap[id].tds;
+                    bDist.push({
+                        bill_id: parseInt(id),
+                        payment: selectedBillsMap[id].payment,
+                        amount: selectedBillsMap[id].payment,
+                        tds: selectedBillsMap[id].tds
+                    });
+                });
+                billDistInput.value = JSON.stringify(bDist);
+                if (billIds.length === 1) {
+                    setSelectValueWithOption(associatedBillInput, billIds[0], `Bill #${billIds[0]}`);
+                } else {
+                    associatedBillInput.value = '';
+                }
+            } else {
+                payment = parseFloat(vendorDirectAmountInput.value) || 0;
+                tds = parseFloat(vendorDirectTdsInput.value) || 0;
+                associatedBillInput.value = '';
+                billDistInput.value = '';
+            }
+        } else if (currentMode === 'expense') {
+            payment = parseFloat(expenseAmountInput.value) || 0;
+        } else if (currentMode === 'driver') {
+            payment = parseFloat(driverAmountInput.value) || 0;
+        } else if (currentMode === 'contra') {
+            payment = parseFloat(contraAmountInput.value) || 0;
+        }
+
+        const totalDeductions = shortage + charges;
+        let notesList = [];
+        if (shortage > 0) notesList.push(`Shortage: ₹${shortage}`);
+        if (charges > 0) notesList.push(`Charges: ₹${charges}`);
+
+        const isTds = Boolean(categorySelect && categorySelect.options[categorySelect.selectedIndex] && categorySelect.options[categorySelect.selectedIndex].text.toLowerCase().includes('tds'));
+        const isDed = Boolean(categorySelect && categorySelect.options[categorySelect.selectedIndex] && (categorySelect.options[categorySelect.selectedIndex].text.toLowerCase().includes('deduction') || categorySelect.options[categorySelect.selectedIndex].text.toLowerCase().includes('shortage')));
+
+        const currentHeaderVal = parseFloat(hiddenAmount.value) || 0;
+        if (currentMode === 'expense') {
+            hiddenAmount.value = payment > 0 ? payment.toFixed(2) : (currentHeaderVal > 0 ? currentHeaderVal.toFixed(2) : '0.00');
+        } else if (currentMode === 'driver') {
+            hiddenAmount.value = payment > 0 ? payment.toFixed(2) : (currentHeaderVal > 0 ? currentHeaderVal.toFixed(2) : '0.00');
+        } else if (currentMode === 'contra') {
+            hiddenAmount.value = payment > 0 ? payment.toFixed(2) : (currentHeaderVal > 0 ? currentHeaderVal.toFixed(2) : '0.00');
+        } else if (currentMode === 'customer' && currentSubtab === 'account') {
+            hiddenAmount.value = payment > 0 ? payment.toFixed(2) : (currentHeaderVal > 0 ? currentHeaderVal.toFixed(2) : '0.00');
+        } else if (isTds && tds > 0) {
+            hiddenAmount.value = tds.toFixed(2);
+        } else if (isDed && totalDeductions > 0) {
+            hiddenAmount.value = totalDeductions.toFixed(2);
+        }
                     bDist.push({ bill_id: parseInt(id), amount: selectedBillsMap[id].payment });
                 });
                 billDistInput.value = JSON.stringify(bDist);
@@ -2311,7 +2380,17 @@ document.addEventListener('DOMContentLoaded', function() {
                 statusText.textContent = 'Enter Total Payment';
                 statusText.className = 'text-amber-600 font-bold';
             } else {
-                const diff = Math.round((allocatedPayment - p) * 100) / 100;
+                const isTds = Boolean(categorySelect && categorySelect.options[categorySelect.selectedIndex] && categorySelect.options[categorySelect.selectedIndex].text.toLowerCase().includes('tds'));
+                const isDed = Boolean(categorySelect && categorySelect.options[categorySelect.selectedIndex] && (categorySelect.options[categorySelect.selectedIndex].text.toLowerCase().includes('deduction') || categorySelect.options[categorySelect.selectedIndex].text.toLowerCase().includes('shortage')));
+
+                let effectiveAlloc = allocatedPayment;
+                if (isTds || (allocatedPayment === 0 && t > 0 && Math.abs(t - p) < 0.01)) {
+                    effectiveAlloc = t;
+                } else if (isDed || (allocatedPayment === 0 && (shortageAmt + chargesAmt) > 0 && Math.abs((shortageAmt + chargesAmt) - p) < 0.01)) {
+                    effectiveAlloc = shortageAmt + chargesAmt;
+                }
+
+                const diff = Math.round((effectiveAlloc - p) * 100) / 100;
                 if (Math.abs(diff) <= 0.01) {
                     clearAmountError();
                     statusText.textContent = 'Ready to Save';
@@ -2416,15 +2495,32 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (isTrips || isBills) {
                     const headerTotal = parseFloat(hiddenAmount.value) || 0;
                     let allocatedTotal = 0;
+                    let pAlloc = 0, tAlloc = 0, dAlloc = 0;
 
                     if (isTrips) {
                         Object.values(selectedTripsMap).forEach(item => {
-                            allocatedTotal += (item.payment || 0);
+                            pAlloc += (item.payment || 0);
+                            tAlloc += (item.tds || 0);
+                            dAlloc += (item.shortage || 0) + (item.charges || 0);
                         });
                     } else if (isBills) {
                         Object.values(selectedBillsMap).forEach(item => {
-                            allocatedTotal += (item.payment || 0);
+                            pAlloc += (item.payment || 0);
+                            tAlloc += (item.tds || 0);
                         });
+                    }
+
+                    const isTds = Boolean(categorySelect && categorySelect.options[categorySelect.selectedIndex] && categorySelect.options[categorySelect.selectedIndex].text.toLowerCase().includes('tds'));
+                    const isDed = Boolean(categorySelect && categorySelect.options[categorySelect.selectedIndex] && (categorySelect.options[categorySelect.selectedIndex].text.toLowerCase().includes('deduction') || categorySelect.options[categorySelect.selectedIndex].text.toLowerCase().includes('shortage')));
+
+                    if (isTds || (pAlloc === 0 && tAlloc > 0 && Math.abs(tAlloc - headerTotal) < 0.01)) {
+                        allocatedTotal = tAlloc;
+                        if (hiddenAmount) hiddenAmount.value = tAlloc.toFixed(2);
+                    } else if (isDed || (pAlloc === 0 && dAlloc > 0 && Math.abs(dAlloc - headerTotal) < 0.01)) {
+                        allocatedTotal = dAlloc;
+                        if (hiddenAmount) hiddenAmount.value = dAlloc.toFixed(2);
+                    } else {
+                        allocatedTotal = pAlloc;
                     }
 
                     const numSelected = isTrips ? Object.keys(selectedTripsMap).length : Object.keys(selectedBillsMap).length;
