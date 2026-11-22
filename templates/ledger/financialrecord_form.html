@@ -734,7 +734,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const vendorDirectTdsInput = document.getElementById('vendor-direct-tds');
 
     // State
-    const isEditing = {% if object %}true{% else %}false{% endif %};
+    const isEditing = "{{ object.pk|default:'' }}" !== "";
     let userChangedMode = false;
     let currentMode = "{{ initial_mode|default:'customer' }}";
     let currentSubtab = "{{ initial_subtab|default:'trips' }}";
@@ -2178,43 +2178,6 @@ document.addEventListener('DOMContentLoaded', function() {
             hiddenAmount.value = tds.toFixed(2);
         } else if (isDed && totalDeductions > 0) {
             hiddenAmount.value = totalDeductions.toFixed(2);
-        }
-                    bDist.push({ bill_id: parseInt(id), amount: selectedBillsMap[id].payment });
-                });
-                billDistInput.value = JSON.stringify(bDist);
-                if (billIds.length === 1) {
-                    setSelectValueWithOption(associatedBillInput, billIds[0], `Bill #${billIds[0]}`);
-                } else {
-                    associatedBillInput.value = '';
-                }
-            } else {
-                payment = parseFloat(vendorDirectAmountInput.value) || 0;
-                tds = parseFloat(vendorDirectTdsInput.value) || 0;
-                associatedBillInput.value = '';
-                billDistInput.value = '';
-            }
-        } else if (currentMode === 'expense') {
-            payment = parseFloat(expenseAmountInput.value) || 0;
-        } else if (currentMode === 'driver') {
-            payment = parseFloat(driverAmountInput.value) || 0;
-        } else if (currentMode === 'contra') {
-            payment = parseFloat(contraAmountInput.value) || 0;
-        }
-
-        const totalDeductions = shortage + charges;
-        let notesList = [];
-        if (shortage > 0) notesList.push(`Shortage: ₹${shortage}`);
-        if (charges > 0) notesList.push(`Charges: ₹${charges}`);
-
-        const currentHeaderVal = parseFloat(hiddenAmount.value) || 0;
-        if (currentMode === 'expense') {
-            hiddenAmount.value = payment > 0 ? payment.toFixed(2) : (currentHeaderVal > 0 ? currentHeaderVal.toFixed(2) : '0.00');
-        } else if (currentMode === 'driver') {
-            hiddenAmount.value = payment > 0 ? payment.toFixed(2) : (currentHeaderVal > 0 ? currentHeaderVal.toFixed(2) : '0.00');
-        } else if (currentMode === 'contra') {
-            hiddenAmount.value = payment > 0 ? payment.toFixed(2) : (currentHeaderVal > 0 ? currentHeaderVal.toFixed(2) : '0.00');
-        } else if (currentMode === 'customer' && currentSubtab === 'account') {
-            hiddenAmount.value = payment > 0 ? payment.toFixed(2) : (currentHeaderVal > 0 ? currentHeaderVal.toFixed(2) : '0.00');
         }
         // Note: For customer trips/invoices and vendor bills, hiddenAmount (Header Total Payment)
         // is strictly entered by the user in the header and must NEVER be overwritten by selecting rows.

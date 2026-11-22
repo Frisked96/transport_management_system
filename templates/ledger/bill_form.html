@@ -465,6 +465,7 @@
 {% endblock %}
 
 {% block extra_js %}
+{{ form.trips.value|json_script:"initial-bill-trips" }}
 <script>
     $(document).ready(function() {
         // --- 1. Global: Disable Number Scroll ---
@@ -883,8 +884,10 @@
                     tbody.empty();
 
                     if (data.trips.length > 0) {
+                        const _initialTripsEl = document.getElementById('initial-bill-trips');
+                        const _initialBillTrips = _initialTripsEl ? (JSON.parse(_initialTripsEl.textContent) || []) : [];
                         data.trips.forEach(trip => {
-                            const isChecked = tripsData.hasOwnProperty(trip.id.toString()) || (billId && {{ form.trips.value|safe|default:"[]" }}.includes(trip.id));
+                            const isChecked = tripsData.hasOwnProperty(trip.id.toString()) || (billId && _initialBillTrips.includes(trip.id));
                             
                             // Get existing data from tripsData if present
                             let lrNo = "";
