@@ -421,3 +421,96 @@ class BillAdjustmentTests(TestCase):
         self.assertIn('RJ 14 UP 0001', plates)
         self.assertIn('RJ 14 UP 0003', plates)
         self.assertNotIn('RJ 14 UP 0002', plates)
+
+    def test_credit_note_classic_weight_rate_amount_format(self):
+        """
+        Test creating and editing a Credit Note using the classic format
+        (standard_weight, standard_rate, amount_override, no BillItems).
+        """
+        self.client.force_login(self.user)
+
+        orig_bill = Bill.objects.create(
+            issuer=self.issuer,
+            party=self.party,
+            date=timezone.now().date(),
+            bill_type=Bill.TYPE_STANDARD,
+            amount_override=Decimal('50000.00'),
+            category=self.category_invoice
+        )
+
+        create_url = reverse('bill-create')
+        get_create_resp = self.client.get(create_url)
+        self.assertEqual(get_create_resp.status_code, 200)
+        self.assertContains(get_create_resp, 'id="creditNoteWeightRateSection"')
+        self.assertContains(get_create_resp, 'isCreditNoteCategory')
+
+        post_data = {
+            'bill_type': Bill.TYPE_STANDARD,
+            'category': self.category_cn.id,
+            'original_bill': orig_bill.id,
+            'issuer': self.issuer.id,
+            'party': self.party.id,
+            'date': timezone.now().date().isoformat(),
+            'item_type': 'Shortage',
+            'standard_weight': '250.000',
+            'standard_rate': '31.96',
+            'amount_override': '7989.78',
+            'gst_rate': 18,
+            'gst_type': 'GST',
+            'use_roundoff': 'on',
+            'items_data': '[]',
+        }
+
+        post_resp = self.client.post(create_url, post_data)
+        self.assertEqual(post_resp.status_code, 302)
+
+        cn = Bill.objects.filter(party=self.party, category=self.category_cn, original_bill=orig_bill).first()
+        self.assertIsNotNone(cn)
+        self.assertEqual(cn.items.count(), 0)
+        self.assertEqual(cn.standard_weight, Decimal('250.000'))
+        self.assertEqual(cn.standard_rate, Decimal('31.96'))
+        self.assertEqual(cn.amount_override, Decimal('7989.78'))
+        self.assertEqual(cn.subtotal, Decimal('7989.78'))
+        self.assertEqual(cn.total_amount_cached, Decimal('9428.00'))
+
+        orig_bill.refresh_from_db()
+        self.assertEqual(orig_bill.outstanding_balance_cached, Decimal('40572.00'))
+
+        # Edit existing Credit Note and verify amount_override updates cleanly with no BillItems
+        update_url = reverse('bill-update', kwargs={'pk': cn.pk})
+        get_edit_resp = self.client.get(update_url)
+        self.assertEqual(get_edit_resp.status_code, 200)
+
+        edit_post_data = {
+            'bill_type': Bill.TYPE_STANDARD,
+            'category': self.category_cn.id,
+            'original_bill': orig_bill.id,
+            'issuer': self.issuer.id,
+            'party': self.party.id,
+            'date': timezone.now().date().isoformat(),
+            'item_type': 'Shortage',
+            'standard_weight': '300.000',
+            'standard_rate': '30.00',
+            'amount_override': '9000.00',
+            'gst_rate': 18,
+            'gst_type': 'GST',
+            'use_roundoff': 'on',
+            'items_data': '[]',
+        }
+        edit_resp = self.client.post(update_url, edit_post_data)
+        self.assertEqual(edit_resp.status_code, 302)
+
+        cn.refresh_from_db()
+        self.assertEqual(cn.items.count(), 0)
+        self.assertEqual(cn.standard_weight, Decimal('300.000'))
+        self.assertEqual(cn.standard_rate, Decimal('30.00'))
+        self.assertEqual(cn.amount_override, Decimal('9000.00'))
+        self.assertEqual(cn.total_amount_cached, Decimal('10620.00'))
+
+        # Verify classic single-row render on print view
+        print_url = reverse('print-combined-bill', kwargs={'pk': cn.pk})
+        print_resp = self.client.get(print_url)
+        self.assertEqual(print_resp.status_code, 200)
+        self.assertContains(print_resp, 'Shortage')
+        self.assertContains(print_resp, '300')
+

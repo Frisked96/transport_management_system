@@ -278,10 +278,16 @@
                         </div>
                         <!-- END: Vehicle Line Items Table -->
 
-                        <!-- Hidden fields for standard_weight & standard_rate to satisfy form binding -->
-                        <div class="hidden">
-                            {{ form.standard_weight }}
-                            {{ form.standard_rate }}
+                        <!-- Weight & Rate fields (shown for Credit Notes; hidden for item-based Standard bills) -->
+                        <div id="creditNoteWeightRateSection" class="hidden col-span-full grid grid-cols-1 sm:grid-cols-2 gap-6 pt-2">
+                            <div class="space-y-2">
+                                <label class="block text-xs font-bold text-slate-500 uppercase">Weight (Optional)</label>
+                                {{ form.standard_weight }}
+                            </div>
+                            <div class="space-y-2">
+                                <label class="block text-xs font-bold text-slate-500 uppercase">Rate per Ton</label>
+                                {{ form.standard_rate }}
+                            </div>
                         </div>
 
                         <!-- Calculations Grid -->
@@ -289,7 +295,7 @@
                             <div class="space-y-1">
                                 <label class="block text-xs font-bold text-slate-700 uppercase">Subtotal / Base Amount (Excl. GST)</label>
                                 {{ form.amount_override }}
-                                <p class="text-[10px] text-slate-400 italic">Auto-calculated from vehicle rows above</p>
+                                <p id="amountOverrideHelpText" class="text-[10px] text-slate-400 italic">Auto-calculated from vehicle rows above</p>
                             </div>
                             <div class="space-y-1">
                                 <label class="block text-xs font-bold text-slate-700 uppercase">GST Amount</label>
@@ -546,6 +552,11 @@
             standardItems = [];
         }
 
+        function isCreditNoteCategory() {
+            const categoryText = $('#id_category option:selected').text() || '';
+            return categoryText.includes('Credit Note');
+        }
+
         function getGstRate() {
             return parseFloat(gstRateInput.val()) || 0;
         }
@@ -573,6 +584,21 @@
 
             baseAmountInput.val(base.toFixed(2));
             gstAmountInput.val(gst.toFixed(2));
+
+            // Update Rate if Weight exists (Credit Note classic workflow)
+            const weight = parseFloat(weightInput.val()) || 0;
+            if (weight > 0) {
+                rateInput.val((base / weight).toFixed(2));
+            }
+        }
+
+        function updateFromWeightRate() {
+            const weight = parseFloat(weightInput.val()) || 0;
+            const rate = parseFloat(rateInput.val()) || 0;
+            if (weight > 0 && rate > 0) {
+                baseAmountInput.val((weight * rate).toFixed(2));
+                updateFromBase();
+            }
         }
 
         function updateFromGst() {
@@ -587,6 +613,12 @@
                 }
                 baseAmountInput.val(base.toFixed(2));
                 totalAmountInput.val(total.toFixed(2));
+
+                // Update Rate if Weight exists (Credit Note classic workflow)
+                const weight = parseFloat(weightInput.val()) || 0;
+                if (weight > 0) {
+                    rateInput.val((base / weight).toFixed(2));
+                }
             } else {
                 const base = parseFloat(baseAmountInput.val()) || 0;
                 let total = base + gst;
@@ -795,6 +827,10 @@
         }
 
         function initItemsTable() {
+            if (isCreditNoteCategory()) {
+                updateFromBase();
+                return;
+            }
             $itemsBody.find('.item-vehicle').each(function() {
                 if ($(this).data('select2')) {
                     $(this).select2('destroy');
@@ -826,6 +862,8 @@
         });
 
         // Event listeners for Standard Invoice fields
+        weightInput.on('input', updateFromWeightRate);
+        rateInput.on('input', updateFromWeightRate);
         baseAmountInput.on('input', updateFromBase);
         gstAmountInput.on('input', updateFromGst);
         totalAmountInput.on('input', updateFromTotal);
@@ -840,8 +878,12 @@
             }
         });
 
-        // Initialize table
-        initItemsTable();
+        // Initialize table (skipped for Credit Notes, which use Weight/Rate/Base Amount)
+        if (!isCreditNoteCategory()) {
+            initItemsTable();
+        } else if (baseAmountInput.val()) {
+            updateFromBase();
+        }
 
         // Bill Type Toggle Logic
         function updateBillTypeUI() {
@@ -850,7 +892,7 @@
                 $('#standardInvoiceFields').removeClass('hidden');
                 $('#tripsSelectionArea').addClass('hidden');
                 $('#partyTripNote').addClass('hidden');
-                if ($itemsBody.find('.item-row').length === 0) {
+                if (!isCreditNoteCategory() && $itemsBody.find('.item-row').length === 0) {
                     initItemsTable();
                 }
             } else {
@@ -1005,11 +1047,33 @@
 
         function updateCategoryUI() {
             const categoryText = $('#id_category option:selected').text();
+            const isCreditNote = isCreditNoteCategory();
+
             if (categoryText.includes('Credit Note') || categoryText.includes('Debit Note')) {
                 $('#originalBillContainer').removeClass('hidden');
             } else {
                 $('#originalBillContainer').addClass('hidden');
                 $('#originalBillVehiclesHint').addClass('hidden');
+            }
+
+            // Toggle between classic Weight/Rate/Base Amount layout (Credit Note)
+            // and multi-vehicle item rows table (Standard / Halting / Debit Note)
+            if (isCreditNote) {
+                $('#standardItemsSection').addClass('hidden');
+                $('#originalBillVehiclesHint').addClass('hidden');
+                $('#creditNoteWeightRateSection').removeClass('hidden');
+                $('#amountOverrideHelpText').text('Enter base amount or calculate from Weight × Rate');
+                if (baseAmountInput.val()) {
+                    updateFromBase();
+                }
+            } else {
+                $('#creditNoteWeightRateSection').addClass('hidden');
+                $('#standardItemsSection').removeClass('hidden');
+                $('#amountOverrideHelpText').text('Auto-calculated from vehicle rows above');
+                if ($('#id_bill_type').val() === 'Standard' && $itemsBody.find('.item-row').length === 0) {
+                    initItemsTable();
+                }
+                renderOriginalBillVehiclesHint($('#id_original_bill').val());
             }
 
             // Auto-populate Item Description / Type if empty or generic
@@ -1185,7 +1249,7 @@
             const $badges = $('#originalBillVehiclesBadges');
             $badges.empty();
 
-            if (!selectedBillId) {
+            if (!selectedBillId || isCreditNoteCategory()) {
                 $hint.addClass('hidden');
                 return;
             }
@@ -1314,9 +1378,15 @@
             // Re-enable disabled fields so they are submitted
             $('#id_gst_type').prop('disabled', false);
 
-            // Sync standard vehicle line items
+            // Sync standard vehicle line items (Credit Notes use classic Weight/Rate/Base Amount)
             if ($('#id_bill_type').val() === 'Standard') {
-                syncItemsData();
+                if (isCreditNoteCategory()) {
+                    if (itemsDataInput) {
+                        itemsDataInput.value = '[]';
+                    }
+                } else {
+                    syncItemsData();
+                }
             }
             
             const finalData = {};
