@@ -352,15 +352,23 @@ class BillingService:
                     cust_cn.sync_to_ledger()
 
     @staticmethod
-    def update_bill_financial_caches(bill):
+    def update_bill_financial_caches(bill, update_trips=True):
         """
         Recalculate and update all cached financial fields for the bill.
         """
         bill._bypass_cache = True
         try:
-            bill.subtotal_cached = bill.subtotal
-            bill.gst_amount_cached = bill.gst_amount
-            bill.total_amount_cached = bill.rounded_total
+            subtotal = bill._calculate_subtotal()
+            gst = subtotal * (Decimal(bill.gst_rate) / Decimal(100))
+            total_raw = subtotal + gst
+            total = (
+                total_raw.quantize(Decimal('1'), rounding='ROUND_HALF_UP')
+                if bill.use_roundoff
+                else total_raw
+            )
+            bill.subtotal_cached = subtotal
+            bill.gst_amount_cached = gst
+            bill.total_amount_cached = total
             
             if bill.is_adjustment:
                 bill.amount_received_cached = Decimal('0.00')
@@ -393,8 +401,30 @@ class BillingService:
         finally:
             del bill._updating_financial_caches
         
-        for trip in bill.trips.all():
-            TripFinancialService.update_trip_financial_caches(trip)
+        if update_trips:
+            bill_pool_cache = {}
+            for trip in bill.trips.select_related('vehicle', 'party', 'route').all():
+                TripFinancialService.update_trip_financial_caches(
+                    trip, bill_pool_cache=bill_pool_cache
+                )
+
+    @staticmethod
+    def _sum_bill_adjustments(bill, is_creditor):
+        adj_iter = (
+            bill.adjustment_bills.all()
+            if hasattr(bill, '_prefetched_objects_cache') and 'adjustment_bills' in bill._prefetched_objects_cache
+            else bill.adjustment_bills.select_related('category').all()
+        )
+        adjustments = Decimal('0')
+        positive_name = 'Debit Note' if is_creditor else 'Credit Note'
+        negative_name = 'Credit Note' if is_creditor else 'Debit Note'
+        for adj in adj_iter:
+            if adj.category:
+                if adj.category.name == positive_name:
+                    adjustments += adj.total_amount_cached
+                elif adj.category.name == negative_name:
+                    adjustments -= adj.total_amount_cached
+        return adjustments
 
     @staticmethod
     def calculate_bill_received_amount(bill):
@@ -427,16 +457,9 @@ class BillingService:
             ).aggregate(total=Sum('amount'))['total'] or 0
 
             bill_allocations = bill.payment_allocations.aggregate(total=Sum('amount'))['total'] or 0
+            adjustments = BillingService._sum_bill_adjustments(bill, is_creditor=True)
 
-            adjustments = 0
-            for adj in bill.adjustment_bills.select_related('category').all():
-                if adj.category:
-                    if adj.category.name == 'Debit Note':
-                        adjustments += adj.total_amount_cached
-                    elif adj.category.name == 'Credit Note':
-                        adjustments -= adj.total_amount_cached
-
-            return Decimal(str(direct)) + Decimal(str(bill_allocations)) + Decimal(str(adjustments))
+            return Decimal(str(direct)) + Decimal(str(bill_allocations)) + adjustments
 
         # Direct links for debtor bill
         direct = bill.financial_records.exclude(
@@ -452,12 +475,21 @@ class BillingService:
 
         trip_payments = 0
         if bill.bill_type == bill.TYPE_TRIP:
+             if hasattr(bill, '_prefetched_objects_cache') and 'bill_trips' in bill._prefetched_objects_cache:
+                 trip_ids = [bt.trip_id for bt in bill.bill_trips.all()]
+                 trip_filter = {'trip_id__in': trip_ids}
+                 assoc_trip_filter = {'associated_trip_id__in': trip_ids}
+             else:
+                 bill_trips_qs = bill.trips.all()
+                 trip_filter = {'trip__in': bill_trips_qs}
+                 assoc_trip_filter = {'associated_trip__in': bill_trips_qs}
+
              trip_payments = TripAllocation.objects.filter(
-                 trip__in=bill.trips.all()
+                 **trip_filter
              ).aggregate(total=Sum('amount'))['total'] or 0
              
              direct_trip_payments = FinancialRecord.objects.filter(
-                 associated_trip__in=bill.trips.all()
+                 **assoc_trip_filter
              ).exclude(
                  Q(record_type=FinancialRecord.RECORD_TYPE_INVOICE) |
                  Q(associated_bill=bill) |
@@ -468,13 +500,7 @@ class BillingService:
              ).aggregate(total=Sum('amount'))['total'] or 0
              trip_payments += direct_trip_payments
 
-        adjustments = 0
-        for adj in bill.adjustment_bills.select_related('category').all():
-            if adj.category:
-                if adj.category.name == 'Credit Note':
-                    adjustments += adj.total_amount_cached
-                elif adj.category.name == 'Debit Note':
-                    adjustments -= adj.total_amount_cached
+        adjustments = BillingService._sum_bill_adjustments(bill, is_creditor=False)
 
-        return Decimal(str(direct)) + Decimal(str(bill_allocations)) + Decimal(str(trip_payments)) + Decimal(str(adjustments))
+        return Decimal(str(direct)) + Decimal(str(bill_allocations)) + Decimal(str(trip_payments)) + adjustments
 

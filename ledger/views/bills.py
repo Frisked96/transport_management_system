@@ -7,7 +7,8 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse_lazy
 from django.contrib import messages
-from django.db.models import Q, Sum, F, DecimalField, Value, Case, When, OuterRef, Count
+from django.db.models import Q, Sum, F, DecimalField, Value, Case, When, OuterRef, Count, Subquery
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 from decimal import Decimal, InvalidOperation, DecimalException
 from datetime import datetime
@@ -36,23 +37,19 @@ class BillListView(LoginRequiredMixin, PermissionRequiredMixin, BaseLedgerPermis
     def get_queryset(self):
         if self.has_driver_permission():
             return Bill.objects.none()
-            
-        # We use prefetch_related to solve the N+1 problem without complex SQL annotations 
-        # that cause 'parser stack overflow' on some SQLite configurations.
-        queryset = Bill.objects.all().select_related(
-            'party', 'issuer', 'category', 'customer_bill'
-        ).prefetch_related(
-            'trips',
-            'trips__payment_allocations',
-            'financial_records',
-            'financial_records__category',
-            'bill_trips',
-            'bill_trips__trip',
-            'adjustment_bills',
-            'adjustment_bills__category',
-            'items',
-            'items__vehicle'
-        ).order_by('-date', '-category__name', '-bill_no')
+
+        trips_count_subquery = (
+            BillTrip.objects.filter(bill_id=OuterRef('pk'))
+            .values('bill_id')
+            .annotate(c=Count('id'))
+            .values('c')[:1]
+        )
+        queryset = (
+            Bill.objects.all()
+            .select_related('party', 'issuer', 'category', 'customer_bill')
+            .annotate(annotated_trips_count=Coalesce(Subquery(trips_count_subquery), Value(0)))
+            .order_by('-date', '-category__name', '-bill_no')
+        )
         
         # Filter by Issuer (Company Account)
         issuer_id = self.request.GET.get('issuer')

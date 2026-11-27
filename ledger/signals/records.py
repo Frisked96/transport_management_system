@@ -7,6 +7,13 @@ from django.dispatch import receiver
 from ledger.models import FinancialRecord, Party, CompanyAccount, Bill
 from trips.models import Trip
 from ledger.services import BalanceService, BillingService, TripFinancialService
+from .context import (
+    is_ledger_refresh_deferred,
+    queue_account_refresh,
+    queue_bill_refresh,
+    queue_party_refresh,
+    queue_trip_refresh,
+)
 
 
 @receiver(post_delete, sender=FinancialRecord)
@@ -67,6 +74,11 @@ def track_financial_record_changes(sender, instance, **kwargs):
     Captures old state to handle party/account changes and handles document replacement.
     """
     if instance.pk:
+        update_fields = kwargs.get('update_fields')
+        tracked_fields = {'party', 'account', 'associated_trip', 'associated_bill', 'document_ref', 'record_type'}
+        if update_fields is not None and not tracked_fields.intersection(update_fields):
+            instance._old_instance = None
+            return
         try:
             old_instance = FinancialRecord.objects.get(pk=instance.pk)
             instance._old_instance = old_instance
@@ -83,12 +95,34 @@ def update_balances_on_save(sender, instance, created, **kwargs):
     """
     Update Party and CompanyAccount balances when a FinancialRecord is saved.
     """
+    old_instance = getattr(instance, '_old_instance', None)
+    if is_ledger_refresh_deferred():
+        if created:
+            if instance.party_id:
+                queue_party_refresh(instance.party_id)
+        else:
+            if old_instance and old_instance.party_id and old_instance.party_id != instance.party_id:
+                queue_party_refresh(old_instance.party_id)
+            if instance.party_id:
+                queue_party_refresh(instance.party_id)
+
+        if instance.record_type != FinancialRecord.RECORD_TYPE_INVOICE:
+            if created:
+                if instance.account_id:
+                    queue_account_refresh(instance.account_id)
+            else:
+                if old_instance and old_instance.account_id and old_instance.account_id != instance.account_id:
+                    queue_account_refresh(old_instance.account_id)
+                if instance.account_id:
+                    queue_account_refresh(instance.account_id)
+        return
+
     # 1. Update Parties
     if created:
         if instance.party:
             BalanceService.refresh_party_balance(instance.party)
     else:
-        old_party = getattr(instance, '_old_instance').party if getattr(instance, '_old_instance') else None
+        old_party = old_instance.party if old_instance else None
         if old_party and old_party != instance.party:
             BalanceService.refresh_party_balance(old_party)
         if instance.party:
@@ -100,7 +134,7 @@ def update_balances_on_save(sender, instance, created, **kwargs):
             if instance.account:
                 BalanceService.refresh_account_balance(instance.account)
         else:
-            old_account = getattr(instance, '_old_instance').account if getattr(instance, '_old_instance') else None
+            old_account = old_instance.account if old_instance else None
             if old_account and old_account != instance.account:
                 BalanceService.refresh_account_balance(old_account)
             if instance.account:
@@ -112,6 +146,13 @@ def update_balances_on_delete(sender, instance, **kwargs):
     """
     Update Party and CompanyAccount balances when a FinancialRecord is deleted.
     """
+    if is_ledger_refresh_deferred():
+        if instance.party_id:
+            queue_party_refresh(instance.party_id)
+        if instance.record_type != FinancialRecord.RECORD_TYPE_INVOICE and instance.account_id:
+            queue_account_refresh(instance.account_id)
+        return
+
     if instance.party_id:
         try:
             party = instance.party
@@ -139,6 +180,19 @@ def update_trip_bill_caches_on_save(sender, instance, **kwargs):
     if instance.record_type == FinancialRecord.RECORD_TYPE_INVOICE:
         return
 
+    old_instance = getattr(instance, '_old_instance', None)
+    if is_ledger_refresh_deferred():
+        if instance.associated_trip_id:
+            queue_trip_refresh(instance.associated_trip_id)
+        if instance.associated_bill_id:
+            queue_bill_refresh(instance.associated_bill_id)
+        if old_instance:
+            if old_instance.associated_trip_id and old_instance.associated_trip_id != instance.associated_trip_id:
+                queue_trip_refresh(old_instance.associated_trip_id)
+            if old_instance.associated_bill_id and old_instance.associated_bill_id != instance.associated_bill_id:
+                queue_bill_refresh(old_instance.associated_bill_id)
+        return
+
     # 1. Update current associations
     if instance.associated_trip:
         TripFinancialService.update_trip_financial_caches(instance.associated_trip)
@@ -146,7 +200,6 @@ def update_trip_bill_caches_on_save(sender, instance, **kwargs):
         BillingService.update_bill_financial_caches(instance.associated_bill)
 
     # 2. Update OLD associations if they changed
-    old_instance = getattr(instance, '_old_instance', None)
     if old_instance:
         if old_instance.associated_trip and old_instance.associated_trip != instance.associated_trip:
             TripFinancialService.update_trip_financial_caches(old_instance.associated_trip)
@@ -163,6 +216,13 @@ def update_trip_bill_caches_on_delete(sender, instance, **kwargs):
 
     # Accrual records do not affect cash/deduction payment caches
     if instance.record_type == FinancialRecord.RECORD_TYPE_INVOICE:
+        return
+
+    if is_ledger_refresh_deferred():
+        if instance.associated_trip_id:
+            queue_trip_refresh(instance.associated_trip_id)
+        if instance.associated_bill_id:
+            queue_bill_refresh(instance.associated_bill_id)
         return
 
     if instance.associated_trip_id:

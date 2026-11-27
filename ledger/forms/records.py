@@ -161,31 +161,78 @@ class FinancialRecordForm(forms.ModelForm):
             parties_for_bills = [party]
             if target_party:
                 parties_for_bills.append(target_party)
-            
-            if party.party_type == Party.TYPE_CREDITOR and not target_party:
-                # Creditors: No per-trip allocations, but support bill settlements
-                if 'associated_trip' in self.fields: del self.fields['associated_trip']
-                if 'payment_distribution' in self.fields: del self.fields['payment_distribution']
-                
-                # Filter bills for this creditor: Exclude CN/DN and already Paid bills
-                bills_qs = Bill.objects.with_payment_info().filter(party__in=parties_for_bills).filter(
-                    models.Q(category__isnull=True) | ~models.Q(category__name__in=['Credit Note', 'Debit Note'])
-                )
-                unpaid_bill_ids = [b.id for b in bills_qs if b.payment_status != Bill.PAYMENT_STATUS_PAID]
-                if self.instance and self.instance.associated_bill:
-                    if self.instance.associated_bill.pk not in unpaid_bill_ids:
-                        unpaid_bill_ids.append(self.instance.associated_bill.pk)
+
+            def _build_bill_queryset():
+                include_bill_ids = set()
+                if self.instance and self.instance.associated_bill_id:
+                    include_bill_ids.add(self.instance.associated_bill_id)
                 initial_bill = kwargs.get('initial', {}).get('associated_bill')
                 if initial_bill:
                     initial_bill_pk = initial_bill.pk if hasattr(initial_bill, 'pk') else initial_bill
                     try:
-                        initial_bill_pk = int(initial_bill_pk)
-                        if initial_bill_pk not in unpaid_bill_ids:
-                            unpaid_bill_ids.append(initial_bill_pk)
+                        include_bill_ids.add(int(initial_bill_pk))
+                    except (ValueError, TypeError):
+                        pass
+                if self.data and self.data.get('associated_bill'):
+                    try:
+                        include_bill_ids.add(int(self.data.get('associated_bill')))
                     except (ValueError, TypeError):
                         pass
 
-                self.fields['associated_bill'].queryset = Bill.objects.with_payment_info().filter(id__in=unpaid_bill_ids).order_by('-date')
+                base_bill_q = models.Q(party__in=parties_for_bills) & (
+                    models.Q(category__isnull=True) | ~models.Q(category__name__in=['Credit Note', 'Debit Note'])
+                )
+                unpaid_q = base_bill_q & ~models.Q(payment_status_cached=Bill.PAYMENT_STATUS_PAID)
+                if include_bill_ids:
+                    bill_q = unpaid_q | models.Q(id__in=include_bill_ids)
+                else:
+                    bill_q = unpaid_q
+                return (
+                    Bill.objects.with_payment_info()
+                    .select_related('party', 'category')
+                    .filter(bill_q)
+                    .order_by('-date')
+                )
+
+            def _configure_trip_field():
+                record_trip_ids = set()
+                record_contributions = {}
+                if self.instance and self.instance.pk:
+                    if self.instance.associated_trip_id:
+                        record_trip_ids.add(self.instance.associated_trip_id)
+                        record_contributions[self.instance.associated_trip_id] = self.instance.amount or Decimal('0')
+                    if hasattr(self.instance, 'allocations'):
+                        for alloc in self.instance.allocations.all():
+                            record_trip_ids.add(alloc.trip_id)
+                            record_contributions[alloc.trip_id] = record_contributions.get(alloc.trip_id, Decimal('0')) + (alloc.amount or Decimal('0'))
+
+                initial_trip = kwargs.get('initial', {}).get('associated_trip')
+                if initial_trip:
+                    initial_trip_pk = initial_trip.pk if hasattr(initial_trip, 'pk') else initial_trip
+                    try:
+                        record_trip_ids.add(int(initial_trip_pk))
+                    except (ValueError, TypeError):
+                        pass
+
+                trips_qs = Trip.objects.with_payment_info().select_related('party', 'vehicle').filter(
+                    party__in=parties_for_bills
+                )
+                if record_trip_ids:
+                    trips_qs = trips_qs.filter(
+                        models.Q(id__in=record_trip_ids) | ~models.Q(annotated_status=Trip.PAYMENT_STATUS_PAID)
+                    )
+                else:
+                    trips_qs = trips_qs.exclude(annotated_status=Trip.PAYMENT_STATUS_PAID)
+
+                self.fields['associated_trip'].record_contributions = record_contributions
+                self.fields['associated_trip'].queryset = trips_qs.distinct().order_by('-date')
+
+            if party.party_type == Party.TYPE_CREDITOR and not target_party:
+                # Creditors: No per-trip allocations, but support bill settlements
+                if 'associated_trip' in self.fields: del self.fields['associated_trip']
+                if 'payment_distribution' in self.fields: del self.fields['payment_distribution']
+
+                self.fields['associated_bill'].queryset = _build_bill_queryset()
 
                 # Filter categories for Creditor
                 self.fields['category'].queryset = TransactionCategory.objects.filter(
@@ -199,113 +246,16 @@ class FinancialRecordForm(forms.ModelForm):
                         self.fields['category'].initial = p_out.id
             elif party.party_type == Party.TYPE_BOTH or target_party:
                 # Dual-role or Contra Adjustment: Can settle trips (client), vendor bills (creditor), or customer invoices
-                record_trip_ids = set()
-                record_contributions = {}
-                if self.instance and self.instance.pk:
-                    if self.instance.associated_trip_id:
-                        record_trip_ids.add(self.instance.associated_trip_id)
-                        record_contributions[self.instance.associated_trip_id] = self.instance.amount or Decimal('0')
-                    if hasattr(self.instance, 'allocations'):
-                        for alloc in self.instance.allocations.all():
-                            record_trip_ids.add(alloc.trip_id)
-                            record_contributions[alloc.trip_id] = record_contributions.get(alloc.trip_id, Decimal('0')) + (alloc.amount or Decimal('0'))
-                
-                initial_trip = kwargs.get('initial', {}).get('associated_trip')
-                if initial_trip:
-                    initial_trip_pk = initial_trip.pk if hasattr(initial_trip, 'pk') else initial_trip
-                    try:
-                        record_trip_ids.add(int(initial_trip_pk))
-                    except (ValueError, TypeError):
-                        pass
-
-                trips_qs = Trip.objects.with_payment_info().with_billing_info().filter(party__in=parties_for_bills)
-                if record_trip_ids:
-                    trips_qs = trips_qs.filter(models.Q(id__in=record_trip_ids) | ~models.Q(annotated_status=Trip.PAYMENT_STATUS_PAID))
-                else:
-                    trips_qs = trips_qs.exclude(annotated_status=Trip.PAYMENT_STATUS_PAID)
-
-                self.fields['associated_trip'].record_contributions = record_contributions
-                self.fields['associated_trip'].queryset = trips_qs.distinct().order_by('-date')
-
-                bills_qs = Bill.objects.with_payment_info().filter(party__in=parties_for_bills).filter(
-                    models.Q(category__isnull=True) | ~models.Q(category__name__in=['Credit Note', 'Debit Note'])
-                )
-                unpaid_bill_ids = [b.id for b in bills_qs if b.payment_status != Bill.PAYMENT_STATUS_PAID]
-                if self.instance and self.instance.associated_bill:
-                    if self.instance.associated_bill.pk not in unpaid_bill_ids:
-                        unpaid_bill_ids.append(self.instance.associated_bill.pk)
-                initial_bill = kwargs.get('initial', {}).get('associated_bill')
-                if initial_bill:
-                    initial_bill_pk = initial_bill.pk if hasattr(initial_bill, 'pk') else initial_bill
-                    try:
-                        initial_bill_pk = int(initial_bill_pk)
-                        if initial_bill_pk not in unpaid_bill_ids:
-                            unpaid_bill_ids.append(initial_bill_pk)
-                    except (ValueError, TypeError):
-                        pass
-
-                self.fields['associated_bill'].queryset = Bill.objects.with_payment_info().filter(id__in=unpaid_bill_ids).order_by('-date')
+                _configure_trip_field()
+                self.fields['associated_bill'].queryset = _build_bill_queryset()
                 self.fields['category'].queryset = TransactionCategory.objects.filter(
                     models.Q(name__in=['Trip Payment', 'Invoice Payment', 'Payment In', 'Payment Out', 'Standard', 'TDS', 'Deductions', 'Expense'])
                 ).order_by('name')
             else:
                 # Setup trips for debtor party using dynamic payment info
-                record_trip_ids = set()
-                record_contributions = {}
-                if self.instance and self.instance.pk:
-                    if self.instance.associated_trip_id:
-                        record_trip_ids.add(self.instance.associated_trip_id)
-                        record_contributions[self.instance.associated_trip_id] = self.instance.amount or Decimal('0')
-                    if hasattr(self.instance, 'allocations'):
-                        for alloc in self.instance.allocations.all():
-                            record_trip_ids.add(alloc.trip_id)
-                            record_contributions[alloc.trip_id] = record_contributions.get(alloc.trip_id, Decimal('0')) + (alloc.amount or Decimal('0'))
-                
-                initial_trip = kwargs.get('initial', {}).get('associated_trip')
-                if initial_trip:
-                    initial_trip_pk = initial_trip.pk if hasattr(initial_trip, 'pk') else initial_trip
-                    try:
-                        record_trip_ids.add(int(initial_trip_pk))
-                    except (ValueError, TypeError):
-                        pass
+                _configure_trip_field()
+                self.fields['associated_bill'].queryset = _build_bill_queryset()
 
-                trips_qs = Trip.objects.with_payment_info().with_billing_info().filter(
-                    party=party
-                )
-                if record_trip_ids:
-                    trips_qs = trips_qs.filter(
-                        models.Q(id__in=record_trip_ids) | ~models.Q(annotated_status=Trip.PAYMENT_STATUS_PAID)
-                    )
-                else:
-                    trips_qs = trips_qs.exclude(annotated_status=Trip.PAYMENT_STATUS_PAID)
-
-                self.fields['associated_trip'].record_contributions = record_contributions
-                self.fields['associated_trip'].queryset = trips_qs.distinct().order_by('-date')
-
-                # Filter bills for this debtor: Exclude CN/DN and already Paid bills
-                bills_qs = Bill.objects.with_payment_info().filter(party=party).filter(
-                    models.Q(category__isnull=True) | ~models.Q(category__name__in=['Credit Note', 'Debit Note'])
-                )
-                
-                # Further filter to only show unpaid bills
-                unpaid_bill_ids = [b.id for b in bills_qs if b.payment_status != Bill.PAYMENT_STATUS_PAID]
-                
-                # Include current bill if editing or from initial
-                if self.instance and self.instance.associated_bill:
-                    if self.instance.associated_bill.pk not in unpaid_bill_ids:
-                        unpaid_bill_ids.append(self.instance.associated_bill.pk)
-                initial_bill = kwargs.get('initial', {}).get('associated_bill')
-                if initial_bill:
-                    initial_bill_pk = initial_bill.pk if hasattr(initial_bill, 'pk') else initial_bill
-                    try:
-                        initial_bill_pk = int(initial_bill_pk)
-                        if initial_bill_pk not in unpaid_bill_ids:
-                            unpaid_bill_ids.append(initial_bill_pk)
-                    except (ValueError, TypeError):
-                        pass
-                
-                self.fields['associated_bill'].queryset = Bill.objects.with_payment_info().filter(id__in=unpaid_bill_ids).order_by('-date')
-                
                 # Filter categories for Debtor
                 self.fields['category'].queryset = TransactionCategory.objects.filter(
                     models.Q(name__in=['Trip Payment', 'Invoice Payment', 'Payment In', 'Standard', 'TDS', 'Deductions'])

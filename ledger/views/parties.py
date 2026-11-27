@@ -522,19 +522,16 @@ def get_party_bills(request):
         if include_ids:
             base_filter |= models.Q(id__in=include_ids)
 
-        # We use prefetch_related instead of complex annotations to avoid parser stack overflow
+        if unpaid_only:
+            if include_ids:
+                base_filter &= (models.Q(outstanding_balance_cached__gt=0) | models.Q(id__in=include_ids))
+            else:
+                base_filter &= models.Q(outstanding_balance_cached__gt=0)
+
         bills_qs = Bill.objects.filter(
             base_filter
-        ).select_related('issuer', 'category').prefetch_related(
-            'trips',
-            'bill_trips',
-            'bill_trips__trip',
+        ).select_related('issuer', 'category', 'party').prefetch_related(
             'bill_trips__trip__vehicle',
-            'financial_records',
-            'financial_records__category',
-            'trips__payment_allocations',
-            'adjustment_bills',
-            'adjustment_bills__category'
         ).filter(
             models.Q(category__isnull=True) | ~models.Q(category__name__in=['Credit Note', 'Debit Note'])
         ).order_by('-date', '-id')

@@ -157,6 +157,16 @@ class Bill(models.Model):
         return self.issuer.invoice_prefix.replace("{YYYY}", str(year))
 
     def save(self, *args, **kwargs):
+        update_fields = kwargs.get('update_fields')
+        if self.pk and update_fields:
+            cache_fields = {
+                'amount_received_cached', 'outstanding_balance_cached', 'payment_status_cached',
+                'subtotal_cached', 'gst_amount_cached', 'total_amount_cached'
+            }
+            if set(update_fields).issubset(cache_fields):
+                super().save(*args, **kwargs)
+                return
+
         # 1. Snapshot Company Details from Issuer
         if self.issuer and not self.invoice_company_name:
             self.invoice_company_name = self.issuer.name
@@ -194,9 +204,17 @@ class Bill(models.Model):
         # Update revenue caches before save
         self._bypass_cache = True
         try:
-            self.subtotal_cached = self.subtotal
-            self.gst_amount_cached = self.gst_amount
-            self.total_amount_cached = self.rounded_total
+            subtotal = self._calculate_subtotal()
+            gst = subtotal * (Decimal(self.gst_rate) / Decimal(100))
+            total_raw = subtotal + gst
+            total = (
+                total_raw.quantize(Decimal('1'), rounding='ROUND_HALF_UP')
+                if self.use_roundoff
+                else total_raw
+            )
+            self.subtotal_cached = subtotal
+            self.gst_amount_cached = gst
+            self.total_amount_cached = total
             
             # Update payment caches as well
             if self.is_adjustment:
@@ -360,7 +378,12 @@ class Bill(models.Model):
         is_creditor = self.is_creditor_bill
 
         trip_subtotal = Decimal('0')
-        for bt in self.bill_trips.select_related('trip').all():
+        bill_trips_iter = (
+            self.bill_trips.all()
+            if hasattr(self, '_prefetched_objects_cache') and 'bill_trips' in self._prefetched_objects_cache
+            else self.bill_trips.select_related('trip').all()
+        )
+        for bt in bill_trips_iter:
             if is_creditor:
                 trip_subtotal += (Decimal(str(bt.trip.vendor_hire_amount or 0)) - Decimal(str(bt.discount or 0)))
             else:
@@ -498,6 +521,8 @@ class Bill(models.Model):
     def trips_count(self):
         if not self.pk:
             return 0
+        if hasattr(self, 'annotated_trips_count'):
+            return self.annotated_trips_count or 0
         if hasattr(self, '_prefetched_objects_cache') and 'trips' in self._prefetched_objects_cache:
             return len(self.trips.all())
         return self.trips.count()

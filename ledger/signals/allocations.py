@@ -6,6 +6,11 @@ from django.dispatch import receiver
 from ledger.models import Bill, TripAllocation, BillAllocation
 from trips.models import Trip
 from ledger.services import BillingService, TripFinancialService
+from .context import (
+    is_ledger_refresh_deferred,
+    queue_bill_refresh,
+    queue_trip_refresh,
+)
 
 
 @receiver(pre_save, sender=BillAllocation)
@@ -26,11 +31,18 @@ def update_bill_caches_on_alloc_save(sender, instance, **kwargs):
     if getattr(instance, '_updating_financial_caches', False) or getattr(instance, '_suppress_cache_cascade', False):
         return
 
+    old_instance = getattr(instance, '_old_instance', None)
+    if is_ledger_refresh_deferred():
+        if instance.bill_id:
+            queue_bill_refresh(instance.bill_id)
+        if old_instance and old_instance.bill_id and old_instance.bill_id != instance.bill_id:
+            queue_bill_refresh(old_instance.bill_id)
+        return
+
     if not getattr(instance.bill, '_is_being_deleted', False):
         BillingService.update_bill_financial_caches(instance.bill)
     
     # Update old bill if it changed
-    old_instance = getattr(instance, '_old_instance', None)
     if old_instance and old_instance.bill_id and old_instance.bill_id != instance.bill_id:
         try:
             old_bill = old_instance.bill
@@ -58,12 +70,19 @@ def update_trip_bill_caches_on_alloc_save(sender, instance, **kwargs):
     if getattr(instance, '_updating_financial_caches', False) or getattr(instance, '_suppress_cache_cascade', False):
         return
 
+    old_instance = getattr(instance, '_old_instance', None)
+    if is_ledger_refresh_deferred():
+        if instance.trip_id:
+            queue_trip_refresh(instance.trip_id)
+        if old_instance and old_instance.trip_id and old_instance.trip_id != instance.trip_id:
+            queue_trip_refresh(old_instance.trip_id)
+        return
+
     TripFinancialService.update_trip_financial_caches(instance.trip)
     if instance.trip.associated_bill:
         BillingService.update_bill_financial_caches(instance.trip.associated_bill)
     
     # Update old trip if it changed
-    old_instance = getattr(instance, '_old_instance', None)
     if old_instance and old_instance.trip_id and old_instance.trip_id != instance.trip_id:
         try:
             old_trip = old_instance.trip
@@ -81,6 +100,11 @@ def update_trip_bill_caches_on_alloc_delete(sender, instance, **kwargs):
     if getattr(instance, '_updating_financial_caches', False) or getattr(instance, '_suppress_cache_cascade', False):
         return
 
+    if is_ledger_refresh_deferred():
+        if instance.trip_id:
+            queue_trip_refresh(instance.trip_id)
+        return
+
     if instance.trip_id:
         try:
             trip = instance.trip
@@ -96,6 +120,11 @@ def update_trip_bill_caches_on_alloc_delete(sender, instance, **kwargs):
 def update_bill_caches_on_alloc_delete(sender, instance, **kwargs):
     """Update Bill caches when a bill allocation is deleted"""
     if getattr(instance, '_updating_financial_caches', False) or getattr(instance, '_suppress_cache_cascade', False):
+        return
+
+    if is_ledger_refresh_deferred():
+        if instance.bill_id:
+            queue_bill_refresh(instance.bill_id)
         return
 
     if instance.bill_id:

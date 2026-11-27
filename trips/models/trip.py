@@ -288,6 +288,16 @@ class Trip(models.Model):
         """
         Override save to handle business logic
         """
+        update_fields = kwargs.get('update_fields')
+        if self.pk and update_fields:
+            cache_fields = {
+                'amount_received_cached', 'outstanding_balance_cached', 'payment_status_cached',
+                'revenue_cached', 'gst_amount_cached', 'total_revenue_cached'
+            }
+            if set(update_fields).issubset(cache_fields):
+                super().save(*args, **kwargs)
+                return
+
         is_new = self._state.adding
         old_instance = getattr(self, '_old_instance', None)
         if not is_new and old_instance is None:

@@ -29,6 +29,7 @@ from .allocations import (
     update_trip_bill_caches_on_alloc_delete,
     update_bill_caches_on_alloc_delete,
 )
+from .context import deferred_ledger_refresh
 from .toll import (
     sync_toll_account_on_opening_change,
     track_toll_recharge_changes,
@@ -40,6 +41,7 @@ from .toll import (
 )
 
 __all__ = [
+    'deferred_ledger_refresh',
     'track_bill_changes',
     'update_original_bill_on_adjustment',
     'update_original_bill_on_adjustment_delete',

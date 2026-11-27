@@ -37,6 +37,12 @@ IGNORED_FIELDS = {
     'total_revenue_cached',
     'outstanding_balance_cached',
     'payment_status_cached',
+    'subtotal_cached',
+    'total_amount_cached',
+    'total_payment_amount',
+    'total_tds_amount',
+    'total_deduction_amount',
+    'total_settled_amount',
 }
 
 @receiver(pre_save)

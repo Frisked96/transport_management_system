@@ -19,6 +19,8 @@ from ledger.models import FinancialRecord, FinancialVoucher, Party, CompanyAccou
 from ledger.forms import FinancialRecordForm
 from trips.models import Trip
 from ledger.services import BalanceService, BillingService, TripFinancialService
+from ledger.signals import deferred_ledger_refresh
+from ledger.signals.context import queue_bill_refresh, queue_trip_refresh
 from ledger.views.base import BaseLedgerPermissionMixin
 from ledger.utils import format_indian_comma, format_balance
 from transport_mgmt.utils import get_local_iso_timestamp
@@ -437,34 +439,36 @@ class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, Fin
         else:
             v_type = FinancialVoucher.VOUCHER_TYPE_DIRECT
 
-        voucher_ref = FinancialVoucher.generate_voucher_number()
-        voucher = FinancialVoucher.objects.create(
-            voucher_number=voucher_ref,
-            date=form.cleaned_data['date'],
-            voucher_type=v_type,
-            party=form.cleaned_data.get('party'),
-            payer_party=paid_by_party or form.cleaned_data.get('party'),
-            account=None if is_inter_party else form.cleaned_data.get('account'),
-            driver=form.cleaned_data.get('driver'),
-            created_by=self.request.user,
-            verification_status=FinancialVoucher.STATUS_PENDING,
-            description=form.cleaned_data.get('description') or '',
-            document_ref=form.cleaned_data.get('document_ref'),
-            audit_log=[{
-                'timestamp': get_local_iso_timestamp(),
-                'action': 'created',
-                'user': self.request.user.username,
-                'details': {
-                    'voucher_type': v_type,
-                    'reference': voucher_ref,
-                }
-            }]
-        )
+        def _create_voucher():
+            voucher_ref = FinancialVoucher.generate_voucher_number()
+            return FinancialVoucher.objects.create(
+                voucher_number=voucher_ref,
+                date=form.cleaned_data['date'],
+                voucher_type=v_type,
+                party=form.cleaned_data.get('party'),
+                payer_party=paid_by_party or form.cleaned_data.get('party'),
+                account=None if is_inter_party else form.cleaned_data.get('account'),
+                driver=form.cleaned_data.get('driver'),
+                created_by=self.request.user,
+                verification_status=FinancialVoucher.STATUS_PENDING,
+                description=form.cleaned_data.get('description') or '',
+                document_ref=form.cleaned_data.get('document_ref'),
+                audit_log=[{
+                    'timestamp': get_local_iso_timestamp(),
+                    'action': 'created',
+                    'user': self.request.user.username,
+                    'details': {
+                        'voucher_type': v_type,
+                        'reference': voucher_ref,
+                    }
+                }]
+            )
 
         # 0. Inter-Party Contra Settlement Flow
         if is_inter_party:
             try:
-                with transaction.atomic():
+                with transaction.atomic(), deferred_ledger_refresh():
+                    voucher = _create_voucher()
                     source_party = form.cleaned_data.get('party')
                     target_party = form.cleaned_data.get('adjustment_target_party')
                     settle_amt = form.cleaned_data.get('amount') or Decimal('0.00')
@@ -520,19 +524,19 @@ class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, Fin
                     )
 
                     if form.cleaned_data.get('associated_bill'):
-                        ba = BillAllocation(financial_record=rec_target, bill=form.cleaned_data['associated_bill'], amount=settle_amt)
-                        ba._suppress_cache_cascade = True
-                        ba.save()
-                        BillingService.update_bill_financial_caches(form.cleaned_data['associated_bill'])
+                        BillAllocation.objects.create(
+                            financial_record=rec_target,
+                            bill=form.cleaned_data['associated_bill'],
+                            amount=settle_amt
+                        )
 
                     if form.cleaned_data.get('associated_trip'):
-                        ta = TripAllocation(financial_record=rec_target, trip=form.cleaned_data['associated_trip'], amount=settle_amt)
-                        ta._suppress_cache_cascade = True
-                        ta.save()
-                        TripFinancialService.update_trip_financial_caches(form.cleaned_data['associated_trip'])
+                        TripAllocation.objects.create(
+                            financial_record=rec_target,
+                            trip=form.cleaned_data['associated_trip'],
+                            amount=settle_amt
+                        )
 
-                    BalanceService.refresh_party_balance(source_party)
-                    BalanceService.refresh_party_balance(target_party)
                     voucher.update_totals()
 
                     self.object = rec_source
@@ -547,7 +551,8 @@ class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, Fin
         # 1. Multi-Trip Distribution Flow
         if distribution_json:
             try:
-                with transaction.atomic():
+                with transaction.atomic(), deferred_ledger_refresh():
+                    voucher = _create_voucher()
                     distribution_data = json.loads(distribution_json)
                     if not isinstance(distribution_data, list) or len(distribution_data) == 0:
                         raise ValueError("No trip allocation data found")
@@ -566,6 +571,17 @@ class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, Fin
 
                     trip_ids = [item.get('trip_id') for item in distribution_data if item.get('trip_id')]
                     trips_by_id = Trip.objects.in_bulk(trip_ids)
+                    trip_allocs = []
+                    queued_trip_ids = set()
+
+                    # Pre-compute auto description so we only save self.object once
+                    paid_trip_nums = [
+                        trips_by_id[item.get('trip_id')].trip_number
+                        for item in distribution_data
+                        if item.get('trip_id') in trips_by_id
+                        and Decimal(str(item.get('payment', item.get('amount', 0)) or 0)) > 0
+                    ]
+                    auto_desc = f"Paid across trips: {', '.join(paid_trip_nums)}" if paid_trip_nums else ''
 
                     # 1.1 Bank Payment Record
                     # When advance allocation is enabled, preserve the full header amount
@@ -577,6 +593,8 @@ class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, Fin
                     if record_amount > 0:
                         self.object = form.save(commit=False)
                         self.object.amount = record_amount
+                        if not self.object.description and auto_desc:
+                            self.object.description = auto_desc
                         self.object.recorded_by = self.request.user
                         self.object.voucher = voucher
                         self.object.verification_status = FinancialVoucher.STATUS_PENDING
@@ -586,13 +604,12 @@ class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, Fin
                             trip_id = item.get('trip_id')
                             p_amt = Decimal(str(item.get('payment', item.get('amount', 0)) or 0))
                             if p_amt > 0 and trip_id in trips_by_id:
-                                alloc = TripAllocation(
+                                trip_allocs.append(TripAllocation(
                                     financial_record=self.object,
                                     trip=trips_by_id[trip_id],
                                     amount=p_amt
-                                )
-                                alloc._suppress_cache_cascade = True
-                                alloc.save()
+                                ))
+                                queued_trip_ids.add(trip_id)
 
                     # 1.2 TDS Record
                     if total_tds > 0:
@@ -626,16 +643,14 @@ class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, Fin
                             if has_explicit_tds:
                                 t_amt = Decimal(str(item.get('tds', 0) or 0))
                                 if t_amt > 0:
-                                    alloc = TripAllocation(financial_record=tds_record, trip=trip, amount=t_amt)
-                                    alloc._suppress_cache_cascade = True
-                                    alloc.save()
+                                    trip_allocs.append(TripAllocation(financial_record=tds_record, trip=trip, amount=t_amt))
+                                    queued_trip_ids.add(trip_id)
                             elif total_payment > 0:
                                 p_amt = Decimal(str(item.get('payment', item.get('amount', 0)) or 0))
                                 if p_amt > 0:
                                     ratio = p_amt / total_payment
-                                    alloc = TripAllocation(financial_record=tds_record, trip=trip, amount=total_tds * ratio)
-                                    alloc._suppress_cache_cascade = True
-                                    alloc.save()
+                                    trip_allocs.append(TripAllocation(financial_record=tds_record, trip=trip, amount=total_tds * ratio))
+                                    queued_trip_ids.add(trip_id)
 
                     # 1.3 Deductions Record
                     if total_deduction > 0:
@@ -674,16 +689,19 @@ class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, Fin
                             if has_explicit_ded:
                                 d_amt = Decimal(str(item.get('deduction', 0) or 0))
                                 if d_amt > 0:
-                                    alloc = TripAllocation(financial_record=ded_record, trip=trip, amount=d_amt)
-                                    alloc._suppress_cache_cascade = True
-                                    alloc.save()
+                                    trip_allocs.append(TripAllocation(financial_record=ded_record, trip=trip, amount=d_amt))
+                                    queued_trip_ids.add(trip_id)
                             elif total_payment > 0:
                                 p_amt = Decimal(str(item.get('payment', item.get('amount', 0)) or 0))
                                 if p_amt > 0:
                                     ratio = p_amt / total_payment
-                                    alloc = TripAllocation(financial_record=ded_record, trip=trip, amount=total_deduction * ratio)
-                                    alloc._suppress_cache_cascade = True
-                                    alloc.save()
+                                    trip_allocs.append(TripAllocation(financial_record=ded_record, trip=trip, amount=total_deduction * ratio))
+                                    queued_trip_ids.add(trip_id)
+
+                    if trip_allocs:
+                        TripAllocation.objects.bulk_create(trip_allocs)
+                        for tid in queued_trip_ids:
+                            queue_trip_refresh(tid)
 
                     # Fallback if no payment, tds, or deduction created an object
                     if not self.object:
@@ -692,21 +710,6 @@ class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, Fin
                         self.object.voucher = voucher
                         self.object.verification_status = FinancialVoucher.STATUS_PENDING
                         self.object.save()
-
-                    # Single consolidated cache refresh pass on unique touched trips and bills
-                    touched_trips = list(trips_by_id.values())
-                    touched_bills = {t.associated_bill for t in touched_trips if t.associated_bill}
-                    for trip in touched_trips:
-                        TripFinancialService.update_trip_financial_caches(trip)
-                    for bill in touched_bills:
-                        BillingService.update_bill_financial_caches(bill)
-
-                    # Auto-generate description if blank
-                    if not self.object.description:
-                        trip_nums = [a.trip.trip_number for a in self.object.allocations.select_related('trip').all()]
-                        if trip_nums:
-                            self.object.description = f"Paid across trips: {', '.join(trip_nums)}"
-                            self.object.save(update_fields=['description'])
 
                     voucher.update_totals()
                     messages.success(self.request, f'Settlement recorded across {len(distribution_data)} trips under Reference #{voucher.voucher_number}. (Pending Verification)')
@@ -723,7 +726,8 @@ class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, Fin
         # 2. Multi-Bill Distribution Flow
         if bill_distribution_json:
             try:
-                with transaction.atomic():
+                with transaction.atomic(), deferred_ledger_refresh():
+                    voucher = _create_voucher()
                     bill_data = json.loads(bill_distribution_json)
                     bill_ids = [item.get('bill_id') for item in bill_data if item.get('bill_id')]
                     bills_by_id = Bill.objects.select_related('party').in_bulk(bill_ids)
@@ -740,6 +744,8 @@ class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, Fin
                         # Multi-Party Split Payment Flow
                         self.object = None
                         remitter = paid_by_party or form.cleaned_data.get('party')
+                        bill_allocs = []
+                        queued_bill_ids = set()
 
                         for p, p_items in bills_by_party.items():
                             p_total = sum(Decimal(str(item.get('amount', 0))) for b, item in p_items)
@@ -762,17 +768,13 @@ class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, Fin
                             for b, item in p_items:
                                 b_amt = Decimal(str(item.get('amount', 0)))
                                 if b_amt > 0:
-                                    ba = BillAllocation(financial_record=p_rec, bill=b, amount=b_amt)
-                                    ba._suppress_cache_cascade = True
-                                    ba.save()
+                                    bill_allocs.append(BillAllocation(financial_record=p_rec, bill=b, amount=b_amt))
+                                    queued_bill_ids.add(b.pk)
 
-                            BalanceService.refresh_party_balance(p)
-
-                        for bill in bills_by_id.values():
-                            BillingService.update_bill_financial_caches(bill)
-
-                        if form.cleaned_data.get('account'):
-                            BalanceService.refresh_account_balance(form.cleaned_data['account'])
+                        if bill_allocs:
+                            BillAllocation.objects.bulk_create(bill_allocs)
+                            for bid in queued_bill_ids:
+                                queue_bill_refresh(bid)
 
                         voucher.update_totals()
                         messages.success(self.request, f'Payment recorded across {len(bill_data)} bills for {len(bills_by_party)} parties under Reference #{voucher.voucher_number}.')
@@ -786,6 +788,19 @@ class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, Fin
                     self.object.recorded_by = self.request.user
                     self.object.voucher = voucher
                     self.object.verification_status = FinancialVoucher.STATUS_PENDING
+                    if not self.object.description:
+                        alloc_bill_nums = []
+                        for item in bill_data:
+                            bid = item.get('bill_id')
+                            try:
+                                amt_val = Decimal(str(item.get('amount')))
+                            except (ValueError, InvalidOperation):
+                                amt_val = Decimal('0')
+                            if amt_val > 0 and bid in bills_by_id:
+                                alloc_bill_nums.append(bills_by_id[bid].bill_number or 'Draft')
+                        if alloc_bill_nums:
+                            payer_note = f" (Paid by {paid_by_party.name})" if paid_by_party and paid_by_party != self.object.party else ""
+                            self.object.description = f"Paid across invoices: {', '.join(alloc_bill_nums)}{payer_note}"
                     self.object.save()
 
                     # TDS record if specified
@@ -812,6 +827,8 @@ class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, Fin
                         )
 
                     total_allocated = sum(Decimal(str(item.get('amount', 0))) for item in bill_data)
+                    bill_allocs = []
+                    queued_bill_ids = set()
                     for item in bill_data:
                         bill_id = item.get('bill_id')
                         try:
@@ -821,34 +838,24 @@ class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, Fin
 
                         if amount > 0 and bill_id in bills_by_id:
                             bill = bills_by_id[bill_id]
+                            queued_bill_ids.add(bill_id)
                             if has_tds and total_allocated > 0:
                                 ratio = amount / total_allocated
                                 payment_alloc = self.object.amount * ratio
                                 tds_alloc = tds_amount * ratio
-                                ba1 = BillAllocation(financial_record=self.object, bill=bill, amount=payment_alloc)
-                                ba1._suppress_cache_cascade = True
-                                ba1.save()
-                                ba2 = BillAllocation(financial_record=tds_record, bill=bill, amount=tds_alloc)
-                                ba2._suppress_cache_cascade = True
-                                ba2.save()
+                                bill_allocs.append(BillAllocation(financial_record=self.object, bill=bill, amount=payment_alloc))
+                                bill_allocs.append(BillAllocation(financial_record=tds_record, bill=bill, amount=tds_alloc))
                             else:
-                                ba = BillAllocation(
+                                bill_allocs.append(BillAllocation(
                                     financial_record=self.object,
                                     bill=bill,
                                     amount=amount
-                                )
-                                ba._suppress_cache_cascade = True
-                                ba.save()
+                                ))
 
-                    for bill in bills_by_id.values():
-                        BillingService.update_bill_financial_caches(bill)
-
-                    if not self.object.description:
-                        bill_nums = [a.bill.bill_number or 'Draft' for a in self.object.bill_allocations.select_related('bill').all()]
-                        if bill_nums:
-                            payer_note = f" (Paid by {paid_by_party.name})" if paid_by_party and paid_by_party != self.object.party else ""
-                            self.object.description = f"Paid across invoices: {', '.join(bill_nums)}{payer_note}"
-                            self.object.save(update_fields=['description'])
+                    if bill_allocs:
+                        BillAllocation.objects.bulk_create(bill_allocs)
+                        for bid in queued_bill_ids:
+                            queue_bill_refresh(bid)
 
                     voucher.update_totals()
                     messages.success(self.request, f'Payment recorded across {len(bill_data)} bills under Reference #{voucher.voucher_number}. (Pending Verification)')
@@ -863,7 +870,8 @@ class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, Fin
                 return self.form_invalid(form)
 
         # 3. Single Trip or Standard Financial Record Creation
-        with transaction.atomic():
+        with transaction.atomic(), deferred_ledger_refresh():
+            voucher = _create_voucher()
             payment_amount = form.cleaned_data.get('amount') or Decimal('0.00')
             self.object = None
 
@@ -875,7 +883,6 @@ class FinancialRecordCreateView(LoginRequiredMixin, PermissionRequiredMixin, Fin
                 self.object.verification_status = FinancialVoucher.STATUS_PENDING
                 if paid_by_party and paid_by_party != self.object.party and not self.object.description:
                     self.object.description = f"Payment from {paid_by_party.name}"
-                self.object.save()
                 self.object.save()
 
             # Auto-create TDS record if specified
@@ -1094,40 +1101,33 @@ class FinancialRecordUpdateView(LoginRequiredMixin, PermissionRequiredMixin, Fin
         distribution_json = form.cleaned_data.get('payment_distribution')
         bill_distribution_json = form.cleaned_data.get('bill_distribution')
         dist_notes = []
-        
-        if distribution_json or bill_distribution_json:
-            try:
-                with transaction.atomic():
+
+        try:
+            with transaction.atomic(), deferred_ledger_refresh():
+                if distribution_json or bill_distribution_json:
                     # 1. Update the parent FinancialRecord
                     # When advance allocation is enabled, preserve header amount (full transaction)
-                    allow_advance = form.cleaned_data.get('allow_advance_allocation', False)
-                    if allow_advance:
-                        self.object = form.save(commit=False)
-                        header_amount = form.cleaned_data.get('amount') or self.object.amount
-                        self.object.amount = header_amount
-                        self.object.save()
-                    else:
-                        self.object = form.save()
-                    
+                    self.object = form.save(commit=False)
+                    if form.cleaned_data.get('allow_advance_allocation', False):
+                        self.object.amount = form.cleaned_data.get('amount') or self.object.amount
+                    self.object.verification_status = FinancialVoucher.STATUS_PENDING
+                    self.object.verified_by = None
+                    self.object.verified_at = None
+                    self.object.save()
+
                     # 2. Update Trip Allocations (Delete old ones first)
                     if distribution_json:
                         distribution_data = json.loads(distribution_json)
-                        old_allocs = list(self.object.allocations.all())
-                        old_trip_ids = [a.trip_id for a in old_allocs]
-                        if self.object.associated_trip_id and self.object.associated_trip_id not in old_trip_ids:
-                            old_trip_ids.append(self.object.associated_trip_id)
-                        for a in old_allocs:
-                            a._suppress_cache_cascade = True
-                            a.delete()
-
-                        # Also clear any bill allocations if switching
-                        for ba in self.object.bill_allocations.all():
-                            ba._suppress_cache_cascade = True
-                            ba.delete()
+                        if self.object.associated_trip_id:
+                            queue_trip_refresh(self.object.associated_trip_id)
+                        self.object.allocations.all().delete()
+                        self.object.bill_allocations.all().delete()
 
                         trip_ids = [item.get('trip_id') for item in distribution_data if item.get('trip_id')]
-                        trips_by_id = Trip.objects.in_bulk(list(set(old_trip_ids + trip_ids)))
+                        trips_by_id = Trip.objects.in_bulk(trip_ids)
 
+                        trip_allocs = []
+                        queued_trip_ids = set()
                         for item in distribution_data:
                             trip_id = item.get('trip_id')
                             raw_val = item.get('payment') if item.get('payment') is not None else item.get('amount')
@@ -1135,24 +1135,19 @@ class FinancialRecordUpdateView(LoginRequiredMixin, PermissionRequiredMixin, Fin
                                 amount = Decimal(str(raw_val))
                             except (ValueError, InvalidOperation):
                                 raise ValueError(f"Invalid amount format for trip {trip_id}")
-                            
-                            if amount > 0 and trip_id in trips_by_id:
-                                trip = trips_by_id[trip_id]
-                                alloc = TripAllocation(
-                                    financial_record=self.object,
-                                    trip=trip,
-                                    amount=amount
-                                )
-                                alloc._suppress_cache_cascade = True
-                                alloc.save()
 
-                        # Refresh caches once for all affected trips and their bills
-                        touched_trips = list(trips_by_id.values())
-                        touched_bills = {t.associated_bill for t in touched_trips if t.associated_bill}
-                        for trip in touched_trips:
-                            TripFinancialService.update_trip_financial_caches(trip)
-                        for bill in touched_bills:
-                            BillingService.update_bill_financial_caches(bill)
+                            if amount > 0 and trip_id in trips_by_id:
+                                trip_allocs.append(TripAllocation(
+                                    financial_record=self.object,
+                                    trip=trips_by_id[trip_id],
+                                    amount=amount
+                                ))
+                                queued_trip_ids.add(trip_id)
+
+                        if trip_allocs:
+                            TripAllocation.objects.bulk_create(trip_allocs)
+                            for tid in queued_trip_ids:
+                                queue_trip_refresh(tid)
 
                         allocated_trip_nums = [trips_by_id[tid].trip_number for tid in trip_ids if tid in trips_by_id]
                         if allocated_trip_nums:
@@ -1162,22 +1157,16 @@ class FinancialRecordUpdateView(LoginRequiredMixin, PermissionRequiredMixin, Fin
                     # 3. Update Bill Allocations (Delete old ones first)
                     if bill_distribution_json:
                         bill_data = json.loads(bill_distribution_json)
-                        old_allocs = list(self.object.bill_allocations.all())
-                        old_bill_ids = [a.bill_id for a in old_allocs]
-                        if self.object.associated_bill_id and self.object.associated_bill_id not in old_bill_ids:
-                            old_bill_ids.append(self.object.associated_bill_id)
-                        for a in old_allocs:
-                            a._suppress_cache_cascade = True
-                            a.delete()
-
-                        # Also clear any trip allocations if switching
-                        for ta in self.object.allocations.all():
-                            ta._suppress_cache_cascade = True
-                            ta.delete()
+                        if self.object.associated_bill_id:
+                            queue_bill_refresh(self.object.associated_bill_id)
+                        self.object.bill_allocations.all().delete()
+                        self.object.allocations.all().delete()
 
                         bill_ids = [item.get('bill_id') for item in bill_data if item.get('bill_id')]
-                        bills_by_id = Bill.objects.in_bulk(list(set(old_bill_ids + bill_ids)))
+                        bills_by_id = Bill.objects.in_bulk(bill_ids)
 
+                        bill_allocs = []
+                        queued_bill_ids = set()
                         for item in bill_data:
                             bill_id = item.get('bill_id')
                             raw_val = item.get('payment') if item.get('payment') is not None else item.get('amount')
@@ -1185,82 +1174,68 @@ class FinancialRecordUpdateView(LoginRequiredMixin, PermissionRequiredMixin, Fin
                                 amount = Decimal(str(raw_val))
                             except (ValueError, InvalidOperation):
                                 raise ValueError(f"Invalid amount format for bill {bill_id}")
-                            
-                            if amount > 0 and bill_id in bills_by_id:
-                                bill = bills_by_id[bill_id]
-                                alloc = BillAllocation(
-                                    financial_record=self.object,
-                                    bill=bill,
-                                    amount=amount
-                                )
-                                alloc._suppress_cache_cascade = True
-                                alloc.save()
 
-                        for bill in bills_by_id.values():
-                            BillingService.update_bill_financial_caches(bill)
+                            if amount > 0 and bill_id in bills_by_id:
+                                bill_allocs.append(BillAllocation(
+                                    financial_record=self.object,
+                                    bill=bills_by_id[bill_id],
+                                    amount=amount
+                                ))
+                                queued_bill_ids.add(bill_id)
+
+                        if bill_allocs:
+                            BillAllocation.objects.bulk_create(bill_allocs)
+                            for bid in queued_bill_ids:
+                                queue_bill_refresh(bid)
 
                         allocated_bill_nums = [bills_by_id[bid].bill_number or f"Bill #{bid}" for bid in bill_ids if bid in bills_by_id]
                         if allocated_bill_nums:
                             dist_notes.append(f"Allocated across invoices: {', '.join(allocated_bill_nums)}")
                         messages.success(self.request, f'Financial record updated and redistributed across bills!')
+                else:
+                    # Clean up old allocations if switching to a non-distribution flow
+                    if self.object.allocations.exists():
+                        self.object.allocations.all().delete()
+                        dist_notes.append("Cleared trip allocations")
 
-            except Exception as e:
-                form.add_error(None, f"Error processing distribution: {str(e)}")
-                return self.form_invalid(form)
+                    if self.object.bill_allocations.exists():
+                        self.object.bill_allocations.all().delete()
+                        dist_notes.append("Cleared invoice allocations")
 
-        # Clean up old allocations if switching to a non-distribution flow
-        if not distribution_json and self.object.allocations.exists():
-            old_allocs = list(self.object.allocations.all())
-            old_trips = [a.trip for a in old_allocs]
-            for a in old_allocs:
-                a._suppress_cache_cascade = True
-                a.delete()
-            for t in old_trips:
-                TripFinancialService.update_trip_financial_caches(t)
-            dist_notes.append("Cleared trip allocations")
+                    self.object = form.save(commit=False)
+                    self.object.verification_status = FinancialVoucher.STATUS_PENDING
+                    self.object.verified_by = None
+                    self.object.verified_at = None
+                    self.object.save()
 
-        if not bill_distribution_json and self.object.bill_allocations.exists():
-            old_bill_allocs = list(self.object.bill_allocations.all())
-            old_bills = [a.bill for a in old_bill_allocs]
-            for a in old_bill_allocs:
-                a._suppress_cache_cascade = True
-                a.delete()
-            for b in old_bills:
-                BillingService.update_bill_financial_caches(b)
-            dist_notes.append("Cleared invoice allocations")
+                # Check for field diffs and log to voucher audit history
+                new_data = {
+                    'amount': self.object.amount,
+                    'date': str(self.object.date),
+                    'party': str(self.object.party) if self.object.party else 'None',
+                    'account': str(self.object.account) if self.object.account else 'None',
+                    'category': str(self.object.category) if self.object.category else 'None',
+                    'description': self.object.description or '',
+                }
+                diffs = {}
+                for k, old_val in old_data.items():
+                    if old_val != new_data[k]:
+                        diffs[k] = (old_val, new_data[k])
 
-        if not distribution_json and not bill_distribution_json:
-            self.object = form.save()
+                if self.object.voucher:
+                    from ledger.services import VoucherService
+                    if distribution_json and self.object.voucher.voucher_type == FinancialVoucher.VOUCHER_TYPE_DIRECT:
+                        self.object.voucher.voucher_type = FinancialVoucher.VOUCHER_TYPE_TRIP_PAYMENT
+                    elif bill_distribution_json and self.object.voucher.voucher_type == FinancialVoucher.VOUCHER_TYPE_DIRECT:
+                        self.object.voucher.voucher_type = FinancialVoucher.VOUCHER_TYPE_BILL_PAYMENT
 
-        # Check for field diffs and log to voucher audit history
-        new_data = {
-            'amount': self.object.amount,
-            'date': str(self.object.date),
-            'party': str(self.object.party) if self.object.party else 'None',
-            'account': str(self.object.account) if self.object.account else 'None',
-            'category': str(self.object.category) if self.object.category else 'None',
-            'description': self.object.description or '',
-        }
-        diffs = {}
-        for k, old_val in old_data.items():
-            if old_val != new_data[k]:
-                diffs[k] = (old_val, new_data[k])
+                    alteration_note = "; ".join(dist_notes) if dist_notes else ''
+                    VoucherService.record_alteration(self.object.voucher, self.request.user, diffs, notes=alteration_note)
+                    self.object.voucher.update_totals()
 
-        # Mark record and associated voucher as pending re-verification upon edit
-        self.object.verification_status = FinancialVoucher.STATUS_PENDING
-        self.object.verified_by = None
-        self.object.verified_at = None
-        self.object.save(update_fields=['verification_status', 'verified_by', 'verified_at'])
-        if self.object.voucher:
-            from ledger.services import VoucherService
-            if distribution_json and self.object.voucher.voucher_type == FinancialVoucher.VOUCHER_TYPE_DIRECT:
-                self.object.voucher.voucher_type = FinancialVoucher.VOUCHER_TYPE_TRIP_PAYMENT
-            elif bill_distribution_json and self.object.voucher.voucher_type == FinancialVoucher.VOUCHER_TYPE_DIRECT:
-                self.object.voucher.voucher_type = FinancialVoucher.VOUCHER_TYPE_BILL_PAYMENT
-
-            alteration_note = "; ".join(dist_notes) if dist_notes else ''
-            VoucherService.record_alteration(self.object.voucher, self.request.user, diffs, notes=alteration_note)
-            self.object.voucher.update_totals()
+        except Exception as e:
+            form.add_error(None, f"Error processing distribution: {str(e)}")
+            return self.form_invalid(form)
 
         messages.success(self.request, 'Financial record updated successfully! (Submitted for re-verification)')
         return redirect(self.get_success_url())

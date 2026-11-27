@@ -119,14 +119,16 @@ class TripFinancialService:
         voucher.update_totals()
 
     @staticmethod
-    def update_trip_financial_caches(trip):
+    def update_trip_financial_caches(trip, bill_pool_cache=None):
         """
         Recalculate and update cached received amount and outstanding balance.
         """
         if not trip.pk:
             return
 
-        received = TripFinancialService.calculate_trip_received_amount(trip)
+        received = TripFinancialService.calculate_trip_received_amount(
+            trip, bill_pool_cache=bill_pool_cache
+        )
         total_rev = trip.total_revenue_cached
         
         trip.amount_received_cached = received
@@ -150,7 +152,7 @@ class TripFinancialService:
             del trip._updating_financial_caches
 
     @staticmethod
-    def calculate_trip_received_amount(trip):
+    def calculate_trip_received_amount(trip, bill_pool_cache=None):
         """
         Helper to calculate amount received.
         """
@@ -177,23 +179,29 @@ class TripFinancialService:
         if bill:
             if bill.payment_status_cached == 'Paid':
                 return trip.total_revenue_cached
-            
-            direct_bill = bill.financial_records.exclude(
-                record_type=FinancialRecord.RECORD_TYPE_INVOICE
-            ).filter(
-                Q(category__type=TransactionCategory.TYPE_INCOME) | 
-                Q(category__name__in=["Deductions", "TDS", "Shortage", "Credit Note", "Debit Note"])
-            ).aggregate(total=Sum('amount'))['total'] or 0
-            
-            adjustments = 0
-            for adj in bill.adjustment_bills.select_related('category').all():
-                if adj.category:
-                    if adj.category.name == 'Credit Note':
-                        adjustments += adj.rounded_total
-                    elif adj.category.name == 'Debit Note':
-                        adjustments -= adj.rounded_total
-            
-            bill_pool = direct_bill + adjustments
+
+            if bill_pool_cache is not None and bill.pk in bill_pool_cache:
+                bill_pool = bill_pool_cache[bill.pk]
+            else:
+                direct_bill = bill.financial_records.exclude(
+                    record_type=FinancialRecord.RECORD_TYPE_INVOICE
+                ).filter(
+                    Q(category__type=TransactionCategory.TYPE_INCOME) | 
+                    Q(category__name__in=["Deductions", "TDS", "Shortage", "Credit Note", "Debit Note"])
+                ).aggregate(total=Sum('amount'))['total'] or 0
+                
+                adjustments = 0
+                for adj in bill.adjustment_bills.select_related('category').all():
+                    if adj.category:
+                        if adj.category.name == 'Credit Note':
+                            adjustments += adj.rounded_total
+                        elif adj.category.name == 'Debit Note':
+                            adjustments -= adj.rounded_total
+                
+                bill_pool = direct_bill + adjustments
+                if bill_pool_cache is not None:
+                    bill_pool_cache[bill.pk] = bill_pool
+
             if bill_pool > 0:
                 bill_total = bill.total_amount_cached
                 if bill_total > 0:
