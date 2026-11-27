@@ -867,7 +867,7 @@ $(document).ready(function() {
 
             const key = e.key;
 
-            // Enter: open date picker on date field; open empty required Select2; otherwise advance
+            // Enter: open date picker on date field; open Party/Route/Vehicle dropdowns; otherwise advance
             if (key === 'Enter') {
                 if ($target.is('textarea') && e.shiftKey) return;
                 if ($target.is('button, a')) return;
@@ -885,9 +885,9 @@ $(document).ready(function() {
                 if (isSelection && !e.shiftKey) {
                     const $select = getSelectForSelection($target);
                     const name = $select.attr('name') || '';
-                    const isRequiredSelect = $select.prop('required') || /-party$|-route$|-vehicle$/.test(name);
+                    const isMainDropdown = $select.prop('required') || /-party$|-route$|-vehicle$/.test(name);
                     const hasOptions = $select.find('option').filter(function(_, opt) { return opt.value !== ''; }).length > 0;
-                    if ($select.length && !$select.val() && isRequiredSelect && hasOptions) {
+                    if ($select.length && isMainDropdown && hasOptions) {
                         $select.select2('open');
                         return;
                     }
