@@ -70,28 +70,41 @@
 </header>
 
 <!-- Batch GST and Actions Toolbar -->
-<div class="bg-white border border-slate-200 rounded-xl p-3 sm:p-4 shadow-sm mb-4 flex flex-wrap items-center justify-between gap-3">
-    <div class="flex flex-wrap items-center gap-2">
-        <span class="text-xs font-black text-slate-500 uppercase tracking-wider mr-1">Batch GST:</span>
-        <button type="button" class="batch-gst-btn px-2.5 py-1 text-xs font-bold rounded-lg bg-slate-100 hover:bg-slate-900 hover:text-white text-slate-700 border border-slate-200 transition-all flex items-center gap-1" data-gst="GST">
-            <i class="fa-solid fa-percent text-emerald-500"></i>
-            <span>All Local GST (18%)</span>
-        </button>
-        <button type="button" class="batch-gst-btn px-2.5 py-1 text-xs font-bold rounded-lg bg-slate-100 hover:bg-slate-900 hover:text-white text-slate-700 border border-slate-200 transition-all flex items-center gap-1" data-gst="IGST">
-            <i class="fa-solid fa-arrows-split-up-and-left text-blue-500"></i>
-            <span>All Interstate IGST (18%)</span>
-        </button>
-        <button type="button" class="batch-gst-btn px-2.5 py-1 text-xs font-bold rounded-lg bg-slate-100 hover:bg-slate-900 hover:text-white text-slate-700 border border-slate-200 transition-all flex items-center gap-1" data-gst="NONE">
-            <i class="fa-solid fa-ban text-amber-500"></i>
-            <span>All Non-GST (0%)</span>
-        </button>
+<div class="bg-white border border-slate-200 rounded-xl p-3 sm:p-4 shadow-sm mb-4 space-y-2.5">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="flex flex-wrap items-center gap-2">
+            <span class="text-xs font-black text-slate-500 uppercase tracking-wider mr-1">Batch GST:</span>
+            <button type="button" class="batch-gst-btn px-2.5 py-1 text-xs font-bold rounded-lg bg-slate-100 hover:bg-slate-900 hover:text-white text-slate-700 border border-slate-200 transition-all flex items-center gap-1" data-gst="GST">
+                <i class="fa-solid fa-percent text-emerald-500"></i>
+                <span>All Local GST (18%)</span>
+            </button>
+            <button type="button" class="batch-gst-btn px-2.5 py-1 text-xs font-bold rounded-lg bg-slate-100 hover:bg-slate-900 hover:text-white text-slate-700 border border-slate-200 transition-all flex items-center gap-1" data-gst="IGST">
+                <i class="fa-solid fa-arrows-split-up-and-left text-blue-500"></i>
+                <span>All Interstate IGST (18%)</span>
+            </button>
+            <button type="button" class="batch-gst-btn px-2.5 py-1 text-xs font-bold rounded-lg bg-slate-100 hover:bg-slate-900 hover:text-white text-slate-700 border border-slate-200 transition-all flex items-center gap-1" data-gst="NONE">
+                <i class="fa-solid fa-ban text-amber-500"></i>
+                <span>All Non-GST (0%)</span>
+            </button>
+        </div>
+        <div class="flex items-center space-x-2">
+            <button type="button" id="top-add-trip-btn" class="flex items-center space-x-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-bold hover:bg-emerald-100 transition-all active:scale-95">
+                <i class="fa-solid fa-plus text-xs"></i>
+                <span>Add Row</span>
+            </button>
+            <span class="text-xs font-bold text-slate-500">Total Rows: <span id="total-rows-badge" class="px-1.5 py-0.5 bg-slate-100 text-slate-800 rounded font-black">1</span></span>
+        </div>
     </div>
-    <div class="flex items-center space-x-2">
-        <button type="button" id="top-add-trip-btn" class="flex items-center space-x-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-bold hover:bg-emerald-100 transition-all active:scale-95">
-            <i class="fa-solid fa-plus text-xs"></i>
-            <span>Add Row</span>
-        </button>
-        <span class="text-xs font-bold text-slate-500">Total Rows: <span id="total-rows-badge" class="px-1.5 py-0.5 bg-slate-100 text-slate-800 rounded font-black">1</span></span>
+    <div class="hidden md:flex flex-wrap items-center gap-x-4 gap-y-1 pt-2 border-t border-slate-100 text-[11px] text-slate-500">
+        <span class="font-bold text-slate-400 uppercase tracking-wider text-[10px]"><i class="fa-regular fa-keyboard mr-1"></i>Shortcuts:</span>
+        <span><kbd class="px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded text-[10px] font-bold text-slate-700">Enter</kbd> Next / Open</span>
+        <span><kbd class="px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded text-[10px] font-bold text-slate-700">Space</kbd> Open Dropdown</span>
+        <span><kbd class="px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded text-[10px] font-bold text-slate-700">← / →</kbd> Prev / Next</span>
+        <span><kbd class="px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded text-[10px] font-bold text-slate-700">↑ / ↓</kbd> Switch Row</span>
+        <span><kbd class="px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded text-[10px] font-bold text-slate-700">Alt+1/2/3</kbd> GST Type</span>
+        <span><kbd class="px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded text-[10px] font-bold text-slate-700">Alt+N</kbd> Add Row</span>
+        <span><kbd class="px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded text-[10px] font-bold text-slate-700">Ctrl+Enter</kbd> Save</span>
+        <span><kbd class="px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded text-[10px] font-bold text-slate-700">Ctrl+Shift+Enter</kbd> Save &amp; Add</span>
     </div>
 </div>
 
@@ -570,6 +583,22 @@ $(document).ready(function() {
                         window.scrollBy(0, rect.bottom - keyboardSpace + 60);
                     }
                 }, 50);
+            }).on('select2:select', function() {
+                const $select = $(this);
+                const $selection = $select.next('.select2-container').find('.select2-selection');
+                setTimeout(function() {
+                    if ($selection.length) {
+                        moveFocus($selection, 1);
+                    }
+                }, 20);
+            }).on('select2:close', function() {
+                const $select = $(this);
+                setTimeout(function() {
+                    if (!document.activeElement || document.activeElement === document.body) {
+                        const $selection = $select.next('.select2-container').find('.select2-selection');
+                        if ($selection.length) $selection.focus();
+                    }
+                }, 30);
             }).on('change', function() {
                 saveDraft();
             });
@@ -756,10 +785,220 @@ $(document).ready(function() {
         updateRevenue($newRow);
         updateVendorHireState($newRow);
         saveDraft();
+        return $newRow;
     }
 
+    // --- Keyboard Navigation & Shortcuts ---
+    function getRowFocusableFields($row) {
+        const fields = [];
+        $row.find('.grid').find('input:not([type="hidden"]), select, textarea').each(function() {
+            const $el = $(this);
+            if ($el.is('[disabled], [readonly]')) return;
+            if ($el.closest('.weight-container').hasClass('pointer-events-none')) return;
+            if ($el.closest('.vendor-hire-container').hasClass('hidden')) return;
+
+            if ($el.is('select') && $el.data('select2')) {
+                const $sel = $el.next('.select2-container').find('.select2-selection');
+                if ($sel.length && $sel.is(':visible')) {
+                    fields.push($sel[0]);
+                }
+            } else if ($el.is(':visible')) {
+                fields.push(this);
+            }
+        });
+        return $(fields);
+    }
+
+    function getAllFocusableFields() {
+        const fields = [];
+        $('.form-row:not(#empty-form-template .form-row)').each(function() {
+            getRowFocusableFields($(this)).each(function() {
+                fields.push(this);
+            });
+        });
+        return $(fields);
+    }
+
+    function focusField($target) {
+        if (!$target || !$target.length) return;
+        $target.focus();
+        if ($target.is('input:not([type="date"]), textarea')) {
+            try { $target.select(); } catch (err) {}
+        }
+        if ($target[0] && $target[0].scrollIntoView) {
+            $target[0].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        }
+    }
+
+    function moveFocus($current, delta) {
+        const $all = getAllFocusableFields();
+        const idx = $all.index($current);
+        if (idx === -1) return false;
+        const nextIdx = idx + delta;
+        if (nextIdx >= 0 && nextIdx < $all.length) {
+            focusField($all.eq(nextIdx));
+            return true;
+        }
+        if (delta > 0 && nextIdx >= $all.length) {
+            focusField($('#save-trips-btn'));
+            return true;
+        }
+        return false;
+    }
+
+    function getSelectForSelection($selection) {
+        return $selection.closest('.select2-container').prev('select');
+    }
+
+    const bulkFormEl = document.getElementById('bulk-trip-form');
+    if (bulkFormEl) {
+        // Use capture phase so Select2 / base.html handlers do not hijack grid navigation
+        bulkFormEl.addEventListener('keydown', function(e) {
+            if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+            // Let open Select2 dropdown handle its own Enter / Arrow / Escape keys
+            if ($('.select2-container--open').length) return;
+
+            const target = e.target;
+            const $target = $(target);
+            const isSelection = $target.hasClass('select2-selection');
+            const isFormControl = $target.is('input, select, textarea');
+            if (!isSelection && !isFormControl) return;
+
+            const key = e.key;
+
+            // Enter: open date picker on date field; open empty required Select2; otherwise advance
+            if (key === 'Enter') {
+                if ($target.is('textarea') && e.shiftKey) return;
+                if ($target.is('button, a')) return;
+
+                e.preventDefault();
+                e.stopPropagation();
+
+                if ($target.prop('type') === 'date' && !e.shiftKey) {
+                    if (typeof target.showPicker === 'function') {
+                        try { target.showPicker(); } catch (err) {}
+                    }
+                    return;
+                }
+
+                if (isSelection && !e.shiftKey) {
+                    const $select = getSelectForSelection($target);
+                    const name = $select.attr('name') || '';
+                    const isRequiredSelect = $select.prop('required') || /-party$|-route$|-vehicle$/.test(name);
+                    const hasOptions = $select.find('option').filter(function(_, opt) { return opt.value !== ''; }).length > 0;
+                    if ($select.length && !$select.val() && isRequiredSelect && hasOptions) {
+                        $select.select2('open');
+                        return;
+                    }
+                }
+                moveFocus($target, e.shiftKey ? -1 : 1);
+                return;
+            }
+
+            // Up / Down: jump to the same field in the previous / next trip row
+            if (key === 'ArrowUp' || key === 'ArrowDown') {
+                const $row = $target.closest('.form-row');
+                const $rows = $('.form-row:not(#empty-form-template .form-row)');
+                if ($rows.length <= 1) {
+                    // Single row: let date/textarea behave naturally, block base.html on numbers
+                    if ($target.prop('type') === 'number') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                    }
+                    return;
+                }
+
+                if ($target.is('textarea')) {
+                    const val = target.value || '';
+                    if (val.includes('\n')) return;
+                }
+
+                const $targetRow = (key === 'ArrowUp') ? $row.prev('.form-row') : $row.next('.form-row');
+                if ($targetRow.length) {
+                    const $rowFields = getRowFocusableFields($row);
+                    const colIdx = $rowFields.index($target);
+                    const $nextRowFields = getRowFocusableFields($targetRow);
+                    const $dest = $nextRowFields.eq(Math.min(Math.max(colIdx, 0), $nextRowFields.length - 1));
+                    if ($dest.length) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        focusField($dest);
+                        return;
+                    }
+                }
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+            }
+
+            // Left / Right: move to previous / next field (respecting text cursor)
+            if (key === 'ArrowLeft' || key === 'ArrowRight') {
+                let canMove = false;
+                if (isSelection || $target.is('select') || $target.prop('type') === 'number' || $target.prop('type') === 'date') {
+                    canMove = true;
+                } else {
+                    const start = target.selectionStart;
+                    const end = target.selectionEnd;
+                    const len = (target.value || '').length;
+                    if (key === 'ArrowLeft' && start === 0 && end === 0) canMove = true;
+                    if (key === 'ArrowRight' && start === len && end === len) canMove = true;
+                }
+
+                if (canMove) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    moveFocus($target, key === 'ArrowLeft' ? -1 : 1);
+                }
+            }
+        }, true);
+    }
+
+    // Form & Row Action Shortcuts
+    $(document).on('keydown', function(e) {
+        if ($('.select2-container--open').length) return;
+
+        // Ctrl+Enter / Cmd+Enter -> Save Trip(s); Ctrl+Shift+Enter -> Save & Add Another
+        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+            e.preventDefault();
+            if (e.shiftKey) {
+                $('button[name="_save_and_add"]').click();
+            } else {
+                $('#save-trips-btn').click();
+            }
+            return;
+        }
+
+        // Alt+N -> Add a new trip row and focus its first field
+        if (e.altKey && !e.ctrlKey && !e.metaKey && (e.key === 'n' || e.key === 'N')) {
+            e.preventDefault();
+            const $newRow = addFormRow();
+            setTimeout(function() {
+                const $first = getRowFocusableFields($newRow).first();
+                focusField($first);
+            }, 30);
+            return;
+        }
+
+        // Alt+1 / Alt+2 / Alt+3 -> Set GST type on active row
+        if (e.altKey && !e.ctrlKey && !e.metaKey && ['1', '2', '3'].includes(e.key)) {
+            e.preventDefault();
+            const gstMap = { '1': 'GST', '2': 'IGST', '3': 'NONE' };
+            let $activeRow = $(document.activeElement).closest('.form-row');
+            if (!$activeRow.length || $activeRow.closest('#empty-form-template').length) {
+                $activeRow = $('.form-row:not(#empty-form-template .form-row)').first();
+            }
+            $activeRow.find(`.row-gst-btn[data-gst="${gstMap[e.key]}"]`).click();
+        }
+    });
+
     // Initialization
-    $('#add-trip-btn, #top-add-trip-btn').on('click', addFormRow);
+    $('#add-trip-btn, #top-add-trip-btn').on('click', function() {
+        const $newRow = addFormRow();
+        setTimeout(function() {
+            focusField(getRowFocusableFields($newRow).first());
+        }, 30);
+    });
     
     $('#formset-container').on('click', '.remove-row-btn', function() {
         const rowCount = $('.form-row:not(#empty-form-template .form-row)').length;
@@ -821,6 +1060,14 @@ $(document).ready(function() {
     } else {
         setActionsMinimized(false);
     }
+
+    // Focus the first field automatically on desktop so entry can start without clicking
+    setTimeout(function() {
+        if (!document.activeElement || document.activeElement === document.body) {
+            const $firstRow = $('.form-row:not(#empty-form-template .form-row)').first();
+            focusField(getRowFocusableFields($firstRow).first());
+        }
+    }, 150);
     
     // Clear draft if successful (Django messages handle success usually)
     // For now we add an inline script in the template if messages are present?

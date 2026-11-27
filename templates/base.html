@@ -345,6 +345,14 @@
         }
     });
 
+    // Fix Select2 4.1.0-rc.0 + jQuery 3.6+ search input focus on open
+    $(document).on('select2:open', function() {
+        setTimeout(function() {
+            const searchField = document.querySelector('.select2-container--open .select2-search__field');
+            if (searchField) searchField.focus();
+        }, 10);
+    });
+
     // Universal Smart Navigation: Use arrow keys to move focus between boxes
     $(document).on('keydown', 'input, select, textarea', function(e) {
         const key = e.which;
@@ -360,8 +368,8 @@
                 e.preventDefault();
             }
 
-            // If it's a select2 being edited/opened, let it handle arrows
-            if ($this.data('select2') && $('.select2-container--open').length) return;
+            // If a Select2 dropdown is open or this is a Select2 search input, let Select2 handle arrows
+            if ($('.select2-container--open').length || $this.hasClass('select2-search__field')) return;
 
             let $next;
             const $allFields = $('input:visible, select:visible, textarea:visible').not('[readonly], [disabled]');
