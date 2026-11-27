@@ -478,7 +478,7 @@
         // --- Bulk Trip Draft Clearing ---
         // If we see a success message about trips being created, clear the draft.
         const successMessage = $('.bg-green-50').text();
-        if (successMessage && successMessage.includes('Trips created successfully')) {
+        if (successMessage && /Trips?\s+created successfully/.test(successMessage)) {
             localStorage.removeItem('bulk_trips_draft');
         }
     });

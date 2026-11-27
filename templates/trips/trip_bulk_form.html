@@ -805,9 +805,14 @@ $(document).ready(function() {
     // Load draft if no validation errors are present on page load (which means fresh page load)
     const hasErrors = $('.bg-rose-50').length > 0;
     if (!hasErrors) {
-        // Attempt to load draft.
-        // Wait a slight tick to let select2 init
-        setTimeout(loadDraft, 100);
+        const successMessage = $('.bg-green-50').text();
+        if (successMessage && /Trips?\s+created successfully/.test(successMessage)) {
+            localStorage.removeItem(DRAFT_KEY);
+        } else {
+            // Attempt to load draft.
+            // Wait a slight tick to let select2 init
+            setTimeout(loadDraft, 100);
+        }
 
         // Restore minimize preference
         if (localStorage.getItem(ACTIONS_MINIMIZED_KEY) === 'true') {
